@@ -1,0 +1,37 @@
+{
+	"nodeModulesDir": "manual",
+	"compilerOptions": {
+		"lib": ["deno.window", "deno.desktop", "dom", "dom.iterable"],
+		"strict": true
+	},
+	"desktop": {
+		"app": {
+			"name": "Radiora v2 PoC",
+			"identifier": "dev.radiora.v2"
+		},
+		"backend": "cef",
+		"output": {
+			"windows": "./dist-desktop/radiora-v2-windows"
+		}
+	},
+	"fmt": {
+		"lineWidth": 100,
+		"useTabs": true
+	},
+	"tasks": {
+		"build": "npm run build",
+		"check": "deno check src/main.ts && npm run check",
+		"desktop:preflight": "deno run -A scripts/desktop_preflight.ts",
+		"test": "deno test -A src",
+		"test:integration": "deno run -A scripts/surreal_integration.ts",
+		"desktop:probe": "deno task desktop:preflight && deno task desktop:probe:build && deno task desktop:probe:run",
+		"desktop:probe:build": "deno run -A scripts/surreal_desktop_probe_build.ts",
+		"desktop:probe:run": "deno run -A scripts/surreal_desktop_probe_run.ts",
+		"desktop": "deno task desktop:preflight && deno task build && deno task desktop:build && deno task desktop:run",
+		"desktop:surreal": "deno task desktop:preflight && deno task build && deno task desktop:build && deno task desktop:run:surreal",
+		"desktop:build": "deno run -A scripts/desktop_build.ts",
+		"desktop:run": "deno run -A scripts/desktop_run.ts",
+		"desktop:run:surreal": "deno run -A scripts/desktop_run.ts --surreal",
+		"desktop:hmr": "deno desktop -A --hmr src/main.ts"
+	}
+}
