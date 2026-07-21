@@ -4,6 +4,8 @@ import type { GraphStore } from "./graph_store.ts";
 
 type Row = Record<string, unknown>;
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
 
 const RELATION_TABLE: Record<LinkType, string> = {
@@ -13,11 +15,19 @@ const RELATION_TABLE: Record<LinkType, string> = {
 	IN: "in_knot",
 };
 
-function itemFromRow(row: Row): OutlineItem {
+function domainId(value: unknown, field: "id" | "parent_id"): string {
+	const id = String(value ?? "");
+	if (!UUID_PATTERN.test(id)) {
+		throw new TypeError(`Expected ${field} to be a UUID, received: ${id}`);
+	}
+	return id;
+}
+
+export function itemFromRow(row: Row): OutlineItem {
 	return {
-		id: String(row.id ?? ""),
+		id: domainId(row.id, "id"),
 		text: String(row.text ?? ""),
-		parentId: row.parent_id == null ? null : String(row.parent_id),
+		parentId: row.parent_id == null ? null : domainId(row.parent_id, "parent_id"),
 		orderKey: Number(row.order_key ?? 0),
 		collapsed: Boolean(row.collapsed),
 		createdAt: String(row.created_at ?? ""),
@@ -85,7 +95,9 @@ export class SurrealGraphStore implements GraphStore {
 	async listItems(): Promise<OutlineItem[]> {
 		const [rows] = await this.#db.query<[Row[]]>(`
 			SELECT record::id(id) AS id, text, order_key, collapsed, created_at, updated_at,
-				array::first(<-evolved_from<-outline_item).id AS parent_id
+				array::first(
+					(<-evolved_from<-outline_item).map(|$parent| record::id($parent.id))
+				) AS parent_id
 			FROM outline_item ORDER BY order_key;
 		`);
 		return rows.map(itemFromRow);

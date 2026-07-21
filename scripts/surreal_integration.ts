@@ -2,6 +2,7 @@ import { OutlineService } from "../src/services/outline_service.ts";
 import { SurrealGraphStore } from "../src/storage/surreal_store.ts";
 
 const port = 18012;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const endpoint = `ws://127.0.0.1:${port}`;
 const tempDir = await Deno.makeTempDir({ prefix: "radiora-v2-" });
 const databasePath = `${tempDir}${Deno.build.os === "windows" ? "\\" : "/"}test.db`;
@@ -106,6 +107,9 @@ try {
 	let service = new OutlineService(store);
 	trace("integration.create-root.begin");
 	const root = await service.createItem({ text: "persisted root", parentId: null });
+	if (!UUID_PATTERN.test(root.id)) {
+		throw new Error(`Root ID is not a canonical UUID: ${root.id}`);
+	}
 	trace("integration.create-root.ready", { id: root.id });
 	trace("integration.create-child.begin");
 	const child = await service.createItem({ text: "persisted child", parentId: root.id });
@@ -128,6 +132,17 @@ try {
 	});
 	if (snapshot.items.length !== 2 || snapshot.links.length !== 1) {
 		throw new Error(`Persistence verification failed: ${JSON.stringify(snapshot)}`);
+	}
+	const persistedRoot = snapshot.items.find((item) => item.id === root.id);
+	const persistedChild = snapshot.items.find((item) => item.id === child.id);
+	if (
+		!persistedRoot || !persistedChild ||
+		!UUID_PATTERN.test(persistedRoot.id) ||
+		!UUID_PATTERN.test(persistedChild.id) ||
+		persistedChild.parentId !== persistedRoot.id ||
+		!UUID_PATTERN.test(persistedChild.parentId)
+	) {
+		throw new Error(`UUID boundary verification failed: ${JSON.stringify(snapshot.items)}`);
 	}
 	await store.close();
 	trace("integration.ready");
