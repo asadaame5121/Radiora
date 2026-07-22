@@ -9,7 +9,7 @@ const appData = Deno.env.get("LOCALAPPDATA") ?? Deno.env.get("APPDATA") ?? Deno.
 const dataDir = `${appData}\\RadioraV2`;
 const logDir = `${dataDir}\\logs`;
 const logPath = `${logDir}\\startup.log`;
-const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "json";
+const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "surreal";
 const surrealPort = Number(Deno.env.get("RADIORA_SURREAL_PORT") ?? "8012");
 await Deno.mkdir(logDir, { recursive: true });
 
@@ -59,11 +59,13 @@ async function bootstrap(): Promise<StartupStatus> {
 			let nextStore: GraphStore;
 			if (storageMode === "json") {
 				nextStore = new JsonGraphStore(`${dataDir}\\radiora-v2.json`);
-			} else if (storageMode === "surreal-diagnostic") {
+			} else if (storageMode === "surreal" || storageMode === "surreal-diagnostic") {
 				if (!Number.isInteger(surrealPort) || surrealPort < 1 || surrealPort > 65535) {
 					throw new Error(`Invalid RADIORA_SURREAL_PORT: ${surrealPort}`);
 				}
-				const surrealDir = `${dataDir}\\surreal-diagnostic`;
+				const surrealDir = storageMode === "surreal"
+					? `${dataDir}\\surreal`
+					: `${dataDir}\\surreal-diagnostic`;
 				await Deno.mkdir(surrealDir, { recursive: true });
 				const nextProcess = new SurrealProcess(
 					`${surrealDir}\\main.db`,

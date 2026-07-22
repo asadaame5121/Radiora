@@ -2,7 +2,11 @@ if (Deno.build.os !== "windows") {
 	throw new Error("Desktop bundleはWindows PowerShellまたはNushellから実行してください。");
 }
 
-const storageMode = Deno.args.includes("--surreal") ? "surreal-diagnostic" : "json";
+const storageMode = Deno.args.includes("--json")
+	? "json"
+	: Deno.args.includes("--surreal-diagnostic")
+	? "surreal-diagnostic"
+	: "surreal";
 const outputDir = new URL("../dist-desktop/radiora-v2-windows/", import.meta.url);
 const entries = [];
 for await (const entry of Deno.readDir(outputDir)) entries.push(entry);
