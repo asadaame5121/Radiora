@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import PhylogeneticTree from "./PhylogeneticTree.svelte";
 	import type {
 		LinkType,
 		OutlineItem,
@@ -266,7 +267,23 @@
 
 	function otherName(link: OutlineLink): string {
 		const id = link.fromId === selectedId ? link.toId : link.fromId;
-		return itemById.get(id)?.text || "(空の項目)";
+		const item = itemById.get(id);
+		return item ? titleFor(item) : "(空の項目)";
+	}
+
+	function titleFor(item: OutlineItem): string {
+		return item.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "(空の項目)";
+	}
+
+	function bodyFor(item: OutlineItem): string {
+		const lines = item.text.split(/\r?\n/);
+		const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
+		return firstContentIndex < 0 ? "" : lines.slice(firstContentIndex + 1).join("\n").trim();
+	}
+
+	function formatCreatedAt(value: string): string {
+		const date = new Date(value);
+		return Number.isNaN(date.getTime()) ? "不明" : date.toLocaleDateString("ja-JP");
 	}
 
 	function errorMessage(cause: unknown): string {
@@ -352,20 +369,26 @@
 			</section>
 		{:else}
 			<section class="tree-panel" aria-label="Phylogenetic Tree">
-				<div class="tree-placeholder">
-					<span class="tree-placeholder-node"></span>
-					<p class="eyebrow">PHYLOGENETIC TREE</p>
-					<h2>思索の系統を準備しています</h2>
-					<p>次の段階で時間軸、Node、Linkをこの領域へ描画します。</p>
-				</div>
+				<PhylogeneticTree
+					{snapshot}
+					{selectedId}
+					onSelect={(id) => (selectedId = id)}
+				/>
 			</section>
 		{/if}
 
 		<aside>
 			{#if selectedItem}
 				<p class="eyebrow">SELECTED THOUGHT</p>
-				<h2>{selectedItem.text || "(空の項目)"}</h2>
-				<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
+				<h2>{titleFor(selectedItem)}</h2>
+				{#if bodyFor(selectedItem)}
+					<p class="thought-body">{bodyFor(selectedItem)}</p>
+				{/if}
+				{#if viewMode === "outline"}
+					<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
+				{:else}
+					<div class="thought-meta"><span>作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
+				{/if}
 				<div class="link-form">
 					<select bind:value={newLinkType}>{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}</select>
 					<select bind:value={newLinkTarget}>
