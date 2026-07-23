@@ -55,6 +55,8 @@ button {
 		var(--bg);
 }
 header {
+	position: relative;
+	z-index: 20;
 	height: 66px;
 	padding: 0 28px;
 	border-bottom: 1px solid var(--border);
