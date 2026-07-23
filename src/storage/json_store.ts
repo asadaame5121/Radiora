@@ -1,10 +1,20 @@
-import type { Knot, LinkType, OutlineItem, OutlineLink } from "../domain/models.ts";
+import type {
+	Knot,
+	LinkType,
+	OutlineItem,
+	OutlineLink,
+	SavedRuleQuery,
+	SearchAlias,
+} from "../domain/models.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
 
 interface StoredGraph {
 	items: OutlineItem[];
 	links: OutlineLink[];
 	knots: Knot[];
+	aliases?: SearchAlias[];
+	emergenceFeedback?: Record<string, "accept" | "dismiss" | "pin">;
+	savedRuleQueries?: SavedRuleQuery[];
 }
 
 export class JsonGraphStore extends MemoryGraphStore {
@@ -18,6 +28,9 @@ export class JsonGraphStore extends MemoryGraphStore {
 			this.items = data.items ?? [];
 			this.links = data.links ?? [];
 			this.knots = data.knots ?? [];
+			this.aliases = data.aliases ?? [];
+			this.emergenceFeedback = data.emergenceFeedback ?? {};
+			this.savedRuleQueries = data.savedRuleQueries ?? [];
 		} catch (cause) {
 			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
 		}
@@ -51,9 +64,39 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await super.replaceKnots(knots);
 		await this.persist();
 	}
+	override async upsertAlias(alias: SearchAlias): Promise<void> {
+		await super.upsertAlias(alias);
+		await this.persist();
+	}
+	override async deleteAlias(id: string): Promise<void> {
+		await super.deleteAlias(id);
+		await this.persist();
+	}
+	override async setEmergenceFeedback(
+		id: string,
+		action: "accept" | "dismiss" | "pin",
+	): Promise<void> {
+		await super.setEmergenceFeedback(id, action);
+		await this.persist();
+	}
+	override async upsertSavedRuleQuery(query: SavedRuleQuery): Promise<void> {
+		await super.upsertSavedRuleQuery(query);
+		await this.persist();
+	}
+	override async deleteSavedRuleQuery(id: string): Promise<void> {
+		await super.deleteSavedRuleQuery(id);
+		await this.persist();
+	}
 
 	private async persist(): Promise<void> {
-		const data: StoredGraph = { items: this.items, links: this.links, knots: this.knots };
+		const data: StoredGraph = {
+			items: this.items,
+			links: this.links,
+			knots: this.knots,
+			aliases: this.aliases,
+			emergenceFeedback: this.emergenceFeedback,
+			savedRuleQueries: this.savedRuleQueries,
+		};
 		await Deno.writeTextFile(this.path, JSON.stringify(data, null, 2));
 	}
 }

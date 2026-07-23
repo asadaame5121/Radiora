@@ -7,7 +7,12 @@ import {
 	lodForDensity,
 } from "../src/ui/tree_layout.ts";
 
-function item(id: string, createdAt: string, parentId: string | null = null, text = id): OutlineItem {
+function item(
+	id: string,
+	createdAt: string,
+	parentId: string | null = null,
+	text = id,
+): OutlineItem {
 	return {
 		id,
 		text,

@@ -25,7 +25,18 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		setCollapsed: (id, collapsed) => service().setCollapsed(id, collapsed),
 		createLink: (input) => service().createLink(input),
 		deleteLink: (fromId, toId, type) => service().deleteLink(fromId, toId, type),
-		searchItems: (query) => service().searchItems(query),
+		suggestItems: (prefix, limit) => service().suggestItems(prefix, limit),
+		searchItems: (request) => service().searchItems(request),
+		listSearchAliases: () => service().listSearchAliases(),
+		saveSearchAlias: (input) => service().saveSearchAlias(input),
+		deleteSearchAlias: (id) => service().deleteSearchAlias(id),
+		listEmergenceSuggestions: (contextItemId, limit) =>
+			service().listEmergenceSuggestions(contextItemId, limit),
+		resolveEmergenceSuggestion: (id, action) => service().resolveEmergenceSuggestion(id, action),
+		runRuleQuery: (source, limit) => service().runRuleQuery(source, limit),
+		listSavedRuleQueries: () => service().listSavedRuleQueries(),
+		saveRuleQuery: (input) => service().saveRuleQuery(input),
+		deleteRuleQuery: (id) => service().deleteRuleQuery(id),
 	};
 }
 

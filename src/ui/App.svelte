@@ -2,11 +2,17 @@
 	import { onMount } from "svelte";
 	import PhylogeneticTree from "./PhylogeneticTree.svelte";
 	import type {
+		EmergenceAction,
+		EmergenceSuggestion,
 		LinkType,
 		OutlineItem,
 		OutlineLink,
 		OutlineSnapshot,
+		RuleQueryResult,
+		SavedRuleQuery,
+		SearchAlias,
 		SearchResult,
+		Suggestion,
 	} from "../domain/models";
 	import { LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
@@ -26,6 +32,7 @@
 
 	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
 	type ViewMode = "outline" | "tree";
+	type AsideMode = "links" | "discover" | "query";
 
 	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
 	let loading = $state(true);
@@ -34,7 +41,20 @@
 	let viewMode = $state<ViewMode>("outline");
 	let selectedId = $state<string | null>(null);
 	let searchQuery = $state("");
+	let suggestions = $state<Suggestion[]>([]);
 	let searchResults = $state<SearchResult[]>([]);
+	let searchActiveIndex = $state(-1);
+	let asideMode = $state<AsideMode>("links");
+	let emergenceSuggestions = $state<EmergenceSuggestion[]>([]);
+	let emergenceLoading = $state(false);
+	let aliases = $state<SearchAlias[]>([]);
+	let aliasCanonical = $state("");
+	let aliasVariants = $state("");
+	let ruleSource = $state('?- link("LIKE", From, To).');
+	let ruleResult = $state<RuleQueryResult | null>(null);
+	let ruleName = $state("");
+	let savedRuleQueries = $state<SavedRuleQuery[]>([]);
+	let ruleError = $state("");
 	let newLinkTarget = $state("");
 	let newLinkType = $state<LinkType>("LIKE");
 	let draggedId = $state<string | null>(null);
@@ -46,6 +66,16 @@
 		? snapshot.links.filter((link) => link.fromId === selectedId || link.toId === selectedId)
 		: []);
 	const visibleRows = $derived.by(() => buildVisibleRows(snapshot));
+	const searchEntries = $derived([
+		...suggestions.map((suggestion) => ({ kind: "suggestion" as const, value: suggestion })),
+		...searchResults.map((result) => ({ kind: "result" as const, value: result })),
+	]);
+
+	$effect(() => {
+		const id = selectedId;
+		if (id && startup.phase === "ready") void loadEmergence(id);
+		else emergenceSuggestions = [];
+	});
 
 	onMount(() => {
 		let cancelled = false;
@@ -55,6 +85,8 @@
 					startup = await api.getStartupStatus();
 					if (startup.phase === "ready") {
 						await load();
+						aliases = await api.listSearchAliases();
+						savedRuleQueries = await api.listSavedRuleQueries();
 						return;
 					}
 				} catch (cause) {
@@ -225,23 +257,136 @@
 		await load(moved);
 	}
 
+	let suggestTimer: number | undefined;
 	let searchTimer: number | undefined;
+	let searchRequestId = 0;
 	function queueSearch(): void {
+		clearTimeout(suggestTimer);
 		clearTimeout(searchTimer);
+		const requestId = ++searchRequestId;
+		searchActiveIndex = -1;
+		if (!searchQuery.trim()) {
+			suggestions = [];
+			searchResults = [];
+			return;
+		}
+		suggestTimer = window.setTimeout(async () => {
+			try {
+				const next = await api.suggestItems(searchQuery, 8);
+				if (requestId === searchRequestId) suggestions = next;
+			} catch (cause) {
+				if (requestId === searchRequestId) error = errorMessage(cause);
+			}
+		}, 100);
 		searchTimer = window.setTimeout(async () => {
-			searchResults = await api.searchItems(searchQuery);
-		}, 180);
+			try {
+				const next = await api.searchItems({ query: searchQuery, contextItemId: selectedId, limit: 20 });
+				if (requestId === searchRequestId) searchResults = next;
+			} catch (cause) {
+				if (requestId === searchRequestId) error = errorMessage(cause);
+			}
+		}, 250);
+	}
+
+	function handleSearchKeydown(event: KeyboardEvent): void {
+		if (event.key === "Escape") {
+			searchQuery = "";
+			suggestions = [];
+			searchResults = [];
+			searchActiveIndex = -1;
+			return;
+		}
+		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+			event.preventDefault();
+			const delta = event.key === "ArrowDown" ? 1 : -1;
+			searchActiveIndex = Math.max(-1, Math.min(searchEntries.length - 1, searchActiveIndex + delta));
+			return;
+		}
+		if (event.key === "Enter" && searchActiveIndex >= 0) {
+			event.preventDefault();
+			const entry = searchEntries[searchActiveIndex];
+			if (entry.kind === "suggestion") void selectItem(entry.value.item, entry.value.ancestorIds);
+			else void selectItem(entry.value.item, entry.value.ancestorIds);
+		}
 	}
 
 	async function selectSearch(result: SearchResult): Promise<void> {
-		for (const ancestorId of result.ancestorIds) {
+		await selectItem(result.item, result.ancestorIds);
+	}
+
+	async function selectItem(item: OutlineItem, ancestorIds: string[]): Promise<void> {
+		for (const ancestorId of ancestorIds) {
 			const ancestor = itemById.get(ancestorId);
 			if (ancestor?.collapsed) await api.setCollapsed(ancestor.id, false);
 		}
 		searchQuery = "";
+		suggestions = [];
 		searchResults = [];
-		selectedId = result.item.id;
-		await load(result.item.id);
+		searchActiveIndex = -1;
+		selectedId = item.id;
+		await load(item.id);
+	}
+
+	async function loadEmergence(id: string): Promise<void> {
+		emergenceLoading = true;
+		try {
+			emergenceSuggestions = await api.listEmergenceSuggestions(id, 10);
+		} catch (cause) {
+			error = errorMessage(cause);
+		} finally {
+			emergenceLoading = false;
+		}
+	}
+
+	async function resolveEmergence(suggestion: EmergenceSuggestion, action: EmergenceAction): Promise<void> {
+		await api.resolveEmergenceSuggestion(suggestion.id, action);
+		if (action === "accept") await load();
+		if (selectedId) await loadEmergence(selectedId);
+	}
+
+	async function saveAlias(): Promise<void> {
+		try {
+			await api.saveSearchAlias({
+				canonical: aliasCanonical,
+				variants: aliasVariants.split(/[,、\n]/).map((value) => value.trim()).filter(Boolean),
+			});
+			aliasCanonical = "";
+			aliasVariants = "";
+			aliases = await api.listSearchAliases();
+		} catch (cause) {
+			ruleError = errorMessage(cause);
+		}
+	}
+
+	async function removeAlias(id: string): Promise<void> {
+		await api.deleteSearchAlias(id);
+		aliases = await api.listSearchAliases();
+	}
+
+	async function executeRule(): Promise<void> {
+		ruleError = "";
+		ruleResult = null;
+		try {
+			ruleResult = await api.runRuleQuery(ruleSource, 500);
+		} catch (cause) {
+			ruleError = errorMessage(cause);
+		}
+	}
+
+	async function saveRule(): Promise<void> {
+		ruleError = "";
+		try {
+			await api.saveRuleQuery({ name: ruleName, source: ruleSource });
+			savedRuleQueries = await api.listSavedRuleQueries();
+			ruleName = "";
+		} catch (cause) {
+			ruleError = errorMessage(cause);
+		}
+	}
+
+	async function removeRule(id: string): Promise<void> {
+		await api.deleteRuleQuery(id);
+		savedRuleQueries = await api.listSavedRuleQueries();
 	}
 
 	async function addLink(): Promise<void> {
@@ -275,6 +420,11 @@
 		return item.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "(空の項目)";
 	}
 
+	function titleForId(id: string): string {
+		const item = itemById.get(id);
+		return item ? titleFor(item) : id;
+	}
+
 	function bodyFor(item: OutlineItem): string {
 		const lines = item.text.split(/\r?\n/);
 		const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
@@ -304,11 +454,26 @@
 				onclick={() => (viewMode = "tree")}>Tree</button>
 		</nav>
 		<div class="search-wrap" class:disabled={startup.phase !== "ready"}>
-			<input aria-label="思索を検索" placeholder="思索を検索…" bind:value={searchQuery} oninput={queueSearch} />
-			{#if searchResults.length}
-				<div class="search-results">
-					{#each searchResults as result}
-						<button onclick={() => selectSearch(result)}>{result.item.text || "(空の項目)"}</button>
+			<input aria-label="思索を検索" placeholder="思索を検索…" bind:value={searchQuery}
+				oninput={queueSearch} onkeydown={handleSearchKeydown} autocomplete="off"
+				aria-expanded={searchEntries.length > 0} />
+			{#if searchEntries.length}
+				<div class="search-results" role="listbox" aria-label="検索候補">
+					{#if suggestions.length}<p class="search-section">タイトル</p>{/if}
+					{#each suggestions as suggestion, index}
+						<button class:active={searchActiveIndex === index}
+							onclick={() => selectItem(suggestion.item, suggestion.ancestorIds)}>
+							<strong>{suggestion.title || "(空の項目)"}</strong>
+							<small>先頭一致</small>
+						</button>
+					{/each}
+					{#if searchResults.length}<p class="search-section">本文・関連</p>{/if}
+					{#each searchResults as result, index}
+						<button class:active={searchActiveIndex === suggestions.length + index}
+							onclick={() => selectSearch(result)}>
+							<strong>{titleFor(result.item)}</strong>
+							<small>{result.reasons.map((reason) => reason.label).slice(0, 2).join(" · ")}</small>
+						</button>
 					{/each}
 				</div>
 			{/if}
@@ -379,31 +544,76 @@
 
 		<aside>
 			{#if selectedItem}
+				<nav class="aside-tabs" aria-label="詳細表示">
+					<button class:active={asideMode === "links"} onclick={() => (asideMode = "links")}>Links</button>
+					<button class:active={asideMode === "discover"} onclick={() => (asideMode = "discover")}>発見</button>
+					<button class:active={asideMode === "query"} onclick={() => (asideMode = "query")}>Query</button>
+				</nav>
 				<p class="eyebrow">SELECTED THOUGHT</p>
 				<h2>{titleFor(selectedItem)}</h2>
-				{#if bodyFor(selectedItem)}
+				{#if asideMode === "links" && bodyFor(selectedItem)}
 					<p class="thought-body">{bodyFor(selectedItem)}</p>
 				{/if}
-				{#if viewMode === "outline"}
+				{#if asideMode === "links" && viewMode === "outline"}
 					<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
-				{:else}
+				{:else if asideMode === "links"}
 					<div class="thought-meta"><span>作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
 				{/if}
-				<div class="link-form">
-					<select bind:value={newLinkType}>{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}</select>
-					<select bind:value={newLinkTarget}>
-						<option value="">リンク先を選択</option>
-						{#each snapshot.items.filter((item) => item.id !== selectedId) as item}
-							<option value={item.id}>{item.text || "(空の項目)"}</option>
+				{#if asideMode === "links"}
+					<div class="link-form">
+						<select bind:value={newLinkType}>{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}</select>
+						<select bind:value={newLinkTarget}>
+							<option value="">リンク先を選択</option>
+							{#each snapshot.items.filter((item) => item.id !== selectedId) as item}
+								<option value={item.id}>{item.text || "(空の項目)"}</option>
+							{/each}
+						</select>
+						<button onclick={addLink} disabled={!newLinkTarget}>Link</button>
+					</div>
+					<div class="links">
+						{#each selectedLinks as link}
+							<div><span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span><span>{link.fromId === selectedId ? "→" : "←"} {otherName(link)}</span><button onclick={() => removeLink(link)}>×</button></div>
+						{:else}<p class="empty">任意リンクはありません</p>{/each}
+					</div>
+				{:else if asideMode === "discover"}
+					<div class="discoveries">
+						{#if emergenceLoading}<p class="empty">関係を探索中…</p>{/if}
+						{#each emergenceSuggestions as suggestion}
+							<article class:pinned={suggestion.status === "pinned"}>
+								<div class="discovery-title"><span>{suggestion.title}</span><small>{Math.round(suggestion.score * 100)}%</small></div>
+								<strong>{titleForId(suggestion.targetItemId)}</strong>
+								<p>{suggestion.explanation}</p>
+								<ol>{#each suggestion.evidence as step}<li>{step.relation}: {titleForId(step.fromId)} → {titleForId(step.toId)}</li>{/each}</ol>
+								<div class="discovery-actions">
+									{#if suggestion.proposedLinkType}<button onclick={() => resolveEmergence(suggestion, "accept")}>採用</button>{/if}
+									<button onclick={() => resolveEmergence(suggestion, "pin")}>ピン</button>
+									<button onclick={() => resolveEmergence(suggestion, "dismiss")}>却下</button>
+								</div>
+							</article>
+						{:else}
+							{#if !emergenceLoading}<p class="empty">新しい関係候補はありません</p>{/if}
 						{/each}
-					</select>
-					<button onclick={addLink} disabled={!newLinkTarget}>Link</button>
-				</div>
-				<div class="links">
-					{#each selectedLinks as link}
-						<div><span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span><span>{link.fromId === selectedId ? "→" : "←"} {otherName(link)}</span><button onclick={() => removeLink(link)}>×</button></div>
-					{:else}<p class="empty">任意リンクはありません</p>{/each}
-				</div>
+					</div>
+				{:else}
+					<div class="query-panel">
+						<label for="rule-source">読み取り専用Datalog</label>
+						<textarea id="rule-source" rows="6" bind:value={ruleSource} spellcheck="false"></textarea>
+						<div class="query-actions"><button onclick={executeRule}>実行</button><input placeholder="保存名" bind:value={ruleName} /><button onclick={saveRule}>保存</button></div>
+						{#if ruleError}<p class="query-error">{ruleError}</p>{/if}
+						{#if ruleResult}
+							<p class="query-meta">{ruleResult.rows.length}件・{ruleResult.elapsedMs.toFixed(1)}ms</p>
+							<div class="query-table"><table><thead><tr>{#each ruleResult.columns as column}<th>{column}</th>{/each}</tr></thead>
+								<tbody>{#each ruleResult.rows as row}<tr>{#each row as value}<td>{titleForId(value)}</td>{/each}</tr>{/each}</tbody>
+							</table></div>
+						{/if}
+						<div class="saved-queries">{#each savedRuleQueries as saved}<button onclick={() => { ruleSource = saved.source; ruleName = saved.name; }}>{saved.name}</button><button class="remove-saved" onclick={() => removeRule(saved.id)}>×</button>{/each}</div>
+						<h3>検索別名</h3>
+						<input placeholder="基準語" bind:value={aliasCanonical} />
+						<textarea rows="2" placeholder="別名（カンマ区切り）" bind:value={aliasVariants}></textarea>
+						<button onclick={saveAlias}>別名を追加</button>
+						<div class="alias-list">{#each aliases as alias}<div><span>{alias.canonical} ↔ {alias.variants.join(", ")}</span><button onclick={() => removeAlias(alias.id)}>×</button></div>{/each}</div>
+					</div>
+				{/if}
 			{:else}
 				<div class="aside-empty"><span>•</span><p>項目を選択すると<br />関連リンクを編集できます</p></div>
 			{/if}

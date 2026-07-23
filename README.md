@@ -43,6 +43,19 @@ Linkだけが強調されます。
 `dev:mock`のAPIはViteの`mock`モードだけで有効になり、通常のDesktop起動と本番ビルドでは
 使用されません。
 
+### 検索と創発支援
+
+- 検索欄への入力中は、タイトルの厳密な前方一致候補を表示します。確定後は語彙一致、
+  明示的なエイリアス、グラフ上の近さを組み合わせ、順位の根拠も表示します。
+- 項目を選ぶと、右側の`発見`タブに橋渡し、欠けたリンク、近傍クラスタの提案が表示されます。
+  提案は採用、却下、ピン留めできます。
+- `Query`タブでは、項目とリンクに対する制限付き・読み取り専用のDatalog風クエリを実行できます。
+  `item`、`parent`、`ancestor`、`link`、`title_prefix`、`text_match`を利用できます。
+
+```prolog
+?- link("LIKE", From, To).
+```
+
 データは `%LOCALAPPDATA%\RadioraV2\surreal\main.db`
 に保存されます。JSONストアで一時的に起動する場合は
 `deno task desktop:json`、生成済みbundleでは`deno task desktop:run:json`を使用します。

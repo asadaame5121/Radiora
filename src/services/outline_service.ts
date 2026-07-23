@@ -1,19 +1,31 @@
 import type {
 	CreateItemInput,
 	CreateLinkInput,
+	EmergenceAction,
+	EmergenceSuggestion,
 	Knot,
 	LinkType,
 	MoveItemInput,
 	OutlineItem,
 	OutlineSnapshot,
+	RuleQueryResult,
+	SavedRuleQuery,
+	SearchAlias,
+	SearchRequest,
 	SearchResult,
+	Suggestion,
 } from "../domain/models.ts";
 import { LINK_TYPES } from "../domain/models.ts";
 import type { GraphStore } from "../storage/graph_store.ts";
+import { normalizeSearchText, titleOf } from "./search_text.ts";
+import { runRuleQuery } from "./rule_query.ts";
 
 const ORDER_STEP = 1024;
+const MAX_SEARCH_LIMIT = 50;
 
 export class OutlineService {
+	private readonly suggestionCache = new Map<string, EmergenceSuggestion>();
+
 	constructor(private readonly store: GraphStore) {}
 
 	async listOutline(): Promise<OutlineSnapshot> {
@@ -76,9 +88,10 @@ export class OutlineService {
 		if (!item) return;
 		const children = items.filter((candidate) => candidate.parentId === id)
 			.sort((a, b) => a.orderKey - b.orderKey);
-		let afterId = items.filter((candidate) => candidate.parentId === item.parentId && candidate.id !== id)
-			.sort((a, b) => a.orderKey - b.orderKey)
-			.filter((candidate) => candidate.orderKey < item.orderKey).at(-1)?.id ?? null;
+		let afterId =
+			items.filter((candidate) => candidate.parentId === item.parentId && candidate.id !== id)
+				.sort((a, b) => a.orderKey - b.orderKey)
+				.filter((candidate) => candidate.orderKey < item.orderKey).at(-1)?.id ?? null;
 		for (const child of children) {
 			await this.moveItem({ id: child.id, parentId: item.parentId, afterId });
 			afterId = child.id;
@@ -97,14 +110,385 @@ export class OutlineService {
 		return this.store.deleteLink(fromId, toId, type);
 	}
 
-	async searchItems(query: string): Promise<SearchResult[]> {
-		const normalized = query.trim().toLocaleLowerCase();
+	async suggestItems(prefix: string, limit = 8): Promise<Suggestion[]> {
+		const normalized = normalizeSearchText(prefix);
 		if (!normalized) return [];
 		const items = await this.store.listItems();
 		const byId = new Map(items.map((item) => [item.id, item]));
-		return items
-			.filter((item) => item.text.toLocaleLowerCase().includes(normalized))
-			.map((item) => ({ item, ancestorIds: this.ancestors(item, byId) }));
+		return (await this.store.suggestItems(normalized, Math.min(Math.max(limit, 1), 20)))
+			.map((item) => ({ item, title: titleOf(item), ancestorIds: this.ancestors(item, byId) }));
+	}
+
+	async searchItems(request: SearchRequest | string): Promise<SearchResult[]> {
+		const input = typeof request === "string" ? { query: request } : request;
+		const query = normalizeSearchText(input.query);
+		if (!query) return [];
+		const limit = Math.min(Math.max(input.limit ?? 20, 1), MAX_SEARCH_LIMIT);
+		const items = await this.store.listItems();
+		const links = await this.store.listLinks();
+		const byId = new Map(items.map((item) => [item.id, item]));
+		const aliases = await this.store.listAliases();
+		const expansions = this.expandQuery(query, aliases, items, links);
+		const baseHits = await this.store.searchLexical(query, Math.max(limit * 3, 40));
+		const expansionHits = (await Promise.all(expansions.map(async (expansion) => ({
+			...expansion,
+			hits: await this.store.searchLexical(expansion.term, Math.max(limit * 2, 30)),
+		})))).flatMap(({ term, weight, label, hits }) =>
+			hits.map((hit) => ({ hit, term, weight, label }))
+		);
+		const maxBase = Math.max(1, ...baseHits.map((hit) => hit.titleScore * 2 + hit.bodyScore));
+		const maxExpanded = Math.max(
+			1,
+			...expansionHits.map(({ hit, weight }) => (hit.titleScore * 2 + hit.bodyScore) * weight),
+		);
+		const candidates = new Map<string, {
+			item: OutlineItem;
+			lexical: number;
+			expansion: number;
+			reasons: SearchResult["reasons"];
+		}>();
+		for (const hit of baseHits) {
+			const title = normalizeSearchText(titleOf(hit.item));
+			let lexical = (hit.titleScore * 2 + hit.bodyScore) / maxBase;
+			if (title === query) lexical = 1;
+			const reasons: SearchResult["reasons"] = [];
+			if (hit.titleScore > 0) {
+				reasons.push({
+					kind: "title",
+					label: title === query ? "タイトル完全一致" : "タイトル一致",
+					score: hit.titleScore,
+				});
+			}
+			if (hit.bodyScore > 0) {
+				reasons.push({ kind: "body", label: "本文一致", score: hit.bodyScore });
+			}
+			candidates.set(hit.item.id, { item: hit.item, lexical, expansion: 0, reasons });
+		}
+		for (const { hit, weight, label } of expansionHits) {
+			const candidate = candidates.get(hit.item.id) ??
+				{ item: hit.item, lexical: 0, expansion: 0, reasons: [] };
+			const score = ((hit.titleScore * 2 + hit.bodyScore) * weight) / maxExpanded;
+			if (score > candidate.expansion) {
+				candidate.expansion = score;
+				candidate.reasons.push({ kind: "alias", label, score });
+			}
+			candidates.set(hit.item.id, candidate);
+		}
+		const neighbors = this.neighborMap(links);
+		const context = input.contextItemId ? byId.get(input.contextItemId) : undefined;
+		const contextNeighbors = context
+			? neighbors.get(context.id) ?? new Set<string>()
+			: new Set<string>();
+		return [...candidates.values()].map((candidate): SearchResult => {
+			let graph = 0;
+			if (context && context.id !== candidate.item.id) {
+				const candidateNeighbors = neighbors.get(candidate.item.id) ?? new Set<string>();
+				if (contextNeighbors.has(candidate.item.id)) {
+					graph = 1;
+					candidate.reasons.push({
+						kind: "direct-link",
+						label: "選択中の思索と直接接続",
+						score: 1,
+					});
+				} else {
+					const shared = [...contextNeighbors].filter((id) => candidateNeighbors.has(id));
+					if (shared.length) {
+						graph = Math.min(0.8, shared.length / 3);
+						candidate.reasons.push({
+							kind: "shared-link",
+							label: `共通リンク ${shared.length}件`,
+							score: graph,
+						});
+					}
+					const contextAncestors = new Set(this.ancestors(context, byId));
+					const sharedAncestors = this.ancestors(candidate.item, byId).filter((id) =>
+						contextAncestors.has(id)
+					);
+					if (sharedAncestors.length && graph < 0.5) {
+						graph = 0.5;
+						candidate.reasons.push({ kind: "shared-ancestor", label: "共通の祖先", score: 0.5 });
+					}
+				}
+			}
+			return {
+				item: candidate.item,
+				ancestorIds: this.ancestors(candidate.item, byId),
+				score: 0.55 * candidate.lexical + 0.3 * graph + 0.15 * candidate.expansion,
+				reasons: candidate.reasons,
+			};
+		}).filter((result) => result.item.id !== input.contextItemId)
+			.sort((a, b) => b.score - a.score || b.item.updatedAt.localeCompare(a.item.updatedAt))
+			.slice(0, limit);
+	}
+
+	listSearchAliases(): Promise<SearchAlias[]> {
+		return this.store.listAliases();
+	}
+
+	async saveSearchAlias(
+		input: { id?: string; canonical: string; variants: string[] },
+	): Promise<SearchAlias> {
+		const canonical = normalizeSearchText(input.canonical);
+		const variants = [...new Set(input.variants.map(normalizeSearchText).filter(Boolean))]
+			.filter((variant) => variant !== canonical);
+		if (!canonical || !variants.length) {
+			throw new Error("別名には基準語と1件以上の異なる表記が必要です。");
+		}
+		const existing = input.id
+			? (await this.store.listAliases()).find((alias) => alias.id === input.id)
+			: undefined;
+		const now = new Date().toISOString();
+		const alias: SearchAlias = {
+			id: input.id ?? crypto.randomUUID(),
+			canonical,
+			variants,
+			createdAt: existing?.createdAt ?? now,
+			updatedAt: now,
+		};
+		await this.store.upsertAlias(alias);
+		return alias;
+	}
+
+	deleteSearchAlias(id: string): Promise<void> {
+		return this.store.deleteAlias(id);
+	}
+
+	async listEmergenceSuggestions(
+		contextItemId: string,
+		limit = 10,
+	): Promise<EmergenceSuggestion[]> {
+		const items = await this.store.listItems();
+		const links = await this.store.listLinks();
+		const context = items.find((item) => item.id === contextItemId);
+		if (!context) return [];
+		const byId = new Map(items.map((item) => [item.id, item]));
+		const neighbors = this.neighborMap(links);
+		const contextNeighbors = neighbors.get(context.id) ?? new Set<string>();
+		const direct = new Set(contextNeighbors);
+		const suggestions = new Map<string, EmergenceSuggestion>();
+		for (const candidate of items) {
+			if (candidate.id === context.id || direct.has(candidate.id)) continue;
+			const shared = [...contextNeighbors].filter((id) => neighbors.get(candidate.id)?.has(id));
+			if (shared.length >= 2) {
+				this.addSuggestion(suggestions, {
+					kind: "latent-relation",
+					context,
+					target: candidate,
+					score: Math.min(1, shared.length / 3),
+					proposedLinkType: "LIKE",
+					title: "潜在的な関係",
+					explanation: `${shared.length}件の共通リンクを介してつながっています。`,
+					evidence: shared.slice(0, 3).flatMap((id) => [
+						{ fromId: context.id, toId: id, relation: "LIKE" as const },
+						{ fromId: id, toId: candidate.id, relation: "LIKE" as const },
+					]),
+				});
+			}
+		}
+		for (
+			const result of await this.searchItems({ query: titleOf(context), contextItemId, limit: 20 })
+		) {
+			const target = result.item;
+			if (
+				direct.has(target.id) || this.rootId(context, byId) === this.rootId(target, byId) ||
+				result.score < 0.35
+			) continue;
+			this.addSuggestion(suggestions, {
+				kind: "cross-branch-resonance",
+				context,
+				target,
+				score: result.score,
+				proposedLinkType: "LIKE",
+				title: "枝を越えた共鳴",
+				explanation: "異なるアウトライン枝に、語彙が強く重なる思索があります。",
+				evidence: [{ fromId: context.id, toId: target.id, relation: "LEXICAL" }],
+			});
+		}
+		for (
+			const first of links.filter((link) =>
+				link.type === "LIKE" && (link.fromId === context.id || link.toId === context.id)
+			)
+		) {
+			const middle = first.fromId === context.id ? first.toId : first.fromId;
+			for (
+				const second of links.filter((link) =>
+					(link.type === "VS" || link.type === "FIX") &&
+					(link.fromId === middle || link.toId === middle)
+				)
+			) {
+				const targetId = second.fromId === middle ? second.toId : second.fromId;
+				const target = byId.get(targetId);
+				if (!target || target.id === context.id) continue;
+				this.addSuggestion(suggestions, {
+					kind: "productive-tension",
+					context,
+					target,
+					score: 0.65,
+					title: "対立・修正の観点",
+					explanation: `類似する思索の先に${second.type}関係があります。`,
+					evidence: [
+						{ fromId: context.id, toId: middle, relation: "LIKE" },
+						{ fromId: middle, toId: target.id, relation: second.type },
+					],
+				});
+			}
+		}
+		const visible: EmergenceSuggestion[] = [];
+		for (const suggestion of suggestions.values()) {
+			const feedback = await this.store.getEmergenceFeedback(suggestion.id);
+			if (feedback === "dismiss" || feedback === "accept") continue;
+			if (feedback === "pin") suggestion.status = "pinned";
+			this.suggestionCache.set(suggestion.id, suggestion);
+			visible.push(suggestion);
+		}
+		return visible.sort((a, b) =>
+			Number(b.status === "pinned") - Number(a.status === "pinned") || b.score - a.score
+		).slice(0, Math.min(Math.max(limit, 1), 30));
+	}
+
+	async resolveEmergenceSuggestion(id: string, action: EmergenceAction): Promise<void> {
+		const suggestion = this.suggestionCache.get(id);
+		if (!suggestion) throw new Error("提案が古くなりました。再読み込みしてください。");
+		if (action === "accept" && suggestion.proposedLinkType) {
+			const links = await this.store.listLinks();
+			const exists = links.some((link) =>
+				link.type === suggestion.proposedLinkType &&
+				((link.fromId === suggestion.contextItemId && link.toId === suggestion.targetItemId) ||
+					(link.fromId === suggestion.targetItemId && link.toId === suggestion.contextItemId))
+			);
+			if (!exists) {
+				await this.createLink({
+					fromId: suggestion.contextItemId,
+					toId: suggestion.targetItemId,
+					type: suggestion.proposedLinkType,
+				});
+			}
+		}
+		await this.store.setEmergenceFeedback(id, action);
+	}
+
+	async runRuleQuery(source: string, limit = 500): Promise<RuleQueryResult> {
+		return runRuleQuery(source, await this.store.listItems(), await this.store.listLinks(), limit);
+	}
+
+	listSavedRuleQueries(): Promise<SavedRuleQuery[]> {
+		return this.store.listSavedRuleQueries();
+	}
+
+	async saveRuleQuery(
+		input: { id?: string; name: string; source: string },
+	): Promise<SavedRuleQuery> {
+		const now = new Date().toISOString();
+		const existing = input.id
+			? (await this.store.listSavedRuleQueries()).find((query) => query.id === input.id)
+			: undefined;
+		await this.runRuleQuery(input.source, 1);
+		const saved: SavedRuleQuery = {
+			id: input.id ?? crypto.randomUUID(),
+			name: input.name.trim() || "名称未設定",
+			source: input.source,
+			createdAt: existing?.createdAt ?? now,
+			updatedAt: now,
+		};
+		await this.store.upsertSavedRuleQuery(saved);
+		return saved;
+	}
+
+	deleteRuleQuery(id: string): Promise<void> {
+		return this.store.deleteSavedRuleQuery(id);
+	}
+
+	private expandQuery(
+		query: string,
+		aliases: SearchAlias[],
+		items: OutlineItem[],
+		links: Awaited<ReturnType<GraphStore["listLinks"]>>,
+	): { term: string; weight: number; label: string }[] {
+		const expansions = new Map<string, { term: string; weight: number; label: string }>();
+		for (const alias of aliases) {
+			const terms = [
+				normalizeSearchText(alias.canonical),
+				...alias.variants.map(normalizeSearchText),
+			];
+			if (!terms.includes(query)) continue;
+			for (const term of terms.filter((term) => term !== query)) {
+				expansions.set(term, { term, weight: 0.9, label: `別名: ${term}` });
+			}
+		}
+		const seeds = items.filter((item) => normalizeSearchText(titleOf(item)) === query);
+		for (const seed of seeds) {
+			for (
+				const link of links.filter((link) =>
+					link.type === "LIKE" && (link.fromId === seed.id || link.toId === seed.id)
+				)
+			) {
+				const target = items.find((item) =>
+					item.id === (link.fromId === seed.id ? link.toId : link.fromId)
+				);
+				const term = target ? normalizeSearchText(titleOf(target)) : "";
+				if (term && term !== query && !expansions.has(term) && expansions.size < 5) {
+					expansions.set(term, { term, weight: 0.5, label: `LIKEリンク: ${titleOf(target!)}` });
+				}
+			}
+		}
+		return [...expansions.values()];
+	}
+
+	private neighborMap(
+		links: Awaited<ReturnType<GraphStore["listLinks"]>>,
+	): Map<string, Set<string>> {
+		const result = new Map<string, Set<string>>();
+		for (const link of links) {
+			const from = result.get(link.fromId) ?? new Set<string>();
+			const to = result.get(link.toId) ?? new Set<string>();
+			from.add(link.toId);
+			to.add(link.fromId);
+			result.set(link.fromId, from);
+			result.set(link.toId, to);
+		}
+		return result;
+	}
+
+	private rootId(item: OutlineItem, byId: Map<string, OutlineItem>): string {
+		const visited = new Set([item.id]);
+		let current = item;
+		while (current.parentId && !visited.has(current.parentId)) {
+			visited.add(current.parentId);
+			const parent = byId.get(current.parentId);
+			if (!parent) break;
+			current = parent;
+		}
+		return current.id;
+	}
+
+	private addSuggestion(
+		target: Map<string, EmergenceSuggestion>,
+		input: Omit<EmergenceSuggestion, "id" | "contextItemId" | "targetItemId"> & {
+			context: OutlineItem;
+			target: OutlineItem;
+		},
+	): void {
+		const id = this.fingerprint(`${input.kind}:${input.context.id}:${input.target.id}`);
+		target.set(id, {
+			id,
+			kind: input.kind,
+			contextItemId: input.context.id,
+			targetItemId: input.target.id,
+			proposedLinkType: input.proposedLinkType,
+			title: input.title,
+			explanation: input.explanation,
+			evidence: input.evidence,
+			score: input.score,
+		});
+	}
+
+	private fingerprint(value: string): string {
+		let hash = 2166136261;
+		for (const char of value) {
+			hash ^= char.codePointAt(0) ?? 0;
+			hash = Math.imul(hash, 16777619);
+		}
+		return `s-${(hash >>> 0).toString(16)}`;
 	}
 
 	private async requireItem(id: string): Promise<OutlineItem> {
@@ -113,7 +497,11 @@ export class OutlineService {
 		return item;
 	}
 
-	private orderAfter(items: OutlineItem[], parentId: string | null, afterId: string | null): number {
+	private orderAfter(
+		items: OutlineItem[],
+		parentId: string | null,
+		afterId: string | null,
+	): number {
 		const siblings = items.filter((item) => item.parentId === parentId)
 			.sort((a, b) => a.orderKey - b.orderKey);
 		if (!siblings.length) return ORDER_STEP;

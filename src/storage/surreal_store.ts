@@ -1,6 +1,21 @@
 import { RecordId, Surreal } from "surrealdb";
-import type { Knot, LinkType, OutlineItem, OutlineLink } from "../domain/models.ts";
+import type {
+	Knot,
+	LexicalHit,
+	LinkType,
+	OutlineItem,
+	OutlineLink,
+	SavedRuleQuery,
+	SearchAlias,
+} from "../domain/models.ts";
 import type { GraphStore } from "./graph_store.ts";
+import {
+	countOccurrences,
+	normalizeSearchText,
+	searchTerms,
+	titleFromText,
+	titleOf,
+} from "../services/search_text.ts";
 
 type Row = Record<string, unknown>;
 
@@ -72,6 +87,10 @@ export class SurrealGraphStore implements GraphStore {
 				DEFINE FIELD IF NOT EXISTS collapsed ON outline_item TYPE bool DEFAULT false;
 				DEFINE FIELD IF NOT EXISTS created_at ON outline_item TYPE string;
 				DEFINE FIELD IF NOT EXISTS updated_at ON outline_item TYPE string;
+				DEFINE FIELD IF NOT EXISTS title ON outline_item TYPE string DEFAULT "";
+				DEFINE FIELD IF NOT EXISTS title_key ON outline_item TYPE string DEFAULT "";
+				DEFINE FIELD IF NOT EXISTS title_prefix ON outline_item TYPE string DEFAULT "";
+				DEFINE FIELD IF NOT EXISTS search_terms ON outline_item TYPE string DEFAULT "";
 				DEFINE TABLE IF NOT EXISTS evolved_from TYPE RELATION IN outline_item OUT outline_item SCHEMAFULL;
 				DEFINE TABLE IF NOT EXISTS liked TYPE RELATION IN outline_item OUT outline_item SCHEMAFULL;
 				DEFINE TABLE IF NOT EXISTS fixed TYPE RELATION IN outline_item OUT outline_item SCHEMAFULL;
@@ -84,7 +103,32 @@ export class SurrealGraphStore implements GraphStore {
 				DEFINE TABLE IF NOT EXISTS knot SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS cycle_ids ON knot TYPE array<string>;
 				DEFINE FIELD IF NOT EXISTS created_at ON knot TYPE string;
+				DEFINE TABLE IF NOT EXISTS search_alias SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS canonical ON search_alias TYPE string;
+				DEFINE FIELD IF NOT EXISTS variants ON search_alias TYPE array<string>;
+				DEFINE FIELD IF NOT EXISTS created_at ON search_alias TYPE string;
+				DEFINE FIELD IF NOT EXISTS updated_at ON search_alias TYPE string;
+				DEFINE TABLE IF NOT EXISTS emergence_feedback SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS action ON emergence_feedback TYPE string;
+				DEFINE FIELD IF NOT EXISTS updated_at ON emergence_feedback TYPE string;
+				DEFINE TABLE IF NOT EXISTS saved_rule_query SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS name ON saved_rule_query TYPE string;
+				DEFINE FIELD IF NOT EXISTS source ON saved_rule_query TYPE string;
+				DEFINE FIELD IF NOT EXISTS created_at ON saved_rule_query TYPE string;
+				DEFINE FIELD IF NOT EXISTS updated_at ON saved_rule_query TYPE string;
+				DEFINE ANALYZER IF NOT EXISTS title_prefix FILTERS lowercase, edgengram(1,64);
+				DEFINE ANALYZER IF NOT EXISTS lexical TOKENIZERS class, camel, punct FILTERS lowercase;
+				DEFINE ANALYZER IF NOT EXISTS japanese_terms TOKENIZERS blank FILTERS lowercase;
+				DEFINE INDEX IF NOT EXISTS outline_title_prefix ON outline_item FIELDS title_prefix
+					FULLTEXT ANALYZER title_prefix;
+				DEFINE INDEX IF NOT EXISTS outline_title_lexical ON outline_item FIELDS title_key
+					FULLTEXT ANALYZER lexical BM25;
+				DEFINE INDEX IF NOT EXISTS outline_text_lexical ON outline_item FIELDS text
+					FULLTEXT ANALYZER lexical BM25;
+				DEFINE INDEX IF NOT EXISTS outline_terms_lexical ON outline_item FIELDS search_terms
+					FULLTEXT ANALYZER japanese_terms BM25;
 			`));
+		for (const item of await this.listItems()) await this.updateItem(item);
 		this.trace("sdk.initialize.ready");
 	}
 
@@ -104,21 +148,37 @@ export class SurrealGraphStore implements GraphStore {
 	}
 
 	async createItem(item: OutlineItem): Promise<void> {
+		const title = titleFromText(item.text);
 		await this.#db.query(
 			`CREATE $record CONTENT {
 				text: $text, order_key: $orderKey, collapsed: $collapsed,
-				created_at: $createdAt, updated_at: $updatedAt
+				created_at: $createdAt, updated_at: $updatedAt,
+				title: $title, title_key: $titleKey, title_prefix: $titleKey, search_terms: $searchTerms
 			};`,
-			{ ...item, record: new RecordId("outline_item", item.id) },
+			{
+				...item,
+				title,
+				titleKey: normalizeSearchText(title),
+				searchTerms: searchTerms(item.text),
+				record: new RecordId("outline_item", item.id),
+			},
 		);
 	}
 
 	async updateItem(item: OutlineItem): Promise<void> {
+		const title = titleFromText(item.text);
 		await this.#db.query(
 			`UPDATE $record MERGE {
-				text: $text, order_key: $orderKey, collapsed: $collapsed, updated_at: $updatedAt
+				text: $text, order_key: $orderKey, collapsed: $collapsed, updated_at: $updatedAt,
+				title: $title, title_key: $titleKey, title_prefix: $titleKey, search_terms: $searchTerms
 			};`,
-			{ ...item, record: new RecordId("outline_item", item.id) },
+			{
+				...item,
+				title,
+				titleKey: normalizeSearchText(title),
+				searchTerms: searchTerms(item.text),
+				record: new RecordId("outline_item", item.id),
+			},
 		);
 	}
 
@@ -195,6 +255,133 @@ export class SurrealGraphStore implements GraphStore {
 				{ ...knot, record: new RecordId("knot", knot.id) },
 			);
 		}
+	}
+
+	async suggestItems(prefix: string, limit: number): Promise<OutlineItem[]> {
+		const normalized = normalizeSearchText(prefix);
+		if (!normalized) return [];
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id FROM outline_item
+				WHERE title_prefix @1@ $prefix LIMIT $limit;`,
+			{ prefix: normalized, limit },
+		);
+		const ids = new Set(rows.map((row) => String(row.id)));
+		return (await this.listItems())
+			.filter((item) =>
+				ids.has(item.id) && normalizeSearchText(titleOf(item)).startsWith(normalized)
+			)
+			.sort((a, b) =>
+				titleOf(a).length - titleOf(b).length || b.updatedAt.localeCompare(a.updatedAt)
+			)
+			.slice(0, limit);
+	}
+
+	async searchLexical(query: string, limit: number): Promise<LexicalHit[]> {
+		const normalized = normalizeSearchText(query);
+		if (!normalized) return [];
+		const terms = searchTerms(query);
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id,
+				(search::score(1) ?? 0) AS title_score,
+				(search::score(2) ?? 0) + (search::score(3) ?? 0) AS body_score
+			FROM outline_item
+			WHERE title_key @1@ $query OR text @2@ $query OR search_terms @3@ $terms
+			ORDER BY title_score DESC, body_score DESC LIMIT $limit;`,
+			{ query: normalized, terms, limit },
+		);
+		const items = new Map((await this.listItems()).map((item) => [item.id, item]));
+		return rows.flatMap((row) => {
+			const item = items.get(String(row.id));
+			const title = item ? normalizeSearchText(titleOf(item)) : "";
+			const body = item ? normalizeSearchText(item.text) : "";
+			const tokens = terms.split(" ").filter(Boolean);
+			const fallbackTitle = countOccurrences(title, normalized) +
+				tokens.reduce((score, token) => score + countOccurrences(title, token), 0);
+			const fallbackBody = countOccurrences(body, normalized) +
+				tokens.reduce((score, token) => score + countOccurrences(body, token), 0);
+			return item
+				? [{
+					item,
+					titleScore: Number(row.title_score ?? row.titleScore ?? 0) || fallbackTitle,
+					bodyScore: Number(row.body_score ?? row.bodyScore ?? 0) || fallbackBody,
+				}]
+				: [];
+		});
+	}
+
+	async listAliases(): Promise<SearchAlias[]> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, canonical, variants, created_at, updated_at
+				FROM search_alias ORDER BY canonical;`,
+		);
+		return rows.map((row) => ({
+			id: String(row.id),
+			canonical: String(row.canonical ?? ""),
+			variants: Array.isArray(row.variants) ? row.variants.map(String) : [],
+			createdAt: String(row.created_at ?? ""),
+			updatedAt: String(row.updated_at ?? ""),
+		}));
+	}
+
+	async upsertAlias(alias: SearchAlias): Promise<void> {
+		await this.#db.query(
+			`UPSERT $record CONTENT {
+				canonical: $canonical, variants: $variants,
+				created_at: $createdAt, updated_at: $updatedAt
+			};`,
+			{ ...alias, record: new RecordId("search_alias", alias.id) },
+		);
+	}
+
+	async deleteAlias(id: string): Promise<void> {
+		await this.#db.query(`DELETE $record;`, { record: new RecordId("search_alias", id) });
+	}
+
+	async getEmergenceFeedback(id: string): Promise<"accept" | "dismiss" | "pin" | null> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT action FROM $record;`,
+			{ record: new RecordId("emergence_feedback", id) },
+		);
+		const action = rows[0]?.action;
+		return action === "accept" || action === "dismiss" || action === "pin" ? action : null;
+	}
+
+	async setEmergenceFeedback(id: string, action: "accept" | "dismiss" | "pin"): Promise<void> {
+		await this.#db.query(
+			`UPSERT $record CONTENT { action: $action, updated_at: $updatedAt };`,
+			{
+				action,
+				updatedAt: new Date().toISOString(),
+				record: new RecordId("emergence_feedback", id),
+			},
+		);
+	}
+
+	async listSavedRuleQueries(): Promise<SavedRuleQuery[]> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, name, source, created_at, updated_at
+				FROM saved_rule_query ORDER BY updated_at DESC;`,
+		);
+		return rows.map((row) => ({
+			id: String(row.id),
+			name: String(row.name ?? ""),
+			source: String(row.source ?? ""),
+			createdAt: String(row.created_at ?? ""),
+			updatedAt: String(row.updated_at ?? ""),
+		}));
+	}
+
+	async upsertSavedRuleQuery(query: SavedRuleQuery): Promise<void> {
+		await this.#db.query(
+			`UPSERT $record CONTENT {
+				name: $name, source: $source, created_at: $createdAt, updated_at: $updatedAt
+			};`,
+			{ ...query, record: new RecordId("saved_rule_query", query.id) },
+		);
+	}
+
+	async deleteSavedRuleQuery(id: string): Promise<void> {
+		await this.#db.query(`DELETE $record;`, { record: new RecordId("saved_rule_query", id) });
 	}
 
 	private trace(event: string, detail?: unknown): void {

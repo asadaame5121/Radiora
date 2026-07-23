@@ -21,6 +21,7 @@
 	"tasks": {
 		"build": "npm run build",
 		"check": "deno check src/main.ts && npm run check",
+		"verify": "deno fmt --check src scripts tests deno.json && deno task check && deno task test && npm run build",
 		"desktop:preflight": "deno run -A scripts/desktop_preflight.ts",
 		"test": "deno test -A src tests",
 		"test:integration": "deno run -A scripts/surreal_integration.ts",
