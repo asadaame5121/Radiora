@@ -24,11 +24,13 @@
 	}) as RadioraBindings;
 
 	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
+	type ViewMode = "outline" | "tree";
 
 	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
 	let loading = $state(true);
 	let startup = $state<StartupStatus>({ phase: "starting", message: "Radioraを起動しています…" });
 	let error = $state("");
+	let viewMode = $state<ViewMode>("outline");
 	let selectedId = $state<string | null>(null);
 	let searchQuery = $state("");
 	let searchResults = $state<SearchResult[]>([]);
@@ -277,9 +279,15 @@
 
 <div class="shell">
 	<header>
-		<div><strong>Radiora</strong><span>v2 technology PoC</span></div>
+		<div class="brand"><strong>Radiora</strong><span>v2</span></div>
+		<nav class="view-switcher" aria-label="表示モード">
+			<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
+				onclick={() => (viewMode = "outline")}>Outline</button>
+			<button class:active={viewMode === "tree"} aria-pressed={viewMode === "tree"}
+				onclick={() => (viewMode = "tree")}>Tree</button>
+		</nav>
 		<div class="search-wrap" class:disabled={startup.phase !== "ready"}>
-			<input aria-label="アウトラインを検索" placeholder="本文を検索…" bind:value={searchQuery} oninput={queueSearch} />
+			<input aria-label="思索を検索" placeholder="思索を検索…" bind:value={searchQuery} oninput={queueSearch} />
 			{#if searchResults.length}
 				<div class="search-results">
 					{#each searchResults as result}
@@ -305,46 +313,57 @@
 		</main>
 	{:else}
 	<main>
-		<section class="outline-panel">
-			<div class="section-title"><span>Outline</span><button onclick={createRoot}>＋ Root</button></div>
-			{#if loading}
-				<p class="empty">Loading…</p>
-			{:else if snapshot.items.length === 0}
-				<button class="first-item" onclick={createRoot}>最初の項目を作る</button>
-			{:else}
-				<div class="rows">
-					{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
-						<div class:selected={selectedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
-							aria-selected={selectedId === row.item.id} tabindex="-1"
-							draggable="true" ondragstart={() => draggedId = row.item.id}
-							ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
-							<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
-							<button class="bullet" aria-label="項目を選択" onclick={() => selectedId = row.item.id}>•</button>
-							<textarea rows="1" data-item-id={row.item.id} value={row.item.text}
-								onfocus={() => selectedId = row.item.id}
-								oninput={(event) => updateLocalText(row.item.id, event.currentTarget.value)}
-								onkeydown={(event) => handleKeydown(event, row)}></textarea>
-							<button class="delete" title="項目を削除" onclick={() => remove(row.item.id)}>×</button>
-						</div>
-					{/each}
-				</div>
-			{/if}
+		{#if viewMode === "outline"}
+			<section class="outline-panel">
+				<div class="section-title"><span>Outline</span><button onclick={createRoot}>＋ Root</button></div>
+				{#if loading}
+					<p class="empty">Loading…</p>
+				{:else if snapshot.items.length === 0}
+					<button class="first-item" onclick={createRoot}>最初の項目を作る</button>
+				{:else}
+					<div class="rows">
+						{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
+							<div class:selected={selectedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
+								aria-selected={selectedId === row.item.id} tabindex="-1"
+								draggable="true" ondragstart={() => draggedId = row.item.id}
+								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
+								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
+								<button class="bullet" aria-label="項目を選択" onclick={() => selectedId = row.item.id}>•</button>
+								<textarea rows="1" data-item-id={row.item.id} value={row.item.text}
+									onfocus={() => selectedId = row.item.id}
+									oninput={(event) => updateLocalText(row.item.id, event.currentTarget.value)}
+									onkeydown={(event) => handleKeydown(event, row)}></textarea>
+								<button class="delete" title="項目を削除" onclick={() => remove(row.item.id)}>×</button>
+							</div>
+						{/each}
+					</div>
+				{/if}
 
-			{#if snapshot.stashItemIds.length}
-				<div class="section-title stash-title"><span>Stash / Knots</span><small>{snapshot.knots.length} knot</small></div>
-				<div class="stash-list">
-					{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
-						<button class:selected={selectedId === row.item.id} onclick={() => selectedId = row.item.id}>
-							<span>∞</span>{row.item.text || "(空の項目)"}
-						</button>
-					{/each}
+				{#if snapshot.stashItemIds.length}
+					<div class="section-title stash-title"><span>Stash / Knots</span><small>{snapshot.knots.length} knot</small></div>
+					<div class="stash-list">
+						{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
+							<button class:selected={selectedId === row.item.id} onclick={() => selectedId = row.item.id}>
+								<span>∞</span>{row.item.text || "(空の項目)"}
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</section>
+		{:else}
+			<section class="tree-panel" aria-label="Phylogenetic Tree">
+				<div class="tree-placeholder">
+					<span class="tree-placeholder-node"></span>
+					<p class="eyebrow">PHYLOGENETIC TREE</p>
+					<h2>思索の系統を準備しています</h2>
+					<p>次の段階で時間軸、Node、Linkをこの領域へ描画します。</p>
 				</div>
-			{/if}
-		</section>
+			</section>
+		{/if}
 
 		<aside>
 			{#if selectedItem}
-				<p class="eyebrow">SELECTED ITEM</p>
+				<p class="eyebrow">SELECTED THOUGHT</p>
 				<h2>{selectedItem.text || "(空の項目)"}</h2>
 				<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
 				<div class="link-form">
