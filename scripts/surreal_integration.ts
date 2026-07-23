@@ -144,6 +144,22 @@ try {
 	) {
 		throw new Error(`UUID boundary verification failed: ${JSON.stringify(snapshot.items)}`);
 	}
+	const suggestions = await service.suggestItems("persist", 8);
+	if (suggestions.length !== 2) {
+		throw new Error(`Prefix suggestion verification failed: ${JSON.stringify(suggestions)}`);
+	}
+	const lexical = await service.searchItems({ query: "child", contextItemId: root.id });
+	if (lexical[0]?.item.id !== child.id || !lexical[0].reasons.length) {
+		throw new Error(`Lexical search verification failed: ${JSON.stringify(lexical)}`);
+	}
+	await service.saveSearchAlias({ canonical: "child", variants: ["offspring"] });
+	const expanded = await service.searchItems({ query: "offspring", contextItemId: root.id });
+	if (
+		expanded[0]?.item.id !== child.id ||
+		!expanded[0].reasons.some((reason) => reason.kind === "alias")
+	) {
+		throw new Error(`Alias search verification failed: ${JSON.stringify(expanded)}`);
+	}
 	await store.close();
 	trace("integration.ready");
 	console.log(

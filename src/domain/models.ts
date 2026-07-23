@@ -52,4 +52,88 @@ export interface CreateLinkInput {
 export interface SearchResult {
 	item: OutlineItem;
 	ancestorIds: string[];
+	score: number;
+	reasons: SearchReason[];
+}
+
+export type SearchReasonKind =
+	| "title"
+	| "body"
+	| "alias"
+	| "direct-link"
+	| "shared-link"
+	| "shared-ancestor";
+
+export interface SearchReason {
+	kind: SearchReasonKind;
+	label: string;
+	score: number;
+}
+
+export interface SearchRequest {
+	query: string;
+	contextItemId?: string | null;
+	limit?: number;
+}
+
+export interface Suggestion {
+	item: OutlineItem;
+	ancestorIds: string[];
+	title: string;
+}
+
+export interface LexicalHit {
+	item: OutlineItem;
+	titleScore: number;
+	bodyScore: number;
+}
+
+export interface SearchAlias {
+	id: string;
+	canonical: string;
+	variants: string[];
+	createdAt: string;
+	updatedAt: string;
+}
+
+export type EmergenceKind = "latent-relation" | "cross-branch-resonance" | "productive-tension";
+export type EmergenceAction = "accept" | "dismiss" | "pin";
+
+export interface EvidenceStep {
+	fromId: string;
+	toId: string;
+	relation: LinkType | "PARENT" | "LEXICAL";
+}
+
+export interface EmergenceSuggestion {
+	id: string;
+	kind: EmergenceKind;
+	contextItemId: string;
+	targetItemId: string;
+	proposedLinkType?: LinkType;
+	title: string;
+	explanation: string;
+	evidence: EvidenceStep[];
+	score: number;
+	status?: "pinned";
+}
+
+export interface EmergenceFeedback {
+	id: string;
+	action: EmergenceAction;
+	updatedAt: string;
+}
+
+export interface RuleQueryResult {
+	columns: string[];
+	rows: string[][];
+	elapsedMs: number;
+}
+
+export interface SavedRuleQuery {
+	id: string;
+	name: string;
+	source: string;
+	createdAt: string;
+	updatedAt: string;
 }

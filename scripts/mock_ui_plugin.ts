@@ -103,13 +103,71 @@ export function mockUiPlugin(): Plugin {
 					case "listOutline":
 						result = snapshot;
 						break;
-					case "searchItems": {
-						const query = String(args[0] ?? "").toLocaleLowerCase();
-						result = snapshot.items
-							.filter((item) => item.text.toLocaleLowerCase().includes(query))
-							.map((item) => ({ item, ancestorIds: [] }));
+					case "setCollapsed": {
+						const item = snapshot.items.find((candidate) => candidate.id === String(args[0]));
+						if (item) item.collapsed = Boolean(args[1]);
+						result = null;
 						break;
 					}
+					case "suggestItems": {
+						const prefix = String(args[0] ?? "").normalize("NFKC").toLocaleLowerCase();
+						result = snapshot.items
+							.filter((item) =>
+								item.text.split(/\r?\n/)[0].normalize("NFKC").toLocaleLowerCase().startsWith(prefix)
+							)
+							.slice(0, Number(args[1] ?? 8))
+							.map((item) => ({ item, title: item.text.split(/\r?\n/)[0], ancestorIds: [] }));
+						break;
+					}
+					case "searchItems": {
+						const input = args[0] as { query?: string } | string;
+						const query = (typeof input === "string" ? input : input?.query ?? "")
+							.toLocaleLowerCase();
+						result = snapshot.items
+							.filter((item) => item.text.toLocaleLowerCase().includes(query))
+							.map((item) => ({
+								item,
+								ancestorIds: [],
+								score: 0.75,
+								reasons: [{ kind: "body", label: "本文一致", score: 1 }],
+							}));
+						break;
+					}
+					case "listSearchAliases":
+					case "listSavedRuleQueries":
+						result = [];
+						break;
+					case "listEmergenceSuggestions": {
+						const contextId = String(args[0] ?? snapshot.items[0]?.id ?? "mock-1");
+						const context = snapshot.items.find((item) => item.id === contextId) ??
+							snapshot.items[0];
+						const target = snapshot.items.find((item) => item.id !== contextId) ??
+							snapshot.items[1] ?? context;
+						const contextTitle = context.text.split(/\r?\n/)[0];
+						const targetTitle = target.text.split(/\r?\n/)[0];
+						result = [{
+							id: `bridge:${context.id}:${target.id}`,
+							kind: "cross-branch-resonance",
+							title: "離れた話題をつなぐ接点",
+							explanation:
+								`「${contextTitle}」と「${targetTitle}」は、共通する語と近接リンクから一緒に眺める価値があります。`,
+							score: 0.82,
+							contextItemId: context.id,
+							targetItemId: target.id,
+							proposedLinkType: "LIKE",
+							evidence: [
+								{
+									fromId: context.id,
+									toId: target.id,
+									relation: "LEXICAL",
+								},
+							],
+						}];
+						break;
+					}
+					case "runRuleQuery":
+						result = { columns: ["From", "To"], rows: [["mock-7", "mock-10"]], elapsedMs: 0.4 };
+						break;
 					default:
 						result = null;
 				}

@@ -80,7 +80,12 @@ export function calculateTreeLayout(
 	const laidOut = assignLanes(projected, snapshot, lod, options.height);
 
 	if (lod === "overview") {
-		return aggregateOverview(laidOut.nodes, rawEdges(snapshot), visibleDensity, laidOut.contentHeight);
+		return aggregateOverview(
+			laidOut.nodes,
+			rawEdges(snapshot),
+			visibleDensity,
+			laidOut.contentHeight,
+		);
 	}
 
 	const nodesById = new Map(laidOut.nodes.map((node) => [node.id, node]));
@@ -144,7 +149,10 @@ function assignLanes(
 	for (const { item, x } of sorted) {
 		const { label, lines } = labelForItem(item.text);
 		const labelWidth = lod !== "overview"
-			? Math.min(180, Math.max(48, Math.max(...lines.map((line) => splitGraphemes(line).length)) * 13))
+			? Math.min(
+				180,
+				Math.max(48, Math.max(...lines.map((line) => splitGraphemes(line).length)) * 13),
+			)
 			: 0;
 		const radius = knotIds.has(item.id) ? 10 : 6;
 		const intervalStart = x - radius - 5;
@@ -154,9 +162,9 @@ function assignLanes(
 			if (laneEnds[lane] + NODE_GAP <= intervalStart) available.push(lane);
 		}
 
-		const preferredLane = preferredLaneById.get(item.id)
-			?? (item.parentId ? laneById.get(item.parentId) : undefined)
-			?? 0;
+		const preferredLane = preferredLaneById.get(item.id) ??
+			(item.parentId ? laneById.get(item.parentId) : undefined) ??
+			0;
 		let lane: number;
 		if (available.length > 0) {
 			lane = available.reduce((best, candidate) =>
@@ -233,7 +241,9 @@ function aggregateOverview(
 ): TreeLayout {
 	const buckets = new Map<string, TreeLayoutNode[]>();
 	for (const node of nodes) {
-		const key = `${Math.floor(node.x / OVERVIEW_CELL_WIDTH)}:${Math.floor(node.y / OVERVIEW_CELL_HEIGHT)}`;
+		const key = `${Math.floor(node.x / OVERVIEW_CELL_WIDTH)}:${
+			Math.floor(node.y / OVERVIEW_CELL_HEIGHT)
+		}`;
 		const bucket = buckets.get(key) ?? [];
 		bucket.push(node);
 		buckets.set(key, bucket);
@@ -249,7 +259,9 @@ function aggregateOverview(
 		const aggregate: TreeLayoutNode = {
 			...representative,
 			id: `cluster:${key}`,
-			itemIds: bucket.map((node) => node.id),
+			itemIds: bucket.map((node) =>
+				node.id
+			),
 			x: bucket.reduce((total, node) => total + node.x, 0) / count,
 			y: bucket.reduce((total, node) => total + node.y, 0) / count,
 			label: count > 1 ? String(count) : "",

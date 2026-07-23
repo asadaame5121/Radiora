@@ -142,7 +142,8 @@ header span {
 	box-shadow: 0 16px 40px #000a;
 }
 .search-results button {
-	display: block;
+	display: grid;
+	gap: 3px;
 	width: 100%;
 	border: 0;
 	border-bottom: 1px solid var(--border);
@@ -151,8 +152,31 @@ header span {
 	background: transparent;
 	cursor: pointer;
 }
-.search-results button:hover {
+.search-results button:hover,
+.search-results button.active {
 	background: var(--surface-hover);
+}
+.search-results button strong {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+}
+.search-results button small {
+	color: var(--muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 9px;
+}
+.search-section {
+	margin: 0;
+	padding: 7px 12px;
+	background: #07121c;
+	color: var(--cyan);
+	font-size: 8px;
+	letter-spacing: .15em;
+	text-transform: uppercase;
 }
 .error {
 	margin: 12px 24px 0;
@@ -307,6 +331,28 @@ aside {
 	padding: 26px 22px;
 	overflow: auto;
 }
+.aside-tabs {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 3px;
+	margin: -10px 0 20px;
+	padding: 3px;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+}
+.aside-tabs button {
+	border: 0;
+	border-radius: 4px;
+	padding: 6px 3px;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+	font-size: 10px;
+}
+.aside-tabs button.active {
+	background: var(--surface-hover);
+	color: var(--cyan-soft);
+}
 .eyebrow {
 	color: var(--cyan);
 	font-size: 9px;
@@ -389,6 +435,138 @@ aside h2 {
 	background: transparent;
 	cursor: pointer;
 	color: var(--muted);
+}
+.discoveries {
+	display: grid;
+	gap: 10px;
+}
+.discoveries article {
+	padding: 11px;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: var(--surface-raised);
+}
+.discoveries article.pinned {
+	border-color: var(--amber);
+}
+.discovery-title {
+	display: flex;
+	justify-content: space-between;
+	margin-bottom: 7px;
+	color: var(--cyan);
+	font-size: 9px;
+	letter-spacing: .08em;
+}
+.discoveries article > strong {
+	font-family: Georgia, serif;
+	font-size: 13px;
+}
+.discoveries article p,
+.discoveries article ol {
+	color: #9aadb6;
+	font-size: 10px;
+	line-height: 1.5;
+}
+.discoveries article ol {
+	padding-left: 17px;
+}
+.discovery-actions {
+	display: flex;
+	gap: 6px;
+}
+.discovery-actions button,
+.query-panel button {
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 5px 8px;
+	background: var(--surface-hover);
+	cursor: pointer;
+	font-size: 10px;
+}
+.query-panel {
+	display: grid;
+	gap: 8px;
+}
+.query-panel label,
+.query-panel h3 {
+	color: var(--cyan);
+	font-size: 10px;
+	letter-spacing: .1em;
+}
+.query-panel textarea,
+.query-panel input {
+	width: 100%;
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	padding: 7px;
+	background: #04080d;
+	color: var(--text);
+	font-family: ui-monospace, monospace;
+	font-size: 10px;
+	resize: vertical;
+}
+.query-actions {
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	gap: 5px;
+}
+.query-error {
+	margin: 0;
+	color: #ff9f92;
+	font-size: 10px;
+	white-space: pre-wrap;
+}
+.query-meta {
+	margin: 0;
+	color: var(--muted);
+	font-size: 9px;
+}
+.query-table {
+	max-height: 180px;
+	overflow: auto;
+	border: 1px solid var(--border);
+}
+.query-table table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 9px;
+}
+.query-table th,
+.query-table td {
+	padding: 5px;
+	border-bottom: 1px solid var(--border);
+	text-align: left;
+}
+.saved-queries {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 4px;
+}
+.saved-queries button {
+	text-align: left;
+}
+.saved-queries .remove-saved {
+	color: var(--muted);
+}
+.alias-list {
+	display: grid;
+	gap: 4px;
+}
+.alias-list div {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 4px;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	color: #9aadb6;
+	font-size: 9px;
+}
+.alias-list button {
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
 }
 .tag {
 	font-size: 8px;
