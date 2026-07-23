@@ -57,6 +57,7 @@ Deno.test("overview aggregates screen cells and merges duplicate projected links
 		item("n1", "2025-01-01T00:00:00.000Z"),
 		item("n2", "2025-01-02T00:00:00.000Z", "n1"),
 		item("n3", "2025-01-03T00:00:00.000Z", "n1"),
+		item("n4", "2025-01-04T00:00:00.000Z"),
 	]);
 	const layout = calculateTreeLayout(data, {
 		width: 30,
@@ -65,7 +66,7 @@ Deno.test("overview aggregates screen cells and merges duplicate projected links
 	});
 	assertEquals(layout.lod, "overview");
 	assert(layout.nodes.some((node) => node.aggregate));
-	assert(layout.nodes.reduce((total, node) => total + node.count, 0) === 3);
+	assert(layout.nodes.reduce((total, node) => total + node.count, 0) === 4);
 	assertEquals(layout.edges.length, 1);
 	assertEquals(layout.edges[0].count, 2);
 });

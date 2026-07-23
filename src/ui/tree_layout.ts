@@ -129,7 +129,11 @@ function assignLanes(
 	height: number,
 ): { nodes: TreeLayoutNode[]; contentHeight: number } {
 	const knotIds = new Set(snapshot.stashItemIds);
-	const laneEnds: number[] = [];
+	const baseLaneCount = lod === "detail"
+		? Math.min(10, Math.max(1, Math.ceil(Math.sqrt(projected.length))))
+		: Math.min(12, Math.max(4, Math.ceil(Math.sqrt(projected.length) * 1.5)));
+	const preferredLaneById = structuralLanes(snapshot, baseLaneCount);
+	const laneEnds: number[] = Array.from({ length: baseLaneCount }, () => Number.NEGATIVE_INFINITY);
 	const laneById = new Map<string, number>();
 	const laneSpacing = lod === "detail" ? 52 : lod === "context" ? 38 : 16;
 	const sorted = [...projected].sort((a, b) =>
@@ -139,7 +143,7 @@ function assignLanes(
 
 	for (const { item, x } of sorted) {
 		const { label, lines } = labelForItem(item.text);
-		const labelWidth = lod === "detail"
+		const labelWidth = lod !== "overview"
 			? Math.min(180, Math.max(48, Math.max(...lines.map((line) => splitGraphemes(line).length)) * 13))
 			: 0;
 		const radius = knotIds.has(item.id) ? 10 : 6;
@@ -150,14 +154,14 @@ function assignLanes(
 			if (laneEnds[lane] + NODE_GAP <= intervalStart) available.push(lane);
 		}
 
-		const parentLane = item.parentId ? laneById.get(item.parentId) : undefined;
+		const preferredLane = preferredLaneById.get(item.id)
+			?? (item.parentId ? laneById.get(item.parentId) : undefined)
+			?? 0;
 		let lane: number;
 		if (available.length > 0) {
-			lane = parentLane === undefined
-				? available[0]
-				: available.reduce((best, candidate) =>
-					Math.abs(candidate - parentLane) < Math.abs(best - parentLane) ? candidate : best
-				);
+			lane = available.reduce((best, candidate) =>
+				Math.abs(candidate - preferredLane) < Math.abs(best - preferredLane) ? candidate : best
+			);
 		} else {
 			lane = laneEnds.length;
 			laneEnds.push(Number.NEGATIVE_INFINITY);
@@ -187,6 +191,38 @@ function assignLanes(
 		nodes: pending.map((node) => ({ ...node, y: top + node.lane * laneSpacing })),
 		contentHeight,
 	};
+}
+
+function structuralLanes(snapshot: OutlineSnapshot, laneCount: number): Map<string, number> {
+	const byParent = new Map<string | null, OutlineItem[]>();
+	const ids = new Set(snapshot.items.map((item) => item.id));
+	for (const item of snapshot.items) {
+		const parentId = item.parentId && ids.has(item.parentId) ? item.parentId : null;
+		const bucket = byParent.get(parentId) ?? [];
+		bucket.push(item);
+		byParent.set(parentId, bucket);
+	}
+	for (const bucket of byParent.values()) {
+		bucket.sort((a, b) => a.orderKey - b.orderKey || a.id.localeCompare(b.id));
+	}
+
+	const ordered: OutlineItem[] = [];
+	const visited = new Set<string>();
+	const visit = (item: OutlineItem) => {
+		if (visited.has(item.id)) return;
+		visited.add(item.id);
+		ordered.push(item);
+		for (const child of byParent.get(item.id) ?? []) visit(child);
+	};
+	for (const root of byParent.get(null) ?? []) visit(root);
+	for (const item of snapshot.items) visit(item);
+
+	const result = new Map<string, number>();
+	const denominator = Math.max(1, ordered.length - 1);
+	ordered.forEach((item, index) => {
+		result.set(item.id, Math.round(index / denominator * Math.max(0, laneCount - 1)));
+	});
+	return result;
 }
 
 function aggregateOverview(
