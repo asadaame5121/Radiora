@@ -27,6 +27,22 @@ deno task desktop
 `desktop:build` はDeno Desktopが再ビルドを拒否しないよう、前回のWindows bundleとその配下の
 WebView2ランタイムキャッシュを削除してから新しいbundleを生成します。
 
+### UIの目視確認
+
+Desktop Backendを起動せず、固定の高密度グラフでOutlineとTreeを確認する場合は次を実行します。
+
+```powershell
+npm run dev:mock
+```
+
+Treeはヘッダーの`Outline / Tree`から切り替えます。時間軸の表示密度に応じて
+`Detail / Context / Overview`が切り替わり、Overviewの件数Nodeをクリックすると対象期間へ
+拡大します。Nodeへポインターを合わせるかキーボードフォーカスすると、直接接続されたNodeと
+Linkだけが強調されます。
+
+`dev:mock`のAPIはViteの`mock`モードだけで有効になり、通常のDesktop起動と本番ビルドでは
+使用されません。
+
 データは `%LOCALAPPDATA%\RadioraV2\surreal\main.db`
 に保存されます。JSONストアで一時的に起動する場合は
 `deno task desktop:json`、生成済みbundleでは`deno task desktop:run:json`を使用します。
