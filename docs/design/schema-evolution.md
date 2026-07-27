@@ -20,9 +20,9 @@ tags:
 製品上のデータモデルと機能境界は[[product-direction]]を正とする。本書は、そのモデルを
 永続化形式へ反映する際の手続きを扱う。
 
-## 2. 現在の基準点
+## 2. 基準点と現在地
 
-現行PoCは次の状態にある。
+Phase 0時点のPoCは次の状態にあった。
 
 - SurrealDB schemaは`SurrealGraphStore.initialize()`内の`DEFINE ... IF NOT EXISTS`で生成している
 - DB内に適用済みschema versionを記録していない
@@ -38,6 +38,10 @@ tags:
 | Work / Occurrence以降の最初の正式形式 | version `1` |
 
 version `0`は互換入力として扱うlegacy形式であり、今後同じ形へ新規出力しない。
+
+2026-07-27に`0001_work_occurrence`を導入し、現在のstorage schemaとbackup schemaは
+version `1`である。Work、main Branch、Working Copy、Occurrence、意味リンク、システム関係へ
+分離した。詳細は[[../log/2026-07-27-phase-1-work-occurrence]]を参照する。
 
 ## 3. 二つのschema version
 

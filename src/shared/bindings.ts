@@ -1,18 +1,21 @@
 import type {
 	CreateItemInput,
 	CreateLinkInput,
+	CreateOccurrenceInput,
 	EmergenceAction,
 	EmergenceSuggestion,
 	LinkType,
 	MoveItemInput,
 	OutlineItem,
 	OutlineSnapshot,
+	PurgeManifest,
 	RuleQueryResult,
 	SavedRuleQuery,
 	SearchAlias,
 	SearchRequest,
 	SearchResult,
 	Suggestion,
+	TrashEntry,
 } from "../domain/models.ts";
 
 export interface RadioraBindings {
@@ -20,9 +23,15 @@ export interface RadioraBindings {
 	retryStartup(): Promise<StartupStatus>;
 	listOutline(): Promise<OutlineSnapshot>;
 	createItem(input: CreateItemInput): Promise<OutlineItem>;
+	createOccurrence(input: CreateOccurrenceInput): Promise<OutlineItem>;
 	updateItemText(id: string, text: string): Promise<void>;
+	setContextualHeading(id: string, contextualHeading?: string): Promise<void>;
 	moveItem(input: MoveItemInput): Promise<void>;
 	deleteItem(id: string): Promise<void>;
+	trashWork(id: string): Promise<void>;
+	listTrash(): Promise<TrashEntry[]>;
+	restoreWork(workId: string): Promise<void>;
+	purgeWork(workId: string): Promise<PurgeManifest>;
 	setCollapsed(id: string, collapsed: boolean): Promise<void>;
 	createLink(input: CreateLinkInput): Promise<void>;
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;

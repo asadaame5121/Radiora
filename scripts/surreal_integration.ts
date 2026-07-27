@@ -1,5 +1,6 @@
 import { OutlineService } from "../src/services/outline_service.ts";
 import { SurrealGraphStore } from "../src/storage/surreal_store.ts";
+import { Surreal } from "surrealdb";
 
 const port = 18012;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -101,6 +102,28 @@ async function waitUntilReady(): Promise<void> {
 
 try {
 	await waitUntilReady();
+	trace("integration.seed-v0.begin");
+	const legacy = new Surreal();
+	await legacy.connect(endpoint, {
+		authentication: { username: "root", password: "root" },
+	});
+	await legacy.query(`
+		DEFINE NAMESPACE IF NOT EXISTS radiora_v2;
+		USE NS radiora_v2;
+		DEFINE DATABASE IF NOT EXISTS main;
+	`);
+	await legacy.use({ namespace: "radiora_v2", database: "main" });
+	await legacy.query(
+		await Deno.readTextFile(new URL("../tests/fixtures/storage-v0.surql", import.meta.url)),
+	);
+	await legacy.query(`
+		RELATE outline_item:\`11111111-1111-4111-8111-111111111111\`
+			->in_knot->outline_item:\`22222222-2222-4222-8222-222222222222\`
+			CONTENT { created_at: "2026-07-05T01:00:00.000Z" };
+	`);
+	await legacy.close();
+	trace("integration.seed-v0.ready");
+
 	let store = new SurrealGraphStore(endpoint, "root", "root", trace);
 	await store.initialize();
 	trace("integration.first-session.ready");
@@ -130,8 +153,27 @@ try {
 		items: snapshot.items.length,
 		links: snapshot.links.length,
 	});
-	if (snapshot.items.length !== 2 || snapshot.links.length !== 1) {
+	if (snapshot.items.length !== 4 || snapshot.links.length !== 2) {
 		throw new Error(`Persistence verification failed: ${JSON.stringify(snapshot)}`);
+	}
+	const migratedLegacy = snapshot.items.find((item) =>
+		item.id === "11111111-1111-4111-8111-111111111111"
+	);
+	if (
+		!migratedLegacy ||
+		!migratedLegacy.text.includes("日本語・**Markdown**・radiora://item/") ||
+		snapshot.links.some((link) => link.type === "FROM")
+	) {
+		throw new Error(`Version 0 migration verification failed: ${JSON.stringify(snapshot)}`);
+	}
+	const systemRelations = await store.listSystemRelations();
+	if (
+		systemRelations.length !== 1 ||
+		systemRelations[0].type !== "IN" ||
+		systemRelations[0].fromWorkId !== "11111111-1111-4111-8111-111111111111" ||
+		systemRelations[0].toWorkId !== "22222222-2222-4222-8222-222222222222"
+	) {
+		throw new Error(`IN system relation migration failed: ${JSON.stringify(systemRelations)}`);
 	}
 	const persistedRoot = snapshot.items.find((item) => item.id === root.id);
 	const persistedChild = snapshot.items.find((item) => item.id === child.id);
@@ -159,6 +201,32 @@ try {
 		!expanded[0].reasons.some((reason) => reason.kind === "alias")
 	) {
 		throw new Error(`Alias search verification failed: ${JSON.stringify(expanded)}`);
+	}
+	const mirror = await service.createOccurrence({
+		workId: root.workId,
+		parentId: null,
+		contextualHeading: "integration mirror",
+	});
+	await service.updateItemText(mirror.id, "persisted root shared");
+	const shared = (await service.listOutline()).items.filter((item) => item.workId === root.workId);
+	if (shared.length !== 2 || shared.some((item) => item.text !== "persisted root shared")) {
+		throw new Error(`Shared WorkingCopy verification failed: ${JSON.stringify(shared)}`);
+	}
+	await service.deleteItem(mirror.id);
+	await service.trashWork(root.id);
+	if (!(await service.listTrash()).some((entry) => entry.work.id === root.workId)) {
+		throw new Error("Trash verification failed");
+	}
+	await service.restoreWork(root.workId);
+	const disposable = await service.createItem({ text: "must not enter manifest", parentId: null });
+	await service.trashWork(disposable.id);
+	const manifest = await service.purgeWork(disposable.workId);
+	const manifests = await store.listPurgeManifests();
+	if (
+		!manifests.some((candidate) => candidate.id === manifest.id) ||
+		JSON.stringify(manifest).includes("must not enter manifest")
+	) {
+		throw new Error(`Purge manifest verification failed: ${JSON.stringify(manifests)}`);
 	}
 	await store.close();
 	trace("integration.ready");

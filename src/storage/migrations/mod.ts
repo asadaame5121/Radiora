@@ -1,4 +1,4 @@
-export const CURRENT_STORAGE_SCHEMA_VERSION = 0;
+export const CURRENT_STORAGE_SCHEMA_VERSION = 1;
 
 export interface SchemaMetadata {
 	id: "radiora";

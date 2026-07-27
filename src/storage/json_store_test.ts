@@ -1,27 +1,31 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import type { OutlineItem } from "../domain/models.ts";
-import { JsonGraphStore } from "./json_store.ts";
+import { JsonGraphStore, migrateBackupV0 } from "./json_store.ts";
 
 Deno.test("persists and reloads graph data", async () => {
 	const directory = await Deno.makeTempDir();
 	const path = `${directory}/graph.json`;
-	const item: OutlineItem = {
-		id: "one",
-		text: "persistent",
-		parentId: null,
-		orderKey: 1,
-		collapsed: false,
-		createdAt: "2026-01-01T00:00:00.000Z",
-		updatedAt: "2026-01-01T00:00:00.000Z",
-	};
+	const timestamp = "2026-01-01T00:00:00.000Z";
 	try {
 		const first = new JsonGraphStore(path);
 		await first.initialize();
-		await first.createItem(item);
+		await first.createWorkBundle(
+			{ id: "one", createdAt: timestamp, updatedAt: timestamp },
+			{ id: "main", workId: "one", name: "main", headRevisionId: null, createdAt: timestamp },
+			{ branchId: "main", workId: "one", text: "persistent", updatedAt: timestamp },
+			{
+				id: "occurrence-one",
+				workId: "one",
+				parentOccurrenceId: null,
+				orderKey: 1,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId: "main" },
+			},
+		);
 
 		const second = new JsonGraphStore(path);
 		await second.initialize();
-		assertEquals(await second.listItems(), [item]);
+		assertEquals((await second.listItems())[0].text, "persistent");
+		assertEquals((await second.listItems())[0].workId, "one");
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -29,20 +33,117 @@ Deno.test("persists and reloads graph data", async () => {
 
 Deno.test("loads the complete version 0 JSON fixture without data loss", async () => {
 	const fixture = new URL("../../tests/fixtures/backup-v0.json", import.meta.url);
-	const store = new JsonGraphStore(fixture);
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/backup-v0.json`;
+	try {
+		await Deno.copyFile(fixture, path);
+		const store = new JsonGraphStore(path);
+		await store.initialize();
 
-	await store.initialize();
+		const items = await store.listItems();
+		assertEquals(items.length, 2);
+		assertEquals(
+			items[0].text,
+			"原稿\n\n日本語・**Markdown**・radiora://item/22222222-2222-4222-8222-222222222222",
+		);
+		assertEquals(items[1].parentId, items[0].id);
+		assertEquals(items[1].collapsed, true);
+		assertEquals((await store.listLinks()).length, 1);
+		assertEquals((await store.listAliases())[0].variants, ["来歴", "genealogy"]);
+		assertEquals(await store.getEmergenceFeedback("suggestion-1"), "pin");
+		assertEquals((await store.listSavedRuleQueries())[0].name, "LIKEリンク");
+		const migrated = JSON.parse(await Deno.readTextFile(path));
+		assertEquals(migrated.schemaVersion, 1);
+		assertEquals(migrated.data.works.length, 2);
+		assertEquals(migrated.data.occurrences[1].parentOccurrenceId, items[0].id);
+		assertEquals(migrated.data.links[0].status, "asserted");
+		assertEquals(migrated.data.links.some((link: { type: string }) => link.type === "FROM"), false);
+		const protectedInput = JSON.parse(await Deno.readTextFile(`${path}.v0.bak`));
+		assertEquals(protectedInput.items.length, 2);
+		assertEquals(protectedInput.schemaVersion, undefined);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
 
-	const items = await store.listItems();
-	assertEquals(items.length, 2);
-	assertEquals(
-		items[0].text,
-		"原稿\n\n日本語・**Markdown**・radiora://item/22222222-2222-4222-8222-222222222222",
-	);
-	assertEquals(items[1].parentId, items[0].id);
-	assertEquals(items[1].collapsed, true);
-	assertEquals((await store.listLinks()).length, 1);
-	assertEquals((await store.listAliases())[0].variants, ["来歴", "genealogy"]);
-	assertEquals(await store.getEmergenceFeedback("suggestion-1"), "pin");
-	assertEquals((await store.listSavedRuleQueries())[0].name, "LIKEリンク");
+Deno.test("version 0 IN links migrate to system relations, not semantic links", () => {
+	const migrated = migrateBackupV0({
+		items: [
+			{
+				id: "one",
+				text: "one",
+				parentId: null,
+				orderKey: 1,
+				collapsed: false,
+				createdAt: "2026-01-01T00:00:00.000Z",
+				updatedAt: "2026-01-01T00:00:00.000Z",
+			},
+			{
+				id: "two",
+				text: "two",
+				parentId: "one",
+				orderKey: 2,
+				collapsed: false,
+				createdAt: "2026-01-01T00:00:00.000Z",
+				updatedAt: "2026-01-01T00:00:00.000Z",
+			},
+		],
+		links: [{
+			fromId: "one",
+			toId: "two",
+			type: "IN",
+			createdAt: "2026-01-01T00:00:00.000Z",
+		}],
+		knots: [],
+	});
+
+	assertEquals(migrated.links, []);
+	assertEquals(migrated.systemRelations[0].type, "IN");
+	assertEquals(migrated.occurrences[1].parentOccurrenceId, "one");
+});
+
+Deno.test("version 1 reload preserves trash state and content-free purge manifests", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	const timestamp = "2026-01-01T00:00:00.000Z";
+	try {
+		const first = new JsonGraphStore(path);
+		await first.initialize();
+		await first.createWorkBundle(
+			{ id: "purged-work", createdAt: timestamp, updatedAt: timestamp },
+			{
+				id: "purged-main",
+				workId: "purged-work",
+				name: "main",
+				headRevisionId: null,
+				createdAt: timestamp,
+			},
+			{
+				branchId: "purged-main",
+				workId: "purged-work",
+				text: "manifestに残してはいけない",
+				updatedAt: timestamp,
+			},
+			{
+				id: "purged-occurrence",
+				workId: "purged-work",
+				parentOccurrenceId: null,
+				orderKey: 1,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId: "purged-main" },
+			},
+		);
+		await first.trashWork("purged-work", timestamp);
+		const manifest = await first.purgeWork("purged-work");
+
+		const second = new JsonGraphStore(path);
+		await second.initialize();
+		const [reloaded] = await second.listPurgeManifests();
+
+		assertEquals(reloaded, manifest);
+		assertEquals((await second.listWorks(true)).length, 0);
+		assertEquals(JSON.stringify(reloaded).includes("manifestに残してはいけない"), false);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
 });

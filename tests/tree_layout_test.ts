@@ -15,10 +15,12 @@ function item(
 ): OutlineItem {
 	return {
 		id,
+		workId: id,
 		text,
 		parentId,
 		orderKey: Number(id.replace(/\D/g, "")) || 1,
 		collapsed: false,
+		revisionSelector: { mode: "branch", branchId: id },
 		createdAt,
 		updatedAt: createdAt,
 	};
@@ -26,6 +28,24 @@ function item(
 
 function snapshot(items: OutlineItem[]): OutlineSnapshot {
 	return { items, links: [], knots: [], stashItemIds: [] };
+}
+
+function link(
+	fromId: string,
+	toId: string,
+	type: "RELATED" | "FROM" | "LIKE",
+): OutlineSnapshot["links"][number] {
+	return {
+		id: `${type}-${fromId}-${toId}`,
+		fromId,
+		toId,
+		from: { scope: "work", workId: fromId },
+		to: { scope: "work", workId: toId },
+		type,
+		status: "asserted",
+		origin: "human",
+		createdAt: "2026-01-01T00:00:00.000Z",
+	};
 }
 
 Deno.test("tree labels use the first non-empty line and clamp to two lines", () => {
@@ -64,6 +84,7 @@ Deno.test("overview aggregates screen cells and merges duplicate projected links
 		item("n3", "2025-01-03T00:00:00.000Z", "n1"),
 		item("n4", "2025-01-04T00:00:00.000Z"),
 	]);
+	data.links.push(link("n1", "n2", "RELATED"), link("n1", "n3", "RELATED"));
 	const layout = calculateTreeLayout(data, {
 		width: 30,
 		height: 120,
@@ -84,9 +105,14 @@ Deno.test("direct neighborhood includes parent, children, and related links", ()
 		item("related", "2025-01-04T00:00:00.000Z"),
 	]);
 	data.links.push({
+		id: "link-1",
 		fromId: "focus",
 		toId: "related",
+		from: { scope: "work", workId: "focus" },
+		to: { scope: "work", workId: "related" },
 		type: "LIKE",
+		status: "asserted",
+		origin: "human",
 		createdAt: "2025-01-05T00:00:00.000Z",
 	});
 	assertEquals(
@@ -98,8 +124,9 @@ Deno.test("direct neighborhood includes parent, children, and related links", ()
 Deno.test("FROM draws from parent source to child target", () => {
 	const data = snapshot([
 		item("parent", "2026-01-01T00:00:00.000Z"),
-		item("child", "2026-01-02T00:00:00.000Z", "parent"),
+		item("child", "2026-01-02T00:00:00.000Z"),
 	]);
+	data.links.push(link("child", "parent", "FROM"));
 	const layout = calculateTreeLayout(data, {
 		width: 600,
 		height: 300,
@@ -110,4 +137,29 @@ Deno.test("FROM draws from parent source to child target", () => {
 	assertEquals(edge?.source.id, "parent");
 	assertEquals(edge?.target.id, "child");
 	assertEquals(edge?.count, 1);
+});
+
+Deno.test("Work links project to one visible Occurrence while neighborhood includes every mirror", () => {
+	const source = item("source-primary", "2026-01-01T00:00:00.000Z");
+	source.workId = "source-work";
+	const mirror = item("source-mirror", "2026-01-02T00:00:00.000Z");
+	mirror.workId = source.workId;
+	const target = item("target", "2026-01-03T00:00:00.000Z");
+	target.workId = "target-work";
+	const data = snapshot([source, mirror, target]);
+	data.links.push(link(source.workId, target.workId, "RELATED"));
+
+	const layout = calculateTreeLayout(data, {
+		width: 600,
+		height: 300,
+		projectX: (timestamp) => timestamp,
+	});
+	const edge = layout.edges.find((candidate) => candidate.type === "RELATED");
+
+	assertEquals(edge?.source.id, source.id);
+	assertEquals(edge?.target.id, target.id);
+	assertEquals(
+		buildDirectNeighborSet(data, target.id),
+		new Set([target.id, source.id, mirror.id]),
+	);
 });

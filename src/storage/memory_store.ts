@@ -1,11 +1,17 @@
 import type {
+	Branch,
 	Knot,
 	LexicalHit,
 	LinkType,
+	Occurrence,
 	OutlineItem,
 	OutlineLink,
+	PurgeManifest,
 	SavedRuleQuery,
 	SearchAlias,
+	SystemRelation,
+	Work,
+	WorkingCopy,
 } from "../domain/models.ts";
 import type { GraphStore } from "./graph_store.ts";
 import {
@@ -16,41 +22,141 @@ import {
 } from "../services/search_text.ts";
 
 export class MemoryGraphStore implements GraphStore {
-	items: OutlineItem[] = [];
-	links: OutlineLink[] = [];
-	knots: Knot[] = [];
-	aliases: SearchAlias[] = [];
-	emergenceFeedback: Record<string, "accept" | "dismiss" | "pin"> = {};
-	savedRuleQueries: SavedRuleQuery[] = [];
+	protected works: Work[] = [];
+	protected branches: Branch[] = [];
+	protected workingCopies: WorkingCopy[] = [];
+	protected occurrences: Occurrence[] = [];
+	protected links: OutlineLink[] = [];
+	protected systemRelations: SystemRelation[] = [];
+	protected knots: Knot[] = [];
+	protected aliases: SearchAlias[] = [];
+	protected emergenceFeedback: Record<string, "accept" | "dismiss" | "pin"> = {};
+	protected savedRuleQueries: SavedRuleQuery[] = [];
+	protected purgeManifests: PurgeManifest[] = [];
+
 	initialize(): Promise<void> {
 		return Promise.resolve();
 	}
+
 	close(): Promise<void> {
 		return Promise.resolve();
 	}
+
 	listItems(): Promise<OutlineItem[]> {
-		return Promise.resolve(structuredClone(this.items));
+		return Promise.resolve(structuredClone(this.projectItems(false)));
 	}
-	createItem(item: OutlineItem): Promise<void> {
-		this.items.push(structuredClone(item));
+
+	listWorks(includeDeleted = false): Promise<Work[]> {
+		return Promise.resolve(structuredClone(
+			this.works.filter((work) => includeDeleted || !work.deletedAt),
+		));
+	}
+
+	listOccurrences(includeDeletedWorks = false): Promise<Occurrence[]> {
+		const visibleWorkIds = new Set(
+			this.works.filter((work) => includeDeletedWorks || !work.deletedAt).map((work) => work.id),
+		);
+		return Promise.resolve(structuredClone(
+			this.occurrences.filter((occurrence) => visibleWorkIds.has(occurrence.workId)),
+		));
+	}
+
+	createWorkBundle(
+		work: Work,
+		branch: Branch,
+		workingCopy: WorkingCopy,
+		occurrence: Occurrence,
+	): Promise<void> {
+		this.works.push(structuredClone(work));
+		this.branches.push(structuredClone(branch));
+		this.workingCopies.push(structuredClone(workingCopy));
+		this.occurrences.push(structuredClone(occurrence));
 		return Promise.resolve();
 	}
-	updateItem(item: OutlineItem): Promise<void> {
-		this.items = this.items.map((candidate) =>
-			candidate.id === item.id ? structuredClone(item) : candidate
+
+	createOccurrence(occurrence: Occurrence): Promise<void> {
+		this.occurrences.push(structuredClone(occurrence));
+		return Promise.resolve();
+	}
+
+	updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
+		this.workingCopies = this.workingCopies.map((copy) =>
+			copy.workId === workId ? { ...copy, text, updatedAt } : copy
+		);
+		this.works = this.works.map((work) => work.id === workId ? { ...work, updatedAt } : work);
+		return Promise.resolve();
+	}
+
+	updateOccurrence(occurrence: Occurrence): Promise<void> {
+		this.occurrences = this.occurrences.map((candidate) =>
+			candidate.id === occurrence.id ? structuredClone(occurrence) : candidate
 		);
 		return Promise.resolve();
 	}
-	deleteItem(id: string): Promise<void> {
-		this.items = this.items.filter((item) => item.id !== id);
-		this.links = this.links.filter((link) => link.fromId !== id && link.toId !== id);
+
+	deleteOccurrence(id: string): Promise<void> {
+		this.occurrences = this.occurrences.filter((occurrence) => occurrence.id !== id);
 		return Promise.resolve();
 	}
-	setParent(childId: string, parentId: string | null): Promise<void> {
-		const item = this.items.find((candidate) => candidate.id === childId);
-		if (item) item.parentId = parentId;
+
+	trashWork(workId: string, deletedAt: string): Promise<void> {
+		this.works = this.works.map((work) =>
+			work.id === workId ? { ...work, deletedAt, updatedAt: deletedAt } : work
+		);
 		return Promise.resolve();
 	}
+
+	restoreWork(workId: string): Promise<void> {
+		this.works = this.works.map((work) => {
+			if (work.id !== workId) return work;
+			const restored = { ...work };
+			delete restored.deletedAt;
+			return restored;
+		});
+		const occurrenceIds = new Set(this.occurrences.map((occurrence) => occurrence.id));
+		this.occurrences = this.occurrences.map((occurrence) =>
+			occurrence.workId === workId && occurrence.parentOccurrenceId &&
+				!occurrenceIds.has(occurrence.parentOccurrenceId)
+				? { ...occurrence, parentOccurrenceId: null }
+				: occurrence
+		);
+		return Promise.resolve();
+	}
+
+	purgeWork(workId: string): Promise<PurgeManifest> {
+		const branchIds = new Set(
+			this.branches.filter((branch) => branch.workId === workId).map((branch) => branch.id),
+		);
+		const manifest: PurgeManifest = {
+			id: crypto.randomUUID(),
+			workId,
+			occurrenceIds: this.occurrences
+				.filter((occurrence) => occurrence.workId === workId)
+				.map((occurrence) => occurrence.id),
+			branchIds: [...branchIds],
+			revisionIds: [],
+			linkIds: this.links
+				.filter((link) => link.from.workId === workId || link.to.workId === workId)
+				.map((link) => link.id),
+			purgedAt: new Date().toISOString(),
+		};
+		this.purgeManifests.push(manifest);
+		this.works = this.works.filter((work) => work.id !== workId);
+		this.branches = this.branches.filter((branch) => branch.workId !== workId);
+		this.workingCopies = this.workingCopies.filter((copy) =>
+			copy.workId !== workId && !branchIds.has(copy.branchId)
+		);
+		this.occurrences = this.occurrences.filter((occurrence) => occurrence.workId !== workId);
+		this.links = this.links.filter((link) =>
+			link.from.workId !== workId && link.to.workId !== workId
+		);
+		return Promise.resolve(structuredClone(manifest));
+	}
+
+	listPurgeManifests(): Promise<PurgeManifest[]> {
+		return Promise.resolve(structuredClone(this.purgeManifests));
+	}
+
 	listLinks(): Promise<OutlineLink[]> {
 		return Promise.resolve(structuredClone(this.links));
 	}
@@ -64,6 +170,10 @@ export class MemoryGraphStore implements GraphStore {
 		);
 		return Promise.resolve();
 	}
+
+	listSystemRelations(): Promise<SystemRelation[]> {
+		return Promise.resolve(structuredClone(this.systemRelations));
+	}
 	listKnots(): Promise<Knot[]> {
 		return Promise.resolve(structuredClone(this.knots));
 	}
@@ -74,8 +184,9 @@ export class MemoryGraphStore implements GraphStore {
 	suggestItems(prefix: string, limit: number): Promise<OutlineItem[]> {
 		const normalized = normalizeSearchText(prefix);
 		if (!normalized) return Promise.resolve([]);
+		const items = this.representativeItems();
 		return Promise.resolve(structuredClone(
-			this.items
+			items
 				.filter((item) => normalizeSearchText(titleOf(item)).startsWith(normalized))
 				.sort((a, b) =>
 					titleOf(a).length - titleOf(b).length || b.updatedAt.localeCompare(a.updatedAt)
@@ -87,7 +198,7 @@ export class MemoryGraphStore implements GraphStore {
 		const normalized = normalizeSearchText(query);
 		const tokenized = searchTerms(query).split(" ").filter(Boolean);
 		if (!normalized) return Promise.resolve([]);
-		const hits = this.items.map((item) => {
+		const hits = this.representativeItems().map((item) => {
 			const title = normalizeSearchText(titleOf(item));
 			const body = normalizeSearchText(item.text);
 			const titleCount = countOccurrences(title, normalized) +
@@ -138,5 +249,39 @@ export class MemoryGraphStore implements GraphStore {
 	deleteSavedRuleQuery(id: string): Promise<void> {
 		this.savedRuleQueries = this.savedRuleQueries.filter((query) => query.id !== id);
 		return Promise.resolve();
+	}
+
+	private projectItems(includeDeleted: boolean): OutlineItem[] {
+		const workById = new Map(
+			this.works.filter((work) => includeDeleted || !work.deletedAt).map((work) => [work.id, work]),
+		);
+		const copyByBranchId = new Map(this.workingCopies.map((copy) => [copy.branchId, copy]));
+		return this.occurrences.flatMap((occurrence): OutlineItem[] => {
+			const work = workById.get(occurrence.workId);
+			if (!work) return [];
+			const text = occurrence.revisionSelector.mode === "branch"
+				? copyByBranchId.get(occurrence.revisionSelector.branchId)?.text ?? ""
+				: "";
+			return [{
+				id: occurrence.id,
+				workId: occurrence.workId,
+				text,
+				parentId: occurrence.parentOccurrenceId,
+				orderKey: occurrence.orderKey,
+				collapsed: occurrence.collapsed,
+				revisionSelector: structuredClone(occurrence.revisionSelector),
+				contextualHeading: occurrence.contextualHeading,
+				createdAt: work.createdAt,
+				updatedAt: work.updatedAt,
+			}];
+		});
+	}
+
+	private representativeItems(): OutlineItem[] {
+		const byWork = new Map<string, OutlineItem>();
+		for (const item of this.projectItems(false)) {
+			if (!byWork.has(item.workId)) byWork.set(item.workId, item);
+		}
+		return [...byWork.values()];
 	}
 }

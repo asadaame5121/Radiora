@@ -13,6 +13,7 @@
 		SearchAlias,
 		SearchResult,
 		Suggestion,
+		TrashEntry,
 	} from "../domain/models";
 	import { LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
@@ -31,7 +32,7 @@
 	}) as RadioraBindings;
 
 	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
-	type ViewMode = "outline" | "tree";
+	type ViewMode = "outline" | "tree" | "trash";
 	type AsideMode = "links" | "discover" | "query";
 
 	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
@@ -58,13 +59,24 @@
 	let newLinkTarget = $state("");
 	let newLinkType = $state<LinkType>("LIKE");
 	let draggedId = $state<string | null>(null);
+	let trashEntries = $state<TrashEntry[]>([]);
 	const saveTimers = new Map<string, number>();
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
+	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
-	const selectedLinks = $derived(selectedId
-		? snapshot.links.filter((link) => link.fromId === selectedId || link.toId === selectedId)
+	const selectedLinks = $derived(selectedItem
+		? snapshot.links.filter((link) =>
+			link.fromId === selectedItem.workId || link.toId === selectedItem.workId
+		)
 		: []);
+	const linkTargets = $derived([
+		...new Map(
+			snapshot.items
+				.filter((item) => item.workId !== selectedItem?.workId)
+				.map((item) => [item.workId, item]),
+		).values(),
+	]);
 	const visibleRows = $derived.by(() => buildVisibleRows(snapshot));
 	const searchEntries = $derived([
 		...suggestions.map((suggestion) => ({ kind: "suggestion" as const, value: suggestion })),
@@ -411,13 +423,61 @@
 	}
 
 	function otherName(link: OutlineLink): string {
-		const id = link.fromId === selectedId ? link.toId : link.fromId;
-		const item = itemById.get(id);
+		const id = link.fromId === selectedItem?.workId ? link.toId : link.fromId;
+		const item = itemByWorkId.get(id);
 		return item ? titleFor(item) : "(空の項目)";
 	}
 
+	async function duplicateSelectedOccurrence(): Promise<void> {
+		if (!selectedItem) return;
+		const created = await api.createOccurrence({
+			workId: selectedItem.workId,
+			parentId: selectedItem.parentId,
+			afterId: selectedItem.id,
+		});
+		await load(created.id);
+	}
+
+	async function updateSelectedHeading(value: string): Promise<void> {
+		if (!selectedItem) return;
+		await api.setContextualHeading(selectedItem.id, value);
+		await load(selectedItem.id);
+	}
+
+	async function trashSelectedWork(): Promise<void> {
+		if (!selectedItem) return;
+		const count = snapshot.items.filter((item) => item.workId === selectedItem.workId).length;
+		if (!confirm(`この実身をゴミ箱へ移します。${count}件の化身とリンクは保持されます。`)) return;
+		await api.trashWork(selectedItem.id);
+		selectedId = null;
+		await load();
+	}
+
+	async function openTrash(): Promise<void> {
+		trashEntries = await api.listTrash();
+		viewMode = "trash";
+	}
+
+	async function restoreTrash(workId: string): Promise<void> {
+		await api.restoreWork(workId);
+		trashEntries = await api.listTrash();
+		await load();
+	}
+
+	async function purgeTrash(entry: TrashEntry): Promise<void> {
+		if (
+			!confirm(
+				`完全消去します。化身${entry.occurrenceCount}件、リンク${entry.linkCount}件と本文を復元できなくなります。`,
+			)
+		) return;
+		await api.purgeWork(entry.work.id);
+		trashEntries = await api.listTrash();
+	}
+
 	function titleFor(item: OutlineItem): string {
-		return item.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "(空の項目)";
+		return item.contextualHeading ??
+			item.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ??
+			"(空の項目)";
 	}
 
 	function titleForId(id: string): string {
@@ -452,6 +512,8 @@
 				onclick={() => (viewMode = "outline")}>Outline</button>
 			<button class:active={viewMode === "tree"} aria-pressed={viewMode === "tree"}
 				onclick={() => (viewMode = "tree")}>Tree</button>
+			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
+				onclick={openTrash}>ゴミ箱</button>
 		</nav>
 		<div class="search-wrap" class:disabled={startup.phase !== "ready"}>
 			<input aria-label="思索を検索" placeholder="思索を検索…" bind:value={searchQuery}
@@ -515,7 +577,7 @@
 									onfocus={() => selectedId = row.item.id}
 									oninput={(event) => updateLocalText(row.item.id, event.currentTarget.value)}
 									onkeydown={(event) => handleKeydown(event, row)}></textarea>
-								<button class="delete" title="項目を削除" onclick={() => remove(row.item.id)}>×</button>
+								<button class="delete" title="この化身を外す" onclick={() => remove(row.item.id)}>×</button>
 							</div>
 						{/each}
 					</div>
@@ -531,6 +593,21 @@
 						{/each}
 					</div>
 				{/if}
+			</section>
+		{:else if viewMode === "trash"}
+			<section class="outline-panel">
+				<div class="section-title"><span>ゴミ箱</span><small>{trashEntries.length}件</small></div>
+				<div class="stash-list">
+					{#each trashEntries as entry}
+						<div>
+							<span>{entry.work.id.slice(0, 8)} · 化身{entry.occurrenceCount} · リンク{entry.linkCount}</span>
+							<button onclick={() => restoreTrash(entry.work.id)}>復元</button>
+							<button class="delete" onclick={() => purgeTrash(entry)}>完全消去</button>
+						</div>
+					{:else}
+						<p class="empty">ゴミ箱は空です</p>
+					{/each}
+				</div>
 			</section>
 		{:else}
 			<section class="tree-panel" aria-label="Phylogenetic Tree">
@@ -551,6 +628,19 @@
 				</nav>
 				<p class="eyebrow">SELECTED THOUGHT</p>
 				<h2>{titleFor(selectedItem)}</h2>
+				{#if asideMode === "links"}
+					<label>
+						化身固有の見出し
+						<input value={selectedItem.contextualHeading ?? ""}
+							onchange={(event) => updateSelectedHeading(event.currentTarget.value)}
+							placeholder="未設定時は本文の先頭行" />
+					</label>
+					<div class="discovery-actions">
+						<button onclick={duplicateSelectedOccurrence}>同じ実身をもう一箇所へ配置</button>
+						<button onclick={() => remove(selectedItem.id)}>この化身を外す</button>
+						<button onclick={trashSelectedWork}>実身をゴミ箱へ</button>
+					</div>
+				{/if}
 				{#if asideMode === "links" && bodyFor(selectedItem)}
 					<p class="thought-body">{bodyFor(selectedItem)}</p>
 				{/if}
@@ -564,7 +654,7 @@
 						<select bind:value={newLinkType}>{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}</select>
 						<select bind:value={newLinkTarget}>
 							<option value="">リンク先を選択</option>
-							{#each snapshot.items.filter((item) => item.id !== selectedId) as item}
+							{#each linkTargets as item}
 								<option value={item.id}>{item.text || "(空の項目)"}</option>
 							{/each}
 						</select>
@@ -572,7 +662,7 @@
 					</div>
 					<div class="links">
 						{#each selectedLinks as link}
-							<div><span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span><span>{link.fromId === selectedId ? "→" : "←"} {otherName(link)}</span><button onclick={() => removeLink(link)}>×</button></div>
+							<div><span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span><span>{link.fromId === selectedItem.workId ? "→" : "←"} {otherName(link)}</span><button onclick={() => removeLink(link)}>×</button></div>
 						{:else}<p class="empty">任意リンクはありません</p>{/each}
 					</div>
 				{:else if asideMode === "discover"}

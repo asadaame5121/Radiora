@@ -1,0 +1,72 @@
+import { assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { OutlineService } from "../services/outline_service.ts";
+import { MemoryGraphStore } from "../storage/memory_store.ts";
+import type { StartupStatus } from "../shared/bindings.ts";
+import { createBindingHandlers } from "./register_bindings.ts";
+
+Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end to end", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const ready: StartupStatus = { phase: "ready", message: "ready" };
+	const handlers = createBindingHandlers({
+		getService: () => service,
+		getStartupStatus: () => ready,
+		retryStartup: () => Promise.resolve(ready),
+	});
+
+	const source = await handlers.createItem({ text: "共有前", parentId: null });
+	const target = await handlers.createItem({ text: "Target", parentId: null });
+	const mirror = await handlers.createOccurrence({
+		workId: source.workId,
+		parentId: target.id,
+		contextualHeading: "別文脈",
+	});
+	await handlers.updateItemText(mirror.id, "共有後");
+	await handlers.setContextualHeading(mirror.id, "更新した文脈");
+	await handlers.setCollapsed(mirror.id, true);
+	await handlers.moveItem({ id: mirror.id, parentId: null });
+	await handlers.createLink({ fromId: source.id, toId: target.id, type: "FROM" });
+
+	let snapshot = await handlers.listOutline();
+	const placements = snapshot.items.filter((item) => item.workId === source.workId);
+	assertEquals(placements.map((item) => item.text), ["共有後", "共有後"]);
+	assertEquals(placements.find((item) => item.id === mirror.id)?.contextualHeading, "更新した文脈");
+	assertEquals(placements.find((item) => item.id === mirror.id)?.collapsed, true);
+	assertEquals(placements.find((item) => item.id === mirror.id)?.parentId, null);
+	assertEquals(snapshot.links[0].fromId, source.workId);
+	assertEquals(snapshot.links[0].toId, target.workId);
+
+	await handlers.trashWork(source.id);
+	assertEquals((await handlers.listTrash())[0].occurrenceCount, 2);
+	await handlers.restoreWork(source.workId);
+	snapshot = await handlers.listOutline();
+	assertEquals(snapshot.items.filter((item) => item.workId === source.workId).length, 2);
+
+	await handlers.trashWork(source.id);
+	const manifest = await handlers.purgeWork(source.workId);
+	assertEquals(manifest.workId, source.workId);
+	assertEquals(manifest.occurrenceIds.length, 2);
+	assertEquals(manifest.linkIds.length, 1);
+});
+
+Deno.test("desktop bindings expose startup failure and retry without dereferencing a service", async () => {
+	const failed: StartupStatus = {
+		phase: "failed",
+		message: "DB migration failed",
+		detail: "validation mismatch",
+	};
+	let retries = 0;
+	const handlers = createBindingHandlers({
+		getService: () => null,
+		getStartupStatus: () => failed,
+		retryStartup: () => {
+			retries++;
+			return Promise.resolve({ phase: "starting", message: "retrying" });
+		},
+	});
+
+	assertEquals(await handlers.getStartupStatus(), failed);
+	assertThrows(() => handlers.listOutline(), Error, "DB migration failed");
+	assertEquals(await handlers.retryStartup(), { phase: "starting", message: "retrying" });
+	assertEquals(retries, 1);
+});

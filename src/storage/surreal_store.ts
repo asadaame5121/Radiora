@@ -1,12 +1,18 @@
 import { RecordId, Surreal } from "surrealdb";
 import type {
+	Branch,
 	Knot,
 	LexicalHit,
 	LinkType,
+	Occurrence,
 	OutlineItem,
 	OutlineLink,
+	PurgeManifest,
 	SavedRuleQuery,
 	SearchAlias,
+	SystemRelation,
+	Work,
+	WorkingCopy,
 } from "../domain/models.ts";
 import type { GraphStore } from "./graph_store.ts";
 import {
@@ -16,11 +22,11 @@ import {
 	type SchemaMetadata,
 	type StorageMigration,
 } from "./migrations/mod.ts";
+import { workOccurrenceMigration } from "./migrations/0001_work_occurrence.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
 	searchTerms,
-	titleFromText,
 	titleOf,
 } from "../services/search_text.ts";
 
@@ -28,7 +34,7 @@ type Row = Record<string, unknown>;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const APP_VERSION = "0.1.0";
-const STORAGE_MIGRATIONS: readonly StorageMigration[] = [];
+const STORAGE_MIGRATIONS: readonly StorageMigration[] = [workOccurrenceMigration];
 
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
 
@@ -39,14 +45,7 @@ export function evolvedFromEndpoints(
 	return { inId: parentId, outId: childId };
 }
 
-const RELATION_TABLE: Record<LinkType, string> = {
-	LIKE: "liked",
-	FIX: "fixed",
-	VS: "conflicted",
-	IN: "in_knot",
-};
-
-function domainId(value: unknown, field: "id" | "parent_id"): string {
+function domainId(value: unknown, field: "id" | "work_id" | "parent_id" | "branch_id"): string {
 	const id = String(value ?? "");
 	if (!UUID_PATTERN.test(id)) {
 		throw new TypeError(`Expected ${field} to be a UUID, received: ${id}`);
@@ -54,13 +53,30 @@ function domainId(value: unknown, field: "id" | "parent_id"): string {
 	return id;
 }
 
+function optionalRecordDomainId(value: unknown): string | null {
+	if (value == null) return null;
+	if (value instanceof RecordId) return String(value.id);
+	if (typeof value === "object" && "id" in value) {
+		return String((value as { id: unknown }).id);
+	}
+	const raw = String(value);
+	const separator = raw.indexOf(":");
+	return separator < 0 ? raw : raw.slice(separator + 1).replace(/^`|`$/g, "");
+}
+
 export function itemFromRow(row: Row): OutlineItem {
+	const selectorMode = row.selector_mode === "pinned" ? "pinned" : "branch";
 	return {
 		id: domainId(row.id, "id"),
+		workId: domainId(row.work_id ?? row.id, "work_id"),
 		text: String(row.text ?? ""),
 		parentId: row.parent_id == null ? null : domainId(row.parent_id, "parent_id"),
 		orderKey: Number(row.order_key ?? 0),
 		collapsed: Boolean(row.collapsed),
+		revisionSelector: selectorMode === "branch"
+			? { mode: "branch", branchId: domainId(row.branch_id ?? row.work_id, "branch_id") }
+			: { mode: "pinned", revisionId: String(row.revision_id ?? "") },
+		contextualHeading: row.contextual_heading == null ? undefined : String(row.contextual_heading),
 		createdAt: String(row.created_at ?? ""),
 		updatedAt: String(row.updated_at ?? ""),
 	};
@@ -158,7 +174,6 @@ export class SurrealGraphStore implements GraphStore {
 					FULLTEXT ANALYZER japanese_terms BM25;
 			`));
 		await this.step("sdk.schema.migrate", () => this.runMigrations());
-		for (const item of await this.listItems()) await this.updateItem(item);
 		this.trace("sdk.initialize.ready");
 	}
 
@@ -167,107 +182,326 @@ export class SurrealGraphStore implements GraphStore {
 	}
 
 	async listItems(): Promise<OutlineItem[]> {
-		const [rows] = await this.#db.query<[Row[]]>(`
-			SELECT record::id(id) AS id, text, order_key, collapsed, created_at, updated_at,
-				array::first(
-					(<-evolved_from<-outline_item).map(|$parent| record::id($parent.id))
-				) AS parent_id
-			FROM outline_item ORDER BY order_key;
-		`);
-		return rows.map(itemFromRow);
+		const [occurrenceRows, works, copyRows, revisionRows] = await Promise.all([
+			this.listOccurrenceRows(),
+			this.listWorks(),
+			this.listWorkingCopyRows(),
+			this.listRevisionRows(),
+		]);
+		const workById = new Map(works.map((work) => [work.id, work]));
+		const copyByBranch = new Map(
+			copyRows.map((row) => [String(row.branch_id), String(row.text ?? "")]),
+		);
+		const revisionText = new Map(
+			revisionRows.map((row) => [String(row.id), String(row.text ?? "")]),
+		);
+		return occurrenceRows.flatMap((row): OutlineItem[] => {
+			const work = workById.get(String(row.work_id));
+			if (!work) return [];
+			return [itemFromRow({
+				...row,
+				text: row.selector_mode === "pinned"
+					? revisionText.get(String(row.revision_id)) ?? ""
+					: copyByBranch.get(String(row.branch_id)) ?? "",
+				created_at: work.createdAt,
+				updated_at: work.updatedAt,
+			})];
+		});
 	}
 
-	async createItem(item: OutlineItem): Promise<void> {
-		const title = titleFromText(item.text);
+	async listWorks(includeDeleted = false): Promise<Work[]> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, created_at, updated_at, deleted_at
+				FROM work ${includeDeleted ? "" : "WHERE deleted_at IS NONE"};`,
+		);
+		return rows.map((row) => ({
+			id: domainId(row.id, "id"),
+			createdAt: String(row.created_at ?? ""),
+			updatedAt: String(row.updated_at ?? ""),
+			deletedAt: row.deleted_at == null ? undefined : String(row.deleted_at),
+		}));
+	}
+
+	async listOccurrences(includeDeletedWorks = false): Promise<Occurrence[]> {
+		const visible = new Set(
+			(await this.listWorks(includeDeletedWorks)).map((work) => work.id),
+		);
+		return (await this.listOccurrenceRows()).flatMap((row): Occurrence[] => {
+			const workId = domainId(row.work_id, "work_id");
+			if (!visible.has(workId)) return [];
+			return [{
+				id: domainId(row.id, "id"),
+				workId,
+				parentOccurrenceId: row.parent_id == null ? null : domainId(row.parent_id, "parent_id"),
+				orderKey: Number(row.order_key ?? 0),
+				collapsed: Boolean(row.collapsed),
+				revisionSelector: row.selector_mode === "pinned"
+					? { mode: "pinned", revisionId: String(row.revision_id ?? "") }
+					: { mode: "branch", branchId: domainId(row.branch_id, "branch_id") },
+				contextualHeading: row.contextual_heading == null
+					? undefined
+					: String(row.contextual_heading),
+			}];
+		});
+	}
+
+	async createWorkBundle(
+		work: Work,
+		branch: Branch,
+		workingCopy: WorkingCopy,
+		occurrence: Occurrence,
+	): Promise<void> {
+		const parent = occurrence.parentOccurrenceId ? "$parent" : "NONE";
+		const contextualHeading = occurrence.contextualHeading ? "$contextualHeading" : "NONE";
+		await this.#db.query(
+			`BEGIN TRANSACTION;
+			CREATE $work CONTENT {
+				created_at: $createdAt, updated_at: $updatedAt, deleted_at: NONE
+			};
+			CREATE $branch CONTENT {
+				work: $work, name: $name, head_revision: NONE,
+				created_at: $createdAt, promoted_at: NONE, archived_at: NONE
+			};
+			CREATE $copy CONTENT {
+				work: $work, branch: $branch, text: $text, updated_at: $updatedAt
+			};
+			CREATE $occurrence CONTENT {
+				work: $work, parent_occurrence: ${parent}, order_key: $orderKey,
+				collapsed: $collapsed, selector_mode: "branch", branch: $branch,
+				revision: NONE, contextual_heading: ${contextualHeading}
+			};
+			COMMIT TRANSACTION;`,
+			{
+				work: new RecordId("work", work.id),
+				branch: new RecordId("branch", branch.id),
+				copy: new RecordId("working_copy", branch.id),
+				occurrence: new RecordId("occurrence", occurrence.id),
+				...(occurrence.parentOccurrenceId
+					? { parent: new RecordId("occurrence", occurrence.parentOccurrenceId) }
+					: {}),
+				orderKey: occurrence.orderKey,
+				collapsed: occurrence.collapsed,
+				...(occurrence.contextualHeading
+					? { contextualHeading: occurrence.contextualHeading }
+					: {}),
+				name: branch.name,
+				text: workingCopy.text,
+				createdAt: work.createdAt,
+				updatedAt: work.updatedAt,
+			},
+		);
+	}
+
+	async createOccurrence(occurrence: Occurrence): Promise<void> {
+		const expressions = this.occurrenceExpressions(occurrence);
 		await this.#db.query(
 			`CREATE $record CONTENT {
-				text: $text, order_key: $orderKey, collapsed: $collapsed,
-				created_at: $createdAt, updated_at: $updatedAt,
-				title: $title, title_key: $titleKey, title_prefix: $titleKey, search_terms: $searchTerms
+				work: $work, parent_occurrence: ${expressions.parent}, order_key: $orderKey,
+				collapsed: $collapsed, selector_mode: $selectorMode,
+				branch: ${expressions.branch}, revision: ${expressions.revision},
+				contextual_heading: ${expressions.contextualHeading}
 			};`,
-			{
-				...item,
-				title,
-				titleKey: normalizeSearchText(title),
-				searchTerms: searchTerms(item.text),
-				record: new RecordId("outline_item", item.id),
-			},
+			this.occurrenceVariables(occurrence),
 		);
 	}
 
-	async updateItem(item: OutlineItem): Promise<void> {
-		const title = titleFromText(item.text);
+	async updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
+		const work = new RecordId("work", workId);
+		await this.#db.query(
+			`UPDATE working_copy SET text = $text, updated_at = $updatedAt WHERE work = $work;
+			UPDATE $work SET updated_at = $updatedAt;`,
+			{ work, text, updatedAt },
+		);
+	}
+
+	async updateOccurrence(occurrence: Occurrence): Promise<void> {
+		const expressions = this.occurrenceExpressions(occurrence);
 		await this.#db.query(
 			`UPDATE $record MERGE {
-				text: $text, order_key: $orderKey, collapsed: $collapsed, updated_at: $updatedAt,
-				title: $title, title_key: $titleKey, title_prefix: $titleKey, search_terms: $searchTerms
+				work: $work, parent_occurrence: ${expressions.parent}, order_key: $orderKey,
+				collapsed: $collapsed, selector_mode: $selectorMode,
+				branch: ${expressions.branch}, revision: ${expressions.revision},
+				contextual_heading: ${expressions.contextualHeading}
 			};`,
-			{
-				...item,
-				title,
-				titleKey: normalizeSearchText(title),
-				searchTerms: searchTerms(item.text),
-				record: new RecordId("outline_item", item.id),
-			},
+			this.occurrenceVariables(occurrence),
 		);
 	}
 
-	async deleteItem(id: string): Promise<void> {
-		await this.#db.query(`DELETE $record;`, { record: new RecordId("outline_item", id) });
+	async deleteOccurrence(id: string): Promise<void> {
+		await this.#db.query(`DELETE $record;`, { record: new RecordId("occurrence", id) });
 	}
 
-	async setParent(childId: string, parentId: string | null): Promise<void> {
-		const child = new RecordId("outline_item", childId);
-		await this.#db.query(`DELETE evolved_from WHERE out = $child;`, {
-			child,
+	async trashWork(workId: string, deletedAt: string): Promise<void> {
+		await this.#db.query(`UPDATE $work SET deleted_at = $deletedAt, updated_at = $deletedAt;`, {
+			work: new RecordId("work", workId),
+			deletedAt,
 		});
-		if (parentId) {
-			const endpoints = evolvedFromEndpoints(parentId, childId);
-			await this.#db.query(
-				`RELATE $parent->evolved_from->$child;`,
-				{
-					child: new RecordId("outline_item", endpoints.outId),
-					parent: new RecordId("outline_item", endpoints.inId),
-				},
-			);
-		}
+	}
+
+	async restoreWork(workId: string): Promise<void> {
+		await this.#db.query(`UPDATE $work SET deleted_at = NONE;`, {
+			work: new RecordId("work", workId),
+		});
+	}
+
+	async purgeWork(workId: string): Promise<PurgeManifest> {
+		const work = new RecordId("work", workId);
+		const [occurrenceRows, branchRows, revisionRows, links] = await Promise.all([
+			this.#db.query<[Row[]]>(
+				`SELECT record::id(id) AS id FROM occurrence WHERE work = $work;`,
+				{ work },
+			).then(([rows]) => rows),
+			this.#db.query<[Row[]]>(
+				`SELECT record::id(id) AS id FROM branch WHERE work = $work;`,
+				{ work },
+			).then(([rows]) => rows),
+			this.#db.query<[Row[]]>(
+				`SELECT record::id(id) AS id FROM revision WHERE work = $work;`,
+				{ work },
+			).then(([rows]) => rows),
+			this.listLinks(),
+		]);
+		const manifest: PurgeManifest = {
+			id: crypto.randomUUID(),
+			workId,
+			occurrenceIds: occurrenceRows.map((row) => String(row.id)),
+			branchIds: branchRows.map((row) => String(row.id)),
+			revisionIds: revisionRows.map((row) => String(row.id)),
+			linkIds: links
+				.filter((link) => link.from.workId === workId || link.to.workId === workId)
+				.map((link) => link.id),
+			purgedAt: new Date().toISOString(),
+		};
+		await this.#db.query(
+			`BEGIN TRANSACTION;
+			CREATE $manifest CONTENT {
+				work_id: $workId, occurrence_ids: $occurrenceIds, branch_ids: $branchIds,
+				revision_ids: $revisionIds, link_ids: $linkIds, purged_at: $purgedAt
+			};
+			LET $removed = SELECT VALUE id FROM occurrence WHERE work = $work;
+			UPDATE occurrence SET parent_occurrence = NONE WHERE parent_occurrence IN $removed;
+			DELETE semantic_link WHERE from_work = $work OR to_work = $work;
+			DELETE system_relation WHERE from_work = $work OR to_work = $work;
+			DELETE occurrence WHERE work = $work;
+			DELETE working_copy WHERE work = $work;
+			DELETE revision WHERE work = $work;
+			DELETE branch WHERE work = $work;
+			DELETE $work;
+			COMMIT TRANSACTION;`,
+			{
+				...manifest,
+				work,
+				manifest: new RecordId("purge_manifest", manifest.id),
+			},
+		);
+		return manifest;
+	}
+
+	async listPurgeManifests(): Promise<PurgeManifest[]> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, work_id, occurrence_ids, branch_ids,
+				revision_ids, link_ids, purged_at FROM purge_manifest ORDER BY purged_at DESC;`,
+		);
+		return rows.map((row) => ({
+			id: String(row.id),
+			workId: String(row.work_id),
+			occurrenceIds: Array.isArray(row.occurrence_ids) ? row.occurrence_ids.map(String) : [],
+			branchIds: Array.isArray(row.branch_ids) ? row.branch_ids.map(String) : [],
+			revisionIds: Array.isArray(row.revision_ids) ? row.revision_ids.map(String) : [],
+			linkIds: Array.isArray(row.link_ids) ? row.link_ids.map(String) : [],
+			purgedAt: String(row.purged_at ?? ""),
+		}));
 	}
 
 	async listLinks(): Promise<OutlineLink[]> {
-		const links: OutlineLink[] = [];
-		for (const [type, table] of Object.entries(RELATION_TABLE) as [LinkType, string][]) {
-			const [rows] = await this.#db.query<[Row[]]>(
-				`SELECT record::id(in) AS from_id, record::id(out) AS to_id, created_at FROM ${table};`,
-			);
-			links.push(...rows.map((row) => ({
-				fromId: String(row.from_id),
-				toId: String(row.to_id),
-				type,
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, from_scope, record::id(from_work) AS from_id,
+				from_revision, to_scope,
+				record::id(to_work) AS to_id, to_revision,
+				type, status, origin, reason, created_at FROM semantic_link;`,
+		);
+		return rows.map((row) => {
+			const fromId = domainId(row.from_id, "work_id");
+			const toId = domainId(row.to_id, "work_id");
+			return {
+				id: String(row.id),
+				fromId,
+				toId,
+				from: row.from_scope === "revision"
+					? {
+						scope: "revision",
+						workId: fromId,
+						revisionId: optionalRecordDomainId(row.from_revision) ?? "",
+					}
+					: { scope: "work", workId: fromId },
+				to: row.to_scope === "revision"
+					? {
+						scope: "revision",
+						workId: toId,
+						revisionId: optionalRecordDomainId(row.to_revision) ?? "",
+					}
+					: { scope: "work", workId: toId },
+				type: String(row.type) as LinkType,
+				status: String(row.status) as OutlineLink["status"],
+				origin: String(row.origin) as OutlineLink["origin"],
 				createdAt: String(row.created_at ?? ""),
-			})));
-		}
-		return links;
+				reason: row.reason == null ? undefined : String(row.reason),
+			};
+		});
 	}
 
 	async createLink(link: OutlineLink): Promise<void> {
-		const table = RELATION_TABLE[link.type];
+		const fromRevision = link.from.scope === "revision" ? "$fromRevision" : "NONE";
+		const toRevision = link.to.scope === "revision" ? "$toRevision" : "NONE";
+		const reason = link.reason ? "$reason" : "NONE";
 		await this.#db.query(
-			`RELATE $from->${table}->$to
-				CONTENT { created_at: $createdAt };`,
+			`CREATE $record CONTENT {
+				from_scope: $fromScope, from_work: $fromWork, from_revision: ${fromRevision},
+				to_scope: $toScope, to_work: $toWork, to_revision: ${toRevision},
+				type: $type, status: $status, origin: $origin, reason: ${reason},
+				created_at: $createdAt
+			};`,
 			{
 				...link,
-				from: new RecordId("outline_item", link.fromId),
-				to: new RecordId("outline_item", link.toId),
+				record: new RecordId("semantic_link", link.id),
+				fromScope: link.from.scope,
+				fromWork: new RecordId("work", link.from.workId),
+				...(link.from.scope === "revision"
+					? { fromRevision: new RecordId("revision", link.from.revisionId) }
+					: {}),
+				toScope: link.to.scope,
+				toWork: new RecordId("work", link.to.workId),
+				...(link.to.scope === "revision"
+					? { toRevision: new RecordId("revision", link.to.revisionId) }
+					: {}),
+				...(link.reason ? { reason: link.reason } : {}),
 			},
 		);
 	}
 
 	async deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
-		const table = RELATION_TABLE[type];
 		await this.#db.query(
-			`DELETE ${table} WHERE in = $from AND out = $to;`,
-			{ from: new RecordId("outline_item", fromId), to: new RecordId("outline_item", toId) },
+			`DELETE semantic_link WHERE from_work = $from AND to_work = $to AND type = $type;`,
+			{
+				from: new RecordId("work", fromId),
+				to: new RecordId("work", toId),
+				type,
+			},
 		);
+	}
+
+	async listSystemRelations(): Promise<SystemRelation[]> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, record::id(from_work) AS from_id,
+				record::id(to_work) AS to_id, type, created_at FROM system_relation;`,
+		);
+		return rows.map((row) => ({
+			id: String(row.id),
+			fromWorkId: domainId(row.from_id, "work_id"),
+			toWorkId: domainId(row.to_id, "work_id"),
+			type: "IN",
+			createdAt: String(row.created_at ?? ""),
+		}));
 	}
 
 	async listKnots(): Promise<Knot[]> {
@@ -294,16 +528,8 @@ export class SurrealGraphStore implements GraphStore {
 	async suggestItems(prefix: string, limit: number): Promise<OutlineItem[]> {
 		const normalized = normalizeSearchText(prefix);
 		if (!normalized) return [];
-		const [rows] = await this.#db.query<[Row[]]>(
-			`SELECT record::id(id) AS id FROM outline_item
-				WHERE title_prefix @1@ $prefix LIMIT $limit;`,
-			{ prefix: normalized, limit },
-		);
-		const ids = new Set(rows.map((row) => String(row.id)));
-		return (await this.listItems())
-			.filter((item) =>
-				ids.has(item.id) && normalizeSearchText(titleOf(item)).startsWith(normalized)
-			)
+		return this.representativeItems(await this.listItems())
+			.filter((item) => normalizeSearchText(titleOf(item)).startsWith(normalized))
 			.sort((a, b) =>
 				titleOf(a).length - titleOf(b).length || b.updatedAt.localeCompare(a.updatedAt)
 			)
@@ -314,33 +540,19 @@ export class SurrealGraphStore implements GraphStore {
 		const normalized = normalizeSearchText(query);
 		if (!normalized) return [];
 		const terms = searchTerms(query);
-		const [rows] = await this.#db.query<[Row[]]>(
-			`SELECT record::id(id) AS id,
-				(search::score(1) ?? 0) AS title_score,
-				(search::score(2) ?? 0) + (search::score(3) ?? 0) AS body_score
-			FROM outline_item
-			WHERE title_key @1@ $query OR text @2@ $query OR search_terms @3@ $terms
-			ORDER BY title_score DESC, body_score DESC LIMIT $limit;`,
-			{ query: normalized, terms, limit },
-		);
-		const items = new Map((await this.listItems()).map((item) => [item.id, item]));
-		return rows.flatMap((row) => {
-			const item = items.get(String(row.id));
-			const title = item ? normalizeSearchText(titleOf(item)) : "";
-			const body = item ? normalizeSearchText(item.text) : "";
+		return this.representativeItems(await this.listItems()).map((item) => {
+			const title = normalizeSearchText(titleOf(item));
+			const body = normalizeSearchText(item.text);
 			const tokens = terms.split(" ").filter(Boolean);
-			const fallbackTitle = countOccurrences(title, normalized) +
+			const titleScore = (title === normalized ? 3 : title.startsWith(normalized) ? 2 : 0) +
+				countOccurrences(title, normalized) +
 				tokens.reduce((score, token) => score + countOccurrences(title, token), 0);
-			const fallbackBody = countOccurrences(body, normalized) +
+			const bodyScore = countOccurrences(body, normalized) +
 				tokens.reduce((score, token) => score + countOccurrences(body, token), 0);
-			return item
-				? [{
-					item,
-					titleScore: Number(row.title_score ?? row.titleScore ?? 0) || fallbackTitle,
-					bodyScore: Number(row.body_score ?? row.bodyScore ?? 0) || fallbackBody,
-				}]
-				: [];
-		});
+			return { item, titleScore, bodyScore };
+		}).filter((hit) => hit.titleScore > 0 || hit.bodyScore > 0)
+			.sort((a, b) => (b.titleScore * 2 + b.bodyScore) - (a.titleScore * 2 + a.bodyScore))
+			.slice(0, limit);
 	}
 
 	async listAliases(): Promise<SearchAlias[]> {
@@ -426,6 +638,75 @@ export class SurrealGraphStore implements GraphStore {
 		}
 	}
 
+	private async listOccurrenceRows(): Promise<Row[]> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, record::id(work) AS work_id,
+				parent_occurrence, order_key, collapsed,
+				selector_mode, branch, revision, contextual_heading
+			FROM occurrence ORDER BY order_key;`,
+		);
+		return rows.map((row) => ({
+			...row,
+			parent_id: optionalRecordDomainId(row.parent_occurrence),
+			branch_id: optionalRecordDomainId(row.branch),
+			revision_id: optionalRecordDomainId(row.revision),
+		}));
+	}
+
+	private async listWorkingCopyRows(): Promise<Row[]> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(work) AS work_id, record::id(branch) AS branch_id,
+				text, updated_at FROM working_copy;`,
+		);
+		return rows;
+	}
+
+	private async listRevisionRows(): Promise<Row[]> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, text FROM revision;`,
+		);
+		return rows;
+	}
+
+	private occurrenceVariables(occurrence: Occurrence): Record<string, unknown> {
+		return {
+			record: new RecordId("occurrence", occurrence.id),
+			work: new RecordId("work", occurrence.workId),
+			...(occurrence.parentOccurrenceId
+				? { parent: new RecordId("occurrence", occurrence.parentOccurrenceId) }
+				: {}),
+			orderKey: occurrence.orderKey,
+			collapsed: occurrence.collapsed,
+			selectorMode: occurrence.revisionSelector.mode,
+			...(occurrence.revisionSelector.mode === "branch"
+				? { branch: new RecordId("branch", occurrence.revisionSelector.branchId) }
+				: { revision: new RecordId("revision", occurrence.revisionSelector.revisionId) }),
+			...(occurrence.contextualHeading ? { contextualHeading: occurrence.contextualHeading } : {}),
+		};
+	}
+
+	private occurrenceExpressions(occurrence: Occurrence): {
+		parent: string;
+		branch: string;
+		revision: string;
+		contextualHeading: string;
+	} {
+		return {
+			parent: occurrence.parentOccurrenceId ? "$parent" : "NONE",
+			branch: occurrence.revisionSelector.mode === "branch" ? "$branch" : "NONE",
+			revision: occurrence.revisionSelector.mode === "pinned" ? "$revision" : "NONE",
+			contextualHeading: occurrence.contextualHeading ? "$contextualHeading" : "NONE",
+		};
+	}
+
+	private representativeItems(items: OutlineItem[]): OutlineItem[] {
+		const byWork = new Map<string, OutlineItem>();
+		for (const item of items) {
+			if (!byWork.has(item.workId)) byWork.set(item.workId, item);
+		}
+		return [...byWork.values()];
+	}
+
 	private async runMigrations(): Promise<void> {
 		await runStorageMigrations({
 			appVersion: APP_VERSION,
@@ -466,20 +747,20 @@ export class SurrealGraphStore implements GraphStore {
 	}
 
 	private async writeMigrationJournal(entry: MigrationJournalEntry): Promise<void> {
+		const completedAt = entry.completedAt ? "$completedAt" : "NONE";
+		const error = entry.error ? "$error" : "NONE";
 		await this.#db.query(
 			`UPSERT $record CONTENT {
 				from_version: $fromVersion,
 				to_version: $toVersion,
 				started_at: $startedAt,
-				completed_at: $completedAt,
+				completed_at: ${completedAt},
 				app_version: $appVersion,
 				status: $status,
-				error: $error
+				error: ${error}
 			};`,
 			{
 				...entry,
-				completedAt: entry.completedAt ?? null,
-				error: entry.error ?? null,
 				record: new RecordId("migration_journal", entry.id),
 			},
 		);
