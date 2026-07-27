@@ -75,8 +75,35 @@ CREATE outline_item:`22222222-2222-4222-8222-222222222222` CONTENT {
 	created_at: "2026-07-03T00:00:00.000Z",
 	updated_at: "2026-07-04T00:00:00.000Z"
 };
+CREATE outline_item:`33333333-3333-4333-8333-333333333333` CONTENT {
+	text: "親が見つからない項目",
+	order_key: 3072,
+	collapsed: false,
+	created_at: "2026-07-08T00:00:00.000Z",
+	updated_at: "2026-07-08T00:00:00.000Z"
+};
+CREATE outline_item:`44444444-4444-4444-8444-444444444444` CONTENT {
+	text: "循環項目A",
+	order_key: 4096,
+	collapsed: false,
+	created_at: "2026-07-09T00:00:00.000Z",
+	updated_at: "2026-07-09T00:00:00.000Z"
+};
+CREATE outline_item:`55555555-5555-4555-8555-555555555555` CONTENT {
+	text: "循環項目B",
+	order_key: 5120,
+	collapsed: false,
+	created_at: "2026-07-10T00:00:00.000Z",
+	updated_at: "2026-07-10T00:00:00.000Z"
+};
 RELATE outline_item:`11111111-1111-4111-8111-111111111111`
 	->evolved_from->outline_item:`22222222-2222-4222-8222-222222222222`;
+RELATE outline_item:`99999999-9999-4999-8999-999999999999`
+	->evolved_from->outline_item:`33333333-3333-4333-8333-333333333333`;
+RELATE outline_item:`55555555-5555-4555-8555-555555555555`
+	->evolved_from->outline_item:`44444444-4444-4444-8444-444444444444`;
+RELATE outline_item:`44444444-4444-4444-8444-444444444444`
+	->evolved_from->outline_item:`55555555-5555-4555-8555-555555555555`;
 RELATE outline_item:`11111111-1111-4111-8111-111111111111`
 	->liked->outline_item:`22222222-2222-4222-8222-222222222222`
 	CONTENT { created_at: "2026-07-05T00:00:00.000Z" };
