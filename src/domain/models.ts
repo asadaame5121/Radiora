@@ -1,20 +1,81 @@
-export const LINK_TYPES = ["LIKE", "FIX", "VS", "IN"] as const;
+export const LINK_TYPES = ["RELATED", "FROM", "LIKE", "SUPPORT", "VS", "FIX", "CITE"] as const;
 export type LinkType = (typeof LINK_TYPES)[number];
+export type LinkStatus = "provisional" | "asserted" | "retracted";
+export type LinkOrigin = "human" | "suggestion" | "import";
+
+export interface Work {
+	id: string;
+	createdAt: string;
+	updatedAt: string;
+	deletedAt?: string;
+}
+
+export interface Branch {
+	id: string;
+	workId: string;
+	name: string;
+	headRevisionId: string | null;
+	createdAt: string;
+	promotedAt?: string;
+	archivedAt?: string;
+}
+
+export interface WorkingCopy {
+	branchId: string;
+	workId: string;
+	text: string;
+	updatedAt: string;
+}
+
+export type RevisionSelector =
+	| { mode: "branch"; branchId: string }
+	| { mode: "pinned"; revisionId: string };
+
+export interface Occurrence {
+	id: string;
+	workId: string;
+	parentOccurrenceId: string | null;
+	orderKey: number;
+	collapsed: boolean;
+	revisionSelector: RevisionSelector;
+	contextualHeading?: string;
+}
+
+export type LinkEndpoint =
+	| { scope: "work"; workId: string }
+	| { scope: "revision"; workId: string; revisionId: string };
 
 export interface OutlineItem {
 	id: string;
+	workId: string;
 	text: string;
 	parentId: string | null;
 	orderKey: number;
 	collapsed: boolean;
+	revisionSelector: RevisionSelector;
+	contextualHeading?: string;
 	createdAt: string;
 	updatedAt: string;
 }
 
 export interface OutlineLink {
+	id: string;
 	fromId: string;
 	toId: string;
+	from: LinkEndpoint;
+	to: LinkEndpoint;
 	type: LinkType;
+	status: LinkStatus;
+	origin: LinkOrigin;
+	createdAt: string;
+	reason?: string;
+}
+
+export interface SystemRelation {
+	id: string;
+	fromWorkId: string;
+	toWorkId: string;
+	type: "IN";
 	createdAt: string;
 }
 
@@ -37,6 +98,13 @@ export interface CreateItemInput {
 	afterId?: string | null;
 }
 
+export interface CreateOccurrenceInput {
+	workId: string;
+	parentId: string | null;
+	afterId?: string | null;
+	contextualHeading?: string;
+}
+
 export interface MoveItemInput {
 	id: string;
 	parentId: string | null;
@@ -47,6 +115,27 @@ export interface CreateLinkInput {
 	fromId: string;
 	toId: string;
 	type: LinkType;
+	status?: LinkStatus;
+	origin?: LinkOrigin;
+	reason?: string;
+	fromEndpoint?: LinkEndpoint;
+	toEndpoint?: LinkEndpoint;
+}
+
+export interface TrashEntry {
+	work: Work;
+	occurrenceCount: number;
+	linkCount: number;
+}
+
+export interface PurgeManifest {
+	id: string;
+	workId: string;
+	occurrenceIds: string[];
+	branchIds: string[];
+	revisionIds: string[];
+	linkIds: string[];
+	purgedAt: string;
 }
 
 export interface SearchResult {

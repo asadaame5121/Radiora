@@ -1,7 +1,7 @@
 import type { LinkType, OutlineItem, OutlineSnapshot } from "../domain/models.ts";
 
 export type TreeLod = "detail" | "context" | "overview";
-export type TreeLinkType = "FROM" | LinkType;
+export type TreeLinkType = LinkType;
 
 export interface TreeLayoutNode {
 	id: string;
@@ -116,13 +116,19 @@ export function labelForItem(text: string): { label: string; lines: string[] } {
 
 export function buildDirectNeighborSet(snapshot: OutlineSnapshot, id: string): Set<string> {
 	const result = new Set([id]);
+	const selected = snapshot.items.find((item) => item.id === id);
 	for (const item of snapshot.items) {
 		if (item.id === id && item.parentId) result.add(item.parentId);
 		if (item.parentId === id) result.add(item.id);
 	}
+	if (!selected) return result;
+	const neighborWorkIds = new Set<string>();
 	for (const link of snapshot.links) {
-		if (link.fromId === id) result.add(link.toId);
-		if (link.toId === id) result.add(link.fromId);
+		if (link.fromId === selected.workId) neighborWorkIds.add(link.toId);
+		if (link.toId === selected.workId) neighborWorkIds.add(link.fromId);
+	}
+	for (const item of snapshot.items) {
+		if (neighborWorkIds.has(item.workId)) result.add(item.id);
 	}
 	return result;
 }
@@ -286,17 +292,20 @@ function aggregateOverview(
 }
 
 function rawEdges(snapshot: OutlineSnapshot): RawEdge[] {
-	const ids = new Set(snapshot.items.map((item) => item.id));
-	const result: RawEdge[] = [];
+	const occurrenceByWork = new Map<string, string>();
 	for (const item of snapshot.items) {
-		if (item.parentId && ids.has(item.parentId)) {
-			result.push({ sourceId: item.parentId, targetId: item.id, type: "FROM" });
-		}
+		if (!occurrenceByWork.has(item.workId)) occurrenceByWork.set(item.workId, item.id);
 	}
+	const result: RawEdge[] = [];
 	for (const link of snapshot.links) {
-		if (ids.has(link.fromId) && ids.has(link.toId)) {
-			result.push({ sourceId: link.fromId, targetId: link.toId, type: link.type });
-		}
+		const storedFrom = occurrenceByWork.get(link.fromId);
+		const storedTo = occurrenceByWork.get(link.toId);
+		if (!storedFrom || !storedTo) continue;
+		result.push(
+			link.type === "FROM"
+				? { sourceId: storedTo, targetId: storedFrom, type: link.type }
+				: { sourceId: storedFrom, targetId: storedTo, type: link.type },
+		);
 	}
 	return result;
 }

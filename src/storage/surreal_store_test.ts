@@ -7,8 +7,11 @@ const PARENT_ID = "a3744669-9419-4edb-ab06-09f397c18932";
 function row(parentId: unknown) {
 	return {
 		id: ITEM_ID,
+		work_id: ITEM_ID,
 		text: "child",
 		parent_id: parentId,
+		selector_mode: "branch",
+		branch_id: ITEM_ID,
 		order_key: 1024,
 		collapsed: false,
 		created_at: "2026-07-21T00:00:00.000Z",

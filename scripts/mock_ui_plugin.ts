@@ -40,12 +40,14 @@ function mockSnapshot(): OutlineSnapshot {
 		const parentIndex = index < 4 ? null : Math.max(0, index - (2 + index % 4));
 		return {
 			id: `mock-${index + 1}`,
+			workId: `mock-${index + 1}`,
 			text: index === 6
 				? `${title}\n創造性は、記憶の単なる再生ではなく、過去の要素を新しい文脈で再構成する働きである。`
 				: title,
 			parentId: parentIndex === null ? null : `mock-${parentIndex + 1}`,
 			orderKey: (index + 1) * 1024,
 			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: `mock-${index + 1}` },
 			createdAt,
 			updatedAt: createdAt,
 		};
@@ -54,12 +56,17 @@ function mockSnapshot(): OutlineSnapshot {
 		["mock-7", "mock-10", "LIKE"],
 		["mock-7", "mock-11", "FIX"],
 		["mock-11", "mock-12", "VS"],
-		["mock-4", "mock-18", "IN"],
+		["mock-4", "mock-18", "SUPPORT"],
 		["mock-15", "mock-22", "LIKE"],
 	].map(([fromId, toId, type], index) => ({
+		id: `mock-link-${index + 1}`,
 		fromId,
 		toId,
+		from: { scope: "work" as const, workId },
+		to: { scope: "work" as const, workId: toId },
 		type: type as OutlineLink["type"],
+		status: "asserted" as const,
+		origin: "human" as const,
 		createdAt: new Date(start + (index + 1) * 86_400_000).toISOString(),
 	}));
 	return {
@@ -109,6 +116,38 @@ export function mockUiPlugin(): Plugin {
 						result = null;
 						break;
 					}
+					case "createOccurrence": {
+						const input = args[0] as {
+							workId: string;
+							parentId: string | null;
+							contextualHeading?: string;
+						};
+						const source = snapshot.items.find((item) => item.workId === input.workId)!;
+						const created = {
+							...source,
+							id: `mock-${crypto.randomUUID()}`,
+							parentId: input.parentId,
+							contextualHeading: input.contextualHeading,
+						};
+						snapshot.items.push(created);
+						result = created;
+						break;
+					}
+					case "setContextualHeading": {
+						const item = snapshot.items.find((candidate) => candidate.id === String(args[0]));
+						if (item) item.contextualHeading = String(args[1] ?? "") || undefined;
+						result = null;
+						break;
+					}
+					case "deleteItem": {
+						const id = String(args[0]);
+						snapshot.items = snapshot.items.filter((item) => item.id !== id);
+						result = null;
+						break;
+					}
+					case "listTrash":
+						result = [];
+						break;
 					case "suggestItems": {
 						const prefix = String(args[0] ?? "").normalize("NFKC").toLocaleLowerCase();
 						result = snapshot.items

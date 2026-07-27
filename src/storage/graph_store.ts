@@ -1,24 +1,43 @@
 import type {
+	Branch,
 	Knot,
 	LexicalHit,
 	LinkType,
+	Occurrence,
 	OutlineItem,
 	OutlineLink,
+	PurgeManifest,
 	SavedRuleQuery,
 	SearchAlias,
+	SystemRelation,
+	Work,
+	WorkingCopy,
 } from "../domain/models.ts";
 
 export interface GraphStore {
 	initialize(): Promise<void>;
 	close(): Promise<void>;
 	listItems(): Promise<OutlineItem[]>;
-	createItem(item: OutlineItem): Promise<void>;
-	updateItem(item: OutlineItem): Promise<void>;
-	deleteItem(id: string): Promise<void>;
-	setParent(childId: string, parentId: string | null): Promise<void>;
+	listWorks(includeDeleted?: boolean): Promise<Work[]>;
+	listOccurrences(includeDeletedWorks?: boolean): Promise<Occurrence[]>;
+	createWorkBundle(
+		work: Work,
+		branch: Branch,
+		workingCopy: WorkingCopy,
+		occurrence: Occurrence,
+	): Promise<void>;
+	createOccurrence(occurrence: Occurrence): Promise<void>;
+	updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void>;
+	updateOccurrence(occurrence: Occurrence): Promise<void>;
+	deleteOccurrence(id: string): Promise<void>;
+	trashWork(workId: string, deletedAt: string): Promise<void>;
+	restoreWork(workId: string): Promise<void>;
+	purgeWork(workId: string): Promise<PurgeManifest>;
+	listPurgeManifests(): Promise<PurgeManifest[]>;
 	listLinks(): Promise<OutlineLink[]>;
 	createLink(link: OutlineLink): Promise<void>;
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;
+	listSystemRelations(): Promise<SystemRelation[]>;
 	listKnots(): Promise<Knot[]>;
 	replaceKnots(knots: Knot[]): Promise<void>;
 	suggestItems(prefix: string, limit: number): Promise<OutlineItem[]>;
