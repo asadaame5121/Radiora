@@ -18,7 +18,7 @@ interface StoredGraph {
 }
 
 export class JsonGraphStore extends MemoryGraphStore {
-	constructor(private readonly path: string) {
+	constructor(private readonly path: string | URL) {
 		super();
 	}
 
