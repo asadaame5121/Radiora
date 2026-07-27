@@ -4,6 +4,8 @@ import { OutlineService } from "./services/outline_service.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
 import type { GraphStore } from "./storage/graph_store.ts";
 import { JsonGraphStore } from "./storage/json_store.ts";
+import { prepareStorageMigrationBackup, recordStorageVersion } from "./storage/migration_backup.ts";
+import { CURRENT_STORAGE_SCHEMA_VERSION } from "./storage/migrations/mod.ts";
 
 const appData = Deno.env.get("LOCALAPPDATA") ?? Deno.env.get("APPDATA") ?? Deno.cwd();
 const dataDir = `${appData}\\RadioraV2`;
@@ -57,6 +59,7 @@ async function bootstrap(): Promise<StartupStatus> {
 		await stopBackend();
 		try {
 			let nextStore: GraphStore;
+			let storageVersionMarker: string | null = null;
 			if (storageMode === "json") {
 				nextStore = new JsonGraphStore(`${dataDir}\\radiora-v2.json`);
 			} else if (storageMode === "surreal" || storageMode === "surreal-diagnostic") {
@@ -67,8 +70,20 @@ async function bootstrap(): Promise<StartupStatus> {
 					? `${dataDir}\\surreal`
 					: `${dataDir}\\surreal-diagnostic`;
 				await Deno.mkdir(surrealDir, { recursive: true });
+				const databasePath = `${surrealDir}\\main.db`;
+				storageVersionMarker = `${surrealDir}\\storage-schema-version`;
+				const backupPath = `${surrealDir}\\migration-backups\\storage-v0`;
+				const protectedBackup = await prepareStorageMigrationBackup(
+					databasePath,
+					backupPath,
+					storageVersionMarker,
+					CURRENT_STORAGE_SCHEMA_VERSION,
+				);
+				if (protectedBackup) {
+					await log("Storage migration backup ready", { path: protectedBackup });
+				}
 				const nextProcess = new SurrealProcess(
-					`${surrealDir}\\main.db`,
+					databasePath,
 					"127.0.0.1",
 					surrealPort,
 					(event, detail) => void log(`SurrealDB ${event}`, detail),
@@ -89,6 +104,9 @@ async function bootstrap(): Promise<StartupStatus> {
 			}
 			store = nextStore;
 			await nextStore.initialize();
+			if (storageVersionMarker) {
+				await recordStorageVersion(storageVersionMarker, CURRENT_STORAGE_SCHEMA_VERSION);
+			}
 			service = new OutlineService(nextStore);
 			startupStatus = { phase: "ready", message: "準備完了", logPath };
 			await log("Backend startup completed");

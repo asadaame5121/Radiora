@@ -1,6 +1,7 @@
 import type {
 	CreateItemInput,
 	CreateLinkInput,
+	CreateOccurrenceInput,
 	EmergenceAction,
 	EmergenceSuggestion,
 	Knot,
@@ -8,12 +9,14 @@ import type {
 	MoveItemInput,
 	OutlineItem,
 	OutlineSnapshot,
+	PurgeManifest,
 	RuleQueryResult,
 	SavedRuleQuery,
 	SearchAlias,
 	SearchRequest,
 	SearchResult,
 	Suggestion,
+	TrashEntry,
 } from "../domain/models.ts";
 import { LINK_TYPES } from "../domain/models.ts";
 import type { GraphStore } from "../storage/graph_store.ts";
@@ -39,28 +42,90 @@ export class OutlineService {
 	async createItem(input: CreateItemInput): Promise<OutlineItem> {
 		const items = await this.store.listItems();
 		const now = new Date().toISOString();
-		const item: OutlineItem = {
-			id: crypto.randomUUID(),
-			text: input.text,
-			parentId: input.parentId,
+		const workId = crypto.randomUUID();
+		const branchId = crypto.randomUUID();
+		const occurrenceId = crypto.randomUUID();
+		const occurrence = {
+			id: occurrenceId,
+			workId,
+			parentOccurrenceId: input.parentId,
 			orderKey: this.orderAfter(items, input.parentId, input.afterId ?? null),
 			collapsed: false,
+			revisionSelector: { mode: "branch" as const, branchId },
+		};
+		await this.store.createWorkBundle(
+			{ id: workId, createdAt: now, updatedAt: now },
+			{ id: branchId, workId, name: "main", headRevisionId: null, createdAt: now },
+			{ branchId, workId, text: input.text, updatedAt: now },
+			occurrence,
+		);
+		return {
+			id: occurrenceId,
+			workId,
+			text: input.text,
+			parentId: input.parentId,
+			orderKey: occurrence.orderKey,
+			collapsed: false,
+			revisionSelector: occurrence.revisionSelector,
 			createdAt: now,
 			updatedAt: now,
 		};
-		await this.store.createItem(item);
-		await this.store.setParent(item.id, item.parentId);
-		return item;
+	}
+
+	async createOccurrence(input: CreateOccurrenceInput): Promise<OutlineItem> {
+		const items = await this.store.listItems();
+		const source = items.find((item) => item.workId === input.workId);
+		if (!source) throw new Error(`Work not found: ${input.workId}`);
+		const occurrence = {
+			id: crypto.randomUUID(),
+			workId: input.workId,
+			parentOccurrenceId: input.parentId,
+			orderKey: this.orderAfter(items, input.parentId, input.afterId ?? null),
+			collapsed: false,
+			revisionSelector: structuredClone(source.revisionSelector),
+			contextualHeading: input.contextualHeading?.trim() || undefined,
+		};
+		await this.store.createOccurrence(occurrence);
+		return {
+			...source,
+			id: occurrence.id,
+			parentId: occurrence.parentOccurrenceId,
+			orderKey: occurrence.orderKey,
+			collapsed: occurrence.collapsed,
+			revisionSelector: occurrence.revisionSelector,
+			contextualHeading: occurrence.contextualHeading,
+		};
 	}
 
 	async updateItemText(id: string, text: string): Promise<void> {
 		const item = await this.requireItem(id);
-		await this.store.updateItem({ ...item, text, updatedAt: new Date().toISOString() });
+		await this.store.updateWorkingCopy(item.workId, text, new Date().toISOString());
 	}
 
 	async setCollapsed(id: string, collapsed: boolean): Promise<void> {
 		const item = await this.requireItem(id);
-		await this.store.updateItem({ ...item, collapsed, updatedAt: new Date().toISOString() });
+		await this.store.updateOccurrence({
+			id: item.id,
+			workId: item.workId,
+			parentOccurrenceId: item.parentId,
+			orderKey: item.orderKey,
+			collapsed,
+			revisionSelector: item.revisionSelector,
+			contextualHeading: item.contextualHeading,
+		});
+	}
+
+	async setContextualHeading(id: string, contextualHeading?: string): Promise<void> {
+		const item = await this.requireItem(id);
+		await this.store.updateOccurrence({
+			id: item.id,
+			workId: item.workId,
+			parentOccurrenceId: item.parentId,
+			orderKey: item.orderKey,
+			collapsed: item.collapsed,
+			revisionSelector: item.revisionSelector,
+			contextualHeading: contextualHeading?.trim() || undefined,
+		});
 	}
 
 	async moveItem(input: MoveItemInput): Promise<void> {
@@ -72,12 +137,14 @@ export class OutlineService {
 			input.parentId,
 			input.afterId ?? null,
 		);
-		await this.store.setParent(item.id, input.parentId);
-		await this.store.updateItem({
-			...item,
-			parentId: input.parentId,
+		await this.store.updateOccurrence({
+			id: item.id,
+			workId: item.workId,
+			parentOccurrenceId: input.parentId,
 			orderKey,
-			updatedAt: new Date().toISOString(),
+			collapsed: item.collapsed,
+			revisionSelector: item.revisionSelector,
+			contextualHeading: item.contextualHeading,
 		});
 		await this.reconcileKnots();
 	}
@@ -96,18 +163,74 @@ export class OutlineService {
 			await this.moveItem({ id: child.id, parentId: item.parentId, afterId });
 			afterId = child.id;
 		}
-		await this.store.deleteItem(id);
+		await this.store.deleteOccurrence(id);
 		await this.reconcileKnots();
+	}
+
+	async trashWork(id: string): Promise<void> {
+		const item = await this.requireItem(id);
+		await this.store.trashWork(item.workId, new Date().toISOString());
+	}
+
+	async listTrash(): Promise<TrashEntry[]> {
+		const works = (await this.store.listWorks(true)).filter((work) => work.deletedAt);
+		const occurrences = await this.store.listOccurrences(true);
+		const links = await this.store.listLinks();
+		return works.map((work) => ({
+			work,
+			occurrenceCount: occurrences.filter((occurrence) => occurrence.workId === work.id).length,
+			linkCount:
+				links.filter((link) => link.from.workId === work.id || link.to.workId === work.id).length,
+		}));
+	}
+
+	restoreWork(workId: string): Promise<void> {
+		return this.store.restoreWork(workId);
+	}
+
+	purgeWork(workId: string): Promise<PurgeManifest> {
+		return this.store.purgeWork(workId);
 	}
 
 	async createLink(input: CreateLinkInput): Promise<void> {
 		if (!LINK_TYPES.includes(input.type)) throw new Error(`Unsupported link type: ${input.type}`);
-		if (input.fromId === input.toId) throw new Error("A related link cannot target itself");
-		await this.store.createLink({ ...input, createdAt: new Date().toISOString() });
+		const [fromItem, toItem] = await Promise.all([
+			this.requireItem(input.fromId),
+			this.requireItem(input.toId),
+		]);
+		const from = input.fromEndpoint ?? { scope: "work" as const, workId: fromItem.workId };
+		const to = input.toEndpoint ?? { scope: "work" as const, workId: toItem.workId };
+		if (from.workId === to.workId) throw new Error("A related link cannot target the same work");
+		let fromId = from.workId;
+		let toId = to.workId;
+		let fromEndpoint = from;
+		let toEndpoint = to;
+		if (
+			(input.type === "RELATED" || input.type === "LIKE" || input.type === "VS") &&
+			fromId.localeCompare(toId) > 0
+		) {
+			[fromId, toId] = [toId, fromId];
+			[fromEndpoint, toEndpoint] = [toEndpoint, fromEndpoint];
+		}
+		await this.store.createLink({
+			id: crypto.randomUUID(),
+			fromId,
+			toId,
+			from: fromEndpoint,
+			to: toEndpoint,
+			type: input.type,
+			status: input.status ?? "asserted",
+			origin: input.origin ?? "human",
+			createdAt: new Date().toISOString(),
+			reason: input.reason?.trim() || undefined,
+		});
 	}
 
-	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
-		return this.store.deleteLink(fromId, toId, type);
+	async deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
+		const items = await this.store.listItems();
+		const fromWorkId = items.find((item) => item.id === fromId)?.workId ?? fromId;
+		const toWorkId = items.find((item) => item.id === toId)?.workId ?? toId;
+		return this.store.deleteLink(fromWorkId, toWorkId, type);
 	}
 
 	async suggestItems(prefix: string, limit = 8): Promise<Suggestion[]> {
@@ -177,13 +300,13 @@ export class OutlineService {
 		const neighbors = this.neighborMap(links);
 		const context = input.contextItemId ? byId.get(input.contextItemId) : undefined;
 		const contextNeighbors = context
-			? neighbors.get(context.id) ?? new Set<string>()
+			? neighbors.get(context.workId) ?? new Set<string>()
 			: new Set<string>();
 		return [...candidates.values()].map((candidate): SearchResult => {
 			let graph = 0;
-			if (context && context.id !== candidate.item.id) {
-				const candidateNeighbors = neighbors.get(candidate.item.id) ?? new Set<string>();
-				if (contextNeighbors.has(candidate.item.id)) {
+			if (context && context.workId !== candidate.item.workId) {
+				const candidateNeighbors = neighbors.get(candidate.item.workId) ?? new Set<string>();
+				if (contextNeighbors.has(candidate.item.workId)) {
 					graph = 1;
 					candidate.reasons.push({
 						kind: "direct-link",
@@ -262,13 +385,14 @@ export class OutlineService {
 		const context = items.find((item) => item.id === contextItemId);
 		if (!context) return [];
 		const byId = new Map(items.map((item) => [item.id, item]));
+		const byWorkId = new Map(items.map((item) => [item.workId, item]));
 		const neighbors = this.neighborMap(links);
-		const contextNeighbors = neighbors.get(context.id) ?? new Set<string>();
+		const contextNeighbors = neighbors.get(context.workId) ?? new Set<string>();
 		const direct = new Set(contextNeighbors);
 		const suggestions = new Map<string, EmergenceSuggestion>();
-		for (const candidate of items) {
-			if (candidate.id === context.id || direct.has(candidate.id)) continue;
-			const shared = [...contextNeighbors].filter((id) => neighbors.get(candidate.id)?.has(id));
+		for (const candidate of byWorkId.values()) {
+			if (candidate.workId === context.workId || direct.has(candidate.workId)) continue;
+			const shared = [...contextNeighbors].filter((id) => neighbors.get(candidate.workId)?.has(id));
 			if (shared.length >= 2) {
 				this.addSuggestion(suggestions, {
 					kind: "latent-relation",
@@ -278,9 +402,17 @@ export class OutlineService {
 					proposedLinkType: "LIKE",
 					title: "潜在的な関係",
 					explanation: `${shared.length}件の共通リンクを介してつながっています。`,
-					evidence: shared.slice(0, 3).flatMap((id) => [
-						{ fromId: context.id, toId: id, relation: "LIKE" as const },
-						{ fromId: id, toId: candidate.id, relation: "LIKE" as const },
+					evidence: shared.slice(0, 3).flatMap((workId) => [
+						{
+							fromId: context.id,
+							toId: byWorkId.get(workId)?.id ?? workId,
+							relation: "LIKE" as const,
+						},
+						{
+							fromId: byWorkId.get(workId)?.id ?? workId,
+							toId: candidate.id,
+							relation: "LIKE" as const,
+						},
 					]),
 				});
 			}
@@ -290,7 +422,8 @@ export class OutlineService {
 		) {
 			const target = result.item;
 			if (
-				direct.has(target.id) || this.rootId(context, byId) === this.rootId(target, byId) ||
+				direct.has(target.workId) ||
+				this.rootId(context, byId) === this.rootId(target, byId) ||
 				result.score < 0.35
 			) continue;
 			this.addSuggestion(suggestions, {
@@ -306,10 +439,11 @@ export class OutlineService {
 		}
 		for (
 			const first of links.filter((link) =>
-				link.type === "LIKE" && (link.fromId === context.id || link.toId === context.id)
+				link.type === "LIKE" &&
+				(link.fromId === context.workId || link.toId === context.workId)
 			)
 		) {
-			const middle = first.fromId === context.id ? first.toId : first.fromId;
+			const middle = first.fromId === context.workId ? first.toId : first.fromId;
 			for (
 				const second of links.filter((link) =>
 					(link.type === "VS" || link.type === "FIX") &&
@@ -317,8 +451,8 @@ export class OutlineService {
 				)
 			) {
 				const targetId = second.fromId === middle ? second.toId : second.fromId;
-				const target = byId.get(targetId);
-				if (!target || target.id === context.id) continue;
+				const target = byWorkId.get(targetId);
+				if (!target || target.workId === context.workId) continue;
 				this.addSuggestion(suggestions, {
 					kind: "productive-tension",
 					context,
@@ -327,8 +461,16 @@ export class OutlineService {
 					title: "対立・修正の観点",
 					explanation: `類似する思索の先に${second.type}関係があります。`,
 					evidence: [
-						{ fromId: context.id, toId: middle, relation: "LIKE" },
-						{ fromId: middle, toId: target.id, relation: second.type },
+						{
+							fromId: context.id,
+							toId: byWorkId.get(middle)?.id ?? middle,
+							relation: "LIKE",
+						},
+						{
+							fromId: byWorkId.get(middle)?.id ?? middle,
+							toId: target.id,
+							relation: second.type,
+						},
 					],
 				});
 			}
@@ -350,11 +492,15 @@ export class OutlineService {
 		const suggestion = this.suggestionCache.get(id);
 		if (!suggestion) throw new Error("提案が古くなりました。再読み込みしてください。");
 		if (action === "accept" && suggestion.proposedLinkType) {
+			const [context, target] = await Promise.all([
+				this.requireItem(suggestion.contextItemId),
+				this.requireItem(suggestion.targetItemId),
+			]);
 			const links = await this.store.listLinks();
 			const exists = links.some((link) =>
 				link.type === suggestion.proposedLinkType &&
-				((link.fromId === suggestion.contextItemId && link.toId === suggestion.targetItemId) ||
-					(link.fromId === suggestion.targetItemId && link.toId === suggestion.contextItemId))
+				((link.fromId === context.workId && link.toId === target.workId) ||
+					(link.fromId === target.workId && link.toId === context.workId))
 			);
 			if (!exists) {
 				await this.createLink({
@@ -368,7 +514,22 @@ export class OutlineService {
 	}
 
 	async runRuleQuery(source: string, limit = 500): Promise<RuleQueryResult> {
-		return runRuleQuery(source, await this.store.listItems(), await this.store.listLinks(), limit);
+		const [items, links] = await Promise.all([
+			this.store.listItems(),
+			this.store.listLinks(),
+		]);
+		const representativeByWork = new Map<string, string>();
+		for (const item of items) {
+			if (!representativeByWork.has(item.workId)) {
+				representativeByWork.set(item.workId, item.id);
+			}
+		}
+		const occurrenceLinks = links.flatMap((link) => {
+			const fromId = representativeByWork.get(link.from.workId);
+			const toId = representativeByWork.get(link.to.workId);
+			return fromId && toId ? [{ ...link, fromId, toId }] : [];
+		});
+		return runRuleQuery(source, items, occurrenceLinks, limit);
 	}
 
 	listSavedRuleQueries(): Promise<SavedRuleQuery[]> {
@@ -419,11 +580,12 @@ export class OutlineService {
 		for (const seed of seeds) {
 			for (
 				const link of links.filter((link) =>
-					link.type === "LIKE" && (link.fromId === seed.id || link.toId === seed.id)
+					link.type === "LIKE" &&
+					(link.fromId === seed.workId || link.toId === seed.workId)
 				)
 			) {
 				const target = items.find((item) =>
-					item.id === (link.fromId === seed.id ? link.toId : link.fromId)
+					item.workId === (link.fromId === seed.workId ? link.toId : link.fromId)
 				);
 				const term = target ? normalizeSearchText(titleOf(target)) : "";
 				if (term && term !== query && !expansions.has(term) && expansions.size < 5) {
@@ -538,12 +700,28 @@ export class OutlineService {
 					const signature = cycleIds.join(":");
 					if (!signatures.has(signature)) {
 						signatures.add(signature);
-						knots.push({ id: crypto.randomUUID(), cycleIds, createdAt: new Date().toISOString() });
+						knots.push({
+							id: this.fingerprint(`knot:${signature}`),
+							cycleIds,
+							createdAt: new Date().toISOString(),
+						});
 					}
 					break;
 				}
 				position.set(current.id, path.length);
 				path.push(current.id);
+				if (current.parentId && !byId.has(current.parentId)) {
+					const signature = `orphan:${current.id}`;
+					if (!signatures.has(signature)) {
+						signatures.add(signature);
+						knots.push({
+							id: this.fingerprint(`knot:${signature}`),
+							cycleIds: [current.id],
+							createdAt: new Date().toISOString(),
+						});
+					}
+					break;
+				}
 				current = current.parentId ? byId.get(current.parentId) : undefined;
 			}
 		}

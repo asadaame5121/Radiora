@@ -88,8 +88,9 @@ npm run build
 deno check src/main.ts
 ```
 
-PoC対象はアウトラインCRUD、階層・順序・折りたたみ、削除時の子昇格、本文部分一致検索、
-`LIKE/FIX/VS/IN`リンク、循環する`FROM`のKnot/Stash投影です。
+現在の対象はWork／Occurrenceによる実身・化身、配置ごとに独立した階層・順序・折りたたみ、
+化身削除、実身のゴミ箱と復元、本文部分一致検索、標準7種の意味リンク、
+循環・孤児OccurrenceのKnot/Stash投影です。同じWorkを複数箇所へ配置しても本文は共有されます。
 
 ### SurrealDB Desktop probe
 
