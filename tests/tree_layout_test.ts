@@ -94,3 +94,20 @@ Deno.test("direct neighborhood includes parent, children, and related links", ()
 		new Set(["focus", "parent", "child", "related"]),
 	);
 });
+
+Deno.test("FROM draws from parent source to child target", () => {
+	const data = snapshot([
+		item("parent", "2026-01-01T00:00:00.000Z"),
+		item("child", "2026-01-02T00:00:00.000Z", "parent"),
+	]);
+	const layout = calculateTreeLayout(data, {
+		width: 600,
+		height: 300,
+		projectX: () => 280,
+	});
+
+	const edge = layout.edges.find((candidate) => candidate.type === "FROM");
+	assertEquals(edge?.source.id, "parent");
+	assertEquals(edge?.target.id, "child");
+	assertEquals(edge?.count, 1);
+});

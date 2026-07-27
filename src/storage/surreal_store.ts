@@ -10,6 +10,13 @@ import type {
 } from "../domain/models.ts";
 import type { GraphStore } from "./graph_store.ts";
 import {
+	CURRENT_STORAGE_SCHEMA_VERSION,
+	type MigrationJournalEntry,
+	runStorageMigrations,
+	type SchemaMetadata,
+	type StorageMigration,
+} from "./migrations/mod.ts";
+import {
 	countOccurrences,
 	normalizeSearchText,
 	searchTerms,
@@ -20,8 +27,17 @@ import {
 type Row = Record<string, unknown>;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const APP_VERSION = "0.1.0";
+const STORAGE_MIGRATIONS: readonly StorageMigration[] = [];
 
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
+
+export function evolvedFromEndpoints(
+	parentId: string,
+	childId: string,
+): { inId: string; outId: string } {
+	return { inId: parentId, outId: childId };
+}
 
 const RELATION_TABLE: Record<LinkType, string> = {
 	LIKE: "liked",
@@ -116,6 +132,19 @@ export class SurrealGraphStore implements GraphStore {
 				DEFINE FIELD IF NOT EXISTS source ON saved_rule_query TYPE string;
 				DEFINE FIELD IF NOT EXISTS created_at ON saved_rule_query TYPE string;
 				DEFINE FIELD IF NOT EXISTS updated_at ON saved_rule_query TYPE string;
+				DEFINE TABLE IF NOT EXISTS schema_metadata SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS version ON schema_metadata TYPE number;
+				DEFINE FIELD IF NOT EXISTS updated_at ON schema_metadata TYPE string;
+				DEFINE FIELD IF NOT EXISTS last_migration_id ON schema_metadata TYPE string;
+				DEFINE FIELD IF NOT EXISTS app_version ON schema_metadata TYPE string;
+				DEFINE TABLE IF NOT EXISTS migration_journal SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS from_version ON migration_journal TYPE number;
+				DEFINE FIELD IF NOT EXISTS to_version ON migration_journal TYPE number;
+				DEFINE FIELD IF NOT EXISTS started_at ON migration_journal TYPE string;
+				DEFINE FIELD IF NOT EXISTS completed_at ON migration_journal TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS app_version ON migration_journal TYPE string;
+				DEFINE FIELD IF NOT EXISTS status ON migration_journal TYPE string;
+				DEFINE FIELD IF NOT EXISTS error ON migration_journal TYPE option<string>;
 				DEFINE ANALYZER IF NOT EXISTS title_prefix FILTERS lowercase, edgengram(1,64);
 				DEFINE ANALYZER IF NOT EXISTS lexical TOKENIZERS class, camel, punct FILTERS lowercase;
 				DEFINE ANALYZER IF NOT EXISTS japanese_terms TOKENIZERS blank FILTERS lowercase;
@@ -128,6 +157,7 @@ export class SurrealGraphStore implements GraphStore {
 				DEFINE INDEX IF NOT EXISTS outline_terms_lexical ON outline_item FIELDS search_terms
 					FULLTEXT ANALYZER japanese_terms BM25;
 			`));
+		await this.step("sdk.schema.migrate", () => this.runMigrations());
 		for (const item of await this.listItems()) await this.updateItem(item);
 		this.trace("sdk.initialize.ready");
 	}
@@ -192,9 +222,13 @@ export class SurrealGraphStore implements GraphStore {
 			child,
 		});
 		if (parentId) {
+			const endpoints = evolvedFromEndpoints(parentId, childId);
 			await this.#db.query(
 				`RELATE $parent->evolved_from->$child;`,
-				{ child, parent: new RecordId("outline_item", parentId) },
+				{
+					child: new RecordId("outline_item", endpoints.outId),
+					parent: new RecordId("outline_item", endpoints.inId),
+				},
 			);
 		}
 	}
@@ -390,6 +424,65 @@ export class SurrealGraphStore implements GraphStore {
 		} catch {
 			// Diagnostics must never change database behavior.
 		}
+	}
+
+	private async runMigrations(): Promise<void> {
+		await runStorageMigrations({
+			appVersion: APP_VERSION,
+			targetVersion: CURRENT_STORAGE_SCHEMA_VERSION,
+			migrations: STORAGE_MIGRATIONS,
+			context: {
+				execute: (statement, variables) => this.#db.query(statement, variables),
+			},
+			state: {
+				readMetadata: async () => {
+					const [rows] = await this.#db.query<[Row[]]>(
+						`SELECT version, updated_at, last_migration_id, app_version
+							FROM schema_metadata:radiora;`,
+					);
+					const row = rows[0];
+					if (!row) return null;
+					return {
+						id: "radiora",
+						version: Number(row.version),
+						updatedAt: String(row.updated_at ?? ""),
+						lastMigrationId: String(row.last_migration_id ?? ""),
+						appVersion: String(row.app_version ?? ""),
+					} satisfies SchemaMetadata;
+				},
+				writeMetadata: (metadata) =>
+					this.#db.query(
+						`UPSERT schema_metadata:radiora CONTENT {
+							version: $version,
+							updated_at: $updatedAt,
+							last_migration_id: $lastMigrationId,
+							app_version: $appVersion
+						};`,
+						{ ...metadata },
+					).then(() => undefined),
+				writeJournal: (entry) => this.writeMigrationJournal(entry),
+			},
+		});
+	}
+
+	private async writeMigrationJournal(entry: MigrationJournalEntry): Promise<void> {
+		await this.#db.query(
+			`UPSERT $record CONTENT {
+				from_version: $fromVersion,
+				to_version: $toVersion,
+				started_at: $startedAt,
+				completed_at: $completedAt,
+				app_version: $appVersion,
+				status: $status,
+				error: $error
+			};`,
+			{
+				...entry,
+				completedAt: entry.completedAt ?? null,
+				error: entry.error ?? null,
+				record: new RecordId("migration_journal", entry.id),
+			},
+		);
 	}
 
 	private async step<T>(event: string, operation: () => Promise<T>): Promise<T> {
