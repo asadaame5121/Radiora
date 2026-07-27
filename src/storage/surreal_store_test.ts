@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
-import { itemFromRow } from "./surreal_store.ts";
+import { evolvedFromEndpoints, itemFromRow } from "./surreal_store.ts";
 
 const ITEM_ID = "31a56a11-35ac-4700-9f68-20de9c9d58dc";
 const PARENT_ID = "a3744669-9419-4edb-ab06-09f397c18932";
@@ -33,4 +33,11 @@ Deno.test("Surreal item rows reject a record ID at the domain boundary", () => {
 		TypeError,
 		"Expected parent_id to be a UUID",
 	);
+});
+
+Deno.test("FROM persists from parent in-endpoint to child out-endpoint", () => {
+	assertEquals(evolvedFromEndpoints(PARENT_ID, ITEM_ID), {
+		inId: PARENT_ID,
+		outId: ITEM_ID,
+	});
 });
