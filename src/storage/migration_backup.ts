@@ -4,6 +4,7 @@ export async function prepareStorageMigrationBackup(
 	versionMarkerPath: string,
 	targetVersion: number,
 ): Promise<string | null> {
+	assertSeparatePaths(databasePath, backupPath);
 	const recordedVersion = await readRecordedVersion(versionMarkerPath);
 	if (recordedVersion >= targetVersion) return null;
 	if (!(await exists(databasePath))) return null;
@@ -15,6 +16,45 @@ export async function prepareStorageMigrationBackup(
 
 export async function recordStorageVersion(path: string, version: number): Promise<void> {
 	await Deno.writeTextFile(path, `${version}\n`);
+}
+
+export interface StorageMigrationRestore {
+	databasePath: string;
+	failedDatabasePath: string | null;
+}
+
+export async function restoreStorageMigrationBackup(
+	databasePath: string,
+	backupPath: string,
+	versionMarkerPath: string,
+): Promise<StorageMigrationRestore> {
+	assertSeparatePaths(databasePath, backupPath);
+	if (!(await exists(backupPath))) {
+		throw new Error(`Storage migration backup not found: ${backupPath}`);
+	}
+
+	const restorePath = `${databasePath}.restore-${crypto.randomUUID()}`;
+	const failedDatabasePath = await exists(databasePath)
+		? `${databasePath}.migration-failed-${crypto.randomUUID()}`
+		: null;
+
+	try {
+		await copyPath(backupPath, restorePath);
+		if (failedDatabasePath) await Deno.rename(databasePath, failedDatabasePath);
+		await Deno.rename(restorePath, databasePath);
+		await removeIfExists(versionMarkerPath);
+		return { databasePath, failedDatabasePath };
+	} catch (cause) {
+		await removeIfExists(restorePath, true);
+		if (
+			failedDatabasePath &&
+			!(await exists(databasePath)) &&
+			await exists(failedDatabasePath)
+		) {
+			await Deno.rename(failedDatabasePath, databasePath);
+		}
+		throw cause;
+	}
 }
 
 async function readRecordedVersion(path: string): Promise<number> {
@@ -37,6 +77,14 @@ async function exists(path: string): Promise<boolean> {
 	}
 }
 
+async function removeIfExists(path: string, recursive = false): Promise<void> {
+	try {
+		await Deno.remove(path, { recursive });
+	} catch (cause) {
+		if (!(cause instanceof Deno.errors.NotFound)) throw cause;
+	}
+}
+
 async function copyPath(source: string, destination: string): Promise<void> {
 	const stat = await Deno.lstat(source);
 	if (stat.isSymlink) throw new Error(`Migration backup refuses symbolic link: ${source}`);
@@ -56,4 +104,20 @@ async function copyPath(source: string, destination: string): Promise<void> {
 function parentPath(path: string): string {
 	const separator = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
 	return separator < 0 ? "." : path.slice(0, separator);
+}
+
+function assertSeparatePaths(first: string, second: string): void {
+	const normalizedFirst = normalizePath(first);
+	const normalizedSecond = normalizePath(second);
+	if (
+		normalizedFirst === normalizedSecond ||
+		normalizedFirst.startsWith(`${normalizedSecond}\\`) ||
+		normalizedSecond.startsWith(`${normalizedFirst}\\`)
+	) {
+		throw new Error(`Migration backup paths must not overlap: ${first}, ${second}`);
+	}
+}
+
+function normalizePath(path: string): string {
+	return path.replaceAll("/", "\\").replaceAll(/\\+/g, "\\").replace(/\\$/, "").toLowerCase();
 }
