@@ -200,7 +200,11 @@ export class OutlineService {
 		return this.store.restoreWork(workId);
 	}
 
-	purgeWork(workId: string): Promise<PurgeManifest> {
+	async purgeWork(workId: string): Promise<PurgeManifest> {
+		const work = (await this.store.listWorks(true)).find((candidate) => candidate.id === workId);
+		if (!work?.deletedAt) {
+			throw new Error(`Work must be in trash before it can be purged: ${workId}`);
+		}
 		return this.store.purgeWork(workId);
 	}
 

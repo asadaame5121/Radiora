@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { OutlineService } from "./outline_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 
@@ -253,6 +253,30 @@ Deno.test("complete purge removes content and leaves an ID-only impact manifest"
 	assertEquals("text" in manifest, false);
 	assertEquals((await store.listWorks(true)).some((work) => work.id === source.workId), false);
 	assertEquals((await store.listPurgeManifests())[0], manifest);
+});
+
+Deno.test("complete purge only accepts Work already in trash", async () => {
+	const service = new OutlineService(new MemoryGraphStore());
+	const source = await service.createItem({ text: "まだ表示中", parentId: null });
+
+	await assertRejects(
+		() => service.purgeWork(source.workId),
+		Error,
+		"Work must be in trash before it can be purged",
+	);
+	assertEquals((await service.listOutline()).items.map((item) => item.id), [source.id]);
+});
+
+Deno.test("purging a Work detaches other Works from its removed Occurrences", async () => {
+	const service = new OutlineService(new MemoryGraphStore());
+	const source = await service.createItem({ text: "削除する親", parentId: null });
+	const child = await service.createItem({ text: "残す子", parentId: source.id });
+
+	await service.trashWork(source.id);
+	await service.purgeWork(source.workId);
+
+	const remaining = (await service.listOutline()).items.find((item) => item.id === child.id);
+	assertEquals(remaining?.parentId, null);
 });
 
 Deno.test("each Occurrence owns an independent child structure", async () => {

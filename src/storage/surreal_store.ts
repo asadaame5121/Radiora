@@ -345,6 +345,10 @@ export class SurrealGraphStore implements GraphStore {
 	}
 
 	async purgeWork(workId: string): Promise<PurgeManifest> {
+		const workState = (await this.listWorks(true)).find((candidate) => candidate.id === workId);
+		if (!workState?.deletedAt) {
+			throw new Error(`Work must be in trash before it can be purged: ${workId}`);
+		}
 		const work = new RecordId("work", workId);
 		const [occurrenceRows, branchRows, revisionRows, links] = await Promise.all([
 			this.#db.query<[Row[]]>(
