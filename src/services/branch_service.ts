@@ -1,9 +1,18 @@
-import type { Branch, Revision, WorkingCopy } from "../domain/models.ts";
+import type {
+	Branch,
+	Occurrence,
+	OutlineLink,
+	Revision,
+	Work,
+	WorkingCopy,
+} from "../domain/models.ts";
 import type { GraphStore } from "../storage/graph_store.ts";
 
 export interface BranchServiceOptions {
 	/** Supplies lifecycle timestamps so callers and tests can make mutations deterministic. */
 	now?: () => string;
+	/** Supplies identifiers so callers and tests can make creation deterministic. */
+	createId?: () => string;
 }
 
 export interface SelectedBranch {
@@ -11,17 +20,37 @@ export interface SelectedBranch {
 	workingCopy: WorkingCopy;
 }
 
+/** Placement is deliberately supplied by the caller; this service never infers a parent. */
+export interface DetachAsIndependentWorkInput {
+	parentOccurrenceId: string | null;
+	orderKey: number;
+}
+
+export interface DetachedWorkBundle {
+	work: Work;
+	branch: Branch;
+	workingCopy: WorkingCopy;
+	occurrence: Occurrence;
+}
+
+export interface DetachAsIndependentWorkResult {
+	bundle: DetachedWorkBundle;
+	link: OutlineLink;
+}
+
 /**
  * Manages explicit Branch lifecycle operations without implicitly creating Revisions.
  */
 export class BranchService {
 	readonly #now: () => string;
+	readonly #createId: () => string;
 
 	constructor(
 		private readonly store: GraphStore,
 		options: BranchServiceOptions = {},
 	) {
 		this.#now = options.now ?? (() => new Date().toISOString());
+		this.#createId = options.createId ?? (() => crypto.randomUUID());
 	}
 
 	/**
@@ -138,6 +167,100 @@ export class BranchService {
 		return { branch: advancedMain, workingCopy: syncedWorkingCopy };
 	}
 
+	/**
+	 * Promotes a confirmed Branch draft into a distinct Work.
+	 *
+	 * The new Work deliberately has no Revision history: its provenance is expressed
+	 * only by the asserted `FROM` link from the new Work to the source Work.
+	 */
+	async detachAsIndependentWork(
+		sourceBranchId: string,
+		input: DetachAsIndependentWorkInput,
+	): Promise<DetachAsIndependentWorkResult> {
+		const [works, branches, workingCopies, revisions, occurrences, links] = await Promise.all([
+			this.store.listWorks(),
+			this.store.listBranches(),
+			this.store.listWorkingCopies(),
+			this.store.listRevisions(),
+			this.store.listOccurrences(),
+			this.store.listLinks(),
+		]);
+		const source = this.#requireBranch(branches, sourceBranchId);
+		if (source.archivedAt) {
+			throw new Error(`Archived Branch cannot be made independent: ${sourceBranchId}`);
+		}
+		if (!works.some((work) => work.id === source.workId)) {
+			throw new Error(`Work not found for Branch: ${sourceBranchId}`);
+		}
+		const sourceWorkingCopy = this.#requireWorkingCopy(workingCopies, source);
+		const sourceHead = this.#requireHeadRevision(revisions, source);
+		if (sourceWorkingCopy.text !== sourceHead.text) {
+			throw new Error(`Source Branch has uncommitted Working Copy changes: ${sourceBranchId}`);
+		}
+
+		const timestamp = this.#now();
+		const [workId, branchId, occurrenceId, linkId] = [
+			this.#createId(),
+			this.#createId(),
+			this.#createId(),
+			this.#createId(),
+		];
+		this.#requireFreshIds(
+			[workId, branchId, occurrenceId, linkId],
+			works,
+			branches,
+			workingCopies,
+			revisions,
+			occurrences,
+			links,
+		);
+
+		const bundle: DetachedWorkBundle = {
+			work: { id: workId, createdAt: timestamp, updatedAt: timestamp },
+			branch: {
+				id: branchId,
+				workId,
+				name: "main",
+				headRevisionId: null,
+				createdAt: timestamp,
+			},
+			workingCopy: {
+				branchId,
+				workId,
+				text: sourceHead.text,
+				updatedAt: timestamp,
+			},
+			occurrence: {
+				id: occurrenceId,
+				workId,
+				parentOccurrenceId: input.parentOccurrenceId,
+				orderKey: input.orderKey,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId },
+			},
+		};
+		const link: OutlineLink = {
+			id: linkId,
+			fromId: bundle.work.id,
+			toId: source.workId,
+			from: { scope: "work", workId: bundle.work.id },
+			to: { scope: "work", workId: source.workId },
+			type: "FROM",
+			status: "asserted",
+			origin: "human",
+			createdAt: timestamp,
+		};
+
+		await this.store.createWorkBundle(
+			bundle.work,
+			bundle.branch,
+			bundle.workingCopy,
+			bundle.occurrence,
+		);
+		await this.store.createLink(link);
+		return { bundle, link };
+	}
+
 	#requireBranch(branches: readonly Branch[], branchId: string): Branch {
 		const branch = branches.find((candidate) => candidate.id === branchId);
 		if (!branch) throw new Error(`Branch not found: ${branchId}`);
@@ -171,5 +294,27 @@ export class BranchService {
 			throw new Error(`Confirmed head Revision not found for Branch: ${branch.id}`);
 		}
 		return revision;
+	}
+
+	#requireFreshIds(
+		ids: readonly string[],
+		works: readonly Work[],
+		branches: readonly Branch[],
+		workingCopies: readonly WorkingCopy[],
+		revisions: readonly Revision[],
+		occurrences: readonly Occurrence[],
+		links: readonly OutlineLink[],
+	): void {
+		const existing = new Set([
+			...works.map((work) => work.id),
+			...branches.map((branch) => branch.id),
+			...workingCopies.map((workingCopy) => workingCopy.branchId),
+			...revisions.map((revision) => revision.id),
+			...occurrences.map((occurrence) => occurrence.id),
+			...links.map((link) => link.id),
+		]);
+		if (new Set(ids).size !== ids.length || ids.some((id) => existing.has(id))) {
+			throw new Error("Generated identifier already exists");
+		}
 	}
 }
