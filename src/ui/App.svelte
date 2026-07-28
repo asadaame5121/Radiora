@@ -67,6 +67,10 @@
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
+	const selectedPlacements = $derived(selectedItem
+		? snapshot.items.filter((item) => item.workId === selectedItem.workId)
+			.sort((left, right) => left.orderKey - right.orderKey || left.id.localeCompare(right.id))
+		: []);
 	const selectedLinks = $derived(selectedItem
 		? snapshot.links.filter((link) =>
 			link.fromId === selectedItem.workId || link.toId === selectedItem.workId
@@ -642,6 +646,22 @@
 							onchange={(event) => updateSelectedHeading(event.currentTarget.value)}
 							placeholder="未設定時は本文の先頭行" />
 					</label>
+					<section class="placements">
+						<h3>すべての{vocabulary.occurrence}<small>{selectedPlacements.length}件</small></h3>
+						<div>
+							{#each selectedPlacements as placement (placement.id)}
+								<button class:active={placement.id === selectedItem.id}
+									onclick={() => {
+										viewMode = "outline";
+										selectedId = placement.id;
+										requestFocus(placement.id);
+									}}>
+									<strong>{titleFor(placement)}</strong>
+									<span>{placement.parentId ? `親: ${titleForId(placement.parentId)}` : "ルート"}</span>
+								</button>
+							{/each}
+						</div>
+					</section>
 					<div class="discovery-actions">
 						<button onclick={duplicateSelectedOccurrence}>同じ{vocabulary.work}をもう一箇所へ配置</button>
 						<button onclick={() => remove(selectedItem.id)}>この{vocabulary.occurrence}を外す</button>
