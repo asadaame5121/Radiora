@@ -74,10 +74,10 @@ parent (drawing source)             -> child (drawing target)
 versionを先に進めず、検証成功後だけ`schema_metadata`を更新する。開始、成功、失敗は
 `migration_journal`へ記録する。
 
-自動downgradeは実装しない。version `0 -> 1`の前にSurrealDBの保護SnapshotまたはDB
-ディレクトリの停止時バックアップを作り、失敗時はアプリとSurrealDBを停止してその
-バックアップを丸ごと復元する。JSON importは入力を変更せず、一時領域で変換・検証した後に
-反映する。復元完了までは移行後DBを通常storeとして公開しない。
+自動downgradeは実装しない。version `0 -> 1`の前にSurrealDBのDBディレクトリを 停止中に一度だけcold
+backupし、失敗時はアプリとSurrealDBを停止してからそのバックアップを
+丸ごと復元する。途中状態のDBは一意な`.migration-failed-*`パスへ退避し、診断に使用できる。
+復元後はversion markerを削除し、次回起動で同じmigrationを最初から再実行する。
 
-Phase 1実装時には、バックアップ作成と復元の実処理、途中失敗からの再起動testを `0001_work_occurrence`
-migrationと同時に追加する。
+JSON importは入力を`.v0.bak`へ保護し、変換・検証成功後だけversion 1 envelopeを反映する。
+復元完了までは移行後DBを通常storeとして公開しない。
