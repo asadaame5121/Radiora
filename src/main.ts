@@ -4,7 +4,11 @@ import { OutlineService } from "./services/outline_service.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
 import type { GraphStore } from "./storage/graph_store.ts";
 import { JsonGraphStore } from "./storage/json_store.ts";
-import { prepareStorageMigrationBackup, recordStorageVersion } from "./storage/migration_backup.ts";
+import {
+	prepareStorageMigrationBackup,
+	recordStorageVersion,
+	restoreStorageMigrationBackup,
+} from "./storage/migration_backup.ts";
 import { CURRENT_STORAGE_SCHEMA_VERSION } from "./storage/migrations/mod.ts";
 
 const appData = Deno.env.get("LOCALAPPDATA") ?? Deno.env.get("APPDATA") ?? Deno.cwd();
@@ -57,6 +61,11 @@ async function bootstrap(): Promise<StartupStatus> {
 		startupStatus = { phase: "starting", message: "データを読み込んでいます…", logPath };
 		await log("Backend startup began");
 		await stopBackend();
+		let storageMigrationRecovery: {
+			databasePath: string;
+			backupPath: string;
+			versionMarkerPath: string;
+		} | null = null;
 		try {
 			let nextStore: GraphStore;
 			let storageVersionMarker: string | null = null;
@@ -80,6 +89,11 @@ async function bootstrap(): Promise<StartupStatus> {
 					CURRENT_STORAGE_SCHEMA_VERSION,
 				);
 				if (protectedBackup) {
+					storageMigrationRecovery = {
+						databasePath,
+						backupPath: protectedBackup,
+						versionMarkerPath: storageVersionMarker,
+					};
 					await log("Storage migration backup ready", { path: protectedBackup });
 				}
 				const nextProcess = new SurrealProcess(
@@ -120,6 +134,29 @@ async function bootstrap(): Promise<StartupStatus> {
 			};
 			await log("Backend startup failed", cause);
 			await stopBackend();
+			if (storageMigrationRecovery) {
+				try {
+					const restored = await restoreStorageMigrationBackup(
+						storageMigrationRecovery.databasePath,
+						storageMigrationRecovery.backupPath,
+						storageMigrationRecovery.versionMarkerPath,
+					);
+					await log("Storage migration backup restored", restored);
+					startupStatus = {
+						...startupStatus,
+						message: "移行前のデータを復元しました。再試行できます。",
+					};
+				} catch (restoreCause) {
+					await log("Storage migration backup restore failed", restoreCause);
+					startupStatus = {
+						...startupStatus,
+						message: "移行に失敗し、バックアップの自動復元にも失敗しました。",
+						detail: `${detail}\n復元エラー: ${
+							restoreCause instanceof Error ? restoreCause.message : String(restoreCause)
+						}`,
+					};
+				}
+			}
 		}
 		return startupStatus;
 	})().finally(() => {

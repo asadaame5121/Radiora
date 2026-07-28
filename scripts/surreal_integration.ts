@@ -1,5 +1,6 @@
 import { OutlineService } from "../src/services/outline_service.ts";
 import { SurrealGraphStore } from "../src/storage/surreal_store.ts";
+import { assertGraphStoreContract } from "../tests/support/graph_store_contract.ts";
 import { Surreal } from "surrealdb";
 
 const port = 18012;
@@ -153,8 +154,19 @@ try {
 		items: snapshot.items.length,
 		links: snapshot.links.length,
 	});
-	if (snapshot.items.length !== 4 || snapshot.links.length !== 2) {
+	if (snapshot.items.length !== 7 || snapshot.links.length !== 2) {
 		throw new Error(`Persistence verification failed: ${JSON.stringify(snapshot)}`);
+	}
+	const expectedStashIds = [
+		"33333333-3333-4333-8333-333333333333",
+		"44444444-4444-4444-8444-444444444444",
+		"55555555-5555-4555-8555-555555555555",
+	];
+	if (
+		expectedStashIds.some((id) => !snapshot.stashItemIds.includes(id)) ||
+		snapshot.stashItemIds.some((id) => !expectedStashIds.includes(id))
+	) {
+		throw new Error(`Orphan and cycle isolation failed: ${JSON.stringify(snapshot)}`);
 	}
 	const migratedLegacy = snapshot.items.find((item) =>
 		item.id === "11111111-1111-4111-8111-111111111111"
@@ -228,6 +240,9 @@ try {
 	) {
 		throw new Error(`Purge manifest verification failed: ${JSON.stringify(manifests)}`);
 	}
+	trace("integration.store-contract.begin");
+	await assertGraphStoreContract(store);
+	trace("integration.store-contract.ready");
 	await store.close();
 	trace("integration.ready");
 	console.log(

@@ -20,8 +20,9 @@ tags:
 - `tests/fixtures/storage-v0.surql`: SurrealDB schemaと代表データ
 - `tests/fixtures/backup-v0.json`: envelopeのないJSON
 
-両fixtureは同じ二項目と一つの意味リンクを持ち、日本語、改行、Markdown、
-`radiora://`内部参照、時刻、折りたたみ、別名、保存済みクエリを含む。
+両fixtureは同じ五項目と一つの意味リンクを持ち、日本語、改行、Markdown、
+`radiora://`内部参照、時刻、折りたたみ、別名、保存済みクエリに加え、親が存在しない
+孤児一件と相互参照する循環二件を含む。
 
 ## 現行DBの棚卸し
 
@@ -77,6 +78,18 @@ Backendとdomain modelは`work`、`occurrence`、`semanticLink`の意味コー�
 Svelte entrypointが既定語彙をContextへ設定し、`App.svelte`はContextからのみ取得する。
 設計上の説明語である「実身」「化身」は利用者向けUIへ直書きしない。将来別の語彙を使う場合も
 store、service、RPCを変更せず、Contextへ渡す`UiVocabulary`だけを置き換える。
+## Store共通契約
+
+`tests/support/graph_store_contract.ts`をMemory、JSON、SurrealDBへ同じまま適用する。
+backend固有のテストから分離するdomain invariantは次のとおり。
+
+- Work bundle
+- 共有本文と独立配置
+- 意味リンクと検索補助データ
+- ゴミ箱、復元、完全消去
+
+MemoryとJSONは通常のテストで検証する。SurrealDBは実プロセスを起動する
+`deno task test:integration`で検証する。
 
 ## Migrationとロールバック
 
@@ -84,10 +97,10 @@ store、service、RPCを変更せず、Contextへ渡す`UiVocabulary`だけを�
 versionを先に進めず、検証成功後だけ`schema_metadata`を更新する。開始、成功、失敗は
 `migration_journal`へ記録する。
 
-自動downgradeは実装しない。version `0 -> 1`の前にSurrealDBの保護SnapshotまたはDB
-ディレクトリの停止時バックアップを作り、失敗時はアプリとSurrealDBを停止してその
-バックアップを丸ごと復元する。JSON importは入力を変更せず、一時領域で変換・検証した後に
-反映する。復元完了までは移行後DBを通常storeとして公開しない。
+自動downgradeは実装しない。version `0 -> 1`の前にSurrealDBのDBディレクトリを 停止中に一度だけcold
+backupし、失敗時はアプリとSurrealDBを停止してからそのバックアップを
+丸ごと復元する。途中状態のDBは一意な`.migration-failed-*`パスへ退避し、診断に使用できる。
+復元後はversion markerを削除し、次回起動で同じmigrationを最初から再実行する。
 
-Phase 1実装時には、バックアップ作成と復元の実処理、途中失敗からの再起動testを `0001_work_occurrence`
-migrationと同時に追加する。
+JSON importは入力を`.v0.bak`へ保護し、変換・検証成功後だけversion 1 envelopeを反映する。
+復元完了までは移行後DBを通常storeとして公開しない。
