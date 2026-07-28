@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { DefaultSnapshotPolicy } from "./snapshot_policy.ts";
 import { RevisionService } from "./revision_service.ts";
@@ -84,4 +84,139 @@ Deno.test("ordinary saves, autosave, snapshot policy, and snapshot restore do no
 
 	assertEquals(await store.listRevisions("work"), []);
 	assertEquals((await store.listBranches("work"))[0].headRevisionId, null);
+});
+
+Deno.test("cancelling rewrite creates neither Revision nor Branch nor Working Copy", async () => {
+	const store = await createStore();
+	const service = new RevisionService(store, {
+		now: () => {
+			throw new Error("cancel must not request a timestamp");
+		},
+		createId: () => {
+			throw new Error("cancel must not request an id");
+		},
+	});
+	const before = {
+		branches: await store.listBranches("work"),
+		workingCopies: await store.listWorkingCopies("work"),
+		revisions: await store.listRevisions("work"),
+	};
+
+	assertEquals(
+		await service.rewriteAsNewBranch("branch", "rewrite", "cancelled"),
+		{ status: "cancelled" },
+	);
+	assertEquals(await store.listBranches("work"), before.branches);
+	assertEquals(await store.listWorkingCopies("work"), before.workingCopies);
+	assertEquals(await store.listRevisions("work"), before.revisions);
+});
+
+Deno.test("confirmed rewrite checkpoints an uncommitted Working Copy and branches from it", async () => {
+	const store = await createStore();
+	const ids = ["revision", "rewrite-branch"];
+	const service = new RevisionService(store, {
+		now: () => TIMESTAMP,
+		createId: () => ids.shift()!,
+	});
+
+	const result = await service.rewriteAsNewBranch("branch", "  second draft  ", "confirmed");
+
+	assertEquals(result, {
+		status: "created",
+		branch: {
+			id: "rewrite-branch",
+			workId: "work",
+			name: "second draft",
+			headRevisionId: "revision",
+			createdAt: TIMESTAMP,
+		},
+		workingCopy: {
+			branchId: "rewrite-branch",
+			workId: "work",
+			text: "first",
+			updatedAt: TIMESTAMP,
+		},
+		baseRevision: {
+			id: "revision",
+			workId: "work",
+			text: "first",
+			parentRevisionIds: [],
+			kind: "checkpoint",
+			createdAt: TIMESTAMP,
+		},
+		checkpointCreated: true,
+	});
+	assertEquals(
+		(await store.listBranches("work")).find((branch) => branch.id === "branch")?.headRevisionId,
+		"revision",
+	);
+	assertEquals(
+		(await store.listWorkingCopies("work")).find((copy) => copy.branchId === "branch")?.text,
+		"first",
+	);
+});
+
+Deno.test("confirmed rewrite reuses an identical head Revision without creating a duplicate", async () => {
+	const store = await createStore();
+	const service = new RevisionService(store, {
+		now: () => TIMESTAMP,
+		createId: () => "revision",
+	});
+	const head = await service.createCheckpoint("branch");
+	const rewriteService = new RevisionService(store, {
+		now: () => "2026-07-28T12:05:00.000Z",
+		createId: () => "rewrite-branch",
+	});
+
+	const result = await rewriteService.rewriteAsNewBranch("branch", "rewrite", "confirmed");
+
+	assertEquals(result.status, "created");
+	if (result.status !== "created") throw new Error("expected rewrite Branch creation");
+	assertEquals(result.checkpointCreated, false);
+	assertEquals(result.baseRevision, head);
+	assertEquals(await store.listRevisions("work"), [head]);
+	assertEquals(result.branch.headRevisionId, head.id);
+	assertEquals(result.workingCopy.text, head.text);
+	assertEquals(
+		(await store.listBranches("work")).find((branch) => branch.id === "branch")?.headRevisionId,
+		head.id,
+	);
+	assertEquals(
+		(await store.listWorkingCopies("work")).find((copy) => copy.branchId === "branch")?.text,
+		head.text,
+	);
+});
+
+Deno.test("rewrite rejects a blank Branch name before any persistent write", async () => {
+	const store = await createStore();
+	const service = new RevisionService(store, {
+		now: () => TIMESTAMP,
+		createId: () => "unused",
+	});
+
+	await assertRejects(
+		() => service.rewriteAsNewBranch("branch", " \t ", "confirmed"),
+		Error,
+		"Branch name must not be empty",
+	);
+	assertEquals(await store.listRevisions("work"), []);
+	assertEquals((await store.listBranches("work")).length, 1);
+	assertEquals((await store.listWorkingCopies("work")).length, 1);
+});
+
+Deno.test("rewrite rejects a colliding Branch id before checkpoint creation", async () => {
+	const store = await createStore();
+	const service = new RevisionService(store, {
+		now: () => TIMESTAMP,
+		createId: () => "branch",
+	});
+
+	await assertRejects(
+		() => service.rewriteAsNewBranch("branch", "rewrite", "confirmed"),
+		Error,
+		"Branch already exists: branch",
+	);
+	assertEquals(await store.listRevisions("work"), []);
+	assertEquals((await store.listBranches("work")).length, 1);
+	assertEquals((await store.listWorkingCopies("work")).length, 1);
 });
