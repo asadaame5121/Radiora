@@ -163,3 +163,40 @@ Deno.test("Work links project to one visible Occurrence while neighborhood inclu
 		new Set([target.id, source.id, mirror.id]),
 	);
 });
+
+Deno.test("moving an Occurrence does not change projected semantic link endpoints", () => {
+	const source = item("source-primary", "2026-01-01T00:00:00.000Z");
+	source.workId = "source-work";
+	const sourceMirror = item("source-mirror", "2026-01-02T00:00:00.000Z", "container");
+	sourceMirror.workId = source.workId;
+	const target = item("target", "2026-01-03T00:00:00.000Z");
+	target.workId = "target-work";
+	const container = item("container", "2026-01-04T00:00:00.000Z");
+	const data = snapshot([sourceMirror, target, container, source]);
+	data.links.push(
+		link(source.workId, target.workId, "RELATED"),
+		link(source.workId, target.workId, "FROM"),
+	);
+
+	const options = { width: 600, height: 300, projectX: () => 280 };
+	const before = calculateTreeLayout(data, options).edges.map((edge) =>
+		`${edge.type}:${edge.source.item.workId}:${edge.source.id}->${edge.target.item.workId}:${edge.target.id}`
+	);
+
+	// This changes only the occurrence hierarchy, as OutlineService.moveItem does.
+	source.parentId = container.id;
+	sourceMirror.parentId = null;
+	const after = calculateTreeLayout(
+		{ ...data, items: [target, source, container, sourceMirror] },
+		options,
+	)
+		.edges.map((edge) =>
+			`${edge.type}:${edge.source.item.workId}:${edge.source.id}->${edge.target.item.workId}:${edge.target.id}`
+		);
+
+	assertEquals(before, [
+		"RELATED:source-work:source-primary->target-work:target",
+		"FROM:target-work:target->source-work:source-primary",
+	]);
+	assertEquals(after, before);
+});
