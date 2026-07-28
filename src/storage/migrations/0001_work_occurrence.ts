@@ -19,12 +19,19 @@ export const workOccurrenceMigration: StorageMigration = {
 		const items = await rows(
 			context,
 			`
-			SELECT record::id(id) AS id, text, order_key, collapsed, created_at, updated_at,
-				array::first(
-					(<-evolved_from<-outline_item).map(|$parent| record::id($parent.id))
-				) AS parent_id
+			SELECT record::id(id) AS id, text, order_key, collapsed, created_at, updated_at
 			FROM outline_item ORDER BY order_key;
 		`,
+		);
+		const placements = await rows(
+			context,
+			`
+			SELECT record::id(in) AS parent_id, record::id(out) AS child_id
+			FROM evolved_from;
+		`,
+		);
+		const parentByChild = new Map(
+			placements.map((row) => [String(row.child_id), String(row.parent_id)]),
 		);
 
 		for (const row of items) {
@@ -77,12 +84,13 @@ export const workOccurrenceMigration: StorageMigration = {
 		}
 
 		for (const row of items) {
-			if (row.parent_id == null) continue;
+			const parentId = parentByChild.get(String(row.id));
+			if (parentId == null) continue;
 			await context.execute(
 				`UPDATE $occurrence SET parent_occurrence = $parent;`,
 				{
 					occurrence: new RecordId("occurrence", String(row.id)),
-					parent: new RecordId("occurrence", String(row.parent_id)),
+					parent: new RecordId("occurrence", parentId),
 				},
 			);
 		}

@@ -41,25 +41,34 @@ Deno.test("loads the complete version 0 JSON fixture without data loss", async (
 		await store.initialize();
 
 		const items = await store.listItems();
-		assertEquals(items.length, 2);
+		assertEquals(items.length, 5);
 		assertEquals(
 			items[0].text,
 			"原稿\n\n日本語・**Markdown**・radiora://item/22222222-2222-4222-8222-222222222222",
 		);
 		assertEquals(items[1].parentId, items[0].id);
 		assertEquals(items[1].collapsed, true);
+		assertEquals(items[2].parentId, "99999999-9999-4999-8999-999999999999");
+		assertEquals(items[3].parentId, items[4].id);
+		assertEquals(items[4].parentId, items[3].id);
 		assertEquals((await store.listLinks()).length, 1);
 		assertEquals((await store.listAliases())[0].variants, ["来歴", "genealogy"]);
 		assertEquals(await store.getEmergenceFeedback("suggestion-1"), "pin");
 		assertEquals((await store.listSavedRuleQueries())[0].name, "LIKEリンク");
 		const migrated = JSON.parse(await Deno.readTextFile(path));
 		assertEquals(migrated.schemaVersion, 1);
-		assertEquals(migrated.data.works.length, 2);
+		assertEquals(migrated.data.works.length, 5);
 		assertEquals(migrated.data.occurrences[1].parentOccurrenceId, items[0].id);
+		assertEquals(
+			migrated.data.occurrences[2].parentOccurrenceId,
+			"99999999-9999-4999-8999-999999999999",
+		);
+		assertEquals(migrated.data.occurrences[3].parentOccurrenceId, items[4].id);
+		assertEquals(migrated.data.occurrences[4].parentOccurrenceId, items[3].id);
 		assertEquals(migrated.data.links[0].status, "asserted");
 		assertEquals(migrated.data.links.some((link: { type: string }) => link.type === "FROM"), false);
 		const protectedInput = JSON.parse(await Deno.readTextFile(`${path}.v0.bak`));
-		assertEquals(protectedInput.items.length, 2);
+		assertEquals(protectedInput.items.length, 5);
 		assertEquals(protectedInput.schemaVersion, undefined);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
