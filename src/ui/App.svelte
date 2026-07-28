@@ -31,6 +31,7 @@
 		GlobalLineageProjection,
 	WorkLineageProjection,
 	} from "../services/branch_service";
+	import type { DateProjection, DateRange } from "../services/date_projection";
 	import {
 		WorkingCopyAutosaveCoordinator,
 		type WorkingCopySaveStatus,
@@ -53,7 +54,7 @@
 	}) as RadioraBindings;
 
 	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
-	type ViewMode = "outline" | "globalLineage" | "workLineage" | "comparison" | "trash";
+	type ViewMode = "outline" | "today" | "globalLineage" | "workLineage" | "comparison" | "trash";
 	type AsideMode = "links" | "discover" | "tags" | "query";
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
@@ -65,6 +66,10 @@
 	let startup = $state<StartupStatus>({ phase: "starting", message: "Radioraを起動しています…" });
 	let error = $state("");
 	let viewMode = $state<ViewMode>("outline");
+	let dateStart = $state(localDateValue(new Date()));
+	let dateEnd = $state(localDateValue(addDays(new Date(), 1)));
+	let dateProjection = $state<DateProjection | null>(null);
+	let dateProjectionLoading = $state(false);
 	let selectedId = $state<string | null>(null);
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
@@ -358,6 +363,58 @@
 		}
 		autosave.queue(item.workId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
+	}
+
+	async function openToday(): Promise<void> {
+		const now = new Date();
+		dateStart = localDateValue(now);
+		dateEnd = localDateValue(addDays(now, 1));
+		await loadDateProjection();
+	}
+
+	async function loadDateProjection(): Promise<void> {
+		try {
+			dateProjectionLoading = true;
+			dateProjection = await api.projectDates(dateRangeFromInputs(dateStart, dateEnd));
+			viewMode = "today";
+		} catch (cause) {
+			error = errorMessage(cause);
+		} finally {
+			dateProjectionLoading = false;
+		}
+	}
+
+	async function moveDateRange(days: number): Promise<void> {
+		const start = new Date(`${dateStart}T00:00:00`);
+		const end = new Date(`${dateEnd}T00:00:00`);
+		dateStart = localDateValue(addDays(start, days));
+		dateEnd = localDateValue(addDays(end, days));
+		await loadDateProjection();
+	}
+
+	async function showWeek(): Promise<void> {
+		const today = new Date();
+		const offset = (today.getDay() + 6) % 7;
+		const monday = addDays(today, -offset);
+		dateStart = localDateValue(monday);
+		dateEnd = localDateValue(addDays(monday, 7));
+		await loadDateProjection();
+	}
+
+	async function openDateEntry(entry: DateProjection["created"][number]): Promise<void> {
+		const occurrence = entry.representative;
+		if (!occurrence) {
+			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
+			return;
+		}
+		const placement = entry.placements.find((candidate) => candidate.occurrence.id === occurrence.id);
+		await openNavigationTarget({
+			kind: "occurrence",
+			workId: entry.work.id,
+			occurrenceId: occurrence.id,
+			ancestorOccurrenceIds: placement?.breadcrumb.map((item) => item.id) ?? [],
+			fellBack: false,
+		});
 	}
 
 	async function addBookmark(): Promise<void> {
@@ -854,6 +911,26 @@
 		return Number.isNaN(date.getTime()) ? "不明" : date.toLocaleDateString("ja-JP");
 	}
 
+	function localDateValue(date: Date): string {
+		const offset = date.getTimezoneOffset() * 60_000;
+		return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+	}
+
+	function addDays(date: Date, days: number): Date {
+		const copy = new Date(date);
+		copy.setDate(copy.getDate() + days);
+		return copy;
+	}
+
+	function dateRangeFromInputs(start: string, end: string): DateRange {
+		const startDate = new Date(`${start}T00:00:00`);
+		const endDate = new Date(`${end}T00:00:00`);
+		if (!Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())) {
+			throw new Error("開始日と終了日を入力してください。");
+		}
+		return { startInclusive: startDate.toISOString(), endExclusive: endDate.toISOString() };
+	}
+
 	function errorMessage(cause: unknown): string {
 		if (typeof cause === "object" && cause && "message" in cause) return String(cause.message);
 		return String(cause);
@@ -868,6 +945,8 @@
 		<nav class="view-switcher" aria-label="表示モード">
 			<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
 				onclick={() => (viewMode = "outline")}>Outline</button>
+			<button class:active={viewMode === "today"} aria-pressed={viewMode === "today"}
+				onclick={openToday}>{vocabulary.today}</button>
 			<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
 				onclick={() => (viewMode = "globalLineage")}>{vocabulary.globalLineage}</button>
 			<button class:active={viewMode === "workLineage"} aria-pressed={viewMode === "workLineage"}
@@ -989,6 +1068,46 @@
 							</button>
 						{/each}
 					</div>
+				{/if}
+			</section>
+		{:else if viewMode === "today"}
+			<section class="outline-panel date-projection" aria-label={vocabulary.today}>
+				<div class="section-title"><span>{vocabulary.today}</span></div>
+				<div class="date-controls">
+					<button onclick={() => moveDateRange(-1)}>前日</button>
+					<button onclick={() => moveDateRange(1)}>翌日</button>
+					<button onclick={showWeek}>週</button>
+					<label>開始 <input type="date" bind:value={dateStart} /></label>
+					<label>終了（含まない） <input type="date" bind:value={dateEnd} /></label>
+					<button onclick={loadDateProjection}>表示</button>
+				</div>
+				{#if dateProjectionLoading}
+					<p class="empty">読み込み中…</p>
+				{:else if dateProjection}
+					<section aria-label="この期間に作成">
+						<h2>この期間に作成 <small>{dateProjection.created.length}件</small></h2>
+						{#each dateProjection.created as entry (entry.work.id)}
+							<button class="date-entry" onclick={() => openDateEntry(entry)} disabled={!entry.representative}>
+								<strong>{entry.representative ? titleFor(entry.representative) : `(未配置の${vocabulary.work})`}</strong>
+								<small>{formatCreatedAt(entry.work.createdAt)} · {entry.placements.length}件の{vocabulary.occurrence}</small>
+							</button>
+							{#if entry.placements.length > 1}
+								<p class="hint">{entry.placements.map((placement) => placement.breadcrumb.map(titleFor).concat(titleFor(placement.occurrence)).join(" › ")).join(" / ")}</p>
+							{/if}
+						{:else}<p class="empty">この期間に作成した{vocabulary.work}はありません。</p>{/each}
+					</section>
+					<section aria-label="この期間に更新">
+						<h2>この期間に更新 <small>{dateProjection.updated.length}件</small></h2>
+						{#each dateProjection.updated as entry (entry.work.id)}
+							<button class="date-entry" onclick={() => openDateEntry(entry)} disabled={!entry.representative}>
+								<strong>{entry.representative ? titleFor(entry.representative) : `(未配置の${vocabulary.work})`}</strong>
+								<small>{formatCreatedAt(entry.work.updatedAt)} · {entry.placements.length}件の{vocabulary.occurrence}</small>
+							</button>
+							{#if entry.placements.length > 1}
+								<p class="hint">{entry.placements.map((placement) => placement.breadcrumb.map(titleFor).concat(titleFor(placement.occurrence)).join(" › ")).join(" / ")}</p>
+							{/if}
+						{:else}<p class="empty">この期間に更新した既存{vocabulary.work}はありません。</p>{/each}
+					</section>
 				{/if}
 			</section>
 		{:else if viewMode === "trash"}

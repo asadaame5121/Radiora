@@ -11,7 +11,8 @@ export type UiEntityCode =
 	| "recoverySnapshot"
 	| "tag"
 	| "bookmark"
-	| "resumePosition";
+	| "resumePosition"
+	| "today";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -29,4 +30,5 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	tag: "タグ",
 	bookmark: "栞",
 	resumePosition: "作業再開位置",
+	today: "今日",
 });
