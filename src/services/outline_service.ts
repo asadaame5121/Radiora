@@ -15,10 +15,14 @@ import type {
 	Revision,
 	RuleQueryResult,
 	SavedRuleQuery,
+	ScopedTagSet,
 	SearchAlias,
 	SearchRequest,
 	SearchResult,
 	Suggestion,
+	TagAlias,
+	TagSearchRequest,
+	TagSummary,
 	TrashEntry,
 } from "../domain/models.ts";
 import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
@@ -34,6 +38,7 @@ import {
 	type RecoverySnapshotPreview,
 	RecoverySnapshotService,
 } from "./recovery_snapshot_service.ts";
+import { TagService } from "./tag_service.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -342,7 +347,7 @@ export class OutlineService {
 		const items = await this.store.listItems();
 		const links = await this.listActiveLinks();
 		const byId = new Map(items.map((item) => [item.id, item]));
-		const aliases = await this.store.listAliases();
+		const aliases = (await this.store.listAliases()).filter((alias) => !isReservedTagAlias(alias));
 		const expansions = this.expandQuery(query, aliases, items, links);
 		const baseHits = await this.store.searchLexical(query, Math.max(limit * 3, 40));
 		const expansionHits = (await Promise.all(expansions.map(async (expansion) => ({
@@ -436,8 +441,36 @@ export class OutlineService {
 			.slice(0, limit);
 	}
 
-	listSearchAliases(): Promise<SearchAlias[]> {
-		return this.store.listAliases();
+	listScopedTags(historyRevisionIds: string[] = []): Promise<ScopedTagSet[]> {
+		return new TagService(this.store).listScopedTags(historyRevisionIds);
+	}
+
+	listTags(historyRevisionIds: string[] = []): Promise<TagSummary[]> {
+		return new TagService(this.store).listTags(historyRevisionIds);
+	}
+
+	suggestTags(prefix: string, limit = 8): Promise<TagSummary[]> {
+		return new TagService(this.store).suggest(prefix, limit);
+	}
+
+	searchTags(request: TagSearchRequest): Promise<ScopedTagSet[]> {
+		return new TagService(this.store).search(request);
+	}
+
+	listTagAliases(): Promise<TagAlias[]> {
+		return new TagService(this.store).listAliases();
+	}
+
+	renameTag(from: string, to: string): Promise<TagAlias> {
+		return new TagService(this.store).rename(from, to);
+	}
+
+	mergeTags(sources: string[], target: string): Promise<TagAlias> {
+		return new TagService(this.store).merge(sources, target);
+	}
+
+	async listSearchAliases(): Promise<SearchAlias[]> {
+		return (await this.store.listAliases()).filter((alias) => !isReservedTagAlias(alias));
 	}
 
 	async saveSearchAlias(
@@ -446,6 +479,9 @@ export class OutlineService {
 		const canonical = normalizeSearchText(input.canonical);
 		const variants = [...new Set(input.variants.map(normalizeSearchText).filter(Boolean))]
 			.filter((variant) => variant !== canonical);
+		if (canonical.startsWith("#") || variants.some((variant) => variant.startsWith("#"))) {
+			throw new Error("タグの改名・統合にはタグ管理を使用してください。");
+		}
 		if (!canonical || !variants.length) {
 			throw new Error("別名には基準語と1件以上の異なる表記が必要です。");
 		}
@@ -844,4 +880,9 @@ export class OutlineService {
 	private async reconcileKnots(): Promise<void> {
 		await this.store.replaceKnots(this.detectKnots(await this.store.listItems()));
 	}
+}
+
+function isReservedTagAlias(alias: SearchAlias): boolean {
+	return alias.canonical.startsWith("#") &&
+		alias.variants.every((variant) => variant.startsWith("#"));
 }

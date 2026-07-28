@@ -13,10 +13,14 @@ import type {
 	Revision,
 	RuleQueryResult,
 	SavedRuleQuery,
+	ScopedTagSet,
 	SearchAlias,
 	SearchRequest,
 	SearchResult,
 	Suggestion,
+	TagAlias,
+	TagSearchRequest,
+	TagSummary,
 	TrashEntry,
 } from "../domain/models.ts";
 import type { GlobalLineageProjection, WorkLineageProjection } from "../services/branch_service.ts";
@@ -63,6 +67,13 @@ export interface RadioraBindings {
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;
 	suggestItems(prefix: string, limit?: number): Promise<Suggestion[]>;
 	searchItems(request: SearchRequest | string): Promise<SearchResult[]>;
+	listScopedTags(historyRevisionIds?: string[]): Promise<ScopedTagSet[]>;
+	listTags(historyRevisionIds?: string[]): Promise<TagSummary[]>;
+	suggestTags(prefix: string, limit?: number): Promise<TagSummary[]>;
+	searchTags(request: TagSearchRequest): Promise<ScopedTagSet[]>;
+	listTagAliases(): Promise<TagAlias[]>;
+	renameTag(from: string, to: string): Promise<TagAlias>;
+	mergeTags(sources: string[], target: string): Promise<TagAlias>;
 	listSearchAliases(): Promise<SearchAlias[]>;
 	saveSearchAlias(
 		input: { id?: string; canonical: string; variants: string[] },

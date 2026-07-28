@@ -227,6 +227,42 @@ export interface SearchAlias {
 	updatedAt: string;
 }
 
+export interface TagScope {
+	kind: "working-copy" | "revision";
+	workId: string;
+	branchId?: string;
+	revisionId?: string;
+}
+
+export interface ScopedTagSet {
+	scope: TagScope;
+	/** Canonical display names without the leading `#`. */
+	tags: string[];
+}
+
+export interface TagSummary {
+	name: string;
+	count: number;
+}
+
+export interface TagSearchRequest {
+	/** Every tag must occur in the same Branch Working Copy or Revision. */
+	all: string[];
+	/** A matching scope is excluded if any of these tags occurs in it. */
+	none?: string[];
+	/** Past Revisions are searched only when explicitly selected here. */
+	historyRevisionIds?: string[];
+	limit?: number;
+}
+
+export interface TagAlias {
+	id: string;
+	canonicalName: string;
+	variants: string[];
+	createdAt: string;
+	updatedAt: string;
+}
+
 export type EmergenceKind = "latent-relation" | "cross-branch-resonance" | "productive-tension";
 export type EmergenceAction = "accept" | "dismiss" | "pin";
 
