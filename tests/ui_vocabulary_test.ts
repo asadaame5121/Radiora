@@ -14,6 +14,8 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"workLineage",
 		"recoverySnapshot",
 		"tag",
+		"bookmark",
+		"resumePosition",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -29,5 +31,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		workLineage: "版系統",
 		recoverySnapshot: "復元用保存",
 		tag: "タグ",
+		bookmark: "栞",
+		resumePosition: "作業再開位置",
 	});
 });

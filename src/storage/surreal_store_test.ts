@@ -5,9 +5,11 @@ import { validateRevisionCreation } from "./graph_store.ts";
 import {
 	evolvedFromEndpoints,
 	itemFromRow,
+	navigationPurgeStatements,
 	occurrenceFromRow,
 	recoveryPromotionTransactionQuery,
 	recoveryRestoreTransactionQuery,
+	resumePositionUpsertQuery,
 	revisionFromRow,
 } from "./surreal_store.ts";
 
@@ -164,4 +166,18 @@ Deno.test("Surreal Snapshot promotion atomically advances head and protects its 
 	assertEquals(query.indexOf("UPDATE $branch") < query.indexOf("UPDATE $snapshot"), true);
 	assertEquals(query.includes('protection_reason = "revision-source"'), true);
 	assertEquals(query.trimEnd().endsWith("COMMIT TRANSACTION;"), true);
+});
+
+Deno.test("Surreal resume position uses one fixed upsert record", () => {
+	const query = resumePositionUpsertQuery();
+	assertEquals(query.includes("UPSERT resume_position:current"), true);
+	assertEquals(query.includes("work: $work"), true);
+	assertEquals(query.includes("occurrence: $occurrence"), true);
+	assertEquals(query.includes("caret_offset: $caretOffset"), true);
+});
+
+Deno.test("Surreal Work purge removes both navigation records by Work", () => {
+	const statements = navigationPurgeStatements();
+	assertEquals(statements.includes("DELETE bookmark WHERE work = $work;"), true);
+	assertEquals(statements.includes("DELETE resume_position WHERE work = $work;"), true);
 });

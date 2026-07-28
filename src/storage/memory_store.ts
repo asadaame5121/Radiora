@@ -1,4 +1,5 @@
 import type {
+	Bookmark,
 	Branch,
 	Knot,
 	LexicalHit,
@@ -8,6 +9,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	ResumePosition,
 	Revision,
 	SavedRuleQuery,
 	SearchAlias,
@@ -29,6 +31,8 @@ export class MemoryGraphStore implements GraphStore {
 	protected workingCopies: WorkingCopy[] = [];
 	protected revisions: Revision[] = [];
 	protected recoverySnapshots: RecoverySnapshot[] = [];
+	protected bookmarks: Bookmark[] = [];
+	protected resumePosition: ResumePosition | null = null;
 	protected occurrences: Occurrence[] = [];
 	protected links: OutlineLink[] = [];
 	protected systemRelations: SystemRelation[] = [];
@@ -92,6 +96,21 @@ export class MemoryGraphStore implements GraphStore {
 		));
 	}
 
+	listBookmarks(): Promise<Bookmark[]> {
+		const activeWorkIds = new Set(
+			this.works.filter((work) => !work.deletedAt).map((work) => work.id),
+		);
+		return Promise.resolve(structuredClone(
+			this.bookmarks.filter((bookmark) => activeWorkIds.has(bookmark.workId)),
+		));
+	}
+
+	getResumePosition(): Promise<ResumePosition | null> {
+		const active = this.resumePosition &&
+			this.works.some((work) => work.id === this.resumePosition?.workId && !work.deletedAt);
+		return Promise.resolve(active ? structuredClone(this.resumePosition) : null);
+	}
+
 	createWorkBundle(
 		work: Work,
 		branch: Branch,
@@ -107,6 +126,46 @@ export class MemoryGraphStore implements GraphStore {
 
 	createOccurrence(occurrence: Occurrence): Promise<void> {
 		this.occurrences.push(structuredClone(occurrence));
+		return Promise.resolve();
+	}
+
+	createBookmark(bookmark: Bookmark): Promise<void> {
+		if (this.bookmarks.some((candidate) => candidate.id === bookmark.id)) {
+			return Promise.reject(new Error(`Bookmark already exists: ${bookmark.id}`));
+		}
+		const occurrence = this.occurrences.find((candidate) => candidate.id === bookmark.occurrenceId);
+		const work = this.works.find((candidate) =>
+			candidate.id === bookmark.workId && !candidate.deletedAt
+		);
+		if (!work || occurrence?.workId !== bookmark.workId) {
+			return Promise.reject(new Error("Bookmark Work and Occurrence must exist and match"));
+		}
+		this.bookmarks.push(structuredClone(bookmark));
+		return Promise.resolve();
+	}
+
+	deleteBookmark(id: string): Promise<void> {
+		this.bookmarks = this.bookmarks.filter((bookmark) => bookmark.id !== id);
+		return Promise.resolve();
+	}
+
+	setResumePosition(position: ResumePosition): Promise<void> {
+		if (!Number.isSafeInteger(position.caretOffset) || position.caretOffset < 0) {
+			return Promise.reject(new Error(`Invalid caret offset: ${position.caretOffset}`));
+		}
+		const occurrence = this.occurrences.find((candidate) => candidate.id === position.occurrenceId);
+		const work = this.works.find((candidate) =>
+			candidate.id === position.workId && !candidate.deletedAt
+		);
+		if (!work || occurrence?.workId !== position.workId) {
+			return Promise.reject(new Error("Resume Work and Occurrence must exist and match"));
+		}
+		this.resumePosition = structuredClone(position);
+		return Promise.resolve();
+	}
+
+	clearResumePosition(): Promise<void> {
+		this.resumePosition = null;
 		return Promise.resolve();
 	}
 
@@ -320,6 +379,8 @@ export class MemoryGraphStore implements GraphStore {
 		this.recoverySnapshots = this.recoverySnapshots.filter((snapshot) =>
 			snapshot.workId !== workId
 		);
+		this.bookmarks = this.bookmarks.filter((bookmark) => bookmark.workId !== workId);
+		if (this.resumePosition?.workId === workId) this.resumePosition = null;
 		this.occurrences = this.occurrences.filter((occurrence) => occurrence.workId !== workId);
 		const remainingOccurrenceIds = new Set(this.occurrences.map((occurrence) => occurrence.id));
 		this.occurrences = this.occurrences.map((occurrence) =>

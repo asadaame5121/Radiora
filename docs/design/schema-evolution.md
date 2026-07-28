@@ -43,10 +43,14 @@ version `0`は互換入力として扱うlegacy形式であり、今後同じ形
 意味リンク、システム関係へ分離した。詳細は
 [[../log/2026-07-27-phase-1-work-occurrence]]を参照する。
 
-2026-07-28に`0002_revision_snapshot`を導入し、現在のstorage schemaとbackup schemaは
-version `2`である。複数Branch、変更不能なRevision、Working Copy単位のRecovery Snapshotを
+2026-07-28に`0002_revision_snapshot`を導入し、storage schemaとbackup schemaは
+version `2`になった。複数Branch、変更不能なRevision、Working Copy単位のRecovery Snapshotを
 永続化する。version `1`のWork、Branch、Working Copy、Occurrence、リンクなどはそのまま保持し、
 RevisionとRecovery Snapshotを空集合として追加する。
+
+2026-07-29に`0003_bookmark_resume`を導入し、現在のstorage schemaとbackup schemaは
+version `3`である。手動で複数残す栞と、自動更新する単一の作業再開位置を別レコードとして
+永続化する。version `2`の内容は保持し、栞を空集合、作業再開位置を未設定として追加する。
 
 ## 3. 二つのschema version
 

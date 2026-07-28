@@ -9,7 +9,9 @@ export type UiEntityCode =
 	| "globalLineage"
 	| "workLineage"
 	| "recoverySnapshot"
-	| "tag";
+	| "tag"
+	| "bookmark"
+	| "resumePosition";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -25,4 +27,6 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	workLineage: "版系統",
 	recoverySnapshot: "復元用保存",
 	tag: "タグ",
+	bookmark: "栞",
+	resumePosition: "作業再開位置",
 });

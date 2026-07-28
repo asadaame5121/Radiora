@@ -1,5 +1,6 @@
 import { RecordId, Surreal } from "surrealdb";
 import type {
+	Bookmark,
 	Branch,
 	Knot,
 	LexicalHit,
@@ -9,6 +10,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	ResumePosition,
 	Revision,
 	SavedRuleQuery,
 	SearchAlias,
@@ -27,6 +29,7 @@ import {
 } from "./migrations/mod.ts";
 import { workOccurrenceMigration } from "./migrations/0001_work_occurrence.ts";
 import { revisionSnapshotMigration } from "./migrations/0002_revision_snapshot.ts";
+import { bookmarkResumeMigration } from "./migrations/0003_bookmark_resume.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
@@ -41,6 +44,7 @@ const APP_VERSION = "0.1.0";
 const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
 	workOccurrenceMigration,
 	revisionSnapshotMigration,
+	bookmarkResumeMigration,
 ];
 
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
@@ -123,6 +127,18 @@ export function itemFromRow(row: Row): OutlineItem {
 		createdAt: String(row.created_at ?? ""),
 		updatedAt: String(row.updated_at ?? ""),
 	};
+}
+
+export function resumePositionUpsertQuery(): string {
+	return `UPSERT resume_position:current CONTENT {
+				work: $work, occurrence: $occurrence,
+				caret_offset: $caretOffset, updated_at: $updatedAt
+			};`;
+}
+
+export function navigationPurgeStatements(): string {
+	return `DELETE bookmark WHERE work = $work;
+			DELETE resume_position WHERE work = $work;`;
 }
 
 export function occurrenceFromRow(row: Row): Occurrence {
@@ -382,6 +398,43 @@ export class SurrealGraphStore implements GraphStore {
 		}));
 	}
 
+	async listBookmarks(): Promise<Bookmark[]> {
+		const activeWorkIds = new Set((await this.listWorks()).map((work) => work.id));
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, record::id(work) AS work_id,
+				record::id(occurrence) AS occurrence_id, created_at
+				FROM bookmark ORDER BY created_at, id;`,
+		);
+		return rows.flatMap((row): Bookmark[] => {
+			const workId = domainId(row.work_id, "work_id");
+			return activeWorkIds.has(workId)
+				? [{
+					id: String(row.id),
+					workId,
+					occurrenceId: domainId(row.occurrence_id, "id"),
+					createdAt: String(row.created_at ?? ""),
+				}]
+				: [];
+		});
+	}
+
+	async getResumePosition(): Promise<ResumePosition | null> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(work) AS work_id, record::id(occurrence) AS occurrence_id,
+				caret_offset, updated_at FROM resume_position:current;`,
+		);
+		const row = rows[0];
+		if (!row) return null;
+		const workId = domainId(row.work_id, "work_id");
+		if (!(await this.listWorks()).some((work) => work.id === workId)) return null;
+		return {
+			workId,
+			occurrenceId: domainId(row.occurrence_id, "id"),
+			caretOffset: Number(row.caret_offset),
+			updatedAt: String(row.updated_at ?? ""),
+		};
+	}
+
 	async createWorkBundle(
 		work: Work,
 		branch: Branch,
@@ -440,6 +493,56 @@ export class SurrealGraphStore implements GraphStore {
 			};`,
 			this.occurrenceVariables(occurrence),
 		);
+	}
+
+	async createBookmark(bookmark: Bookmark): Promise<void> {
+		const occurrence = (await this.listOccurrences()).find((candidate) =>
+			candidate.id === bookmark.occurrenceId
+		);
+		if (occurrence?.workId !== bookmark.workId) {
+			throw new Error("Bookmark Work and Occurrence must exist and match");
+		}
+		if ((await this.listBookmarks()).some((candidate) => candidate.id === bookmark.id)) {
+			throw new Error(`Bookmark already exists: ${bookmark.id}`);
+		}
+		await this.#db.query(
+			`CREATE $record CONTENT { work: $work, occurrence: $occurrence, created_at: $createdAt };`,
+			{
+				record: new RecordId("bookmark", bookmark.id),
+				work: new RecordId("work", bookmark.workId),
+				occurrence: new RecordId("occurrence", bookmark.occurrenceId),
+				createdAt: bookmark.createdAt,
+			},
+		);
+	}
+
+	async deleteBookmark(id: string): Promise<void> {
+		await this.#db.query(`DELETE $record;`, { record: new RecordId("bookmark", id) });
+	}
+
+	async setResumePosition(position: ResumePosition): Promise<void> {
+		if (!Number.isSafeInteger(position.caretOffset) || position.caretOffset < 0) {
+			throw new Error(`Invalid caret offset: ${position.caretOffset}`);
+		}
+		const occurrence = (await this.listOccurrences()).find((candidate) =>
+			candidate.id === position.occurrenceId
+		);
+		if (occurrence?.workId !== position.workId) {
+			throw new Error("Resume Work and Occurrence must exist and match");
+		}
+		await this.#db.query(
+			resumePositionUpsertQuery(),
+			{
+				work: new RecordId("work", position.workId),
+				occurrence: new RecordId("occurrence", position.occurrenceId),
+				caretOffset: position.caretOffset,
+				updatedAt: position.updatedAt,
+			},
+		);
+	}
+
+	async clearResumePosition(): Promise<void> {
+		await this.#db.query(`DELETE resume_position:current;`);
 	}
 
 	async createBranch(branch: Branch, workingCopy: WorkingCopy): Promise<void> {
@@ -733,6 +836,7 @@ export class SurrealGraphStore implements GraphStore {
 			DELETE occurrence WHERE work = $work;
 			DELETE working_copy WHERE work = $work;
 			DELETE recovery_snapshot WHERE work = $work;
+			${navigationPurgeStatements()}
 			DELETE revision WHERE work = $work;
 			DELETE branch WHERE work = $work;
 			DELETE $work;

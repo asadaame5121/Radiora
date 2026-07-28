@@ -365,6 +365,65 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		(await store.suggestItems("contract root", 8)).some((item) => item.workId === root.work.id),
 	);
 	assert((await store.searchLexical("updated", 8)).some((hit) => hit.item.workId === root.work.id));
+	const bookmarkId = crypto.randomUUID();
+	const targetBookmarkId = crypto.randomUUID();
+	await store.createBookmark({
+		id: bookmarkId,
+		workId: root.work.id,
+		occurrenceId: root.occurrence.id,
+		createdAt: CREATED_AT,
+	});
+	await store.createBookmark({
+		id: targetBookmarkId,
+		workId: target.work.id,
+		occurrenceId: target.occurrence.id,
+		createdAt: CREATED_AT,
+	});
+	await store.setResumePosition({
+		workId: root.work.id,
+		occurrenceId: root.occurrence.id,
+		caretOffset: 10_000,
+		updatedAt: UPDATED_AT,
+	});
+	assertEquals((await store.listBookmarks())[0]?.id, bookmarkId);
+	assertEquals((await store.getResumePosition())?.caretOffset, 10_000);
+	const bookmarksBeforeInvalidWrite = await store.listBookmarks();
+	await assertRejects(
+		() =>
+			store.createBookmark({
+				id: crypto.randomUUID(),
+				workId: root.work.id,
+				occurrenceId: target.occurrence.id,
+				createdAt: CREATED_AT,
+			}),
+		Error,
+		"must exist and match",
+	);
+	assertEquals(await store.listBookmarks(), bookmarksBeforeInvalidWrite);
+	await assertRejects(
+		() =>
+			store.setResumePosition({
+				workId: root.work.id,
+				occurrenceId: root.occurrence.id,
+				caretOffset: -1,
+				updatedAt: UPDATED_AT,
+			}),
+		Error,
+		"Invalid caret offset",
+	);
+	assertEquals((await store.getResumePosition())?.caretOffset, 10_000);
+	await assertRejects(
+		() =>
+			store.setResumePosition({
+				workId: root.work.id,
+				occurrenceId: target.occurrence.id,
+				caretOffset: 1,
+				updatedAt: UPDATED_AT,
+			}),
+		Error,
+		"must exist and match",
+	);
+	assertEquals((await store.getResumePosition())?.occurrenceId, root.occurrence.id);
 	await assertRejects(
 		() => store.purgeWork(root.work.id),
 		Error,
@@ -383,8 +442,12 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 			.length,
 		4,
 	);
+	assertEquals((await store.listBookmarks()).map((bookmark) => bookmark.id), [targetBookmarkId]);
+	assertEquals(await store.getResumePosition(), null);
 
 	await store.restoreWork(root.work.id);
+	assertEquals((await store.listBookmarks())[0]?.id, bookmarkId);
+	assertEquals((await store.getResumePosition())?.caretOffset, 10_000);
 	assertEquals(
 		(await store.listItems()).filter((item) => item.workId === root.work.id).length,
 		4,
@@ -405,6 +468,9 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	assert(manifest.revisionIds.includes(secondRevision.id));
 	assert(manifest.revisionIds.includes(mergeRevision.id));
 	assertEquals((await store.listRecoverySnapshots(root.work.id)).length, 0);
+	assertEquals((await store.listBookmarks()).some((bookmark) => bookmark.id === bookmarkId), false);
+	assert((await store.listBookmarks()).some((bookmark) => bookmark.id === targetBookmarkId));
+	assertEquals(await store.getResumePosition(), null);
 	assertEquals((await store.listWorks(true)).some((work) => work.id === root.work.id), false);
 	assertEquals((await store.listLinks()).some((candidate) => candidate.id === linkId), false);
 	assert((await store.listPurgeManifests()).some((candidate) => candidate.id === manifest.id));
@@ -418,8 +484,23 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	await store.deleteSavedRuleQuery(queryId);
 	assertEquals((await store.listAliases()).some((alias) => alias.id === aliasId), false);
 	assertEquals((await store.listSavedRuleQueries()).some((query) => query.id === queryId), false);
+	await store.setResumePosition({
+		workId: target.work.id,
+		occurrenceId: target.occurrence.id,
+		caretOffset: 1,
+		updatedAt: UPDATED_AT,
+	});
+	const dependentBookmarkId = crypto.randomUUID();
+	await store.createBookmark({
+		id: dependentBookmarkId,
+		workId: dependent.work.id,
+		occurrenceId: dependent.occurrence.id,
+		createdAt: CREATED_AT,
+	});
 	await store.trashWork(target.work.id, DELETED_AT);
 	await store.purgeWork(target.work.id);
+	assertEquals(await store.getResumePosition(), null);
+	assert((await store.listBookmarks()).some((bookmark) => bookmark.id === dependentBookmarkId));
 	await store.trashWork(dependent.work.id, DELETED_AT);
 	await store.purgeWork(dependent.work.id);
 }
