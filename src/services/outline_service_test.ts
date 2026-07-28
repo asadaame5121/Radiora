@@ -148,7 +148,8 @@ Deno.test("symmetric links are normalized, deduplicated, and retracted without l
 });
 
 Deno.test("one Work can appear in multiple independent Occurrences with shared text", async () => {
-	const service = new OutlineService(new MemoryGraphStore());
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
 	const first = await service.createItem({ text: "共有本文", parentId: null });
 	const second = await service.createOccurrence({
 		workId: first.workId,
@@ -162,6 +163,7 @@ Deno.test("one Work can appear in multiple independent Occurrences with shared t
 	assertEquals(items.length, 2);
 	assertEquals(items.map((item) => item.text), ["どちらからでも更新", "どちらからでも更新"]);
 	assertEquals(items.find((item) => item.id === second.id)?.contextualHeading, "別の文脈");
+	assertEquals(await store.listRevisions(first.workId), []);
 });
 
 Deno.test("contextual heading stays local to its placement", async () => {

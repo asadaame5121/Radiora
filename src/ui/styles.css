@@ -84,6 +84,32 @@ header span {
 .brand {
 	min-width: 170px;
 }
+.working-copy-save-status {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 150px;
+	color: var(--muted);
+	font-size: 10px;
+}
+.working-copy-save-status span {
+	margin: 0;
+	letter-spacing: normal;
+	text-transform: none;
+}
+.working-copy-save-status.pending {
+	color: var(--amber);
+}
+.working-copy-save-status.failed {
+	color: #ffb8af;
+}
+.working-copy-save-status button {
+	border: 1px solid currentcolor;
+	border-radius: 5px;
+	padding: 3px 6px;
+	background: transparent;
+	cursor: pointer;
+}
 .view-switcher {
 	display: grid;
 	grid-template-columns: 1fr 1fr;

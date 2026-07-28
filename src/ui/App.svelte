@@ -17,6 +17,10 @@
 	} from "../domain/models";
 	import { LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
+	import {
+		WorkingCopyAutosaveCoordinator,
+		type WorkingCopySaveStatus,
+	} from "../services/working_copy_autosave";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
 
 	const api = new Proxy({}, {
@@ -68,7 +72,11 @@
 	let pendingConfirmation = $state<PendingConfirmation | null>(null);
 	let confirmationSubmitting = $state(false);
 	let confirmationDialog: HTMLDialogElement;
-	const saveTimers = new Map<string, number>();
+	let workingCopySaveStatuses = $state<WorkingCopySaveStatus[]>([]);
+	const autosave = new WorkingCopyAutosaveCoordinator({
+		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
+		onStatusChange: (statuses) => workingCopySaveStatuses = statuses,
+	});
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
@@ -94,6 +102,15 @@
 		...suggestions.map((suggestion) => ({ kind: "suggestion" as const, value: suggestion })),
 		...searchResults.map((result) => ({ kind: "result" as const, value: result })),
 	]);
+	const workingCopySaveStatus = $derived.by(() => {
+		const failed = workingCopySaveStatuses.find((status) => status.phase === "failed");
+		if (failed) return failed;
+		const saving = workingCopySaveStatuses.find((status) => status.phase === "saving");
+		if (saving) return saving;
+		const unsaved = workingCopySaveStatuses.find((status) => status.phase === "unsaved");
+		if (unsaved) return unsaved;
+		return workingCopySaveStatuses[0];
+	});
 
 	$effect(() => {
 		const id = selectedId;
@@ -103,6 +120,20 @@
 
 	onMount(() => {
 		let cancelled = false;
+		const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
+			if (!autosave.hasUnsavedChanges()) return;
+			event.preventDefault();
+			event.returnValue = "";
+		};
+		const flushWhenHidden = () => {
+			if (document.visibilityState === "hidden") {
+				void autosave.flush().catch(() => {
+					// The retained draft and failed status remain visible after returning.
+				});
+			}
+		};
+		window.addEventListener("beforeunload", warnAboutUnsavedChanges);
+		document.addEventListener("visibilitychange", flushWhenHidden);
 		async function monitorStartup(): Promise<void> {
 			while (!cancelled) {
 				try {
@@ -121,7 +152,14 @@
 			}
 		}
 		void monitorStartup();
-		return () => { cancelled = true; };
+		return () => {
+			cancelled = true;
+			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
+			document.removeEventListener("visibilitychange", flushWhenHidden);
+			void autosave.flush().catch(() => {
+				// beforeunload already warns while an unsaved draft exists.
+			});
+		};
 	});
 
 	async function retryStartup(): Promise<void> {
@@ -133,7 +171,13 @@
 	async function load(focusId?: string): Promise<void> {
 		try {
 			error = "";
-			snapshot = await api.listOutline();
+			const next = await api.listOutline();
+			const drafts = new Map(autosave.drafts().map((draft) => [draft.workId, draft.text]));
+			next.items = next.items.map((item) => {
+				const draft = drafts.get(item.workId);
+				return draft === undefined ? item : { ...item, text: draft };
+			});
+			snapshot = next;
 			if (focusId) requestFocus(focusId);
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -180,6 +224,12 @@
 		const textarea = event.currentTarget as HTMLTextAreaElement;
 		if (event.key === "Enter" && !event.shiftKey) {
 			event.preventDefault();
+			try {
+				await autosave.flush(row.item.workId);
+			} catch (cause) {
+				error = errorMessage(cause);
+				return;
+			}
 			const cursor = textarea.selectionStart;
 			const left = row.item.text.slice(0, cursor);
 			const right = row.item.text.slice(textarea.selectionEnd);
@@ -203,6 +253,12 @@
 			const previous = siblings.at(-1);
 			if (previous) {
 				event.preventDefault();
+				try {
+					await autosave.flush(row.item.workId);
+				} catch (cause) {
+					error = errorMessage(cause);
+					return;
+				}
 				await api.deleteItem(row.item.id);
 				await load(previous.id);
 			}
@@ -216,16 +272,19 @@
 
 	function updateLocalText(id: string, text: string): void {
 		const item = snapshot.items.find((candidate) => candidate.id === id);
-		if (item) item.text = text;
-		const oldTimer = saveTimers.get(id);
-		if (oldTimer) clearTimeout(oldTimer);
-		saveTimers.set(id, window.setTimeout(async () => {
-			try {
-				await api.updateItemText(id, text);
-			} catch (cause) {
-				error = errorMessage(cause);
-			}
-		}, 250));
+		if (!item) return;
+		for (const placement of snapshot.items) {
+			if (placement.workId === item.workId) placement.text = text;
+		}
+		autosave.queue(item.workId, id, text);
+	}
+
+	async function retryWorkingCopySave(): Promise<void> {
+		try {
+			await autosave.retry();
+		} catch {
+			// The coordinator retains the draft and exposes the failure detail.
+		}
 	}
 
 	async function indent(item: OutlineItem): Promise<void> {
@@ -268,6 +327,15 @@
 	}
 
 	async function remove(id: string): Promise<void> {
+		const item = itemById.get(id);
+		if (item) {
+			try {
+				await autosave.flush(item.workId);
+			} catch (cause) {
+				error = errorMessage(cause);
+				return;
+			}
+		}
 		await api.deleteItem(id);
 		if (selectedId === id) selectedId = null;
 		await load();
@@ -442,6 +510,12 @@
 
 	async function duplicateSelectedOccurrence(): Promise<void> {
 		if (!selectedItem) return;
+		try {
+			await autosave.flush(selectedItem.workId);
+		} catch (cause) {
+			error = errorMessage(cause);
+			return;
+		}
 		const created = await api.createOccurrence({
 			workId: selectedItem.workId,
 			parentId: selectedItem.parentId,
@@ -506,6 +580,7 @@
 		if (!confirmation || confirmationSubmitting) return;
 		confirmationSubmitting = true;
 		try {
+			await autosave.flush();
 			if (confirmation.action === "trash") {
 				await api.trashWork(confirmation.occurrenceId);
 				selectedId = null;
@@ -590,6 +665,29 @@
 				</div>
 			{/if}
 		</div>
+		{#if workingCopySaveStatus}
+			<div
+				class="working-copy-save-status"
+				class:failed={workingCopySaveStatus.phase === "failed"}
+				class:pending={workingCopySaveStatus.phase === "unsaved" ||
+					workingCopySaveStatus.phase === "saving"}
+				aria-live="polite"
+				title={workingCopySaveStatus.error}
+			>
+				<span>
+					{workingCopySaveStatus.phase === "failed"
+						? `${vocabulary.workingCopy}を保存できませんでした`
+						: workingCopySaveStatus.phase === "saving"
+						? `${vocabulary.workingCopy}を保存中…`
+						: workingCopySaveStatus.phase === "unsaved"
+						? `未保存の${vocabulary.workingCopy}があります`
+						: `${vocabulary.workingCopy}を保存しました`}
+				</span>
+				{#if workingCopySaveStatus.phase === "failed"}
+					<button onclick={retryWorkingCopySave}>再試行</button>
+				{/if}
+			</div>
+		{/if}
 	</header>
 
 	{#if error}<div class="error">{error}<button onclick={() => (error = "")}>×</button></div>{/if}
