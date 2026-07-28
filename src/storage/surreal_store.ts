@@ -19,7 +19,11 @@ import type {
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
-import { type GraphStore, validateRevisionCreation } from "./graph_store.ts";
+import {
+	type GraphStore,
+	validateRevisionCreation,
+	validateUnplacedWorkCreation,
+} from "./graph_store.ts";
 import {
 	CURRENT_STORAGE_SCHEMA_VERSION,
 	type MigrationJournalEntry,
@@ -83,6 +87,21 @@ export function recoveryPromotionTransactionQuery(hasMessage: boolean): string {
 			UPDATE $branch SET head_revision = $revision;
 			UPDATE $snapshot SET protection_reason = "revision-source",
 				protected_at = $protectedAt, protection_expires_at = NONE;
+			COMMIT TRANSACTION;`;
+}
+
+export function quickCaptureTransactionQuery(): string {
+	return `BEGIN TRANSACTION;
+			CREATE $work CONTENT {
+				created_at: $createdAt, updated_at: $updatedAt, deleted_at: NONE
+			};
+			CREATE $branch CONTENT {
+				work: $work, name: "main", head_revision: NONE,
+				created_at: $createdAt, promoted_at: NONE, archived_at: NONE
+			};
+			CREATE $copy CONTENT {
+				work: $work, branch: $branch, text: $text, updated_at: $updatedAt
+			};
 			COMMIT TRANSACTION;`;
 }
 
@@ -480,6 +499,27 @@ export class SurrealGraphStore implements GraphStore {
 				updatedAt: work.updatedAt,
 			},
 		);
+	}
+
+	async createUnplacedWork(
+		work: Work,
+		branch: Branch,
+		workingCopy: WorkingCopy,
+	): Promise<void> {
+		const [works, branches, copies] = await Promise.all([
+			this.listWorks(true),
+			this.listBranches(),
+			this.listWorkingCopies(),
+		]);
+		validateUnplacedWorkCreation(work, branch, workingCopy, works, branches, copies);
+		await this.#db.query(quickCaptureTransactionQuery(), {
+			work: new RecordId("work", work.id),
+			branch: new RecordId("branch", branch.id),
+			copy: new RecordId("working_copy", branch.id),
+			text: workingCopy.text,
+			createdAt: work.createdAt,
+			updatedAt: work.updatedAt,
+		});
 	}
 
 	async createOccurrence(occurrence: Occurrence): Promise<void> {

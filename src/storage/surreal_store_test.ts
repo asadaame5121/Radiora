@@ -7,11 +7,19 @@ import {
 	itemFromRow,
 	navigationPurgeStatements,
 	occurrenceFromRow,
+	quickCaptureTransactionQuery,
 	recoveryPromotionTransactionQuery,
 	recoveryRestoreTransactionQuery,
 	resumePositionUpsertQuery,
 	revisionFromRow,
 } from "./surreal_store.ts";
+
+Deno.test("Quick Capture Surreal writes are enclosed in one transaction", () => {
+	const query = quickCaptureTransactionQuery();
+	assertEquals(query.match(/BEGIN TRANSACTION/g)?.length, 1);
+	assertEquals(query.match(/COMMIT TRANSACTION/g)?.length, 1);
+	assertEquals(query.match(/\bCREATE\b/g)?.length, 3);
+});
 
 const ITEM_ID = "31a56a11-35ac-4700-9f68-20de9c9d58dc";
 const PARENT_ID = "a3744669-9419-4edb-ab06-09f397c18932";

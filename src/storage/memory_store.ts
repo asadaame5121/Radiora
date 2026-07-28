@@ -17,7 +17,11 @@ import type {
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
-import { type GraphStore, validateRevisionCreation } from "./graph_store.ts";
+import {
+	type GraphStore,
+	validateRevisionCreation,
+	validateUnplacedWorkCreation,
+} from "./graph_store.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
@@ -121,6 +125,25 @@ export class MemoryGraphStore implements GraphStore {
 		this.branches.push(structuredClone(branch));
 		this.workingCopies.push(structuredClone(workingCopy));
 		this.occurrences.push(structuredClone(occurrence));
+		return Promise.resolve();
+	}
+
+	createUnplacedWork(work: Work, branch: Branch, workingCopy: WorkingCopy): Promise<void> {
+		try {
+			validateUnplacedWorkCreation(
+				work,
+				branch,
+				workingCopy,
+				this.works,
+				this.branches,
+				this.workingCopies,
+			);
+		} catch (error) {
+			return Promise.reject(error);
+		}
+		this.works.push(structuredClone(work));
+		this.branches.push(structuredClone(branch));
+		this.workingCopies.push(structuredClone(workingCopy));
 		return Promise.resolve();
 	}
 

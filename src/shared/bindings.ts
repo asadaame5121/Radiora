@@ -26,6 +26,7 @@ import type {
 	TagSearchRequest,
 	TagSummary,
 	TrashEntry,
+	UnplacedWork,
 } from "../domain/models.ts";
 import type { GlobalLineageProjection, WorkLineageProjection } from "../services/branch_service.ts";
 import type { DateProjection, DateRange } from "../services/date_projection.ts";
@@ -66,6 +67,10 @@ export interface RadioraBindings {
 	listGlobalLineage(): Promise<GlobalLineageProjection>;
 	listWorkLineage(workId: string): Promise<WorkLineageProjection>;
 	createItem(input: CreateItemInput): Promise<OutlineItem>;
+	quickCapture(text: string): Promise<UnplacedWork>;
+	listUnplacedWorks(): Promise<UnplacedWork[]>;
+	updateUnplacedWorkText(workId: string, text: string): Promise<void>;
+	placeUnplacedWork(input: CreateOccurrenceInput): Promise<OutlineItem>;
 	createOccurrence(input: CreateOccurrenceInput): Promise<OutlineItem>;
 	updateItemText(id: string, text: string): Promise<void>;
 	setContextualHeading(id: string, contextualHeading?: string): Promise<void>;

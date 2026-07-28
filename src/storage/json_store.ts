@@ -215,6 +215,27 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await this.persist();
 	}
 
+	override async createUnplacedWork(
+		work: Work,
+		branch: Branch,
+		workingCopy: WorkingCopy,
+	): Promise<void> {
+		const before = {
+			works: structuredClone(this.works),
+			branches: structuredClone(this.branches),
+			workingCopies: structuredClone(this.workingCopies),
+		};
+		try {
+			await super.createUnplacedWork(work, branch, workingCopy);
+			await this.persist();
+		} catch (cause) {
+			this.works = before.works;
+			this.branches = before.branches;
+			this.workingCopies = before.workingCopies;
+			throw cause;
+		}
+	}
+
 	override async createOccurrence(occurrence: Occurrence): Promise<void> {
 		await super.createOccurrence(occurrence);
 		await this.persist();
