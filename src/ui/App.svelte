@@ -54,6 +54,16 @@
 	} from "../services/browsing_navigation_state";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
 	import { navigationUiState } from "./navigation_state";
+	import {
+		COMMAND_DEFINITIONS,
+		commandAvailability,
+		dispatchCommand,
+		isEditableTarget,
+		shortcutForKeyboardEvent,
+		validateShortcuts,
+		type CommandContext,
+		type CommandId,
+	} from "./command_service";
 
 	const api = new Proxy({}, {
 		get: (_target, property) => async (...args: unknown[]) => {
@@ -211,6 +221,22 @@
 		if (unsaved) return unsaved;
 		return workingCopySaveStatuses[0];
 	});
+	const commandContext = $derived<CommandContext>({
+		startupReady: startup.phase === "ready",
+		selectedOccurrenceId: selectedId,
+		hasSelectedBranch: Boolean(selectedBranchId),
+		hasRecoverySnapshot: recoverySnapshots.length > 0,
+		hasLinkTarget: Boolean(newLinkTarget),
+		quickCaptureText,
+		quickCaptureSubmitting,
+		ruleSource,
+		ruleName,
+		isHoisted: Boolean(browsingLocation.hoistOccurrenceId),
+	});
+	const commands = $derived(commandAvailability(commandContext));
+	const shortcuts = validateShortcuts(COMMAND_DEFINITIONS.flatMap((command) =>
+		command.shortcut ? [{ commandId: command.id, shortcut: command.shortcut }] : []
+	));
 
 	$effect(() => {
 		const id = selectedId;
@@ -249,8 +275,17 @@
 				});
 			}
 		};
+		const handleGlobalShortcut = (event: KeyboardEvent) => {
+			if (event.defaultPrevented || isEditableTarget(event.target)) return;
+			const shortcut = shortcutForKeyboardEvent(event);
+			const binding = shortcuts.bindings.find((candidate) => candidate.shortcut === shortcut);
+			if (!binding) return;
+			event.preventDefault();
+			void executeCommand(binding.commandId);
+		};
 		window.addEventListener("beforeunload", warnAboutUnsavedChanges);
 		document.addEventListener("visibilitychange", flushWhenHidden);
+		window.addEventListener("keydown", handleGlobalShortcut);
 		async function monitorStartup(): Promise<void> {
 			while (!cancelled) {
 				try {
@@ -275,6 +310,7 @@
 			cancelled = true;
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
 			document.removeEventListener("visibilitychange", flushWhenHidden);
+			window.removeEventListener("keydown", handleGlobalShortcut);
 			void autosave.flush().catch(() => {
 				// beforeunload already warns while an unsaved draft exists.
 			});
@@ -461,8 +497,7 @@
 		resumeAutosave.queue(id, textarea.selectionStart);
 	}
 
-	async function captureQuickText(): Promise<void> {
-		if (!quickCaptureText.trim() || quickCaptureSubmitting) return;
+	async function performQuickCapture(): Promise<void> {
 		quickCaptureSubmitting = true;
 		try {
 			await api.quickCapture(quickCaptureText);
@@ -577,7 +612,7 @@
 		});
 	}
 
-	async function addBookmark(): Promise<void> {
+	async function performAddBookmark(): Promise<void> {
 		if (!selectedId) return;
 		await api.createBookmark(selectedId);
 		bookmarks = await api.listBookmarks();
@@ -647,7 +682,7 @@
 		await loadRecoverySnapshots(selectedItem.workId, selectedBranchId);
 	}
 
-	async function promoteRecoverySnapshot(snapshotId: string): Promise<void> {
+	async function performPromoteRecoverySnapshot(snapshotId: string): Promise<void> {
 		if (!selectedItem || !selectedBranchId) return;
 		await api.promoteRecoverySnapshot(
 			snapshotId,
@@ -855,7 +890,7 @@
 		aliases = await api.listSearchAliases();
 	}
 
-	async function executeRule(): Promise<void> {
+	async function performExecuteRule(): Promise<void> {
 		ruleError = "";
 		ruleResult = null;
 		try {
@@ -865,7 +900,7 @@
 		}
 	}
 
-	async function saveRule(): Promise<void> {
+	async function performSaveRule(): Promise<void> {
 		ruleError = "";
 		try {
 			await api.saveRuleQuery({ name: ruleName, source: ruleSource });
@@ -881,7 +916,7 @@
 		savedRuleQueries = await api.listSavedRuleQueries();
 	}
 
-	async function addLink(): Promise<void> {
+	async function performAddLink(): Promise<void> {
 		if (!selectedId || !newLinkTarget || selectedId === newLinkTarget) return;
 		await api.createLink({ fromId: selectedId, toId: newLinkTarget, type: newLinkType });
 		newLinkTarget = "";
@@ -991,6 +1026,34 @@
 		await api.restoreWork(workId);
 		trashEntries = await api.listTrash();
 		await load();
+	}
+
+	async function executeCommand(id: CommandId, snapshotId?: string): Promise<void> {
+		const result = await dispatchCommand(id, commandContext, async (commandId) => {
+			switch (commandId) {
+				case "quickCapture": await performQuickCapture(); break;
+				case "hoist": hoistSelected(); break;
+				case "clearHoist": clearHoist(); break;
+				case "addBookmark": await performAddBookmark(); break;
+				case "createLink": await performAddLink(); break;
+				case "runQuery": await performExecuteRule(); break;
+				case "saveQuery": await performSaveRule(); break;
+				case "saveRevision": if (snapshotId) await performPromoteRecoverySnapshot(snapshotId); break;
+				case "createBranch": break;
+			}
+		});
+		if (!result.executed && result.reason) error = result.reason;
+	}
+
+	function captureQuickText(): void { void executeCommand("quickCapture"); }
+	function requestHoist(): void { void executeCommand("hoist"); }
+	function requestClearHoist(): void { void executeCommand("clearHoist"); }
+	function addBookmark(): void { void executeCommand("addBookmark"); }
+	function executeRule(): void { void executeCommand("runQuery"); }
+	function saveRule(): void { void executeCommand("saveQuery"); }
+	function addLink(): void { void executeCommand("createLink"); }
+	function promoteRecoverySnapshot(snapshotId: string): Promise<void> {
+		return executeCommand("saveRevision", snapshotId);
 	}
 
 	async function purgeTrash(entry: TrashEntry): Promise<void> {
@@ -1122,7 +1185,7 @@
 				bind:value={quickCaptureText}
 				disabled={startup.phase !== "ready" || quickCaptureSubmitting}
 			/>
-			<button disabled={!quickCaptureText.trim() || quickCaptureSubmitting}>
+			<button disabled={!commands.quickCapture.enabled} title={commands.quickCapture.reason}>
 				{quickCaptureSubmitting ? "保存中…" : vocabulary.quickCapture}
 			</button>
 		</form>
@@ -1212,9 +1275,9 @@
 							disabled={!canMoveBrowsingHistory(browsing, 1)}
 							onclick={() => goBrowsingHistory(1)}
 						>→</button>
-						<button onclick={hoistSelected} disabled={!selectedId}>{vocabulary.hoist}</button>
+						<button onclick={requestHoist} disabled={!commands.hoist.enabled} title={commands.hoist.reason}>{vocabulary.hoist}</button>
 						{#if browsingLocation.hoistOccurrenceId}
-							<button onclick={clearHoist}>{vocabulary.hoist}を解除</button>
+							<button onclick={requestClearHoist} disabled={!commands.clearHoist.enabled} title={commands.clearHoist.reason}>{vocabulary.hoist}を解除</button>
 						{/if}
 					</div>
 					<div class="pane-controls" aria-label={vocabulary.pane}>
@@ -1239,7 +1302,7 @@
 				</nav>
 				<div class="section-title">
 					<span>Outline</span>
-					<button onclick={addBookmark} disabled={!selectedId}>☆ {vocabulary.bookmark}</button>
+					<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
 					<button onclick={createRoot}>＋ Root</button>
 				</div>
 				{#if loading}
@@ -1498,7 +1561,7 @@
 								<option value={item.id}>{item.text || `(空の${vocabulary.work})`}</option>
 							{/each}
 						</select>
-						<button onclick={addLink} disabled={!newLinkTarget}>{vocabulary.semanticLink}を追加</button>
+						<button onclick={addLink} disabled={!commands.createLink.enabled} title={commands.createLink.reason}>{vocabulary.semanticLink}を追加</button>
 					</div>
 					<div class="links">
 						{#each selectedLinks as link}
@@ -1565,7 +1628,7 @@
 					<div class="query-panel">
 						<label for="rule-source">読み取り専用Datalog</label>
 						<textarea id="rule-source" rows="6" bind:value={ruleSource} spellcheck="false"></textarea>
-						<div class="query-actions"><button onclick={executeRule}>実行</button><input placeholder="保存名" bind:value={ruleName} /><button onclick={saveRule}>保存</button></div>
+						<div class="query-actions"><button onclick={executeRule} disabled={!commands.runQuery.enabled} title={commands.runQuery.reason}>実行</button><input placeholder="保存名" bind:value={ruleName} /><button onclick={saveRule} disabled={!commands.saveQuery.enabled} title={commands.saveQuery.reason}>保存</button></div>
 						{#if ruleError}<p class="query-error">{ruleError}</p>{/if}
 						{#if ruleResult}
 							<p class="query-meta">{ruleResult.rows.length}件・{ruleResult.elapsedMs.toFixed(1)}ms</p>
