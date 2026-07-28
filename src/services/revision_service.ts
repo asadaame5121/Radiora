@@ -1,4 +1,4 @@
-import type { Revision } from "../domain/models.ts";
+import type { Branch, Revision, WorkingCopy } from "../domain/models.ts";
 import type { GraphStore } from "../storage/graph_store.ts";
 
 export interface RevisionServiceOptions {
@@ -7,6 +7,18 @@ export interface RevisionServiceOptions {
 	/** Supplies an identifier so callers can make checkpoint creation deterministic. */
 	createId?: () => string;
 }
+
+export type RewriteConfirmation = "confirmed" | "cancelled";
+
+export type RewriteAsNewBranchResult =
+	| { status: "cancelled" }
+	| {
+		status: "created";
+		branch: Branch;
+		workingCopy: WorkingCopy;
+		baseRevision: Revision;
+		checkpointCreated: boolean;
+	};
 
 /**
  * Explicit, append-only creation of a Revision from a Branch's current Working Copy.
@@ -50,5 +62,93 @@ export class RevisionService {
 		};
 		await this.store.createRevision(revision, branch.id);
 		return revision;
+	}
+
+	/**
+	 * Starts a rewrite on a new Branch only after explicit user confirmation.
+	 *
+	 * If the source Working Copy is already identical to its head Revision, that
+	 * Revision is reused as the branch point. Otherwise the current Working Copy is
+	 * explicitly checkpointed first. Cancellation performs no persistent writes.
+	 */
+	async rewriteAsNewBranch(
+		sourceBranchId: string,
+		newBranchName: string,
+		confirmation: RewriteConfirmation,
+	): Promise<RewriteAsNewBranchResult> {
+		if (confirmation === "cancelled") return { status: "cancelled" };
+		if (confirmation !== "confirmed") throw new Error("Explicit confirmation is required");
+		const name = newBranchName.trim();
+		if (!name) throw new Error("Branch name must not be empty");
+
+		const [branches, workingCopies, revisions] = await Promise.all([
+			this.store.listBranches(),
+			this.store.listWorkingCopies(),
+			this.store.listRevisions(),
+		]);
+		const sourceBranch = branches.find((candidate) => candidate.id === sourceBranchId);
+		if (!sourceBranch) throw new Error(`Branch not found: ${sourceBranchId}`);
+
+		const sourceWorkingCopy = workingCopies.find((candidate) =>
+			candidate.branchId === sourceBranchId
+		);
+		if (!sourceWorkingCopy || sourceWorkingCopy.workId !== sourceBranch.workId) {
+			throw new Error(`Working Copy not found for Branch: ${sourceBranchId}`);
+		}
+
+		const headRevision = sourceBranch.headRevisionId
+			? revisions.find((candidate) => candidate.id === sourceBranch.headRevisionId)
+			: undefined;
+		if (
+			sourceBranch.headRevisionId &&
+			(!headRevision || headRevision.workId !== sourceBranch.workId)
+		) {
+			throw new Error(`Head Revision not found for Branch: ${sourceBranchId}`);
+		}
+
+		const timestamp = this.#now();
+		const checkpointCreated = !headRevision || headRevision.text !== sourceWorkingCopy.text;
+		const baseRevision: Revision = checkpointCreated
+			? {
+				id: this.#createId(),
+				workId: sourceBranch.workId,
+				text: sourceWorkingCopy.text,
+				parentRevisionIds: headRevision ? [headRevision.id] : [],
+				kind: "checkpoint",
+				createdAt: timestamp,
+			}
+			: headRevision;
+		const branch: Branch = {
+			id: this.#createId(),
+			workId: sourceBranch.workId,
+			name,
+			headRevisionId: baseRevision.id,
+			createdAt: timestamp,
+		};
+		const workingCopy: WorkingCopy = {
+			branchId: branch.id,
+			workId: branch.workId,
+			text: baseRevision.text,
+			updatedAt: timestamp,
+		};
+		if (
+			branches.some((candidate) => candidate.id === branch.id) ||
+			workingCopies.some((candidate) => candidate.branchId === branch.id)
+		) {
+			throw new Error(`Branch already exists: ${branch.id}`);
+		}
+
+		if (checkpointCreated) {
+			await this.store.createRevision(baseRevision, sourceBranch.id);
+		}
+		await this.store.createBranch(branch, workingCopy);
+
+		return {
+			status: "created",
+			branch,
+			workingCopy,
+			baseRevision,
+			checkpointCreated,
+		};
 	}
 }
