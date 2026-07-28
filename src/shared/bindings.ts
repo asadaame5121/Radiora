@@ -9,6 +9,7 @@ import type {
 	OutlineItem,
 	OutlineSnapshot,
 	PurgeManifest,
+	RecoverySnapshot,
 	Revision,
 	RuleQueryResult,
 	SavedRuleQuery,
@@ -19,12 +20,32 @@ import type {
 	TrashEntry,
 } from "../domain/models.ts";
 import type { GlobalLineageProjection, WorkLineageProjection } from "../services/branch_service.ts";
+import type { RecoverySnapshotPreview } from "../services/recovery_snapshot_service.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	listOutline(): Promise<OutlineSnapshot>;
 	listRevisions(workId: string): Promise<Revision[]>;
+	listRecoverySnapshots(workId: string, branchId: string): Promise<RecoverySnapshot[]>;
+	previewRecoverySnapshot(
+		snapshotId: string,
+		workId: string,
+		branchId: string,
+	): Promise<RecoverySnapshotPreview>;
+	restoreRecoverySnapshot(
+		snapshotId: string,
+		workId: string,
+		branchId: string,
+		confirmation: "confirmed" | "cancelled",
+	): Promise<RecoverySnapshot | null>;
+	promoteRecoverySnapshot(
+		snapshotId: string,
+		workId: string,
+		branchId: string,
+		confirmation: "confirmed" | "cancelled",
+		message?: string,
+	): Promise<Revision | null>;
 	listGlobalLineage(): Promise<GlobalLineageProjection>;
 	listWorkLineage(workId: string): Promise<WorkLineageProjection>;
 	createItem(input: CreateItemInput): Promise<OutlineItem>;

@@ -11,6 +11,7 @@ import type {
 	OutlineItem,
 	OutlineSnapshot,
 	PurgeManifest,
+	RecoverySnapshot,
 	Revision,
 	RuleQueryResult,
 	SavedRuleQuery,
@@ -29,6 +30,10 @@ import {
 } from "./branch_service.ts";
 import { normalizeSearchText, titleOf } from "./search_text.ts";
 import { runRuleQuery } from "./rule_query.ts";
+import {
+	type RecoverySnapshotPreview,
+	RecoverySnapshotService,
+} from "./recovery_snapshot_service.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -62,6 +67,48 @@ export class OutlineService {
 		const revisions = await this.store.listRevisions(workId);
 		return revisions.sort((left, right) =>
 			left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+		);
+	}
+
+	listRecoverySnapshots(workId: string, branchId: string): Promise<RecoverySnapshot[]> {
+		return new RecoverySnapshotService(this.store).list(workId, branchId);
+	}
+
+	previewRecoverySnapshot(
+		snapshotId: string,
+		workId: string,
+		branchId: string,
+	): Promise<RecoverySnapshotPreview> {
+		return new RecoverySnapshotService(this.store).preview(snapshotId, workId, branchId);
+	}
+
+	restoreRecoverySnapshot(
+		snapshotId: string,
+		workId: string,
+		branchId: string,
+		confirmation: "confirmed" | "cancelled",
+	): Promise<RecoverySnapshot | null> {
+		return new RecoverySnapshotService(this.store).restore(
+			snapshotId,
+			workId,
+			branchId,
+			confirmation,
+		);
+	}
+
+	promoteRecoverySnapshot(
+		snapshotId: string,
+		workId: string,
+		branchId: string,
+		confirmation: "confirmed" | "cancelled",
+		message?: string,
+	): Promise<Revision | null> {
+		return new RecoverySnapshotService(this.store).promote(
+			snapshotId,
+			workId,
+			branchId,
+			confirmation,
+			message,
 		);
 	}
 

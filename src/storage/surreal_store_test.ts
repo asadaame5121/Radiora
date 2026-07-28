@@ -6,6 +6,8 @@ import {
 	evolvedFromEndpoints,
 	itemFromRow,
 	occurrenceFromRow,
+	recoveryPromotionTransactionQuery,
+	recoveryRestoreTransactionQuery,
 	revisionFromRow,
 } from "./surreal_store.ts";
 
@@ -142,4 +144,24 @@ Deno.test("FROM persists from parent in-endpoint to child out-endpoint", () => {
 		inId: PARENT_ID,
 		outId: ITEM_ID,
 	});
+});
+
+Deno.test("Surreal Snapshot restore transaction saves recovery state before applying text", () => {
+	const query = recoveryRestoreTransactionQuery(true, true);
+	assertEquals(query.startsWith("BEGIN TRANSACTION;"), true);
+	assertEquals(
+		query.indexOf("CREATE $beforeRestore") < query.indexOf("UPDATE working_copy"),
+		true,
+	);
+	assertEquals(query.trimEnd().endsWith("COMMIT TRANSACTION;"), true);
+	assertEquals(query.includes("source_revision: $sourceRevision"), true);
+});
+
+Deno.test("Surreal Snapshot promotion atomically advances head and protects its source", () => {
+	const query = recoveryPromotionTransactionQuery(false);
+	assertEquals(query.startsWith("BEGIN TRANSACTION;"), true);
+	assertEquals(query.indexOf("CREATE $revision") < query.indexOf("UPDATE $branch"), true);
+	assertEquals(query.indexOf("UPDATE $branch") < query.indexOf("UPDATE $snapshot"), true);
+	assertEquals(query.includes('protection_reason = "revision-source"'), true);
+	assertEquals(query.trimEnd().endsWith("COMMIT TRANSACTION;"), true);
 });

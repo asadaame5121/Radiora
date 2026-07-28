@@ -12,6 +12,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"merge",
 		"globalLineage",
 		"workLineage",
+		"recoverySnapshot",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -25,5 +26,6 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		merge: "混成稿",
 		globalLineage: "全体系統",
 		workLineage: "版系統",
+		recoverySnapshot: "復元用保存",
 	});
 });

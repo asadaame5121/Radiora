@@ -37,7 +37,7 @@ export function chooseInitialRevisionComparison(
  * boundaries so that platform line endings do not create false content changes.
  * When more than one shortest diff exists, removals are emitted before additions.
  */
-export function diffRevisionText(leftText: string, rightText: string): RevisionDiffNode[] {
+export function diffText(leftText: string, rightText: string): RevisionDiffNode[] {
 	const left = splitLines(leftText);
 	const right = splitLines(rightText);
 	const commonSuffixLengths = Array.from(
@@ -100,6 +100,9 @@ export function diffRevisionText(leftText: string, rightText: string): RevisionD
 	}
 	return nodes;
 }
+
+/** Backward-compatible name used by the Revision comparison UI. */
+export const diffRevisionText = diffText;
 
 function splitLines(text: string): string[] {
 	return text === "" ? [] : text.split(/\r\n|\r|\n/);

@@ -239,6 +239,37 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await this.persist();
 	}
 
+	override async restoreRecoverySnapshot(
+		snapshotId: string,
+		beforeRestore: RecoverySnapshot,
+		updatedAt: string,
+	): Promise<void> {
+		const before = this.captureRecoveryMutationState();
+		try {
+			await super.restoreRecoverySnapshot(snapshotId, beforeRestore, updatedAt);
+			await this.persist();
+		} catch (cause) {
+			this.restoreRecoveryMutationState(before);
+			throw cause;
+		}
+	}
+
+	override async promoteRecoverySnapshot(
+		snapshotId: string,
+		revision: Revision,
+		branchId: string,
+		protectedAt: string,
+	): Promise<void> {
+		const before = this.captureRecoveryMutationState();
+		try {
+			await super.promoteRecoverySnapshot(snapshotId, revision, branchId, protectedAt);
+			await this.persist();
+		} catch (cause) {
+			this.restoreRecoveryMutationState(before);
+			throw cause;
+		}
+	}
+
 	override async updateOccurrence(occurrence: Occurrence): Promise<void> {
 		await super.updateOccurrence(occurrence);
 		await this.persist();
@@ -365,6 +396,26 @@ export class JsonGraphStore extends MemoryGraphStore {
 			},
 		};
 		await Deno.writeTextFile(this.path, JSON.stringify(backup, null, 2));
+	}
+
+	private captureRecoveryMutationState() {
+		return structuredClone({
+			works: this.works,
+			branches: this.branches,
+			workingCopies: this.workingCopies,
+			revisions: this.revisions,
+			recoverySnapshots: this.recoverySnapshots,
+		});
+	}
+
+	private restoreRecoveryMutationState(
+		state: ReturnType<JsonGraphStore["captureRecoveryMutationState"]>,
+	): void {
+		this.works = state.works;
+		this.branches = state.branches;
+		this.workingCopies = state.workingCopies;
+		this.revisions = state.revisions;
+		this.recoverySnapshots = state.recoverySnapshots;
 	}
 
 	private async protectVersionZeroInput(): Promise<void> {

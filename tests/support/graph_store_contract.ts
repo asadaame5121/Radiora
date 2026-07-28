@@ -215,6 +215,88 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		(await store.listItems()).find((item) => item.id === alternateOccurrence.id)?.text,
 		"snapshot draft",
 	);
+	await store.updateBranchWorkingCopy(
+		alternateBranch.id,
+		"draft immediately before restore",
+		UPDATED_AT,
+	);
+	const beforeRestoreId = crypto.randomUUID();
+	await store.restoreRecoverySnapshot(snapshotId, {
+		id: beforeRestoreId,
+		workId: root.work.id,
+		branchId: alternateBranch.id,
+		text: "draft immediately before restore",
+		contentHash: "sha256:before-restore",
+		createdAt: DELETED_AT,
+		sourceRevisionId: firstRevision.id,
+		name: "before restore",
+	}, DELETED_AT);
+	assertEquals(
+		(await store.listRecoverySnapshots(root.work.id, alternateBranch.id))
+			.find((snapshot) => snapshot.id === beforeRestoreId)?.text,
+		"draft immediately before restore",
+	);
+	assertEquals(
+		(await store.listWorkingCopies(root.work.id))
+			.find((copy) => copy.branchId === alternateBranch.id)?.text,
+		"snapshot draft",
+	);
+	assertEquals(
+		(await store.listBranches(root.work.id))
+			.find((branch) => branch.id === alternateBranch.id)?.headRevisionId,
+		firstRevision.id,
+	);
+	assertEquals((await store.listRevisions(root.work.id)).length, revisionCount);
+
+	const promotedRevision: Revision = {
+		id: crypto.randomUUID(),
+		workId: root.work.id,
+		text: "snapshot draft",
+		parentRevisionIds: [firstRevision.id],
+		kind: "edition",
+		createdAt: DELETED_AT,
+	};
+	await store.promoteRecoverySnapshot(
+		snapshotId,
+		promotedRevision,
+		alternateBranch.id,
+		DELETED_AT,
+	);
+	assertEquals(
+		(await store.listBranches(root.work.id))
+			.find((branch) => branch.id === alternateBranch.id)?.headRevisionId,
+		promotedRevision.id,
+	);
+	assertEquals((await store.listRevisions(root.work.id)).length, revisionCount + 1);
+	assertEquals(
+		(await store.listRecoverySnapshots(root.work.id, alternateBranch.id))
+			.find((snapshot) => snapshot.id === snapshotId)?.protection,
+		{ reason: "revision-source", protectedAt: DELETED_AT },
+	);
+	const stateBeforeRejectedRestore = {
+		snapshots: await store.listRecoverySnapshots(root.work.id, alternateBranch.id),
+		copies: await store.listWorkingCopies(root.work.id),
+		revisions: await store.listRevisions(root.work.id),
+		branches: await store.listBranches(root.work.id),
+	};
+	await assertRejects(() =>
+		store.restoreRecoverySnapshot(snapshotId, {
+			id: crypto.randomUUID(),
+			workId: root.work.id,
+			branchId: alternateBranch.id,
+			text: "not the current Working Copy",
+			contentHash: "sha256:invalid",
+			createdAt: DELETED_AT,
+			sourceRevisionId: promotedRevision.id,
+		}, DELETED_AT)
+	);
+	assertEquals(
+		await store.listRecoverySnapshots(root.work.id, alternateBranch.id),
+		stateBeforeRejectedRestore.snapshots,
+	);
+	assertEquals(await store.listWorkingCopies(root.work.id), stateBeforeRejectedRestore.copies);
+	assertEquals(await store.listRevisions(root.work.id), stateBeforeRejectedRestore.revisions);
+	assertEquals(await store.listBranches(root.work.id), stateBeforeRejectedRestore.branches);
 
 	const rootItems = (await store.listItems()).filter((item) => item.workId === root.work.id);
 	assertEquals(rootItems.length, 4);

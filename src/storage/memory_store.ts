@@ -176,6 +176,80 @@ export class MemoryGraphStore implements GraphStore {
 		return this.updateBranchWorkingCopy(snapshot.branchId, snapshot.text, updatedAt);
 	}
 
+	restoreRecoverySnapshot(
+		snapshotId: string,
+		beforeRestore: RecoverySnapshot,
+		updatedAt: string,
+	): Promise<void> {
+		const target = this.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
+		if (!target) {
+			return Promise.reject(new Error(`Recovery Snapshot not found: ${snapshotId}`));
+		}
+		const copy = this.workingCopies.find((candidate) => candidate.branchId === target.branchId);
+		if (
+			!copy || copy.workId !== target.workId ||
+			beforeRestore.workId !== target.workId ||
+			beforeRestore.branchId !== target.branchId
+		) {
+			return Promise.reject(new Error("Recovery Snapshot scope does not match Working Copy"));
+		}
+		if (this.recoverySnapshots.some((candidate) => candidate.id === beforeRestore.id)) {
+			return Promise.reject(
+				new Error(`Recovery Snapshot already exists: ${beforeRestore.id}`),
+			);
+		}
+		if (beforeRestore.text !== copy.text) {
+			return Promise.reject(new Error("Recovery Snapshot does not capture current Working Copy"));
+		}
+		this.recoverySnapshots.push(structuredClone(beforeRestore));
+		this.workingCopies = this.workingCopies.map((candidate) =>
+			candidate.branchId === target.branchId
+				? { ...candidate, text: target.text, updatedAt }
+				: candidate
+		);
+		this.works = this.works.map((work) =>
+			work.id === target.workId ? { ...work, updatedAt } : work
+		);
+		return Promise.resolve();
+	}
+
+	promoteRecoverySnapshot(
+		snapshotId: string,
+		revision: Revision,
+		branchId: string,
+		protectedAt: string,
+	): Promise<void> {
+		const snapshot = this.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
+		const branch = this.branches.find((candidate) => candidate.id === branchId);
+		if (!snapshot) {
+			return Promise.reject(new Error(`Recovery Snapshot not found: ${snapshotId}`));
+		}
+		if (
+			snapshot.branchId !== branchId || snapshot.workId !== revision.workId ||
+			branch?.workId !== snapshot.workId || revision.text !== snapshot.text
+		) {
+			return Promise.reject(new Error("Recovery Snapshot scope does not match Revision"));
+		}
+		try {
+			validateRevisionCreation(revision, branch, this.revisions);
+		} catch (error) {
+			return Promise.reject(error);
+		}
+		this.revisions.push(structuredClone(revision));
+		this.branches = this.branches.map((candidate) =>
+			candidate.id === branchId ? { ...candidate, headRevisionId: revision.id } : candidate
+		);
+		this.recoverySnapshots = this.recoverySnapshots.map((candidate) =>
+			candidate.id === snapshotId
+				? {
+					...candidate,
+					protection: { reason: "revision-source", protectedAt },
+				}
+				: candidate
+		);
+		return Promise.resolve();
+	}
+
 	updateOccurrence(occurrence: Occurrence): Promise<void> {
 		this.occurrences = this.occurrences.map((candidate) =>
 			candidate.id === occurrence.id ? structuredClone(occurrence) : candidate
