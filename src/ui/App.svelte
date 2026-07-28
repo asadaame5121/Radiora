@@ -38,6 +38,20 @@
 		type WorkingCopySaveStatus,
 	} from "../services/working_copy_autosave";
 	import { ResumePositionAutosaveCoordinator } from "../services/resume_position_autosave";
+	import {
+		activateBrowsingPane,
+		activeBrowsingPane,
+		ancestorBreadcrumb,
+		browseToOutlineOccurrence,
+		canMoveBrowsingHistory,
+		createBrowsingNavigationState,
+		currentBrowsingLocation,
+		moveBrowsingHistory,
+		openBrowsingPane,
+		projectBrowsingOutline,
+		reconcileBrowsingState,
+		setBrowsingHoist,
+	} from "../services/browsing_navigation_state";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
 	import { navigationUiState } from "./navigation_state";
 
@@ -85,6 +99,8 @@
 	let dateProjection = $state<DateProjection | null>(null);
 	let dateProjectionLoading = $state(false);
 	let selectedId = $state<string | null>(null);
+	let browsing = $state(createBrowsingNavigationState());
+	let nextPaneNumber = 2;
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
 	let searchQuery = $state("");
@@ -144,6 +160,13 @@
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
+	const browsingLocation = $derived(currentBrowsingLocation(browsing));
+	const browsingPane = $derived(activeBrowsingPane(browsing));
+	const browsingProjection = $derived(projectBrowsingOutline(
+		snapshot,
+		browsingLocation.hoistOccurrenceId,
+	));
+	const selectedBreadcrumb = $derived(ancestorBreadcrumb(snapshot, selectedId));
 	const selectedBranchId = $derived(
 		selectedItem?.revisionSelector.mode === "branch"
 			? selectedItem.revisionSelector.branchId
@@ -174,7 +197,7 @@
 				.map((item) => [item.workId, item]),
 		).values(),
 	]);
-	const visibleRows = $derived.by(() => buildVisibleRows(snapshot));
+	const visibleRows = $derived.by(() => buildVisibleRows(snapshot, browsingProjection));
 	const searchEntries = $derived([
 		...suggestions.map((suggestion) => ({ kind: "suggestion" as const, value: suggestion })),
 		...searchResults.map((result) => ({ kind: "result" as const, value: result })),
@@ -281,6 +304,8 @@
 				return draft === undefined ? item : { ...item, text: draft };
 			});
 			snapshot = next;
+			browsing = reconcileBrowsingState(browsing, snapshot);
+			selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
 			globalLineage = nextGlobalLineage;
 			bookmarks = nextBookmarks;
 			if (focusId) requestFocus(focusId);
@@ -291,9 +316,12 @@
 		}
 	}
 
-	function buildVisibleRows(data: OutlineSnapshot): VisibleRow[] {
+	function buildVisibleRows(
+		data: OutlineSnapshot,
+		projection: ReturnType<typeof projectBrowsingOutline>,
+	): VisibleRow[] {
 		const stash = new Set(data.stashItemIds);
-		const normalItems = data.items.filter((item) => !stash.has(item.id));
+		const normalItems = projection.items.filter((item) => !stash.has(item.id));
 		const normalIds = new Set(normalItems.map((item) => item.id));
 		const children = new Map<string | null, OutlineItem[]>();
 		for (const item of normalItems) {
@@ -311,10 +339,55 @@
 				descendants.forEach((child) => visit(child, depth + 1));
 			}
 		};
-		(children.get(null) ?? []).forEach((root) => visit(root, 0));
-		data.items.filter((item) => stash.has(item.id)).sort((a, b) => a.orderKey - b.orderKey)
-			.forEach((item) => rows.push({ item, depth: 0, hasChildren: false, stash: true }));
+		projection.rootOccurrenceIds
+			.map((id) => normalItems.find((item) => item.id === id))
+			.filter((item): item is OutlineItem => Boolean(item))
+			.forEach((root) => visit(root, 0));
+		if (!browsingLocation.hoistOccurrenceId) {
+			data.items.filter((item) => stash.has(item.id)).sort((a, b) => a.orderKey - b.orderKey)
+				.forEach((item) => rows.push({ item, depth: 0, hasChildren: false, stash: true }));
+		}
 		return rows;
+	}
+
+	function selectOccurrence(id: string | null): void {
+		selectedId = id;
+		browsing = browseToOutlineOccurrence(browsing, snapshot, id);
+	}
+
+	function goBrowsingHistory(delta: -1 | 1): void {
+		browsing = moveBrowsingHistory(browsing, delta);
+		browsing = reconcileBrowsingState(browsing, snapshot);
+		selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
+		transientExpandedIds = ancestorBreadcrumb(snapshot, selectedId).map((item) => item.id);
+		if (selectedId) requestFocus(selectedId);
+	}
+
+	function hoistSelected(): void {
+		if (!selectedId) return;
+		transientExpandedIds = [...new Set([...transientExpandedIds, selectedId])];
+		browsing = setBrowsingHoist(browsing, selectedId);
+	}
+
+	function clearHoist(): void {
+		browsing = setBrowsingHoist(browsing, null);
+	}
+
+	function addBrowsingPane(): void {
+		browsing = openBrowsingPane(browsing, `pane-${nextPaneNumber++}`);
+	}
+
+	function switchBrowsingPane(paneId: string): void {
+		browsing = activateBrowsingPane(browsing, paneId);
+		browsing = reconcileBrowsingState(browsing, snapshot);
+		selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
+		transientExpandedIds = ancestorBreadcrumb(snapshot, selectedId).map((item) => item.id);
+		if (selectedId) requestFocus(selectedId);
+	}
+
+	function openBreadcrumb(id: string): void {
+		if (browsingLocation.hoistOccurrenceId) browsing = setBrowsingHoist(browsing, null);
+		selectOccurrence(id);
 	}
 
 	async function createRoot(): Promise<void> {
@@ -429,7 +502,7 @@
 			const created = await api.placeUnplacedWork({ workId, parentId });
 			await Promise.all([load(created.id), loadUnplacedWorks()]);
 			viewMode = "outline";
-			selectedId = created.id;
+			selectOccurrence(created.id);
 		} catch (cause) {
 			error = errorMessage(cause);
 		}
@@ -530,12 +603,12 @@
 		viewMode = "outline";
 		const state = navigationUiState(target, caretOffset);
 		if (!state.selectedOccurrenceId) {
-			selectedId = null;
+			selectOccurrence(null);
 			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
 			return;
 		}
 		transientExpandedIds = state.temporaryExpandedOccurrenceIds;
-		selectedId = state.selectedOccurrenceId;
+		selectOccurrence(state.selectedOccurrenceId);
 		await load();
 		requestFocus(state.selectedOccurrenceId, state.caretOffset);
 	}
@@ -667,7 +740,7 @@
 			}
 		}
 		await api.deleteItem(id);
-		if (selectedId === id) selectedId = null;
+		if (selectedId === id) selectOccurrence(null);
 		await load();
 	}
 
@@ -737,15 +810,12 @@
 	}
 
 	async function selectItem(item: OutlineItem, ancestorIds: string[]): Promise<void> {
-		for (const ancestorId of ancestorIds) {
-			const ancestor = itemById.get(ancestorId);
-			if (ancestor?.collapsed) await api.setCollapsed(ancestor.id, false);
-		}
+		transientExpandedIds = ancestorIds;
 		searchQuery = "";
 		suggestions = [];
 		searchResults = [];
 		searchActiveIndex = -1;
-		selectedId = item.id;
+		selectOccurrence(item.id);
 		await load(item.id);
 	}
 
@@ -959,7 +1029,7 @@
 			await autosave.flush();
 			if (confirmation.action === "trash") {
 				await api.trashWork(confirmation.occurrenceId);
-				selectedId = null;
+				selectOccurrence(null);
 				await load();
 			} else {
 				await api.purgeWork(confirmation.workId);
@@ -1130,6 +1200,43 @@
 	<main>
 		{#if viewMode === "outline"}
 			<section class="outline-panel">
+				<nav class="browsing-navigation" aria-label={vocabulary.browsingHistory}>
+					<div class="history-controls">
+						<button
+							aria-label={`${vocabulary.browsingHistory}を戻る`}
+							disabled={!canMoveBrowsingHistory(browsing, -1)}
+							onclick={() => goBrowsingHistory(-1)}
+						>←</button>
+						<button
+							aria-label={`${vocabulary.browsingHistory}を進む`}
+							disabled={!canMoveBrowsingHistory(browsing, 1)}
+							onclick={() => goBrowsingHistory(1)}
+						>→</button>
+						<button onclick={hoistSelected} disabled={!selectedId}>{vocabulary.hoist}</button>
+						{#if browsingLocation.hoistOccurrenceId}
+							<button onclick={clearHoist}>{vocabulary.hoist}を解除</button>
+						{/if}
+					</div>
+					<div class="pane-controls" aria-label={vocabulary.pane}>
+						{#each browsing.panes as pane, index (pane.id)}
+							<button
+								class:active={pane.id === browsingPane.id}
+								aria-pressed={pane.id === browsingPane.id}
+								onclick={() => switchBrowsingPane(pane.id)}
+							>{vocabulary.pane} {index + 1}</button>
+						{/each}
+						<button aria-label={`新しい${vocabulary.pane}`} onclick={addBrowsingPane}>＋</button>
+					</div>
+					{#if selectedBreadcrumb.length || selectedItem}
+						<div class="breadcrumb" aria-label={vocabulary.breadcrumb}>
+							{#each selectedBreadcrumb as ancestor (ancestor.id)}
+								<button onclick={() => openBreadcrumb(ancestor.id)}>{titleFor(ancestor)}</button>
+								<span aria-hidden="true">›</span>
+							{/each}
+							{#if selectedItem}<span aria-current="page">{titleFor(selectedItem)}</span>{/if}
+						</div>
+					{/if}
+				</nav>
 				<div class="section-title">
 					<span>Outline</span>
 					<button onclick={addBookmark} disabled={!selectedId}>☆ {vocabulary.bookmark}</button>
@@ -1148,9 +1255,9 @@
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
 								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
 								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
-								<button class="bullet" aria-label={`${vocabulary.work}を選択`} onclick={() => selectedId = row.item.id}>•</button>
+								<button class="bullet" aria-label={`${vocabulary.work}を選択`} onclick={() => selectOccurrence(row.item.id)}>•</button>
 								<textarea rows="1" data-item-id={row.item.id} value={row.item.text}
-									onfocus={() => selectedId = row.item.id}
+									onfocus={() => selectOccurrence(row.item.id)}
 									oninput={(event) => updateLocalText(row.item.id, event.currentTarget)}
 									onkeydown={(event) => handleKeydown(event, row)}></textarea>
 								<button class="delete" title={`この${vocabulary.occurrence}を外す`} onclick={() => remove(row.item.id)}>×</button>
@@ -1163,7 +1270,7 @@
 					<div class="section-title stash-title"><span>Stash / Knots</span><small>{snapshot.knots.length} knot</small></div>
 					<div class="stash-list">
 						{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
-							<button class:selected={selectedId === row.item.id} onclick={() => selectedId = row.item.id}>
+							<button class:selected={selectedId === row.item.id} onclick={() => selectOccurrence(row.item.id)}>
 								<span>∞</span>{row.item.text || `(空の${vocabulary.work})`}
 							</button>
 						{/each}
@@ -1329,7 +1436,7 @@
 			<GlobalLineage
 				projection={globalLineage}
 				{selectedId}
-				onSelect={(id) => (selectedId = id)}
+				onSelect={(id) => selectOccurrence(id)}
 			/>
 		{:else}
 			<section class="tree-panel"><p class="empty">{vocabulary.globalLineage}を読み込んでいます…</p></section>
@@ -1359,7 +1466,7 @@
 								<button class:active={placement.id === selectedItem.id}
 									onclick={() => {
 										viewMode = "outline";
-										selectedId = placement.id;
+										selectOccurrence(placement.id);
 										requestFocus(placement.id);
 									}}>
 									<strong>{titleFor(placement)}</strong>
