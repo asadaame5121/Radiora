@@ -23,6 +23,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"breadcrumb",
 		"browsingHistory",
 		"pane",
+		"query",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -47,5 +48,6 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		breadcrumb: "祖先",
 		browsingHistory: "閲覧履歴",
 		pane: "ペイン",
+		query: "Query",
 	});
 });

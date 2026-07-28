@@ -18,7 +18,8 @@ export type UiEntityCode =
 	| "hoist"
 	| "breadcrumb"
 	| "browsingHistory"
-	| "pane";
+	| "pane"
+	| "query";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -43,4 +44,5 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	breadcrumb: "祖先",
 	browsingHistory: "閲覧履歴",
 	pane: "ペイン",
+	query: "Query",
 });
