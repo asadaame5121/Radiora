@@ -1,4 +1,5 @@
 import type {
+	Bookmark,
 	CreateItemInput,
 	CreateLinkInput,
 	CreateOccurrenceInput,
@@ -10,6 +11,9 @@ import type {
 	OutlineSnapshot,
 	PurgeManifest,
 	RecoverySnapshot,
+	ResolvedBookmark,
+	ResolvedResumePosition,
+	ResumePosition,
 	Revision,
 	RuleQueryResult,
 	SavedRuleQuery,
@@ -30,6 +34,13 @@ export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	listOutline(): Promise<OutlineSnapshot>;
+	listBookmarks(): Promise<Bookmark[]>;
+	createBookmark(occurrenceId: string): Promise<Bookmark>;
+	deleteBookmark(id: string): Promise<void>;
+	resolveBookmark(id: string): Promise<ResolvedBookmark>;
+	saveResumePosition(occurrenceId: string, caretOffset: number): Promise<ResumePosition>;
+	resolveResumePosition(): Promise<ResolvedResumePosition | null>;
+	clearResumePosition(): Promise<void>;
 	listRevisions(workId: string): Promise<Revision[]>;
 	listRecoverySnapshots(workId: string, branchId: string): Promise<RecoverySnapshot[]>;
 	previewRecoverySnapshot(

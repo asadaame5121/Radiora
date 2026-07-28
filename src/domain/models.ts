@@ -82,6 +82,42 @@ export interface Occurrence {
 	contextualHeading?: string;
 }
 
+export interface Bookmark {
+	id: string;
+	workId: string;
+	occurrenceId: string;
+	createdAt: string;
+}
+
+export interface ResumePosition {
+	workId: string;
+	occurrenceId: string;
+	caretOffset: number;
+	updatedAt: string;
+}
+
+export type NavigationTarget =
+	| {
+		kind: "occurrence";
+		workId: string;
+		occurrenceId: string;
+		ancestorOccurrenceIds: string[];
+		fellBack: boolean;
+	}
+	| { kind: "work"; workId: string; fellBack: true };
+
+export interface ResolvedBookmark {
+	bookmark: Bookmark;
+	target: NavigationTarget;
+}
+
+export interface ResolvedResumePosition {
+	position: ResumePosition;
+	target: NavigationTarget;
+	/** Safe caret for the currently projected text; the persisted historical offset is unchanged. */
+	resolvedCaretOffset: number;
+}
+
 export type LinkEndpoint =
 	| { scope: "work"; workId: string }
 	| { scope: "revision"; workId: string; revisionId: string };

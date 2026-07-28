@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { JsonGraphStore, migrateBackupV0 } from "./json_store.ts";
 
-Deno.test("new saves use the version 2 backup envelope and reload graph data", async () => {
+Deno.test("new saves use the version 3 backup envelope and reload graph data", async () => {
 	const directory = await Deno.makeTempDir();
 	const path = `${directory}/graph.json`;
 	const timestamp = "2026-01-01T00:00:00.000Z";
@@ -41,10 +41,10 @@ Deno.test("new saves use the version 2 backup envelope and reload graph data", a
 
 		const backup = JSON.parse(await Deno.readTextFile(path));
 		assertEquals(backup.format, "radiora-backup");
-		assertEquals(backup.schemaVersion, 2);
+		assertEquals(backup.schemaVersion, 3);
 		assertEquals(typeof backup.exportedAt, "string");
 		assertEquals(typeof backup.appVersion, "string");
-		assertEquals(backup.source, { storageSchemaVersion: 2 });
+		assertEquals(backup.source, { storageSchemaVersion: 3 });
 		assertEquals(backup.items, undefined);
 		assertEquals(backup.data.works[0].id, "one");
 		assertEquals(backup.data.workingCopies[0].text, "persistent");
@@ -70,10 +70,10 @@ Deno.test("rejects a future backup version without overwriting it", async () => 
 	const futureBackup = JSON.stringify(
 		{
 			format: "radiora-backup",
-			schemaVersion: 3,
+			schemaVersion: 4,
 			exportedAt: "2026-01-01T00:00:00.000Z",
 			appVersion: "9.9.9",
-			source: { storageSchemaVersion: 3 },
+			source: { storageSchemaVersion: 4 },
 			data: { future: "must remain untouched" },
 		},
 		null,
@@ -86,7 +86,7 @@ Deno.test("rejects a future backup version without overwriting it", async () => 
 		await assertRejects(
 			() => store.initialize(),
 			Error,
-			"Unsupported backup schema version: 3",
+			"Unsupported backup schema version: 4",
 		);
 		assertEquals(await Deno.readTextFile(path), futureBackup);
 		await assertRejects(
@@ -172,7 +172,7 @@ Deno.test("persists retracted semantic links as history", async () => {
 	}
 });
 
-Deno.test("version 1 backup migrates losslessly to version 2 and reloads", async () => {
+Deno.test("version 1 backup migrates losslessly to version 3 and reloads", async () => {
 	const directory = await Deno.makeTempDir();
 	const path = `${directory}/backup-v1.json`;
 	const timestamp = "2026-01-01T00:00:00.000Z";
@@ -227,11 +227,13 @@ Deno.test("version 1 backup migrates losslessly to version 2 and reloads", async
 		assertEquals((await migrated.listItems())[0].text, "v1本文");
 		assertEquals(await Deno.readTextFile(`${path}.v1.bak`), versionOneInput);
 		const envelope = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(envelope.schemaVersion, 2);
+		assertEquals(envelope.schemaVersion, 3);
 		assertEquals(envelope.data.works, data.works);
 		assertEquals(envelope.data.workingCopies, data.workingCopies);
 		assertEquals(envelope.data.revisions, []);
 		assertEquals(envelope.data.recoverySnapshots, []);
+		assertEquals(envelope.data.bookmarks, []);
+		assertEquals(envelope.data.resumePosition, null);
 
 		const reloaded = new JsonGraphStore(path);
 		await reloaded.initialize();
@@ -267,7 +269,7 @@ Deno.test("loads the complete version 0 JSON fixture without data loss", async (
 		assertEquals(await store.getEmergenceFeedback("suggestion-1"), "pin");
 		assertEquals((await store.listSavedRuleQueries())[0].name, "LIKEリンク");
 		const migrated = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(migrated.schemaVersion, 2);
+		assertEquals(migrated.schemaVersion, 3);
 		assertEquals(migrated.data.works.length, 5);
 		assertEquals(migrated.data.occurrences[1].parentOccurrenceId, items[0].id);
 		assertEquals(
@@ -363,6 +365,108 @@ Deno.test("version 2 reload preserves trash state and content-free purge manifes
 		assertEquals(reloaded, manifest);
 		assertEquals((await second.listWorks(true)).length, 0);
 		assertEquals(JSON.stringify(reloaded).includes("manifestに残してはいけない"), false);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("version 3 reload preserves bookmarks and the single resume position independently", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	const timestamp = "2026-07-29T00:00:00.000Z";
+	try {
+		const first = new JsonGraphStore(path);
+		await first.initialize();
+		await first.createWorkBundle(
+			{ id: "work", createdAt: timestamp, updatedAt: timestamp },
+			{
+				id: "main",
+				workId: "work",
+				name: "main",
+				headRevisionId: null,
+				createdAt: timestamp,
+			},
+			{
+				branchId: "main",
+				workId: "work",
+				text: "persisted",
+				updatedAt: timestamp,
+			},
+			{
+				id: "occurrence",
+				workId: "work",
+				parentOccurrenceId: null,
+				orderKey: 1,
+				collapsed: true,
+				revisionSelector: { mode: "branch", branchId: "main" },
+			},
+		);
+		await first.createBookmark({
+			id: "bookmark",
+			workId: "work",
+			occurrenceId: "occurrence",
+			createdAt: timestamp,
+		});
+		await first.setResumePosition({
+			workId: "work",
+			occurrenceId: "occurrence",
+			caretOffset: 4,
+			updatedAt: timestamp,
+		});
+
+		const second = new JsonGraphStore(path);
+		await second.initialize();
+		assertEquals((await second.listBookmarks())[0]?.id, "bookmark");
+		assertEquals((await second.getResumePosition())?.caretOffset, 4);
+		const parsed = JSON.parse(await Deno.readTextFile(path));
+		assertEquals(parsed.schemaVersion, 3);
+		assertEquals(parsed.source.storageSchemaVersion, 3);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("version 2 migrates to version 3 and preserves an exact v2 backup", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	const timestamp = "2026-07-29T00:00:00.000Z";
+	try {
+		const seed = new JsonGraphStore(path);
+		await seed.initialize();
+		await seed.createWorkBundle(
+			{ id: "work", createdAt: timestamp, updatedAt: timestamp },
+			{
+				id: "main",
+				workId: "work",
+				name: "main",
+				headRevisionId: null,
+				createdAt: timestamp,
+			},
+			{ branchId: "main", workId: "work", text: "v2", updatedAt: timestamp },
+			{
+				id: "occurrence",
+				workId: "work",
+				parentOccurrenceId: null,
+				orderKey: 1,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId: "main" },
+			},
+		);
+		const versionTwo = JSON.parse(await Deno.readTextFile(path));
+		versionTwo.schemaVersion = 2;
+		versionTwo.source.storageSchemaVersion = 2;
+		delete versionTwo.data.bookmarks;
+		delete versionTwo.data.resumePosition;
+		const versionTwoInput = JSON.stringify(versionTwo, null, 2);
+		await Deno.writeTextFile(path, versionTwoInput);
+
+		const migrated = new JsonGraphStore(path);
+		await migrated.initialize();
+		assertEquals((await migrated.listItems())[0]?.text, "v2");
+		assertEquals(await migrated.listBookmarks(), []);
+		assertEquals(await migrated.getResumePosition(), null);
+		assertEquals(await Deno.readTextFile(`${path}.v2.bak`), versionTwoInput);
+		assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 3);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}

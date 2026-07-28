@@ -5,12 +5,14 @@
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
 	import type {
+		Bookmark,
 		EmergenceAction,
 		EmergenceSuggestion,
 		LinkType,
 		OutlineItem,
 		OutlineLink,
 		OutlineSnapshot,
+		NavigationTarget,
 		RuleQueryResult,
 		SavedRuleQuery,
 		SearchAlias,
@@ -33,7 +35,9 @@
 		WorkingCopyAutosaveCoordinator,
 		type WorkingCopySaveStatus,
 	} from "../services/working_copy_autosave";
+	import { ResumePositionAutosaveCoordinator } from "../services/resume_position_autosave";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
+	import { navigationUiState } from "./navigation_state";
 
 	const api = new Proxy({}, {
 		get: (_target, property) => async (...args: unknown[]) => {
@@ -62,6 +66,8 @@
 	let error = $state("");
 	let viewMode = $state<ViewMode>("outline");
 	let selectedId = $state<string | null>(null);
+	let bookmarks = $state<Bookmark[]>([]);
+	let transientExpandedIds = $state<string[]>([]);
 	let searchQuery = $state("");
 	let suggestions = $state<Suggestion[]>([]);
 	let searchResults = $state<SearchResult[]>([]);
@@ -108,6 +114,12 @@
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
 		onStatusChange: (statuses) => workingCopySaveStatuses = statuses,
+	});
+	const resumeAutosave = new ResumePositionAutosaveCoordinator({
+		save: async (occurrenceId, caretOffset) => {
+			await api.saveResumePosition(occurrenceId, caretOffset);
+		},
+		onError: (cause) => error = errorMessage(cause),
 	});
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
@@ -181,6 +193,9 @@
 				void autosave.flush().catch(() => {
 					// The retained draft and failed status remain visible after returning.
 				});
+				void resumeAutosave.flush().catch(() => {
+					// The latest position remains queued for a later flush.
+				});
 			}
 		};
 		window.addEventListener("beforeunload", warnAboutUnsavedChanges);
@@ -212,6 +227,9 @@
 			void autosave.flush().catch(() => {
 				// beforeunload already warns while an unsaved draft exists.
 			});
+			void resumeAutosave.flush().catch(() => {
+				// Resume persistence is best-effort during teardown.
+			});
 		};
 	});
 
@@ -224,9 +242,10 @@
 	async function load(focusId?: string): Promise<void> {
 		try {
 			error = "";
-			const [next, nextGlobalLineage] = await Promise.all([
+			const [next, nextGlobalLineage, nextBookmarks] = await Promise.all([
 				api.listOutline(),
 				api.listGlobalLineage(),
+				api.listBookmarks(),
 			]);
 			const drafts = new Map(autosave.drafts().map((draft) => [draft.workId, draft.text]));
 			next.items = next.items.map((item) => {
@@ -235,6 +254,7 @@
 			});
 			snapshot = next;
 			globalLineage = nextGlobalLineage;
+			bookmarks = nextBookmarks;
 			if (focusId) requestFocus(focusId);
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -259,7 +279,9 @@
 		const visit = (item: OutlineItem, depth: number) => {
 			const descendants = item.referenceStub ? [] : children.get(item.id) ?? [];
 			rows.push({ item, depth, hasChildren: descendants.length > 0, stash: false });
-			if (!item.collapsed) descendants.forEach((child) => visit(child, depth + 1));
+			if (!item.collapsed || transientExpandedIds.includes(item.id)) {
+				descendants.forEach((child) => visit(child, depth + 1));
+			}
 		};
 		(children.get(null) ?? []).forEach((root) => visit(root, 0));
 		data.items.filter((item) => stash.has(item.id)).sort((a, b) => a.orderKey - b.orderKey)
@@ -327,13 +349,51 @@
 		}
 	}
 
-	function updateLocalText(id: string, text: string): void {
+	function updateLocalText(id: string, textarea: HTMLTextAreaElement): void {
+		const text = textarea.value;
 		const item = snapshot.items.find((candidate) => candidate.id === id);
 		if (!item) return;
 		for (const placement of snapshot.items) {
 			if (placement.workId === item.workId) placement.text = text;
 		}
 		autosave.queue(item.workId, id, text);
+		resumeAutosave.queue(id, textarea.selectionStart);
+	}
+
+	async function addBookmark(): Promise<void> {
+		if (!selectedId) return;
+		await api.createBookmark(selectedId);
+		bookmarks = await api.listBookmarks();
+	}
+
+	async function removeBookmark(id: string): Promise<void> {
+		await api.deleteBookmark(id);
+		bookmarks = await api.listBookmarks();
+	}
+
+	async function openBookmark(id: string): Promise<void> {
+		const resolved = await api.resolveBookmark(id);
+		await openNavigationTarget(resolved.target);
+	}
+
+	async function resumeEditing(): Promise<void> {
+		const resolved = await api.resolveResumePosition();
+		if (!resolved) return;
+		await openNavigationTarget(resolved.target, resolved.resolvedCaretOffset);
+	}
+
+	async function openNavigationTarget(target: NavigationTarget, caretOffset?: number): Promise<void> {
+		viewMode = "outline";
+		const state = navigationUiState(target, caretOffset);
+		if (!state.selectedOccurrenceId) {
+			selectedId = null;
+			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
+			return;
+		}
+		transientExpandedIds = state.temporaryExpandedOccurrenceIds;
+		selectedId = state.selectedOccurrenceId;
+		await load();
+		requestFocus(state.selectedOccurrenceId, state.caretOffset);
 	}
 
 	async function loadRevisions(workId: string): Promise<void> {
@@ -619,11 +679,12 @@
 		await load();
 	}
 
-	function requestFocus(id: string): void {
+	function requestFocus(id: string, caretOffset?: number): void {
 		setTimeout(() => {
 			const element = document.querySelector<HTMLTextAreaElement>(`[data-item-id="${id}"]`);
 			element?.focus();
-			element?.setSelectionRange(element.value.length, element.value.length);
+			const caret = Math.min(caretOffset ?? element?.value.length ?? 0, element?.value.length ?? 0);
+			element?.setSelectionRange(caret, caret);
 			element?.scrollIntoView({ block: "center" });
 		}, 0);
 	}
@@ -759,6 +820,7 @@
 			} else {
 				await api.purgeWork(confirmation.workId);
 				trashEntries = await api.listTrash();
+				bookmarks = await api.listBookmarks();
 			}
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -815,6 +877,13 @@
 			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
 				onclick={openTrash}>ゴミ箱</button>
 		</nav>
+		<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
+		{#each bookmarks as bookmark}
+			<span class="bookmark-control">
+				<button onclick={() => openBookmark(bookmark.id)}>{vocabulary.bookmark} {bookmark.id.slice(0, 4)}</button>
+				<button aria-label={`${vocabulary.bookmark}を削除`} onclick={() => removeBookmark(bookmark.id)}>×</button>
+			</span>
+		{/each}
 		<div class="search-wrap" class:disabled={startup.phase !== "ready"}>
 			<input aria-label="思索を検索" placeholder="思索を検索…" bind:value={searchQuery}
 				oninput={queueSearch} onkeydown={handleSearchKeydown} autocomplete="off"
@@ -882,7 +951,11 @@
 	<main>
 		{#if viewMode === "outline"}
 			<section class="outline-panel">
-				<div class="section-title"><span>Outline</span><button onclick={createRoot}>＋ Root</button></div>
+				<div class="section-title">
+					<span>Outline</span>
+					<button onclick={addBookmark} disabled={!selectedId}>☆ {vocabulary.bookmark}</button>
+					<button onclick={createRoot}>＋ Root</button>
+				</div>
 				{#if loading}
 					<p class="empty">Loading…</p>
 				{:else if snapshot.items.length === 0}
@@ -899,7 +972,7 @@
 								<button class="bullet" aria-label={`${vocabulary.work}を選択`} onclick={() => selectedId = row.item.id}>•</button>
 								<textarea rows="1" data-item-id={row.item.id} value={row.item.text}
 									onfocus={() => selectedId = row.item.id}
-									oninput={(event) => updateLocalText(row.item.id, event.currentTarget.value)}
+									oninput={(event) => updateLocalText(row.item.id, event.currentTarget)}
 									onkeydown={(event) => handleKeydown(event, row)}></textarea>
 								<button class="delete" title={`この${vocabulary.occurrence}を外す`} onclick={() => remove(row.item.id)}>×</button>
 							</div>

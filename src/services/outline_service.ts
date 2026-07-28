@@ -1,4 +1,5 @@
 import type {
+	Bookmark,
 	CreateItemInput,
 	CreateLinkInput,
 	CreateOccurrenceInput,
@@ -12,6 +13,9 @@ import type {
 	OutlineSnapshot,
 	PurgeManifest,
 	RecoverySnapshot,
+	ResolvedBookmark,
+	ResolvedResumePosition,
+	ResumePosition,
 	Revision,
 	RuleQueryResult,
 	SavedRuleQuery,
@@ -39,6 +43,7 @@ import {
 	RecoverySnapshotService,
 } from "./recovery_snapshot_service.ts";
 import { TagService } from "./tag_service.ts";
+import { NavigationService } from "./navigation_service.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -53,6 +58,34 @@ export class OutlineService {
 	private readonly suggestionCache = new Map<string, EmergenceSuggestion>();
 
 	constructor(private readonly store: GraphStore) {}
+
+	listBookmarks(): Promise<Bookmark[]> {
+		return new NavigationService(this.store).listBookmarks();
+	}
+
+	createBookmark(occurrenceId: string): Promise<Bookmark> {
+		return new NavigationService(this.store).createBookmark(occurrenceId);
+	}
+
+	deleteBookmark(id: string): Promise<void> {
+		return new NavigationService(this.store).deleteBookmark(id);
+	}
+
+	resolveBookmark(id: string): Promise<ResolvedBookmark> {
+		return new NavigationService(this.store).resolveBookmark(id);
+	}
+
+	saveResumePosition(occurrenceId: string, caretOffset: number): Promise<ResumePosition> {
+		return new NavigationService(this.store).saveResumePosition(occurrenceId, caretOffset);
+	}
+
+	resolveResumePosition(): Promise<ResolvedResumePosition | null> {
+		return new NavigationService(this.store).resolveResumePosition();
+	}
+
+	clearResumePosition(): Promise<void> {
+		return new NavigationService(this.store).clearResumePosition();
+	}
 
 	async listOutline(): Promise<OutlineSnapshot> {
 		const items = await this.store.listItems();

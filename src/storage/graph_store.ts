@@ -1,4 +1,5 @@
 import type {
+	Bookmark,
 	Branch,
 	Knot,
 	LexicalHit,
@@ -8,6 +9,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	ResumePosition,
 	Revision,
 	SavedRuleQuery,
 	SearchAlias,
@@ -26,6 +28,8 @@ export interface GraphStore {
 	listWorkingCopies(workId?: string): Promise<WorkingCopy[]>;
 	listRevisions(workId?: string): Promise<Revision[]>;
 	listRecoverySnapshots(workId?: string, branchId?: string): Promise<RecoverySnapshot[]>;
+	listBookmarks(): Promise<Bookmark[]>;
+	getResumePosition(): Promise<ResumePosition | null>;
 	createWorkBundle(
 		work: Work,
 		branch: Branch,
@@ -33,6 +37,10 @@ export interface GraphStore {
 		occurrence: Occurrence,
 	): Promise<void>;
 	createOccurrence(occurrence: Occurrence): Promise<void>;
+	createBookmark(bookmark: Bookmark): Promise<void>;
+	deleteBookmark(id: string): Promise<void>;
+	setResumePosition(position: ResumePosition): Promise<void>;
+	clearResumePosition(): Promise<void>;
 	createBranch(branch: Branch, workingCopy: WorkingCopy): Promise<void>;
 	updateBranch(branch: Branch): Promise<void>;
 	updateBranchWorkingCopy(branchId: string, text: string, updatedAt: string): Promise<void>;

@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects, assertStringIncludes } from "jsr:@std/assert@1";
 import { revisionSnapshotMigration } from "./0002_revision_snapshot.ts";
+import { bookmarkResumeMigration } from "./0003_bookmark_resume.ts";
 import {
 	type MigrationContext,
 	type MigrationJournalEntry,
@@ -169,4 +170,37 @@ Deno.test("version 1 storage expands to revision and snapshot schema version 2",
 	assertStringIncludes(statements[0], "DEFINE TABLE IF NOT EXISTS recovery_snapshot");
 	assertStringIncludes(statements[0], "source_revision");
 	assertStringIncludes(statements[1], "INFO FOR TABLE recovery_snapshot");
+});
+
+Deno.test("version 2 storage expands to bookmark and resume schema version 3", async () => {
+	const state = new MemoryMigrationState();
+	state.metadata = {
+		id: "radiora",
+		version: 2,
+		updatedAt: "2026-07-28T00:00:00.000Z",
+		lastMigrationId: "0002_revision_snapshot",
+		appVersion: "0.1.0",
+	};
+	const statements: string[] = [];
+
+	assertEquals(
+		await runStorageMigrations({
+			state,
+			context: {
+				execute: (statement) => {
+					statements.push(statement);
+					return Promise.resolve(undefined);
+				},
+			},
+			migrations: [bookmarkResumeMigration],
+			appVersion: "0.1.0",
+			targetVersion: 3,
+		}),
+		3,
+	);
+	assertEquals(state.metadata.version, 3);
+	assertEquals(state.metadata.lastMigrationId, "0003_bookmark_resume");
+	assertStringIncludes(statements[0], "DEFINE TABLE IF NOT EXISTS bookmark");
+	assertStringIncludes(statements[0], "DEFINE TABLE IF NOT EXISTS resume_position");
+	assertStringIncludes(statements[1], "INFO FOR TABLE bookmark");
 });

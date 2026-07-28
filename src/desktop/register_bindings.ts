@@ -18,6 +18,14 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		getStartupStatus: async () => context.getStartupStatus(),
 		retryStartup: () => context.retryStartup(),
 		listOutline: () => service().listOutline(),
+		listBookmarks: () => service().listBookmarks(),
+		createBookmark: (occurrenceId) => service().createBookmark(occurrenceId),
+		deleteBookmark: (id) => service().deleteBookmark(id),
+		resolveBookmark: (id) => service().resolveBookmark(id),
+		saveResumePosition: (occurrenceId, caretOffset) =>
+			service().saveResumePosition(occurrenceId, caretOffset),
+		resolveResumePosition: () => service().resolveResumePosition(),
+		clearResumePosition: () => service().clearResumePosition(),
 		listRevisions: (workId) => service().listRevisions(workId),
 		listRecoverySnapshots: (workId, branchId) => service().listRecoverySnapshots(workId, branchId),
 		previewRecoverySnapshot: (snapshotId, workId, branchId) =>
