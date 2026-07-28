@@ -15,6 +15,9 @@
 		SavedRuleQuery,
 		SearchAlias,
 		SearchResult,
+		ScopedTagSet,
+		TagAlias,
+		TagSummary,
 		Revision,
 		RecoverySnapshot,
 		Suggestion,
@@ -47,7 +50,7 @@
 
 	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
 	type ViewMode = "outline" | "globalLineage" | "workLineage" | "comparison" | "trash";
-	type AsideMode = "links" | "discover" | "query";
+	type AsideMode = "links" | "discover" | "tags" | "query";
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
 		| { action: "purge"; workId: string; occurrenceCount: number; linkCount: number };
@@ -69,6 +72,17 @@
 	let aliases = $state<SearchAlias[]>([]);
 	let aliasCanonical = $state("");
 	let aliasVariants = $state("");
+	let tags = $state<TagSummary[]>([]);
+	let tagAliases = $state<TagAlias[]>([]);
+	let tagAll = $state("");
+	let tagNone = $state("");
+	let tagHistoryRevisionIds = $state("");
+	let tagMatches = $state<ScopedTagSet[]>([]);
+	let tagRenameFrom = $state("");
+	let tagRenameTo = $state("");
+	let tagMergeSources = $state("");
+	let tagMergeTarget = $state("");
+	let tagError = $state("");
 	let ruleSource = $state('?- link("LIKE", From, To).');
 	let ruleResult = $state<RuleQueryResult | null>(null);
 	let ruleName = $state("");
@@ -178,6 +192,8 @@
 					if (startup.phase === "ready") {
 						await load();
 						aliases = await api.listSearchAliases();
+						tags = await api.listTags();
+						tagAliases = await api.listTagAliases();
 						savedRuleQueries = await api.listSavedRuleQueries();
 						return;
 					}
@@ -618,6 +634,51 @@
 		return item ? titleFor(item) : `(空の${vocabulary.work})`;
 	}
 
+	function splitTagInput(value: string): string[] {
+		return value.split(/[,、\s]+/).map((tag) => tag.trim()).filter(Boolean);
+	}
+
+	async function searchByTags(): Promise<void> {
+		tagError = "";
+		try {
+			tagMatches = await api.searchTags({
+				all: splitTagInput(tagAll),
+				none: splitTagInput(tagNone),
+				historyRevisionIds: splitTagInput(tagHistoryRevisionIds),
+			});
+		} catch (cause) {
+			tagError = errorMessage(cause);
+		}
+	}
+
+	async function renameTag(): Promise<void> {
+		tagError = "";
+		try {
+			await api.renameTag(tagRenameFrom, tagRenameTo);
+			tagRenameFrom = "";
+			tagRenameTo = "";
+			tags = await api.listTags();
+			tagAliases = await api.listTagAliases();
+			if (tagAll) await searchByTags();
+		} catch (cause) {
+			tagError = errorMessage(cause);
+		}
+	}
+
+	async function mergeTags(): Promise<void> {
+		tagError = "";
+		try {
+			await api.mergeTags(splitTagInput(tagMergeSources), tagMergeTarget);
+			tagMergeSources = "";
+			tagMergeTarget = "";
+			tags = await api.listTags();
+			tagAliases = await api.listTagAliases();
+			if (tagAll) await searchByTags();
+		} catch (cause) {
+			tagError = errorMessage(cause);
+		}
+	}
+
 	async function duplicateSelectedOccurrence(): Promise<void> {
 		if (!selectedItem) return;
 		try {
@@ -928,6 +989,7 @@
 				<nav class="aside-tabs" aria-label="詳細表示">
 					<button class:active={asideMode === "links"} onclick={() => (asideMode = "links")}>{vocabulary.semanticLink}</button>
 					<button class:active={asideMode === "discover"} onclick={() => (asideMode = "discover")}>発見</button>
+					<button class:active={asideMode === "tags"} onclick={() => (asideMode = "tags")}>{vocabulary.tag}</button>
 					<button class:active={asideMode === "query"} onclick={() => (asideMode = "query")}>Query</button>
 				</nav>
 				<p class="eyebrow">SELECTED THOUGHT</p>
@@ -1003,6 +1065,43 @@
 						{:else}
 							{#if !emergenceLoading}<p class="empty">新しい関係候補はありません</p>{/if}
 						{/each}
+					</div>
+				{:else if asideMode === "tags"}
+					<div class="query-panel">
+						<datalist id="tag-candidates">
+							{#each tags as tag}<option value={`#${tag.name}`}>{tag.count}件</option>{/each}
+						</datalist>
+						<h3>{vocabulary.tag}検索</h3>
+						<label>すべて含む（AND）
+							<input bind:value={tagAll} list="tag-candidates" placeholder="#tag1, #tag2" />
+						</label>
+						<label>除外
+							<input bind:value={tagNone} list="tag-candidates" placeholder="#除外tag" />
+						</label>
+						<label>履歴も検索する{vocabulary.revision} ID（任意）
+							<input bind:value={tagHistoryRevisionIds} placeholder="IDをカンマ区切り" />
+						</label>
+						<button onclick={searchByTags}>検索</button>
+						{#if tagError}<p class="query-error">{tagError}</p>{/if}
+						<div class="alias-list">
+							{#each tagMatches as match}
+								<div>
+									<span>{titleForId(match.scope.workId)} · {match.scope.kind === "revision" ? `${vocabulary.revision} ${match.scope.revisionId}` : `${vocabulary.branch} ${match.scope.branchId}`} · {match.tags.map((tag) => `#${tag}`).join(" ")}</span>
+								</div>
+							{/each}
+						</div>
+						<h3>{vocabulary.tag}一覧</h3>
+						<div class="alias-list">{#each tags as tag}<div><span>#{tag.name}</span><small>{tag.count}件</small></div>{/each}</div>
+						<h3>名前変更</h3>
+						<input bind:value={tagRenameFrom} list="tag-candidates" placeholder="変更前" />
+						<input bind:value={tagRenameTo} placeholder="変更後" />
+						<button onclick={renameTag}>名前変更</button>
+						<h3>統合</h3>
+						<input bind:value={tagMergeSources} list="tag-candidates" placeholder="統合元をカンマ区切り" />
+						<input bind:value={tagMergeTarget} placeholder="統合先" />
+						<button onclick={mergeTags}>統合</button>
+						<div class="alias-list">{#each tagAliases as alias}<div><span>#{alias.variants.join(", #")} → #{alias.canonicalName}</span></div>{/each}</div>
+						<p class="hint">名前変更・統合は表示と検索の正準名だけを変更し、{vocabulary.workingCopy}と過去の{vocabulary.revision}本文は書き換えません。</p>
 					</div>
 				{:else}
 					<div class="query-panel">
