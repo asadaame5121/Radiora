@@ -5,6 +5,7 @@ import type {
 	EmergenceAction,
 	EmergenceSuggestion,
 	Knot,
+	LinkEndpoint,
 	LinkType,
 	MoveItemInput,
 	OutlineItem,
@@ -18,13 +19,19 @@ import type {
 	Suggestion,
 	TrashEntry,
 } from "../domain/models.ts";
-import { LINK_TYPES } from "../domain/models.ts";
+import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
 import type { GraphStore } from "../storage/graph_store.ts";
 import { normalizeSearchText, titleOf } from "./search_text.ts";
 import { runRuleQuery } from "./rule_query.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
+
+function sameEndpoint(left: LinkEndpoint, right: LinkEndpoint): boolean {
+	if (left.scope !== right.scope || left.workId !== right.workId) return false;
+	return left.scope === "work" ||
+		(right.scope === "revision" && left.revisionId === right.revisionId);
+}
 
 export class OutlineService {
 	private readonly suggestionCache = new Map<string, EmergenceSuggestion>();
@@ -36,7 +43,12 @@ export class OutlineService {
 		const knots = this.detectKnots(items);
 		await this.store.replaceKnots(knots);
 		const stashItemIds = [...new Set(knots.flatMap((knot) => knot.cycleIds))];
-		return { items, links: await this.store.listLinks(), knots, stashItemIds };
+		return {
+			items: this.markRecursivePlacements(items),
+			links: await this.listActiveLinks(),
+			knots,
+			stashItemIds,
+		};
 	}
 
 	async createItem(input: CreateItemInput): Promise<OutlineItem> {
@@ -205,12 +217,16 @@ export class OutlineService {
 		let toId = to.workId;
 		let fromEndpoint = from;
 		let toEndpoint = to;
-		if (
-			(input.type === "RELATED" || input.type === "LIKE" || input.type === "VS") &&
-			fromId.localeCompare(toId) > 0
-		) {
+		if (isSymmetricLinkType(input.type) && fromId.localeCompare(toId) > 0) {
 			[fromId, toId] = [toId, fromId];
 			[fromEndpoint, toEndpoint] = [toEndpoint, fromEndpoint];
+		}
+		if (isSymmetricLinkType(input.type)) {
+			const duplicate = (await this.listActiveLinks()).some((link) =>
+				link.type === input.type && sameEndpoint(link.from, fromEndpoint) &&
+				sameEndpoint(link.to, toEndpoint)
+			);
+			if (duplicate) return;
 		}
 		await this.store.createLink({
 			id: crypto.randomUUID(),
@@ -228,8 +244,11 @@ export class OutlineService {
 
 	async deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
 		const items = await this.store.listItems();
-		const fromWorkId = items.find((item) => item.id === fromId)?.workId ?? fromId;
-		const toWorkId = items.find((item) => item.id === toId)?.workId ?? toId;
+		let fromWorkId = items.find((item) => item.id === fromId)?.workId ?? fromId;
+		let toWorkId = items.find((item) => item.id === toId)?.workId ?? toId;
+		if (isSymmetricLinkType(type) && fromWorkId.localeCompare(toWorkId) > 0) {
+			[fromWorkId, toWorkId] = [toWorkId, fromWorkId];
+		}
 		return this.store.deleteLink(fromWorkId, toWorkId, type);
 	}
 
@@ -248,7 +267,7 @@ export class OutlineService {
 		if (!query) return [];
 		const limit = Math.min(Math.max(input.limit ?? 20, 1), MAX_SEARCH_LIMIT);
 		const items = await this.store.listItems();
-		const links = await this.store.listLinks();
+		const links = await this.listActiveLinks();
 		const byId = new Map(items.map((item) => [item.id, item]));
 		const aliases = await this.store.listAliases();
 		const expansions = this.expandQuery(query, aliases, items, links);
@@ -381,7 +400,7 @@ export class OutlineService {
 		limit = 10,
 	): Promise<EmergenceSuggestion[]> {
 		const items = await this.store.listItems();
-		const links = await this.store.listLinks();
+		const links = await this.listActiveLinks();
 		const context = items.find((item) => item.id === contextItemId);
 		if (!context) return [];
 		const byId = new Map(items.map((item) => [item.id, item]));
@@ -496,7 +515,7 @@ export class OutlineService {
 				this.requireItem(suggestion.contextItemId),
 				this.requireItem(suggestion.targetItemId),
 			]);
-			const links = await this.store.listLinks();
+			const links = await this.listActiveLinks();
 			const exists = links.some((link) =>
 				link.type === suggestion.proposedLinkType &&
 				((link.fromId === context.workId && link.toId === target.workId) ||
@@ -516,7 +535,7 @@ export class OutlineService {
 	async runRuleQuery(source: string, limit = 500): Promise<RuleQueryResult> {
 		const [items, links] = await Promise.all([
 			this.store.listItems(),
-			this.store.listLinks(),
+			this.listActiveLinks(),
 		]);
 		const representativeByWork = new Map<string, string>();
 		for (const item of items) {
@@ -609,6 +628,27 @@ export class OutlineService {
 			result.set(link.toId, to);
 		}
 		return result;
+	}
+
+	private async listActiveLinks(): Promise<Awaited<ReturnType<GraphStore["listLinks"]>>> {
+		return (await this.store.listLinks()).filter((link) => link.status !== "retracted");
+	}
+
+	private markRecursivePlacements(items: OutlineItem[]): OutlineItem[] {
+		const byId = new Map(items.map((item) => [item.id, item]));
+		return items.map((item) => {
+			const visited = new Set<string>();
+			let parentId = item.parentId;
+			while (parentId) {
+				if (visited.has(parentId)) break;
+				visited.add(parentId);
+				const parent = byId.get(parentId);
+				if (!parent) break;
+				if (parent.workId === item.workId) return { ...item, referenceStub: true };
+				parentId = parent.parentId;
+			}
+			return item;
+		});
 	}
 
 	private rootId(item: OutlineItem, byId: Map<string, OutlineItem>): string {

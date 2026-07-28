@@ -146,7 +146,7 @@
 		for (const bucket of children.values()) bucket.sort((a, b) => a.orderKey - b.orderKey);
 		const rows: VisibleRow[] = [];
 		const visit = (item: OutlineItem, depth: number) => {
-			const descendants = children.get(item.id) ?? [];
+			const descendants = item.referenceStub ? [] : children.get(item.id) ?? [];
 			rows.push({ item, depth, hasChildren: descendants.length > 0, stash: false });
 			if (!item.collapsed) descendants.forEach((child) => visit(child, depth + 1));
 		};
@@ -578,6 +578,7 @@
 								draggable="true" ondragstart={() => draggedId = row.item.id}
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
 								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
+								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
 								<button class="bullet" aria-label={`${vocabulary.work}を選択`} onclick={() => selectedId = row.item.id}>•</button>
 								<textarea rows="1" data-item-id={row.item.id} value={row.item.text}
 									onfocus={() => selectedId = row.item.id}
