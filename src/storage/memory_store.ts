@@ -124,6 +124,10 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	purgeWork(workId: string): Promise<PurgeManifest> {
+		const work = this.works.find((candidate) => candidate.id === workId);
+		if (!work?.deletedAt) {
+			return Promise.reject(new Error(`Work must be in trash before it can be purged: ${workId}`));
+		}
 		const branchIds = new Set(
 			this.branches.filter((branch) => branch.workId === workId).map((branch) => branch.id),
 		);
@@ -147,6 +151,12 @@ export class MemoryGraphStore implements GraphStore {
 			copy.workId !== workId && !branchIds.has(copy.branchId)
 		);
 		this.occurrences = this.occurrences.filter((occurrence) => occurrence.workId !== workId);
+		const remainingOccurrenceIds = new Set(this.occurrences.map((occurrence) => occurrence.id));
+		this.occurrences = this.occurrences.map((occurrence) =>
+			occurrence.parentOccurrenceId && !remainingOccurrenceIds.has(occurrence.parentOccurrenceId)
+				? { ...occurrence, parentOccurrenceId: null }
+				: occurrence
+		);
 		this.links = this.links.filter((link) =>
 			link.from.workId !== workId && link.to.workId !== workId
 		);

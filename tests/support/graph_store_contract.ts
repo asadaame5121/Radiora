@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import type { Branch, Occurrence, Work, WorkingCopy } from "../../src/domain/models.ts";
 import type { GraphStore } from "../../src/storage/graph_store.ts";
 
@@ -9,6 +9,8 @@ const DELETED_AT = "2026-07-28T00:02:00.000Z";
 export async function assertGraphStoreContract(store: GraphStore): Promise<void> {
 	const root = bundle("contract root");
 	const target = bundle("contract target");
+	const dependent = bundle("contract dependent");
+	dependent.occurrence.parentOccurrenceId = root.occurrence.id;
 	const mirror: Occurrence = {
 		id: crypto.randomUUID(),
 		workId: root.work.id,
@@ -21,6 +23,12 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 
 	await store.createWorkBundle(root.work, root.branch, root.copy, root.occurrence);
 	await store.createWorkBundle(target.work, target.branch, target.copy, target.occurrence);
+	await store.createWorkBundle(
+		dependent.work,
+		dependent.branch,
+		dependent.copy,
+		dependent.occurrence,
+	);
 	await store.createOccurrence(mirror);
 	await store.updateWorkingCopy(root.work.id, "contract root updated", UPDATED_AT);
 	await store.updateOccurrence({ ...mirror, collapsed: true, contextualHeading: "mirror updated" });
@@ -85,6 +93,11 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		(await store.suggestItems("contract root", 8)).some((item) => item.workId === root.work.id),
 	);
 	assert((await store.searchLexical("updated", 8)).some((hit) => hit.item.workId === root.work.id));
+	await assertRejects(
+		() => store.purgeWork(root.work.id),
+		Error,
+		"Work must be in trash before it can be purged",
+	);
 
 	await store.trashWork(root.work.id, DELETED_AT);
 	assertEquals((await store.listWorks()).some((work) => work.id === root.work.id), false);
@@ -111,6 +124,7 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		1,
 	);
 
+	await store.trashWork(root.work.id, DELETED_AT);
 	const manifest = await store.purgeWork(root.work.id);
 	assertEquals(manifest.workId, root.work.id);
 	assert(manifest.occurrenceIds.includes(root.occurrence.id));
@@ -119,12 +133,19 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	assertEquals((await store.listLinks()).some((candidate) => candidate.id === linkId), false);
 	assert((await store.listPurgeManifests()).some((candidate) => candidate.id === manifest.id));
 	assert((await store.listWorks()).some((work) => work.id === target.work.id));
+	assertEquals(
+		(await store.listItems()).find((item) => item.id === dependent.occurrence.id)?.parentId,
+		null,
+	);
 
 	await store.deleteAlias(aliasId);
 	await store.deleteSavedRuleQuery(queryId);
 	assertEquals((await store.listAliases()).some((alias) => alias.id === aliasId), false);
 	assertEquals((await store.listSavedRuleQueries()).some((query) => query.id === queryId), false);
+	await store.trashWork(target.work.id, DELETED_AT);
 	await store.purgeWork(target.work.id);
+	await store.trashWork(dependent.work.id, DELETED_AT);
+	await store.purgeWork(dependent.work.id);
 }
 
 function bundle(text: string): {

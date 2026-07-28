@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from "svelte";
+	import { onMount, tick } from "svelte";
 	import PhylogeneticTree from "./PhylogeneticTree.svelte";
 	import type {
 		EmergenceAction,
@@ -35,6 +35,9 @@
 	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
 	type ViewMode = "outline" | "tree" | "trash";
 	type AsideMode = "links" | "discover" | "query";
+	type PendingConfirmation =
+		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
+		| { action: "purge"; workId: string; occurrenceCount: number; linkCount: number };
 
 	const vocabulary = useUiVocabulary();
 	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
@@ -62,6 +65,9 @@
 	let newLinkType = $state<LinkType>("LIKE");
 	let draggedId = $state<string | null>(null);
 	let trashEntries = $state<TrashEntry[]>([]);
+	let pendingConfirmation = $state<PendingConfirmation | null>(null);
+	let confirmationSubmitting = $state(false);
+	let confirmationDialog: HTMLDialogElement;
 	const saveTimers = new Map<string, number>();
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
@@ -453,14 +459,7 @@
 	async function trashSelectedWork(): Promise<void> {
 		if (!selectedItem) return;
 		const count = snapshot.items.filter((item) => item.workId === selectedItem.workId).length;
-		if (
-			!confirm(
-				`この${vocabulary.work}をゴミ箱へ移します。${count}件の${vocabulary.occurrence}と${vocabulary.semanticLink}は保持されます。`,
-			)
-		) return;
-		await api.trashWork(selectedItem.id);
-		selectedId = null;
-		await load();
+		await requestConfirmation({ action: "trash", occurrenceId: selectedItem.id, occurrenceCount: count });
 	}
 
 	async function openTrash(): Promise<void> {
@@ -475,13 +474,54 @@
 	}
 
 	async function purgeTrash(entry: TrashEntry): Promise<void> {
-		if (
-			!confirm(
-				`完全消去します。${vocabulary.occurrence}${entry.occurrenceCount}件、${vocabulary.semanticLink}${entry.linkCount}件と本文を復元できなくなります。`,
-			)
-		) return;
-		await api.purgeWork(entry.work.id);
-		trashEntries = await api.listTrash();
+		await requestConfirmation({
+			action: "purge",
+			workId: entry.work.id,
+			occurrenceCount: entry.occurrenceCount,
+			linkCount: entry.linkCount,
+		});
+	}
+
+	async function requestConfirmation(confirmation: PendingConfirmation): Promise<void> {
+		if (pendingConfirmation) return;
+		pendingConfirmation = confirmation;
+		await tick();
+		if (!confirmationDialog.open) confirmationDialog.showModal();
+	}
+
+	function closeConfirmation(): void {
+		if (!confirmationSubmitting) confirmationDialog.close();
+	}
+
+	function resetConfirmation(): void {
+		if (!confirmationSubmitting) pendingConfirmation = null;
+	}
+
+	function preventCloseWhileSubmitting(event: Event): void {
+		if (confirmationSubmitting) event.preventDefault();
+	}
+
+	async function confirmPendingAction(): Promise<void> {
+		const confirmation = pendingConfirmation;
+		if (!confirmation || confirmationSubmitting) return;
+		confirmationSubmitting = true;
+		try {
+			if (confirmation.action === "trash") {
+				await api.trashWork(confirmation.occurrenceId);
+				selectedId = null;
+				await load();
+			} else {
+				await api.purgeWork(confirmation.workId);
+				trashEntries = await api.listTrash();
+			}
+		} catch (cause) {
+			error = errorMessage(cause);
+			return;
+		} finally {
+			confirmationSubmitting = false;
+		}
+		pendingConfirmation = null;
+		confirmationDialog.close();
 	}
 
 	function titleFor(item: OutlineItem): string {
@@ -738,3 +778,35 @@
 	</main>
 	{/if}
 </div>
+
+<dialog
+	bind:this={confirmationDialog}
+	class="confirmation-dialog"
+	aria-labelledby="confirmation-title"
+	aria-describedby="confirmation-description"
+	aria-modal="true"
+	oncancel={preventCloseWhileSubmitting}
+	onclose={resetConfirmation}
+>
+	{#if pendingConfirmation}
+		<div class="confirmation-dialog__content">
+			<p class="eyebrow">CONFIRM ACTION</p>
+			<h2 id="confirmation-title">
+				{pendingConfirmation.action === "trash" ? `${vocabulary.work}をゴミ箱へ移しますか？` : "完全消去しますか？"}
+			</h2>
+			<p id="confirmation-description">
+				{#if pendingConfirmation.action === "trash"}
+					{pendingConfirmation.occurrenceCount}件の{vocabulary.occurrence}と{vocabulary.semanticLink}は保持されます。
+				{:else}
+					{vocabulary.occurrence}{pendingConfirmation.occurrenceCount}件、{vocabulary.semanticLink}{pendingConfirmation.linkCount}件と本文を復元できなくなります。
+				{/if}
+			</p>
+			<div class="confirmation-dialog__actions">
+				<button onclick={closeConfirmation} disabled={confirmationSubmitting}>キャンセル</button>
+				<button class="delete" onclick={confirmPendingAction} disabled={confirmationSubmitting}>
+					{confirmationSubmitting ? "処理中…" : pendingConfirmation.action === "trash" ? "ゴミ箱へ移す" : "完全消去"}
+				</button>
+			</div>
+		</div>
+	{/if}
+</dialog>
