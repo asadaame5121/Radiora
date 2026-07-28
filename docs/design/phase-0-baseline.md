@@ -68,6 +68,16 @@ parent (drawing source)             -> child (drawing target)
 読み込みは子からincoming `evolved_from`を辿って親を得る。Phase 1でWork間の`FROM`へ
 変換するときも正準方向を変えない。
 
+## UI表示語彙
+
+Backendとdomain modelは`work`、`occurrence`、`semanticLink`の意味コードを使い、
+利用者向け名称を返さない。`UiVocabulary`はこの三コードを表示語へ対応付ける。
+中立な既定語彙は「項目」「配置」「リンク」とする。
+
+Svelte entrypointが既定語彙をContextへ設定し、`App.svelte`はContextからのみ取得する。
+設計上の説明語である「実身」「化身」は利用者向けUIへ直書きしない。将来別の語彙を使う場合も
+store、service、RPCを変更せず、Contextへ渡す`UiVocabulary`だけを置き換える。
+
 ## Migrationとロールバック
 
 起動時は[[schema-evolution]]の手順に従い、一段ずつ`up`と`validate`を実行する。

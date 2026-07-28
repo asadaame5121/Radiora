@@ -17,6 +17,7 @@
 	} from "../domain/models";
 	import { LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
+	import { useUiVocabulary } from "./ui_vocabulary_context";
 
 	const api = new Proxy({}, {
 		get: (_target, property) => async (...args: unknown[]) => {
@@ -35,6 +36,7 @@
 	type ViewMode = "outline" | "tree" | "trash";
 	type AsideMode = "links" | "discover" | "query";
 
+	const vocabulary = useUiVocabulary();
 	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
 	let loading = $state(true);
 	let startup = $state<StartupStatus>({ phase: "starting", message: "Radioraを起動しています…" });
@@ -425,7 +427,7 @@
 	function otherName(link: OutlineLink): string {
 		const id = link.fromId === selectedItem?.workId ? link.toId : link.fromId;
 		const item = itemByWorkId.get(id);
-		return item ? titleFor(item) : "(空の項目)";
+		return item ? titleFor(item) : `(空の${vocabulary.work})`;
 	}
 
 	async function duplicateSelectedOccurrence(): Promise<void> {
@@ -447,7 +449,11 @@
 	async function trashSelectedWork(): Promise<void> {
 		if (!selectedItem) return;
 		const count = snapshot.items.filter((item) => item.workId === selectedItem.workId).length;
-		if (!confirm(`この実身をゴミ箱へ移します。${count}件の化身とリンクは保持されます。`)) return;
+		if (
+			!confirm(
+				`この${vocabulary.work}をゴミ箱へ移します。${count}件の${vocabulary.occurrence}と${vocabulary.semanticLink}は保持されます。`,
+			)
+		) return;
 		await api.trashWork(selectedItem.id);
 		selectedId = null;
 		await load();
@@ -467,7 +473,7 @@
 	async function purgeTrash(entry: TrashEntry): Promise<void> {
 		if (
 			!confirm(
-				`完全消去します。化身${entry.occurrenceCount}件、リンク${entry.linkCount}件と本文を復元できなくなります。`,
+				`完全消去します。${vocabulary.occurrence}${entry.occurrenceCount}件、${vocabulary.semanticLink}${entry.linkCount}件と本文を復元できなくなります。`,
 			)
 		) return;
 		await api.purgeWork(entry.work.id);
@@ -477,7 +483,7 @@
 	function titleFor(item: OutlineItem): string {
 		return item.contextualHeading ??
 			item.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ??
-			"(空の項目)";
+			`(空の${vocabulary.work})`;
 	}
 
 	function titleForId(id: string): string {
@@ -525,7 +531,7 @@
 					{#each suggestions as suggestion, index}
 						<button class:active={searchActiveIndex === index}
 							onclick={() => selectItem(suggestion.item, suggestion.ancestorIds)}>
-							<strong>{suggestion.title || "(空の項目)"}</strong>
+							<strong>{suggestion.title || `(空の${vocabulary.work})`}</strong>
 							<small>先頭一致</small>
 						</button>
 					{/each}
@@ -563,7 +569,7 @@
 				{#if loading}
 					<p class="empty">Loading…</p>
 				{:else if snapshot.items.length === 0}
-					<button class="first-item" onclick={createRoot}>最初の項目を作る</button>
+					<button class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
 				{:else}
 					<div class="rows">
 						{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
@@ -572,12 +578,12 @@
 								draggable="true" ondragstart={() => draggedId = row.item.id}
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
 								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
-								<button class="bullet" aria-label="項目を選択" onclick={() => selectedId = row.item.id}>•</button>
+								<button class="bullet" aria-label={`${vocabulary.work}を選択`} onclick={() => selectedId = row.item.id}>•</button>
 								<textarea rows="1" data-item-id={row.item.id} value={row.item.text}
 									onfocus={() => selectedId = row.item.id}
 									oninput={(event) => updateLocalText(row.item.id, event.currentTarget.value)}
 									onkeydown={(event) => handleKeydown(event, row)}></textarea>
-								<button class="delete" title="この化身を外す" onclick={() => remove(row.item.id)}>×</button>
+								<button class="delete" title={`この${vocabulary.occurrence}を外す`} onclick={() => remove(row.item.id)}>×</button>
 							</div>
 						{/each}
 					</div>
@@ -588,7 +594,7 @@
 					<div class="stash-list">
 						{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
 							<button class:selected={selectedId === row.item.id} onclick={() => selectedId = row.item.id}>
-								<span>∞</span>{row.item.text || "(空の項目)"}
+								<span>∞</span>{row.item.text || `(空の${vocabulary.work})`}
 							</button>
 						{/each}
 					</div>
@@ -600,7 +606,7 @@
 				<div class="stash-list">
 					{#each trashEntries as entry}
 						<div>
-							<span>{entry.work.id.slice(0, 8)} · 化身{entry.occurrenceCount} · リンク{entry.linkCount}</span>
+							<span>{entry.work.id.slice(0, 8)} · {vocabulary.occurrence}{entry.occurrenceCount}件 · {vocabulary.semanticLink}{entry.linkCount}件</span>
 							<button onclick={() => restoreTrash(entry.work.id)}>復元</button>
 							<button class="delete" onclick={() => purgeTrash(entry)}>完全消去</button>
 						</div>
@@ -622,7 +628,7 @@
 		<aside>
 			{#if selectedItem}
 				<nav class="aside-tabs" aria-label="詳細表示">
-					<button class:active={asideMode === "links"} onclick={() => (asideMode = "links")}>Links</button>
+					<button class:active={asideMode === "links"} onclick={() => (asideMode = "links")}>{vocabulary.semanticLink}</button>
 					<button class:active={asideMode === "discover"} onclick={() => (asideMode = "discover")}>発見</button>
 					<button class:active={asideMode === "query"} onclick={() => (asideMode = "query")}>Query</button>
 				</nav>
@@ -630,15 +636,15 @@
 				<h2>{titleFor(selectedItem)}</h2>
 				{#if asideMode === "links"}
 					<label>
-						化身固有の見出し
+						{vocabulary.occurrence}固有の見出し
 						<input value={selectedItem.contextualHeading ?? ""}
 							onchange={(event) => updateSelectedHeading(event.currentTarget.value)}
 							placeholder="未設定時は本文の先頭行" />
 					</label>
 					<div class="discovery-actions">
-						<button onclick={duplicateSelectedOccurrence}>同じ実身をもう一箇所へ配置</button>
-						<button onclick={() => remove(selectedItem.id)}>この化身を外す</button>
-						<button onclick={trashSelectedWork}>実身をゴミ箱へ</button>
+						<button onclick={duplicateSelectedOccurrence}>同じ{vocabulary.work}をもう一箇所へ配置</button>
+						<button onclick={() => remove(selectedItem.id)}>この{vocabulary.occurrence}を外す</button>
+						<button onclick={trashSelectedWork}>{vocabulary.work}をゴミ箱へ</button>
 					</div>
 				{/if}
 				{#if asideMode === "links" && bodyFor(selectedItem)}
@@ -653,17 +659,17 @@
 					<div class="link-form">
 						<select bind:value={newLinkType}>{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}</select>
 						<select bind:value={newLinkTarget}>
-							<option value="">リンク先を選択</option>
+							<option value="">{vocabulary.semanticLink}先を選択</option>
 							{#each linkTargets as item}
-								<option value={item.id}>{item.text || "(空の項目)"}</option>
+								<option value={item.id}>{item.text || `(空の${vocabulary.work})`}</option>
 							{/each}
 						</select>
-						<button onclick={addLink} disabled={!newLinkTarget}>Link</button>
+						<button onclick={addLink} disabled={!newLinkTarget}>{vocabulary.semanticLink}を追加</button>
 					</div>
 					<div class="links">
 						{#each selectedLinks as link}
 							<div><span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span><span>{link.fromId === selectedItem.workId ? "→" : "←"} {otherName(link)}</span><button onclick={() => removeLink(link)}>×</button></div>
-						{:else}<p class="empty">任意リンクはありません</p>{/each}
+						{:else}<p class="empty">任意の{vocabulary.semanticLink}はありません</p>{/each}
 					</div>
 				{:else if asideMode === "discover"}
 					<div class="discoveries">
@@ -705,7 +711,7 @@
 					</div>
 				{/if}
 			{:else}
-				<div class="aside-empty"><span>•</span><p>項目を選択すると<br />関連リンクを編集できます</p></div>
+				<div class="aside-empty"><span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p></div>
 			{/if}
 		</aside>
 	</main>
