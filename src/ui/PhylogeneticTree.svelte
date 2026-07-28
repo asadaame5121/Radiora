@@ -4,9 +4,11 @@
 	import type { OutlineSnapshot } from "../domain/models";
 	import {
 		buildDirectNeighborSet,
+		calculateLineageProjection,
 		calculateTreeLayout,
 		type TreeLayoutEdge,
 		type TreeLayoutNode,
+		type TreeProjection,
 	} from "./tree_layout";
 
 	let {
@@ -24,6 +26,7 @@
 	let height = $state(700);
 	let transform = $state<d3.ZoomTransform>(d3.zoomIdentity);
 	let hoveredId = $state<string | null>(null);
+	let projection = $state<TreeProjection>("chronology");
 	let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
 
 	const timeDomain = $derived.by((): [Date, Date] => {
@@ -40,14 +43,56 @@
 		const padding = span * .08;
 		return [new Date(min - padding), new Date(max + padding)];
 	});
-	const baseScale = $derived(d3.scaleTime().domain(timeDomain).range([70, Math.max(71, width - 70)]));
-	const screenScale = $derived(transform.rescaleX(baseScale));
+	const chronologyBaseScale = $derived(
+		d3.scaleTime().domain(timeDomain).range([70, Math.max(71, width - 70)]),
+	);
+	const chronologyScreenScale = $derived(transform.rescaleX(chronologyBaseScale));
+	const lineageProjection = $derived.by(() => calculateLineageProjection(snapshot));
+	const lineageDomainMax = $derived(
+		lineageProjection.knotGeneration ?? lineageProjection.maxGeneration,
+	);
+	const lineageBaseScale = $derived(
+		d3.scaleLinear()
+			.domain(lineageDomainMax === 0 ? [-.5, .5] : [-.15, lineageDomainMax + .15])
+			.range([70, Math.max(71, width - 70)]),
+	);
 	const layout = $derived.by(() => calculateTreeLayout(snapshot, {
 		width,
 		height,
-		projectX: (timestamp) => screenScale(new Date(timestamp)),
+		projection,
+		projectX: (timestamp) =>
+			transform.applyX(chronologyBaseScale(new Date(timestamp))),
+		projectGeneration: (generation) => transform.applyX(lineageBaseScale(generation)),
 	}));
-	const axisTicks = $derived(screenScale.ticks(Math.max(2, Math.floor(width / 180))));
+	const axisMarks = $derived.by(() => {
+		if (projection === "chronology") {
+			return chronologyScreenScale
+				.ticks(Math.max(2, Math.floor(width / 180)))
+				.map((tick) => ({
+					key: tick.toISOString(),
+					x: chronologyScreenScale(tick),
+					label: formatTick(tick),
+				}));
+		}
+		const count = lineageDomainMax + 1;
+		const stride = Math.max(1, Math.ceil(count / Math.max(2, Math.floor(width / 100))));
+		const marks: Array<{ key: string; x: number; label: string }> = [];
+		for (let generation = 0; generation <= lineageProjection.maxGeneration; generation += stride) {
+			marks.push({
+				key: `generation-${generation}`,
+				x: transform.applyX(lineageBaseScale(generation)),
+				label: `G${generation}`,
+			});
+		}
+		if (lineageProjection.knotGeneration !== null) {
+			marks.push({
+				key: "lineage-knot",
+				x: transform.applyX(lineageBaseScale(lineageProjection.knotGeneration)),
+				label: "Knot",
+			});
+		}
+		return marks;
+	});
 	const focusId = $derived(hoveredId ?? selectedId);
 	const directNeighbors = $derived(
 		focusId ? buildDirectNeighborSet(snapshot, focusId) : new Set<string>(),
@@ -201,7 +246,12 @@
 
 	function zoomToNode(node: TreeLayoutNode, nextK: number): void {
 		const timestamp = Date.parse(node.item.createdAt);
-		const baseX = baseScale(new Date(Number.isFinite(timestamp) ? timestamp : 0));
+		const generation = node.isLineageKnot
+			? lineageProjection.knotGeneration ?? 0
+			: lineageProjection.generationByWorkId.get(node.item.workId) ?? 0;
+		const baseX = projection === "lineage"
+			? lineageBaseScale(generation)
+			: chronologyBaseScale(new Date(Number.isFinite(timestamp) ? timestamp : 0));
 		applyTransform(d3.zoomIdentity
 			.translate(width / 2 - baseX * nextK, height / 2 - node.y)
 			.scale(nextK));
@@ -209,6 +259,12 @@
 
 	function fitView(): void {
 		applyTransform(d3.zoomIdentity);
+	}
+
+	function selectProjection(next: TreeProjection): void {
+		if (projection === next) return;
+		projection = next;
+		fitView();
 	}
 
 	function applyTransform(next: d3.ZoomTransform): void {
@@ -223,10 +279,24 @@
 	}
 
 	function formatTick(tick: Date): string {
-		const span = screenScale.domain()[1].getTime() - screenScale.domain()[0].getTime();
+		const span = chronologyScreenScale.domain()[1].getTime() -
+			chronologyScreenScale.domain()[0].getTime();
 		if (span > 1_000 * 60 * 60 * 24 * 730) return d3.timeFormat("%Y")(tick);
 		if (span > 1_000 * 60 * 60 * 24 * 60) return d3.timeFormat("%Y.%m")(tick);
 		return d3.timeFormat("%m/%d")(tick);
+	}
+
+	function nodeTitle(node: TreeLayoutNode): string {
+		if (node.aggregate) return `${node.count}件の思索。クリックして拡大`;
+		const parsed = new Date(node.item.createdAt);
+		const createdAt = Number.isFinite(parsed.getTime())
+			? new Intl.DateTimeFormat("ja-JP", {
+				dateStyle: "medium",
+				timeStyle: "short",
+			}).format(parsed)
+			: node.item.createdAt;
+		const knot = node.isLineageKnot ? "\nFROM循環を検出：Knot帯へ退避" : "";
+		return `${node.item.text}\n作成: ${createdAt}${knot}`;
 	}
 
 	function rectanglesOverlap(
@@ -247,9 +317,15 @@
 
 	<svg bind:this={svgElement} aria-label="思索の系統樹">
 		<g class="time-grid" aria-hidden="true">
-			{#each axisTicks as tick}
-				<line x1={screenScale(tick)} x2={screenScale(tick)} y1="0" y2={height} />
-				<text x={screenScale(tick)} y={height - 22} text-anchor="middle">{formatTick(tick)}</text>
+			{#each axisMarks as mark (mark.key)}
+				<line
+					class:knot-mark={mark.key === "lineage-knot"}
+					x1={mark.x}
+					x2={mark.x}
+					y1="0"
+					y2={height}
+				/>
+				<text x={mark.x} y={height - 22} text-anchor="middle">{mark.label}</text>
 			{/each}
 		</g>
 
@@ -288,7 +364,7 @@
 						onclick={() => handleNodeClick(node)}
 						onkeydown={(event) => handleNodeKeydown(event, node)}
 					>
-						<title>{node.aggregate ? `${node.count}件の思索。クリックして拡大` : node.item.text}</title>
+						<title>{nodeTitle(node)}</title>
 						<circle class="node-safety" r={node.radius + 5} />
 						{#if node.isKnot}
 							<circle class="node-knot-outer" r={node.radius + 2} />
@@ -313,6 +389,19 @@
 			{/each}
 		</g>
 	</svg>
+
+	<div class="tree-projection" aria-label="Treeの投影方法">
+		<button
+			class:active={projection === "chronology"}
+			aria-pressed={projection === "chronology"}
+			onclick={() => selectProjection("chronology")}
+		>Chronology</button>
+		<button
+			class:active={projection === "lineage"}
+			aria-pressed={projection === "lineage"}
+			onclick={() => selectProjection("lineage")}
+		>Lineage</button>
+	</div>
 
 	<div class="tree-controls">
 		<button aria-label="ズームアウト" title="ズームアウト" onclick={() => zoomBy(.7)}>−</button>
@@ -351,6 +440,9 @@
 		fill: #657681;
 		font: 11px Inter, "Noto Sans JP", sans-serif;
 		letter-spacing: .08em;
+	}
+	.time-grid .knot-mark {
+		stroke: #ef5b5b;
 	}
 	.tree-edge {
 		fill: none;
@@ -449,6 +541,36 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+	}
+	.tree-projection {
+		position: absolute;
+		top: 22px;
+		right: 22px;
+		display: flex;
+		padding: 3px;
+		border: 1px solid #28546a;
+		border-radius: 7px;
+		background: rgb(5 10 16 / 88%);
+		box-shadow: 0 8px 22px rgb(0 0 0 / 28%);
+	}
+	.tree-projection button {
+		height: 30px;
+		padding: 0 12px;
+		border: 0;
+		border-radius: 4px;
+		background: transparent;
+		color: #7f949e;
+		font: 11px Inter, "Noto Sans JP", sans-serif;
+		letter-spacing: .03em;
+		cursor: pointer;
+	}
+	.tree-projection button:hover {
+		color: #dce7ec;
+	}
+	.tree-projection button.active {
+		background: #12303d;
+		color: #eafcfd;
+		box-shadow: inset 0 0 0 1px rgb(37 198 209 / 42%);
 	}
 	.tree-controls button,
 	.tree-controls span {

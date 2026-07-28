@@ -2,6 +2,14 @@ import type { LinkType, OutlineItem, OutlineSnapshot } from "../domain/models.ts
 
 export type TreeLod = "detail" | "context" | "overview";
 export type TreeLinkType = LinkType;
+export type TreeProjection = "chronology" | "lineage";
+
+export interface LineageProjection {
+	generationByWorkId: Map<string, number>;
+	knotWorkIds: Set<string>;
+	maxGeneration: number;
+	knotGeneration: number | null;
+}
 
 export interface TreeLayoutNode {
 	id: string;
@@ -17,6 +25,7 @@ export interface TreeLayoutNode {
 	count: number;
 	aggregate: boolean;
 	isKnot: boolean;
+	isLineageKnot: boolean;
 }
 
 export interface TreeLayoutEdge {
@@ -39,6 +48,8 @@ export interface TreeLayoutOptions {
 	width: number;
 	height: number;
 	projectX: (timestamp: number) => number;
+	projection?: TreeProjection;
+	projectGeneration?: (generation: number) => number;
 }
 
 interface RawEdge {
@@ -67,9 +78,16 @@ export function calculateTreeLayout(
 		};
 	}
 
+	const lineage = options.projection === "lineage" ? calculateLineageProjection(snapshot) : null;
 	const projected = snapshot.items.map((item) => ({
 		item,
-		x: options.projectX(parseTimestamp(item.createdAt)),
+		x: lineage
+			? (options.projectGeneration ?? options.projectX)(
+				lineage.knotWorkIds.has(item.workId)
+					? lineage.knotGeneration ?? 0
+					: lineage.generationByWorkId.get(item.workId) ?? 0,
+			)
+			: options.projectX(parseTimestamp(item.createdAt)),
 	}));
 	const visibleCount = Math.max(
 		1,
@@ -77,7 +95,7 @@ export function calculateTreeLayout(
 	);
 	const visibleDensity = options.width / visibleCount;
 	const lod = lodForDensity(visibleDensity);
-	const laidOut = assignLanes(projected, snapshot, lod, options.height);
+	const laidOut = assignLanes(projected, snapshot, lod, options.height, lineage?.knotWorkIds);
 
 	if (lod === "overview") {
 		return aggregateOverview(
@@ -96,6 +114,121 @@ export function calculateTreeLayout(
 		visibleDensity,
 		contentHeight: laidOut.contentHeight,
 	};
+}
+
+export function calculateLineageProjection(snapshot: OutlineSnapshot): LineageProjection {
+	const workIds = [...new Set(snapshot.items.map((item) => item.workId))].sort();
+	const visibleWorkIds = new Set(workIds);
+	const children = new Map(workIds.map((id) => [id, new Set<string>()]));
+	const parents = new Map(workIds.map((id) => [id, new Set<string>()]));
+
+	for (const link of snapshot.links) {
+		if (
+			link.type !== "FROM" ||
+			!visibleWorkIds.has(link.fromId) ||
+			!visibleWorkIds.has(link.toId)
+		) continue;
+		// FROM is stored Child -> Parent. Lineage reads Parent -> Child.
+		children.get(link.toId)?.add(link.fromId);
+		parents.get(link.fromId)?.add(link.toId);
+	}
+
+	const knotWorkIds = findCyclicWorkIds(workIds, children);
+	const generationByWorkId = new Map<string, number>();
+	const indegree = new Map<string, number>();
+	for (const workId of workIds) {
+		if (knotWorkIds.has(workId)) continue;
+		indegree.set(
+			workId,
+			[...(parents.get(workId) ?? [])].filter((parent) => !knotWorkIds.has(parent)).length,
+		);
+		generationByWorkId.set(workId, 0);
+	}
+
+	const ready = [...indegree]
+		.filter(([, degree]) => degree === 0)
+		.map(([id]) => id)
+		.sort();
+	while (ready.length > 0) {
+		const parent = ready.shift()!;
+		const parentGeneration = generationByWorkId.get(parent) ?? 0;
+		for (const child of [...(children.get(parent) ?? [])].sort()) {
+			if (knotWorkIds.has(child)) continue;
+			generationByWorkId.set(
+				child,
+				Math.max(generationByWorkId.get(child) ?? 0, parentGeneration + 1),
+			);
+			const nextDegree = (indegree.get(child) ?? 0) - 1;
+			indegree.set(child, nextDegree);
+			if (nextDegree === 0) {
+				ready.push(child);
+				ready.sort();
+			}
+		}
+	}
+
+	const maxGeneration = Math.max(0, ...generationByWorkId.values());
+	return {
+		generationByWorkId,
+		knotWorkIds,
+		maxGeneration,
+		knotGeneration: knotWorkIds.size > 0 ? maxGeneration + 1 : null,
+	};
+}
+
+function findCyclicWorkIds(
+	workIds: string[],
+	children: Map<string, Set<string>>,
+): Set<string> {
+	let index = 0;
+	const indexById = new Map<string, number>();
+	const lowLinkById = new Map<string, number>();
+	const stack: string[] = [];
+	const onStack = new Set<string>();
+	const cyclic = new Set<string>();
+
+	const visit = (workId: string) => {
+		indexById.set(workId, index);
+		lowLinkById.set(workId, index);
+		index++;
+		stack.push(workId);
+		onStack.add(workId);
+
+		for (const child of [...(children.get(workId) ?? [])].sort()) {
+			if (!indexById.has(child)) {
+				visit(child);
+				lowLinkById.set(
+					workId,
+					Math.min(lowLinkById.get(workId)!, lowLinkById.get(child)!),
+				);
+			} else if (onStack.has(child)) {
+				lowLinkById.set(
+					workId,
+					Math.min(lowLinkById.get(workId)!, indexById.get(child)!),
+				);
+			}
+		}
+
+		if (lowLinkById.get(workId) !== indexById.get(workId)) return;
+		const component: string[] = [];
+		let member: string;
+		do {
+			member = stack.pop()!;
+			onStack.delete(member);
+			component.push(member);
+		} while (member !== workId);
+		if (
+			component.length > 1 ||
+			(children.get(workId)?.has(workId) ?? false)
+		) {
+			for (const id of component) cyclic.add(id);
+		}
+	};
+
+	for (const workId of workIds) {
+		if (!indexById.has(workId)) visit(workId);
+	}
+	return cyclic;
 }
 
 export function lodForDensity(density: number): TreeLod {
@@ -138,6 +271,7 @@ function assignLanes(
 	snapshot: OutlineSnapshot,
 	lod: TreeLod,
 	height: number,
+	lineageKnotWorkIds: Set<string> = new Set(),
 ): { nodes: TreeLayoutNode[]; contentHeight: number } {
 	const knotIds = new Set(snapshot.stashItemIds);
 	const baseLaneCount = lod === "detail"
@@ -194,7 +328,8 @@ function assignLanes(
 			radius,
 			count: 1,
 			aggregate: false,
-			isKnot: knotIds.has(item.id),
+			isKnot: knotIds.has(item.id) || lineageKnotWorkIds.has(item.workId),
+			isLineageKnot: lineageKnotWorkIds.has(item.workId),
 		});
 	}
 
@@ -277,6 +412,7 @@ function aggregateOverview(
 			count,
 			aggregate: count > 1,
 			isKnot: bucket.some((node) => node.isKnot),
+			isLineageKnot: bucket.some((node) => node.isLineageKnot),
 		};
 		aggregatedNodes.push(aggregate);
 		for (const node of bucket) aggregateByItemId.set(node.id, aggregate);

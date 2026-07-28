@@ -2,6 +2,7 @@ import { assert, assertEquals, assertGreater } from "jsr:@std/assert@1";
 import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
 import {
 	buildDirectNeighborSet,
+	calculateLineageProjection,
 	calculateTreeLayout,
 	labelForItem,
 	lodForDensity,
@@ -137,6 +138,73 @@ Deno.test("FROM draws from parent source to child target", () => {
 	assertEquals(edge?.source.id, "parent");
 	assertEquals(edge?.target.id, "child");
 	assertEquals(edge?.count, 1);
+});
+
+Deno.test("Lineage generation follows only normalized FROM links and takes the deepest parent", () => {
+	const data = snapshot([
+		item("root-a", "2026-04-01T00:00:00.000Z"),
+		item("root-b", "2026-01-01T00:00:00.000Z"),
+		// Occurrence placement deliberately disagrees with the FROM lineage.
+		item("middle", "2026-03-01T00:00:00.000Z", "root-b"),
+		item("child", "2026-02-01T00:00:00.000Z", "root-a"),
+	]);
+	data.links.push(
+		link("middle", "root-a", "FROM"),
+		link("child", "root-b", "FROM"),
+		link("child", "middle", "FROM"),
+		link("root-b", "root-a", "RELATED"),
+	);
+
+	const lineage = calculateLineageProjection(data);
+	assertEquals(lineage.generationByWorkId.get("root-a"), 0);
+	assertEquals(lineage.generationByWorkId.get("root-b"), 0);
+	assertEquals(lineage.generationByWorkId.get("middle"), 1);
+	assertEquals(lineage.generationByWorkId.get("child"), 2);
+
+	const layout = calculateTreeLayout(data, {
+		width: 600,
+		height: 300,
+		projection: "lineage",
+		projectX: () => -1,
+		projectGeneration: (generation) => generation * 100,
+	});
+	assertEquals(layout.nodes.find((node) => node.id === "child")?.x, 200);
+});
+
+Deno.test("Lineage detects FROM cycles and deterministically isolates them in a Knot band", () => {
+	const data = snapshot([
+		item("a", "2026-01-03T00:00:00.000Z"),
+		item("b", "2026-01-02T00:00:00.000Z"),
+		item("root", "2026-01-01T00:00:00.000Z"),
+		item("descendant", "2026-01-04T00:00:00.000Z"),
+	]);
+	data.links.push(
+		link("b", "a", "FROM"),
+		link("a", "b", "FROM"),
+		link("descendant", "a", "FROM"),
+	);
+
+	const lineage = calculateLineageProjection(data);
+	assertEquals(lineage.knotWorkIds, new Set(["a", "b"]));
+	assertEquals(lineage.generationByWorkId.get("root"), 0);
+	assertEquals(lineage.generationByWorkId.get("descendant"), 0);
+	assertEquals(lineage.knotGeneration, 1);
+
+	const options = {
+		width: 600,
+		height: 300,
+		projection: "lineage" as const,
+		projectX: () => -1,
+		projectGeneration: (generation: number) => generation * 100,
+	};
+	const first = calculateTreeLayout(data, options);
+	const second = calculateTreeLayout({ ...data, items: [...data.items].reverse() }, options);
+	for (const id of ["a", "b"]) {
+		assertEquals(first.nodes.find((node) => node.id === id)?.x, 100);
+		assertEquals(first.nodes.find((node) => node.id === id)?.isLineageKnot, true);
+		assertEquals(second.nodes.find((node) => node.id === id)?.x, 100);
+	}
+	assertEquals(data.stashItemIds, []);
 });
 
 Deno.test("Work links project to one visible Occurrence while neighborhood includes every mirror", () => {
