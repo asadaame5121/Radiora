@@ -1,7 +1,7 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { JsonGraphStore, migrateBackupV0 } from "./json_store.ts";
 
-Deno.test("persists and reloads graph data", async () => {
+Deno.test("new saves use the version 1 backup envelope and reload graph data", async () => {
 	const directory = await Deno.makeTempDir();
 	const path = `${directory}/graph.json`;
 	const timestamp = "2026-01-01T00:00:00.000Z";
@@ -22,10 +22,55 @@ Deno.test("persists and reloads graph data", async () => {
 			},
 		);
 
+		const backup = JSON.parse(await Deno.readTextFile(path));
+		assertEquals(backup.format, "radiora-backup");
+		assertEquals(backup.schemaVersion, 1);
+		assertEquals(typeof backup.exportedAt, "string");
+		assertEquals(typeof backup.appVersion, "string");
+		assertEquals(backup.source, { storageSchemaVersion: 1 });
+		assertEquals(backup.items, undefined);
+		assertEquals(backup.data.works[0].id, "one");
+		assertEquals(backup.data.workingCopies[0].text, "persistent");
+		assertEquals(backup.data.occurrences[0].id, "occurrence-one");
+
 		const second = new JsonGraphStore(path);
 		await second.initialize();
 		assertEquals((await second.listItems())[0].text, "persistent");
 		assertEquals((await second.listItems())[0].workId, "one");
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("rejects a future backup version without overwriting it", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/future-backup.json`;
+	const futureBackup = JSON.stringify(
+		{
+			format: "radiora-backup",
+			schemaVersion: 2,
+			exportedAt: "2026-01-01T00:00:00.000Z",
+			appVersion: "9.9.9",
+			source: { storageSchemaVersion: 2 },
+			data: { future: "must remain untouched" },
+		},
+		null,
+		2,
+	);
+	try {
+		await Deno.writeTextFile(path, futureBackup);
+		const store = new JsonGraphStore(path);
+
+		await assertRejects(
+			() => store.initialize(),
+			Error,
+			"Unsupported backup schema version: 2",
+		);
+		assertEquals(await Deno.readTextFile(path), futureBackup);
+		await assertRejects(
+			() => Deno.stat(`${path}.v0.bak`),
+			Deno.errors.NotFound,
+		);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
