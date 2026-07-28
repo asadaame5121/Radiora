@@ -8,13 +8,16 @@ import type {
 	OutlineItem,
 	OutlineLink,
 	PurgeManifest,
+	RecoverySnapshot,
+	Revision,
 	SavedRuleQuery,
 	SearchAlias,
+	SnapshotProtection,
 	SystemRelation,
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
-import type { GraphStore } from "./graph_store.ts";
+import { type GraphStore, validateRevisionCreation } from "./graph_store.ts";
 import {
 	CURRENT_STORAGE_SCHEMA_VERSION,
 	type MigrationJournalEntry,
@@ -23,6 +26,7 @@ import {
 	type StorageMigration,
 } from "./migrations/mod.ts";
 import { workOccurrenceMigration } from "./migrations/0001_work_occurrence.ts";
+import { revisionSnapshotMigration } from "./migrations/0002_revision_snapshot.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
@@ -34,7 +38,10 @@ type Row = Record<string, unknown>;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const APP_VERSION = "0.1.0";
-const STORAGE_MIGRATIONS: readonly StorageMigration[] = [workOccurrenceMigration];
+const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
+	workOccurrenceMigration,
+	revisionSnapshotMigration,
+];
 
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
 
@@ -45,7 +52,10 @@ export function evolvedFromEndpoints(
 	return { inId: parentId, outId: childId };
 }
 
-function domainId(value: unknown, field: "id" | "work_id" | "parent_id" | "branch_id"): string {
+function domainId(
+	value: unknown,
+	field: "id" | "work_id" | "parent_id" | "branch_id" | "revision_id",
+): string {
 	const id = String(value ?? "");
 	if (!UUID_PATTERN.test(id)) {
 		throw new TypeError(`Expected ${field} to be a UUID, received: ${id}`);
@@ -75,10 +85,48 @@ export function itemFromRow(row: Row): OutlineItem {
 		collapsed: Boolean(row.collapsed),
 		revisionSelector: selectorMode === "branch"
 			? { mode: "branch", branchId: domainId(row.branch_id ?? row.work_id, "branch_id") }
-			: { mode: "pinned", revisionId: String(row.revision_id ?? "") },
+			: {
+				mode: "pinned",
+				revisionId: domainId(optionalRecordDomainId(row.revision_id), "revision_id"),
+			},
 		contextualHeading: row.contextual_heading == null ? undefined : String(row.contextual_heading),
 		createdAt: String(row.created_at ?? ""),
 		updatedAt: String(row.updated_at ?? ""),
+	};
+}
+
+export function occurrenceFromRow(row: Row): Occurrence {
+	const workId = domainId(row.work_id, "work_id");
+	return {
+		id: domainId(row.id, "id"),
+		workId,
+		parentOccurrenceId: row.parent_id == null ? null : domainId(row.parent_id, "parent_id"),
+		orderKey: Number(row.order_key ?? 0),
+		collapsed: Boolean(row.collapsed),
+		revisionSelector: row.selector_mode === "pinned"
+			? {
+				mode: "pinned",
+				revisionId: domainId(optionalRecordDomainId(row.revision_id), "revision_id"),
+			}
+			: {
+				mode: "branch",
+				branchId: domainId(optionalRecordDomainId(row.branch_id), "branch_id"),
+			},
+		contextualHeading: row.contextual_heading == null ? undefined : String(row.contextual_heading),
+	};
+}
+
+export function revisionFromRow(row: Row): Revision {
+	return {
+		id: String(row.id),
+		workId: domainId(row.work_id, "work_id"),
+		text: String(row.text ?? ""),
+		parentRevisionIds: Array.isArray(row.parent_revisions)
+			? row.parent_revisions.map((id) => domainId(optionalRecordDomainId(id), "revision_id"))
+			: [],
+		kind: String(row.kind) as Revision["kind"],
+		createdAt: String(row.created_at ?? ""),
+		message: row.message == null ? undefined : String(row.message),
 	};
 }
 
@@ -227,22 +275,81 @@ export class SurrealGraphStore implements GraphStore {
 			(await this.listWorks(includeDeletedWorks)).map((work) => work.id),
 		);
 		return (await this.listOccurrenceRows()).flatMap((row): Occurrence[] => {
-			const workId = domainId(row.work_id, "work_id");
-			if (!visible.has(workId)) return [];
-			return [{
-				id: domainId(row.id, "id"),
-				workId,
-				parentOccurrenceId: row.parent_id == null ? null : domainId(row.parent_id, "parent_id"),
-				orderKey: Number(row.order_key ?? 0),
-				collapsed: Boolean(row.collapsed),
-				revisionSelector: row.selector_mode === "pinned"
-					? { mode: "pinned", revisionId: String(row.revision_id ?? "") }
-					: { mode: "branch", branchId: domainId(row.branch_id, "branch_id") },
-				contextualHeading: row.contextual_heading == null
-					? undefined
-					: String(row.contextual_heading),
-			}];
+			const occurrence = occurrenceFromRow(row);
+			return visible.has(occurrence.workId) ? [occurrence] : [];
 		});
+	}
+
+	async listBranches(workId?: string): Promise<Branch[]> {
+		const variables = workId ? { work: new RecordId("work", workId) } : undefined;
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, record::id(work) AS work_id, name,
+				head_revision, created_at, promoted_at, archived_at
+				FROM branch ${workId ? "WHERE work = $work" : ""};`,
+			variables,
+		);
+		return rows.map((row) => ({
+			id: String(row.id),
+			workId: domainId(row.work_id, "work_id"),
+			name: String(row.name ?? ""),
+			headRevisionId: optionalRecordDomainId(row.head_revision),
+			createdAt: String(row.created_at ?? ""),
+			promotedAt: row.promoted_at == null ? undefined : String(row.promoted_at),
+			archivedAt: row.archived_at == null ? undefined : String(row.archived_at),
+		}));
+	}
+
+	async listWorkingCopies(workId?: string): Promise<WorkingCopy[]> {
+		const rows = await this.listWorkingCopyRows(workId);
+		return rows.map((row) => ({
+			workId: domainId(row.work_id, "work_id"),
+			branchId: domainId(row.branch_id, "branch_id"),
+			text: String(row.text ?? ""),
+			updatedAt: String(row.updated_at ?? ""),
+		}));
+	}
+
+	async listRevisions(workId?: string): Promise<Revision[]> {
+		const rows = await this.listRevisionRows(workId);
+		return rows.map(revisionFromRow);
+	}
+
+	async listRecoverySnapshots(
+		workId?: string,
+		branchId?: string,
+	): Promise<RecoverySnapshot[]> {
+		const conditions = [
+			workId ? "work = $work" : "",
+			branchId ? "branch = $branch" : "",
+		].filter(Boolean);
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, record::id(work) AS work_id,
+				record::id(branch) AS branch_id, text, content_hash, created_at,
+				source_revision, name, protection_reason, protected_at, protection_expires_at
+				FROM recovery_snapshot ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
+				ORDER BY created_at;`,
+			{
+				...(workId ? { work: new RecordId("work", workId) } : {}),
+				...(branchId ? { branch: new RecordId("branch", branchId) } : {}),
+			},
+		);
+		return rows.map((row) => ({
+			id: String(row.id),
+			workId: domainId(row.work_id, "work_id"),
+			branchId: domainId(row.branch_id, "branch_id"),
+			text: String(row.text ?? ""),
+			contentHash: String(row.content_hash ?? ""),
+			createdAt: String(row.created_at ?? ""),
+			sourceRevisionId: optionalRecordDomainId(row.source_revision),
+			name: row.name == null ? undefined : String(row.name),
+			protection: row.protection_reason == null ? undefined : {
+				reason: String(row.protection_reason) as SnapshotProtection["reason"],
+				protectedAt: String(row.protected_at ?? ""),
+				expiresAt: row.protection_expires_at == null
+					? undefined
+					: String(row.protection_expires_at),
+			},
+		}));
 	}
 
 	async createWorkBundle(
@@ -305,13 +412,138 @@ export class SurrealGraphStore implements GraphStore {
 		);
 	}
 
-	async updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
-		const work = new RecordId("work", workId);
+	async createBranch(branch: Branch, workingCopy: WorkingCopy): Promise<void> {
+		if (branch.id !== workingCopy.branchId || branch.workId !== workingCopy.workId) {
+			throw new Error("Branch and Working Copy identity must match");
+		}
 		await this.#db.query(
-			`UPDATE working_copy SET text = $text, updated_at = $updatedAt WHERE work = $work;
-			UPDATE $work SET updated_at = $updatedAt;`,
-			{ work, text, updatedAt },
+			`BEGIN TRANSACTION;
+			CREATE $branch CONTENT {
+				work: $work, name: $name, head_revision: ${branch.headRevisionId ? "$head" : "NONE"},
+				created_at: $createdAt, promoted_at: ${branch.promotedAt ? "$promotedAt" : "NONE"},
+				archived_at: ${branch.archivedAt ? "$archivedAt" : "NONE"}
+			};
+			CREATE $copy CONTENT {
+				work: $work, branch: $branch, text: $text, updated_at: $updatedAt
+			};
+			COMMIT TRANSACTION;`,
+			{
+				...branch,
+				...workingCopy,
+				branch: new RecordId("branch", branch.id),
+				copy: new RecordId("working_copy", branch.id),
+				work: new RecordId("work", branch.workId),
+				...(branch.headRevisionId ? { head: new RecordId("revision", branch.headRevisionId) } : {}),
+			},
 		);
+	}
+
+	async updateBranch(branch: Branch): Promise<void> {
+		await this.#db.query(
+			`UPDATE $branch CONTENT {
+				work: $work, name: $name, head_revision: ${branch.headRevisionId ? "$head" : "NONE"},
+				created_at: $createdAt, promoted_at: ${branch.promotedAt ? "$promotedAt" : "NONE"},
+				archived_at: ${branch.archivedAt ? "$archivedAt" : "NONE"}
+			};`,
+			{
+				...branch,
+				branch: new RecordId("branch", branch.id),
+				work: new RecordId("work", branch.workId),
+				...(branch.headRevisionId ? { head: new RecordId("revision", branch.headRevisionId) } : {}),
+			},
+		);
+	}
+
+	async updateBranchWorkingCopy(
+		branchId: string,
+		text: string,
+		updatedAt: string,
+	): Promise<void> {
+		const copy = (await this.listWorkingCopies()).find((candidate) =>
+			candidate.branchId === branchId
+		);
+		if (!copy) throw new Error(`Working Copy not found for Branch: ${branchId}`);
+		const branch = new RecordId("branch", branchId);
+		await this.#db.query(
+			`UPDATE working_copy SET text = $text, updated_at = $updatedAt WHERE branch = $branch;
+			UPDATE $work SET updated_at = $updatedAt;`,
+			{ branch, work: new RecordId("work", copy.workId), text, updatedAt },
+		);
+	}
+
+	async updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
+		const main = (await this.listBranches(workId)).find((branch) => branch.name === "main");
+		if (!main) throw new Error(`Main Branch not found for Work: ${workId}`);
+		await this.updateBranchWorkingCopy(main.id, text, updatedAt);
+	}
+
+	async createRevision(revision: Revision, branchId: string): Promise<void> {
+		const [branches, revisions] = await Promise.all([
+			this.listBranches(),
+			this.listRevisions(),
+		]);
+		const branch = branches.find((candidate) => candidate.id === branchId);
+		validateRevisionCreation(revision, branch, revisions);
+		const message = revision.message ? "$message" : "NONE";
+		await this.#db.query(
+			`BEGIN TRANSACTION;
+			CREATE $revision CONTENT {
+				work: $work, text: $text, parent_revisions: $parents, kind: $kind,
+				created_at: $createdAt, message: ${message}
+			};
+			UPDATE $branch SET head_revision = $revision;
+			COMMIT TRANSACTION;`,
+			{
+				...revision,
+				revision: new RecordId("revision", revision.id),
+				work: new RecordId("work", revision.workId),
+				branch: new RecordId("branch", branchId),
+				parents: revision.parentRevisionIds.map((id) => new RecordId("revision", id)),
+			},
+		);
+	}
+
+	async createRecoverySnapshot(snapshot: RecoverySnapshot): Promise<void> {
+		const copy = (await this.listWorkingCopies(snapshot.workId)).find((candidate) =>
+			candidate.branchId === snapshot.branchId
+		);
+		if (!copy) {
+			throw new Error(`Working Copy not found for Snapshot: ${snapshot.branchId}`);
+		}
+		await this.#db.query(
+			`CREATE $snapshot CONTENT {
+				work: $work, branch: $branch, text: $text, content_hash: $contentHash,
+				created_at: $createdAt,
+				source_revision: ${snapshot.sourceRevisionId ? "$sourceRevision" : "NONE"},
+				name: ${snapshot.name ? "$name" : "NONE"},
+				protection_reason: ${snapshot.protection ? "$protectionReason" : "NONE"},
+				protected_at: ${snapshot.protection ? "$protectedAt" : "NONE"},
+				protection_expires_at: ${snapshot.protection?.expiresAt ? "$expiresAt" : "NONE"}
+			};`,
+			{
+				...snapshot,
+				snapshot: new RecordId("recovery_snapshot", snapshot.id),
+				work: new RecordId("work", snapshot.workId),
+				branch: new RecordId("branch", snapshot.branchId),
+				...(snapshot.sourceRevisionId
+					? { sourceRevision: new RecordId("revision", snapshot.sourceRevisionId) }
+					: {}),
+				...(snapshot.protection
+					? {
+						protectionReason: snapshot.protection.reason,
+						protectedAt: snapshot.protection.protectedAt,
+						expiresAt: snapshot.protection.expiresAt,
+					}
+					: {}),
+			},
+		);
+	}
+
+	async applyRecoverySnapshot(snapshotId: string, updatedAt: string): Promise<void> {
+		const snapshots = await this.listRecoverySnapshots();
+		const snapshot = snapshots.find((candidate) => candidate.id === snapshotId);
+		if (!snapshot) throw new Error(`Recovery Snapshot not found: ${snapshotId}`);
+		await this.updateBranchWorkingCopy(snapshot.branchId, snapshot.text, updatedAt);
 	}
 
 	async updateOccurrence(occurrence: Occurrence): Promise<void> {
@@ -388,6 +620,7 @@ export class SurrealGraphStore implements GraphStore {
 			DELETE system_relation WHERE from_work = $work OR to_work = $work;
 			DELETE occurrence WHERE work = $work;
 			DELETE working_copy WHERE work = $work;
+			DELETE recovery_snapshot WHERE work = $work;
 			DELETE revision WHERE work = $work;
 			DELETE branch WHERE work = $work;
 			DELETE $work;
@@ -659,17 +892,21 @@ export class SurrealGraphStore implements GraphStore {
 		}));
 	}
 
-	private async listWorkingCopyRows(): Promise<Row[]> {
+	private async listWorkingCopyRows(workId?: string): Promise<Row[]> {
 		const [rows] = await this.#db.query<[Row[]]>(
 			`SELECT record::id(work) AS work_id, record::id(branch) AS branch_id,
-				text, updated_at FROM working_copy;`,
+				text, updated_at FROM working_copy ${workId ? "WHERE work = $work" : ""};`,
+			workId ? { work: new RecordId("work", workId) } : undefined,
 		);
 		return rows;
 	}
 
-	private async listRevisionRows(): Promise<Row[]> {
+	private async listRevisionRows(workId?: string): Promise<Row[]> {
 		const [rows] = await this.#db.query<[Row[]]>(
-			`SELECT record::id(id) AS id, text FROM revision;`,
+			`SELECT record::id(id) AS id, record::id(work) AS work_id, text,
+				parent_revisions, kind, created_at, message
+				FROM revision ${workId ? "WHERE work = $work" : ""};`,
+			workId ? { work: new RecordId("work", workId) } : undefined,
 		);
 		return rows;
 	}

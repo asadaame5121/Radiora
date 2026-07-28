@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
-import type { Branch, Occurrence, Work, WorkingCopy } from "../../src/domain/models.ts";
+import type { Branch, Occurrence, Revision, Work, WorkingCopy } from "../../src/domain/models.ts";
 import type { GraphStore } from "../../src/storage/graph_store.ts";
 
 const CREATED_AT = "2026-07-28T00:00:00.000Z";
@@ -33,9 +33,199 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	await store.updateWorkingCopy(root.work.id, "contract root updated", UPDATED_AT);
 	await store.updateOccurrence({ ...mirror, collapsed: true, contextualHeading: "mirror updated" });
 
+	const firstRevision: Revision = {
+		id: crypto.randomUUID(),
+		workId: root.work.id,
+		text: "first edition",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt: CREATED_AT,
+	};
+	const secondRevision: Revision = {
+		id: crypto.randomUUID(),
+		workId: root.work.id,
+		text: "second edition",
+		parentRevisionIds: [firstRevision.id],
+		kind: "edition",
+		createdAt: UPDATED_AT,
+	};
+	const mergeRevision: Revision = {
+		id: crypto.randomUUID(),
+		workId: root.work.id,
+		text: "merged immutable text",
+		parentRevisionIds: [firstRevision.id, secondRevision.id],
+		kind: "merge",
+		createdAt: UPDATED_AT,
+		message: "two parents",
+	};
+	await store.createRevision(firstRevision, root.branch.id);
+	await store.createRevision(secondRevision, root.branch.id);
+	await store.createRevision(mergeRevision, root.branch.id);
+	mergeRevision.text = "caller mutation must not alter storage";
+	mergeRevision.parentRevisionIds.length = 0;
+	const storedMerge = (await store.listRevisions(root.work.id))
+		.find((revision) => revision.id === mergeRevision.id);
+	assertEquals(storedMerge?.text, "merged immutable text");
+	assertEquals(storedMerge?.parentRevisionIds, [firstRevision.id, secondRevision.id]);
+	assertEquals(
+		(await store.listBranches(root.work.id)).find((branch) => branch.id === root.branch.id)
+			?.headRevisionId,
+		mergeRevision.id,
+	);
+
+	const targetRevision: Revision = {
+		id: crypto.randomUUID(),
+		workId: target.work.id,
+		text: "other work",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt: CREATED_AT,
+	};
+	await store.createRevision(targetRevision, target.branch.id);
+	const rejectedRevisions: Revision[] = [
+		{
+			id: crypto.randomUUID(),
+			workId: root.work.id,
+			text: "missing parent",
+			parentRevisionIds: [crypto.randomUUID()],
+			kind: "edition",
+			createdAt: UPDATED_AT,
+		},
+		{
+			id: crypto.randomUUID(),
+			workId: root.work.id,
+			text: "cross-work parent",
+			parentRevisionIds: [targetRevision.id],
+			kind: "edition",
+			createdAt: UPDATED_AT,
+		},
+		{
+			id: crypto.randomUUID(),
+			workId: root.work.id,
+			text: "duplicate parent",
+			parentRevisionIds: [firstRevision.id, firstRevision.id],
+			kind: "merge",
+			createdAt: UPDATED_AT,
+		},
+	];
+	const selfParentRevision: Revision = {
+		id: crypto.randomUUID(),
+		workId: root.work.id,
+		text: "self parent",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt: UPDATED_AT,
+	};
+	selfParentRevision.parentRevisionIds = [selfParentRevision.id];
+	rejectedRevisions.push(selfParentRevision);
+
+	for (const rejected of rejectedRevisions) {
+		await assertRejects(() => store.createRevision(rejected, root.branch.id));
+		assertEquals(
+			(await store.listRevisions()).some((revision) => revision.id === rejected.id),
+			false,
+		);
+		assertEquals(
+			(await store.listBranches(root.work.id)).find((branch) => branch.id === root.branch.id)
+				?.headRevisionId,
+			mergeRevision.id,
+		);
+	}
+
+	const alternateBranch: Branch = {
+		id: crypto.randomUUID(),
+		workId: root.work.id,
+		name: "alternate",
+		headRevisionId: firstRevision.id,
+		createdAt: UPDATED_AT,
+	};
+	await store.createBranch(alternateBranch, {
+		branchId: alternateBranch.id,
+		workId: root.work.id,
+		text: "alternate draft",
+		updatedAt: UPDATED_AT,
+	});
+	await store.updateBranch({ ...alternateBranch, promotedAt: UPDATED_AT });
+	assertEquals(
+		(await store.listBranches(root.work.id)).find((branch) => branch.id === alternateBranch.id)
+			?.promotedAt,
+		UPDATED_AT,
+	);
+	const alternateOccurrence: Occurrence = {
+		id: crypto.randomUUID(),
+		workId: root.work.id,
+		parentOccurrenceId: null,
+		orderKey: 4096,
+		collapsed: false,
+		revisionSelector: { mode: "branch", branchId: alternateBranch.id },
+	};
+	const pinnedOccurrence: Occurrence = {
+		id: crypto.randomUUID(),
+		workId: root.work.id,
+		parentOccurrenceId: null,
+		orderKey: 5120,
+		collapsed: false,
+		revisionSelector: { mode: "pinned", revisionId: mergeRevision.id },
+	};
+	await store.createOccurrence(alternateOccurrence);
+	await store.createOccurrence(pinnedOccurrence);
+	await store.updateBranchWorkingCopy(
+		alternateBranch.id,
+		"alternate independently updated",
+		UPDATED_AT,
+	);
+	await store.updateWorkingCopy(root.work.id, "contract root compatibility updated", UPDATED_AT);
+	const projected = await store.listItems();
+	assertEquals(
+		projected.find((item) => item.id === root.occurrence.id)?.text,
+		"contract root compatibility updated",
+	);
+	assertEquals(
+		projected.find((item) => item.id === alternateOccurrence.id)?.text,
+		"alternate independently updated",
+	);
+	assertEquals(
+		projected.find((item) => item.id === pinnedOccurrence.id)?.text,
+		"merged immutable text",
+	);
+
+	const revisionCount = (await store.listRevisions(root.work.id)).length;
+	const snapshotId = crypto.randomUUID();
+	await store.createRecoverySnapshot({
+		id: snapshotId,
+		workId: root.work.id,
+		branchId: alternateBranch.id,
+		text: "snapshot draft",
+		contentHash: "sha256:contract",
+		createdAt: UPDATED_AT,
+		sourceRevisionId: firstRevision.id,
+		name: "before rewrite",
+		protection: {
+			reason: "revision-source",
+			protectedAt: UPDATED_AT,
+		},
+	});
+	assertEquals((await store.listRevisions(root.work.id)).length, revisionCount);
+	assertEquals(
+		(await store.listRecoverySnapshots(root.work.id, alternateBranch.id))[0].sourceRevisionId,
+		firstRevision.id,
+	);
+	await store.applyRecoverySnapshot(snapshotId, DELETED_AT);
+	assertEquals(
+		(await store.listItems()).find((item) => item.id === alternateOccurrence.id)?.text,
+		"snapshot draft",
+	);
+
 	const rootItems = (await store.listItems()).filter((item) => item.workId === root.work.id);
-	assertEquals(rootItems.length, 2);
-	assert(rootItems.every((item) => item.text === "contract root updated"));
+	assertEquals(rootItems.length, 4);
+	assertEquals(
+		rootItems.find((item) => item.id === root.occurrence.id)?.text,
+		"contract root compatibility updated",
+	);
+	assertEquals(
+		rootItems.find((item) => item.id === mirror.id)?.text,
+		"contract root compatibility updated",
+	);
 	assertEquals(rootItems.find((item) => item.id === mirror.id)?.parentId, target.occurrence.id);
 	assertEquals(rootItems.find((item) => item.id === mirror.id)?.collapsed, true);
 	assertEquals(
@@ -109,19 +299,19 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	assertEquals(
 		(await store.listOccurrences(true)).filter((occurrence) => occurrence.workId === root.work.id)
 			.length,
-		2,
+		4,
 	);
 
 	await store.restoreWork(root.work.id);
 	assertEquals(
 		(await store.listItems()).filter((item) => item.workId === root.work.id).length,
-		2,
+		4,
 	);
 	await store.deleteOccurrence(mirror.id);
 	assertEquals(
 		(await store.listOccurrences()).filter((occurrence) => occurrence.workId === root.work.id)
 			.length,
-		1,
+		3,
 	);
 
 	await store.trashWork(root.work.id, DELETED_AT);
@@ -129,6 +319,10 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	assertEquals(manifest.workId, root.work.id);
 	assert(manifest.occurrenceIds.includes(root.occurrence.id));
 	assert(manifest.linkIds.includes(linkId));
+	assert(manifest.revisionIds.includes(firstRevision.id));
+	assert(manifest.revisionIds.includes(secondRevision.id));
+	assert(manifest.revisionIds.includes(mergeRevision.id));
+	assertEquals((await store.listRecoverySnapshots(root.work.id)).length, 0);
 	assertEquals((await store.listWorks(true)).some((work) => work.id === root.work.id), false);
 	assertEquals((await store.listLinks()).some((candidate) => candidate.id === linkId), false);
 	assert((await store.listPurgeManifests()).some((candidate) => candidate.id === manifest.id));

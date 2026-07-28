@@ -1,13 +1,14 @@
 export async function prepareStorageMigrationBackup(
 	databasePath: string,
-	backupPath: string,
+	backupRoot: string,
 	versionMarkerPath: string,
 	targetVersion: number,
 ): Promise<string | null> {
-	assertSeparatePaths(databasePath, backupPath);
 	const recordedVersion = await readRecordedVersion(versionMarkerPath);
 	if (recordedVersion >= targetVersion) return null;
 	if (!(await exists(databasePath))) return null;
+	const backupPath = `${backupRoot}\\storage-v${recordedVersion}`;
+	assertSeparatePaths(databasePath, backupRoot);
 	if (await exists(backupPath)) return backupPath;
 
 	await copyPath(databasePath, backupPath);
@@ -32,6 +33,7 @@ export async function restoreStorageMigrationBackup(
 	if (!(await exists(backupPath))) {
 		throw new Error(`Storage migration backup not found: ${backupPath}`);
 	}
+	const sourceVersion = backupSourceVersion(backupPath);
 
 	const restorePath = `${databasePath}.restore-${crypto.randomUUID()}`;
 	const failedDatabasePath = await exists(databasePath)
@@ -42,7 +44,11 @@ export async function restoreStorageMigrationBackup(
 		await copyPath(backupPath, restorePath);
 		if (failedDatabasePath) await Deno.rename(databasePath, failedDatabasePath);
 		await Deno.rename(restorePath, databasePath);
-		await removeIfExists(versionMarkerPath);
+		if (sourceVersion === 0) {
+			await removeIfExists(versionMarkerPath);
+		} else {
+			await recordStorageVersion(versionMarkerPath, sourceVersion);
+		}
 		return { databasePath, failedDatabasePath };
 	} catch (cause) {
 		await removeIfExists(restorePath, true);
@@ -55,6 +61,15 @@ export async function restoreStorageMigrationBackup(
 		}
 		throw cause;
 	}
+}
+
+function backupSourceVersion(path: string): number {
+	const match = /(?:^|[\\/])storage-v(\d+)$/.exec(path);
+	const version = Number(match?.[1]);
+	if (!Number.isSafeInteger(version) || version < 0) {
+		throw new Error(`Invalid storage migration backup path: ${path}`);
+	}
+	return version;
 }
 
 async function readRecordedVersion(path: string): Promise<number> {

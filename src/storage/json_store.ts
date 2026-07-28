@@ -5,6 +5,8 @@ import type {
 	Occurrence,
 	OutlineLink,
 	PurgeManifest,
+	RecoverySnapshot,
+	Revision,
 	SavedRuleQuery,
 	SearchAlias,
 	SystemRelation,
@@ -39,7 +41,7 @@ interface BackupV0 {
 	savedRuleQueries?: SavedRuleQuery[];
 }
 
-interface StoredGraphV1 {
+export interface StoredGraphV1 {
 	works: Work[];
 	branches: Branch[];
 	workingCopies: WorkingCopy[];
@@ -53,13 +55,35 @@ interface StoredGraphV1 {
 	purgeManifests: PurgeManifest[];
 }
 
-interface BackupV1 {
+export interface BackupV1 {
 	format: "radiora-backup";
 	schemaVersion: 1;
 	exportedAt: string;
 	appVersion: string;
 	source: { storageSchemaVersion: 1 };
 	data: StoredGraphV1;
+}
+
+export interface StoredGraphV2 extends StoredGraphV1 {
+	revisions: Revision[];
+	recoverySnapshots: RecoverySnapshot[];
+}
+
+interface BackupV2 {
+	format: "radiora-backup";
+	schemaVersion: 2;
+	exportedAt: string;
+	appVersion: string;
+	source: { storageSchemaVersion: 2 };
+	data: StoredGraphV2;
+}
+
+export function migrateBackupV1(data: StoredGraphV1): StoredGraphV2 {
+	return {
+		...data,
+		revisions: [],
+		recoverySnapshots: [],
+	};
 }
 
 export function migrateBackupV0(data: BackupV0): StoredGraphV1 {
@@ -137,11 +161,19 @@ export class JsonGraphStore extends MemoryGraphStore {
 
 	override async initialize(): Promise<void> {
 		try {
-			const parsed = JSON.parse(await Deno.readTextFile(this.path)) as BackupV0 | BackupV1;
-			const data = "schemaVersion" in parsed ? this.readV1(parsed) : migrateBackupV0(parsed);
+			const parsed = JSON.parse(await Deno.readTextFile(this.path)) as
+				| BackupV0
+				| BackupV1
+				| BackupV2;
+			const data = "schemaVersion" in parsed
+				? this.readVersioned(parsed)
+				: migrateBackupV1(migrateBackupV0(parsed));
 			this.load(data);
 			if (!("schemaVersion" in parsed)) {
 				await this.protectVersionZeroInput();
+				await this.persist();
+			} else if (parsed.schemaVersion === 1) {
+				await this.protectVersionOneInput();
 				await this.persist();
 			}
 		} catch (cause) {
@@ -164,12 +196,46 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await this.persist();
 	}
 
+	override async createBranch(branch: Branch, workingCopy: WorkingCopy): Promise<void> {
+		await super.createBranch(branch, workingCopy);
+		await this.persist();
+	}
+
+	override async updateBranch(branch: Branch): Promise<void> {
+		await super.updateBranch(branch);
+		await this.persist();
+	}
+
+	override async updateBranchWorkingCopy(
+		branchId: string,
+		text: string,
+		updatedAt: string,
+	): Promise<void> {
+		await super.updateBranchWorkingCopy(branchId, text, updatedAt);
+		await this.persist();
+	}
+
 	override async updateWorkingCopy(
 		workId: string,
 		text: string,
 		updatedAt: string,
 	): Promise<void> {
 		await super.updateWorkingCopy(workId, text, updatedAt);
+		await this.persist();
+	}
+
+	override async createRevision(revision: Revision, branchId: string): Promise<void> {
+		await super.createRevision(revision, branchId);
+		await this.persist();
+	}
+
+	override async createRecoverySnapshot(snapshot: RecoverySnapshot): Promise<void> {
+		await super.createRecoverySnapshot(snapshot);
+		await this.persist();
+	}
+
+	override async applyRecoverySnapshot(snapshotId: string, updatedAt: string): Promise<void> {
+		await super.applyRecoverySnapshot(snapshotId, updatedAt);
 		await this.persist();
 	}
 
@@ -242,17 +308,24 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await this.persist();
 	}
 
-	private readV1(parsed: BackupV1): StoredGraphV1 {
+	private readVersioned(parsed: BackupV1 | BackupV2): StoredGraphV2 {
 		if (parsed.format !== "radiora-backup") {
 			throw new Error(`Unsupported backup format: ${String(parsed.format)}`);
 		}
-		if (parsed.schemaVersion !== 1) {
-			throw new Error(`Unsupported backup schema version: ${String(parsed.schemaVersion)}`);
+		if (parsed.schemaVersion === 1) {
+			return migrateBackupV1(parsed.data);
+		}
+		if (parsed.schemaVersion !== 2) {
+			throw new Error(
+				`Unsupported backup schema version: ${
+					String((parsed as { schemaVersion: unknown }).schemaVersion)
+				}`,
+			);
 		}
 		return parsed.data;
 	}
 
-	private load(data: StoredGraphV1): void {
+	private load(data: StoredGraphV2): void {
 		this.works = data.works ?? [];
 		this.branches = data.branches ?? [];
 		this.workingCopies = data.workingCopies ?? [];
@@ -264,15 +337,17 @@ export class JsonGraphStore extends MemoryGraphStore {
 		this.emergenceFeedback = data.emergenceFeedback ?? {};
 		this.savedRuleQueries = data.savedRuleQueries ?? [];
 		this.purgeManifests = data.purgeManifests ?? [];
+		this.revisions = data.revisions ?? [];
+		this.recoverySnapshots = data.recoverySnapshots ?? [];
 	}
 
 	private async persist(): Promise<void> {
-		const backup: BackupV1 = {
+		const backup: BackupV2 = {
 			format: "radiora-backup",
-			schemaVersion: 1,
+			schemaVersion: 2,
 			exportedAt: new Date().toISOString(),
 			appVersion: "0.1.0",
-			source: { storageSchemaVersion: 1 },
+			source: { storageSchemaVersion: 2 },
 			data: {
 				works: this.works,
 				branches: this.branches,
@@ -285,6 +360,8 @@ export class JsonGraphStore extends MemoryGraphStore {
 				emergenceFeedback: this.emergenceFeedback,
 				savedRuleQueries: this.savedRuleQueries,
 				purgeManifests: this.purgeManifests,
+				revisions: this.revisions,
+				recoverySnapshots: this.recoverySnapshots,
 			},
 		};
 		await Deno.writeTextFile(this.path, JSON.stringify(backup, null, 2));
@@ -294,6 +371,18 @@ export class JsonGraphStore extends MemoryGraphStore {
 		const backup = typeof this.path === "string"
 			? `${this.path}.v0.bak`
 			: new URL(`${this.path.href}.v0.bak`);
+		try {
+			await Deno.stat(backup);
+		} catch (cause) {
+			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
+			await Deno.copyFile(this.path, backup);
+		}
+	}
+
+	private async protectVersionOneInput(): Promise<void> {
+		const backup = typeof this.path === "string"
+			? `${this.path}.v1.bak`
+			: new URL(`${this.path.href}.v1.bak`);
 		try {
 			await Deno.stat(backup);
 		} catch (cause) {

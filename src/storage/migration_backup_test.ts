@@ -5,31 +5,49 @@ import {
 	restoreStorageMigrationBackup,
 } from "./migration_backup.ts";
 
-Deno.test("migration backup is cold-copied once and skipped after version is recorded", async () => {
+Deno.test("migration backups are isolated and reused by recorded source version", async () => {
 	const directory = await Deno.makeTempDir();
 	const database = `${directory}\\main.db`;
-	const backup = `${directory}\\migration-backups\\storage-v0`;
+	const backupRoot = `${directory}\\migration-backups`;
+	const backupV0 = `${backupRoot}\\storage-v0`;
+	const backupV1 = `${backupRoot}\\storage-v1`;
 	const marker = `${directory}\\storage-schema-version`;
 	try {
 		await Deno.mkdir(database);
 		await Deno.writeTextFile(`${database}\\CURRENT`, "legacy");
 
 		assertEquals(
-			await prepareStorageMigrationBackup(database, backup, marker, 1),
-			backup,
+			await prepareStorageMigrationBackup(database, backupRoot, marker, 1),
+			backupV0,
 		);
-		assertEquals(await Deno.readTextFile(`${backup}\\CURRENT`), "legacy");
+		assertEquals(await Deno.readTextFile(`${backupV0}\\CURRENT`), "legacy");
 
-		await Deno.writeTextFile(`${database}\\CURRENT`, "changed");
+		await Deno.writeTextFile(`${database}\\CURRENT`, "must not replace v0");
 		assertEquals(
-			await prepareStorageMigrationBackup(database, backup, marker, 1),
-			backup,
+			await prepareStorageMigrationBackup(database, backupRoot, marker, 1),
+			backupV0,
 		);
-		assertEquals(await Deno.readTextFile(`${backup}\\CURRENT`), "legacy");
+		assertEquals(await Deno.readTextFile(`${backupV0}\\CURRENT`), "legacy");
 
 		await recordStorageVersion(marker, 1);
+		await Deno.writeTextFile(`${database}\\CURRENT`, "version-one");
 		assertEquals(
-			await prepareStorageMigrationBackup(database, backup, marker, 1),
+			await prepareStorageMigrationBackup(database, backupRoot, marker, 2),
+			backupV1,
+		);
+		assertEquals(await Deno.readTextFile(`${backupV1}\\CURRENT`), "version-one");
+		assertEquals(await Deno.readTextFile(`${backupV0}\\CURRENT`), "legacy");
+
+		await Deno.writeTextFile(`${database}\\CURRENT`, "must not replace v1");
+		assertEquals(
+			await prepareStorageMigrationBackup(database, backupRoot, marker, 2),
+			backupV1,
+		);
+		assertEquals(await Deno.readTextFile(`${backupV1}\\CURRENT`), "version-one");
+
+		await recordStorageVersion(marker, 2);
+		assertEquals(
+			await prepareStorageMigrationBackup(database, backupRoot, marker, 2),
 			null,
 		);
 	} finally {
@@ -40,13 +58,14 @@ Deno.test("migration backup is cold-copied once and skipped after version is rec
 Deno.test("failed migration restores the cold backup and can restart cleanly", async () => {
 	const directory = await Deno.makeTempDir();
 	const database = `${directory}\\main.db`;
-	const backup = `${directory}\\migration-backups\\storage-v0`;
+	const backupRoot = `${directory}\\migration-backups`;
+	const backup = `${backupRoot}\\storage-v0`;
 	const marker = `${directory}\\storage-schema-version`;
 	try {
 		await Deno.mkdir(database);
 		await Deno.writeTextFile(`${database}\\CURRENT`, "legacy");
 		await Deno.writeTextFile(`${database}\\data.json`, '{"value":"before"}');
-		await prepareStorageMigrationBackup(database, backup, marker, 1);
+		await prepareStorageMigrationBackup(database, backupRoot, marker, 1);
 
 		await Deno.writeTextFile(`${database}\\CURRENT`, "partial-migration");
 		await Deno.writeTextFile(`${database}\\data.json`, '{"value":"corrupted"}');
@@ -62,14 +81,42 @@ Deno.test("failed migration restores the cold backup and can restart cleanly", a
 		assertEquals(await pathExists(marker), false);
 
 		assertEquals(
-			await prepareStorageMigrationBackup(database, backup, marker, 1),
+			await prepareStorageMigrationBackup(database, backupRoot, marker, 1),
 			backup,
 		);
 		await Deno.writeTextFile(`${database}\\CURRENT`, "migration-complete");
 		await recordStorageVersion(marker, 1);
 		assertEquals(
-			await prepareStorageMigrationBackup(database, backup, marker, 1),
+			await prepareStorageMigrationBackup(database, backupRoot, marker, 1),
 			null,
+		);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("failed version 1 to 2 migration restores its exact v1 backup and marker", async () => {
+	const directory = await Deno.makeTempDir();
+	const database = `${directory}\\main.db`;
+	const backupRoot = `${directory}\\migration-backups`;
+	const backupV1 = `${backupRoot}\\storage-v1`;
+	const marker = `${directory}\\storage-schema-version`;
+	try {
+		await Deno.mkdir(database);
+		await Deno.writeTextFile(`${database}\\CURRENT`, "version-one");
+		await recordStorageVersion(marker, 1);
+		const prepared = await prepareStorageMigrationBackup(database, backupRoot, marker, 2);
+		assertEquals(prepared, backupV1);
+
+		await Deno.writeTextFile(`${database}\\CURRENT`, "partial-version-two");
+		await recordStorageVersion(marker, 2);
+		await restoreStorageMigrationBackup(database, prepared!, marker);
+		assertEquals(await Deno.readTextFile(`${database}\\CURRENT`), "version-one");
+		assertEquals(await Deno.readTextFile(marker), "1\n");
+
+		assertEquals(
+			await prepareStorageMigrationBackup(database, backupRoot, marker, 2),
+			backupV1,
 		);
 	} finally {
 		await Deno.remove(directory, { recursive: true });

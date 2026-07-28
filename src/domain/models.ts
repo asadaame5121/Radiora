@@ -37,6 +37,37 @@ export interface WorkingCopy {
 	updatedAt: string;
 }
 
+export type RevisionKind = "checkpoint" | "edition" | "merge";
+
+export interface Revision {
+	id: string;
+	workId: string;
+	text: string;
+	parentRevisionIds: string[];
+	kind: RevisionKind;
+	createdAt: string;
+	message?: string;
+}
+
+export interface SnapshotProtection {
+	reason: "user" | "import" | "schema-migration" | "revision-source";
+	protectedAt: string;
+	expiresAt?: string;
+}
+
+export interface RecoverySnapshot {
+	id: string;
+	workId: string;
+	branchId: string;
+	text: string;
+	contentHash: string;
+	createdAt: string;
+	/** Revision at the Branch head when this Snapshot was captured. */
+	sourceRevisionId: string | null;
+	name?: string;
+	protection?: SnapshotProtection;
+}
+
 export type RevisionSelector =
 	| { mode: "branch"; branchId: string }
 	| { mode: "pinned"; revisionId: string };

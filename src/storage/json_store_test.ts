@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { JsonGraphStore, migrateBackupV0 } from "./json_store.ts";
 
-Deno.test("new saves use the version 1 backup envelope and reload graph data", async () => {
+Deno.test("new saves use the version 2 backup envelope and reload graph data", async () => {
 	const directory = await Deno.makeTempDir();
 	const path = `${directory}/graph.json`;
 	const timestamp = "2026-01-01T00:00:00.000Z";
@@ -21,13 +21,30 @@ Deno.test("new saves use the version 1 backup envelope and reload graph data", a
 				revisionSelector: { mode: "branch", branchId: "main" },
 			},
 		);
+		await first.createRevision({
+			id: "revision-one",
+			workId: "one",
+			text: "immutable",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: timestamp,
+		}, "main");
+		await first.createRecoverySnapshot({
+			id: "snapshot-one",
+			workId: "one",
+			branchId: "main",
+			text: "persistent",
+			contentHash: "sha256:persistent",
+			createdAt: timestamp,
+			sourceRevisionId: "revision-one",
+		});
 
 		const backup = JSON.parse(await Deno.readTextFile(path));
 		assertEquals(backup.format, "radiora-backup");
-		assertEquals(backup.schemaVersion, 1);
+		assertEquals(backup.schemaVersion, 2);
 		assertEquals(typeof backup.exportedAt, "string");
 		assertEquals(typeof backup.appVersion, "string");
-		assertEquals(backup.source, { storageSchemaVersion: 1 });
+		assertEquals(backup.source, { storageSchemaVersion: 2 });
 		assertEquals(backup.items, undefined);
 		assertEquals(backup.data.works[0].id, "one");
 		assertEquals(backup.data.workingCopies[0].text, "persistent");
@@ -37,6 +54,11 @@ Deno.test("new saves use the version 1 backup envelope and reload graph data", a
 		await second.initialize();
 		assertEquals((await second.listItems())[0].text, "persistent");
 		assertEquals((await second.listItems())[0].workId, "one");
+		assertEquals((await second.listRevisions("one"))[0].text, "immutable");
+		assertEquals(
+			(await second.listRecoverySnapshots("one", "main"))[0].sourceRevisionId,
+			"revision-one",
+		);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -48,10 +70,10 @@ Deno.test("rejects a future backup version without overwriting it", async () => 
 	const futureBackup = JSON.stringify(
 		{
 			format: "radiora-backup",
-			schemaVersion: 2,
+			schemaVersion: 3,
 			exportedAt: "2026-01-01T00:00:00.000Z",
 			appVersion: "9.9.9",
-			source: { storageSchemaVersion: 2 },
+			source: { storageSchemaVersion: 3 },
 			data: { future: "must remain untouched" },
 		},
 		null,
@@ -64,11 +86,42 @@ Deno.test("rejects a future backup version without overwriting it", async () => 
 		await assertRejects(
 			() => store.initialize(),
 			Error,
-			"Unsupported backup schema version: 2",
+			"Unsupported backup schema version: 3",
 		);
 		assertEquals(await Deno.readTextFile(path), futureBackup);
 		await assertRejects(
 			() => Deno.stat(`${path}.v0.bak`),
+			Deno.errors.NotFound,
+		);
+		await assertRejects(
+			() => Deno.stat(`${path}.v1.bak`),
+			Deno.errors.NotFound,
+		);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("failed version 1 validation does not create a protected migration backup", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/invalid-v1.json`;
+	const invalidInput = JSON.stringify({
+		format: "not-radiora",
+		schemaVersion: 1,
+		data: {},
+	});
+	try {
+		await Deno.writeTextFile(path, invalidInput);
+		const store = new JsonGraphStore(path);
+
+		await assertRejects(
+			() => store.initialize(),
+			Error,
+			"Unsupported backup format",
+		);
+		assertEquals(await Deno.readTextFile(path), invalidInput);
+		await assertRejects(
+			() => Deno.stat(`${path}.v1.bak`),
 			Deno.errors.NotFound,
 		);
 	} finally {
@@ -119,6 +172,76 @@ Deno.test("persists retracted semantic links as history", async () => {
 	}
 });
 
+Deno.test("version 1 backup migrates losslessly to version 2 and reloads", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/backup-v1.json`;
+	const timestamp = "2026-01-01T00:00:00.000Z";
+	const data = {
+		works: [{ id: "one", createdAt: timestamp, updatedAt: timestamp }],
+		branches: [{
+			id: "one-main",
+			workId: "one",
+			name: "main",
+			headRevisionId: null,
+			createdAt: timestamp,
+		}],
+		workingCopies: [{
+			branchId: "one-main",
+			workId: "one",
+			text: "v1本文",
+			updatedAt: timestamp,
+		}],
+		occurrences: [{
+			id: "one-occurrence",
+			workId: "one",
+			parentOccurrenceId: null,
+			orderKey: 1,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "one-main" },
+		}],
+		links: [],
+		systemRelations: [],
+		knots: [],
+		aliases: [],
+		emergenceFeedback: {},
+		savedRuleQueries: [],
+		purgeManifests: [],
+	};
+	try {
+		const versionOneInput = JSON.stringify(
+			{
+				format: "radiora-backup",
+				schemaVersion: 1,
+				exportedAt: timestamp,
+				appVersion: "0.1.0",
+				source: { storageSchemaVersion: 1 },
+				data,
+			},
+			null,
+			2,
+		);
+		await Deno.writeTextFile(path, versionOneInput);
+
+		const migrated = new JsonGraphStore(path);
+		await migrated.initialize();
+		assertEquals((await migrated.listItems())[0].text, "v1本文");
+		assertEquals(await Deno.readTextFile(`${path}.v1.bak`), versionOneInput);
+		const envelope = JSON.parse(await Deno.readTextFile(path));
+		assertEquals(envelope.schemaVersion, 2);
+		assertEquals(envelope.data.works, data.works);
+		assertEquals(envelope.data.workingCopies, data.workingCopies);
+		assertEquals(envelope.data.revisions, []);
+		assertEquals(envelope.data.recoverySnapshots, []);
+
+		const reloaded = new JsonGraphStore(path);
+		await reloaded.initialize();
+		assertEquals((await reloaded.listItems())[0].text, "v1本文");
+		assertEquals(await Deno.readTextFile(`${path}.v1.bak`), versionOneInput);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
 Deno.test("loads the complete version 0 JSON fixture without data loss", async () => {
 	const fixture = new URL("../../tests/fixtures/backup-v0.json", import.meta.url);
 	const directory = await Deno.makeTempDir();
@@ -144,7 +267,7 @@ Deno.test("loads the complete version 0 JSON fixture without data loss", async (
 		assertEquals(await store.getEmergenceFeedback("suggestion-1"), "pin");
 		assertEquals((await store.listSavedRuleQueries())[0].name, "LIKEリンク");
 		const migrated = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(migrated.schemaVersion, 1);
+		assertEquals(migrated.schemaVersion, 2);
 		assertEquals(migrated.data.works.length, 5);
 		assertEquals(migrated.data.occurrences[1].parentOccurrenceId, items[0].id);
 		assertEquals(
@@ -199,7 +322,7 @@ Deno.test("version 0 IN links migrate to system relations, not semantic links", 
 	assertEquals(migrated.occurrences[1].parentOccurrenceId, "one");
 });
 
-Deno.test("version 1 reload preserves trash state and content-free purge manifests", async () => {
+Deno.test("version 2 reload preserves trash state and content-free purge manifests", async () => {
 	const directory = await Deno.makeTempDir();
 	const path = `${directory}/graph.json`;
 	const timestamp = "2026-01-01T00:00:00.000Z";
