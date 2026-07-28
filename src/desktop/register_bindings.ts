@@ -18,6 +18,7 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		getStartupStatus: async () => context.getStartupStatus(),
 		retryStartup: () => context.retryStartup(),
 		listOutline: () => service().listOutline(),
+		projectDates: (range) => service().projectDates(range),
 		listBookmarks: () => service().listBookmarks(),
 		createBookmark: (occurrenceId) => service().createBookmark(occurrenceId),
 		deleteBookmark: (id) => service().deleteBookmark(id),

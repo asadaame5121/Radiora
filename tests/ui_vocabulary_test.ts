@@ -16,6 +16,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"tag",
 		"bookmark",
 		"resumePosition",
+		"today",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -33,5 +34,6 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		tag: "タグ",
 		bookmark: "栞",
 		resumePosition: "作業再開位置",
+		today: "今日",
 	});
 });

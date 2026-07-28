@@ -9,7 +9,7 @@ Deno.test("global and selected Work lineage have separate UI responsibilities", 
 		new URL("../src/ui/WorkLineage.svelte", import.meta.url),
 	);
 
-	assert(app.includes('type ViewMode = "outline" | "globalLineage" | "workLineage"'));
+	assert(app.includes('type ViewMode = "outline" | "today" | "globalLineage" | "workLineage"'));
 	assert(app.includes("<GlobalLineage"));
 	assert(app.includes("<WorkLineage"));
 	assert(global.includes("<PhylogeneticTree"));

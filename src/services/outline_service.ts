@@ -44,6 +44,7 @@ import {
 } from "./recovery_snapshot_service.ts";
 import { TagService } from "./tag_service.ts";
 import { NavigationService } from "./navigation_service.ts";
+import { type DateProjection, DateProjectionService, type DateRange } from "./date_projection.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -85,6 +86,10 @@ export class OutlineService {
 
 	clearResumePosition(): Promise<void> {
 		return new NavigationService(this.store).clearResumePosition();
+	}
+
+	projectDates(range: DateRange): Promise<DateProjection> {
+		return new DateProjectionService(this.store).project(range);
 	}
 
 	async listOutline(): Promise<OutlineSnapshot> {

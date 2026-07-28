@@ -28,12 +28,14 @@ import type {
 	TrashEntry,
 } from "../domain/models.ts";
 import type { GlobalLineageProjection, WorkLineageProjection } from "../services/branch_service.ts";
+import type { DateProjection, DateRange } from "../services/date_projection.ts";
 import type { RecoverySnapshotPreview } from "../services/recovery_snapshot_service.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	listOutline(): Promise<OutlineSnapshot>;
+	projectDates(range: DateRange): Promise<DateProjection>;
 	listBookmarks(): Promise<Bookmark[]>;
 	createBookmark(occurrenceId: string): Promise<Bookmark>;
 	deleteBookmark(id: string): Promise<void>;
