@@ -2,6 +2,7 @@
 	import { onMount, tick } from "svelte";
 	import GlobalLineage from "./GlobalLineage.svelte";
 	import RevisionComparison from "./RevisionComparison.svelte";
+	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
 	import type {
 		EmergenceAction,
@@ -15,6 +16,7 @@
 		SearchAlias,
 		SearchResult,
 		Revision,
+		RecoverySnapshot,
 		Suggestion,
 		TrashEntry,
 	} from "../domain/models";
@@ -77,6 +79,7 @@
 	let draggedId = $state<string | null>(null);
 	let trashEntries = $state<TrashEntry[]>([]);
 	let revisions = $state<Revision[]>([]);
+	let recoverySnapshots = $state<RecoverySnapshot[]>([]);
 	let revisionsLoading = $state(false);
 	let revisionLoadRequest = 0;
 	let globalLineage = $state<GlobalLineageProjection | null>(null);
@@ -96,6 +99,11 @@
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
+	const selectedBranchId = $derived(
+		selectedItem?.revisionSelector.mode === "branch"
+			? selectedItem.revisionSelector.branchId
+			: null,
+	);
 	const selectedPlacements = $derived(selectedItem
 		? snapshot.items.filter((item) => item.workId === selectedItem.workId)
 			.sort((left, right) => left.orderKey - right.orderKey || left.id.localeCompare(right.id))
@@ -138,8 +146,11 @@
 		if (workId && startup.phase === "ready") {
 			void loadRevisions(workId);
 			void loadWorkLineage(workId);
+			if (selectedBranchId) void loadRecoverySnapshots(workId, selectedBranchId);
+			else recoverySnapshots = [];
 		} else {
 			revisions = [];
+			recoverySnapshots = [];
 			workLineage = null;
 		}
 	});
@@ -320,6 +331,42 @@
 		} finally {
 			if (request === revisionLoadRequest) revisionsLoading = false;
 		}
+	}
+
+	async function loadRecoverySnapshots(workId: string, branchId: string): Promise<void> {
+		try {
+			recoverySnapshots = await api.listRecoverySnapshots(workId, branchId);
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function restoreRecoverySnapshot(snapshotId: string): Promise<void> {
+		if (!selectedItem || !selectedBranchId) return;
+		await autosave.flush();
+		await api.restoreRecoverySnapshot(
+			snapshotId,
+			selectedItem.workId,
+			selectedBranchId,
+			"confirmed",
+		);
+		await load();
+		await loadRecoverySnapshots(selectedItem.workId, selectedBranchId);
+	}
+
+	async function promoteRecoverySnapshot(snapshotId: string): Promise<void> {
+		if (!selectedItem || !selectedBranchId) return;
+		await api.promoteRecoverySnapshot(
+			snapshotId,
+			selectedItem.workId,
+			selectedBranchId,
+			"confirmed",
+		);
+		await Promise.all([
+			loadRevisions(selectedItem.workId),
+			loadWorkLineage(selectedItem.workId),
+			loadRecoverySnapshots(selectedItem.workId, selectedBranchId),
+		]);
 	}
 
 	async function loadWorkLineage(workId: string): Promise<void> {
@@ -849,6 +896,19 @@
 			{:else if workLineage}
 				{#key workLineage.work.id}
 					<WorkLineage projection={workLineage} onCompare={openRevisionComparison} />
+					{#if selectedItem && selectedBranchId}
+						<RecoverySnapshots
+							snapshots={recoverySnapshots}
+							loadPreview={(snapshotId) =>
+								api.previewRecoverySnapshot(
+									snapshotId,
+									selectedItem.workId,
+									selectedBranchId,
+								)}
+							onRestore={restoreRecoverySnapshot}
+							onPromote={promoteRecoverySnapshot}
+						/>
+					{/if}
 				{/key}
 			{:else}
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.work}を選択してください。</p></section>

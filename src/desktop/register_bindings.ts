@@ -19,6 +19,19 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		retryStartup: () => context.retryStartup(),
 		listOutline: () => service().listOutline(),
 		listRevisions: (workId) => service().listRevisions(workId),
+		listRecoverySnapshots: (workId, branchId) => service().listRecoverySnapshots(workId, branchId),
+		previewRecoverySnapshot: (snapshotId, workId, branchId) =>
+			service().previewRecoverySnapshot(snapshotId, workId, branchId),
+		restoreRecoverySnapshot: (snapshotId, workId, branchId, confirmation) =>
+			service().restoreRecoverySnapshot(snapshotId, workId, branchId, confirmation),
+		promoteRecoverySnapshot: (snapshotId, workId, branchId, confirmation, message) =>
+			service().promoteRecoverySnapshot(
+				snapshotId,
+				workId,
+				branchId,
+				confirmation,
+				message,
+			),
 		listGlobalLineage: () => service().listGlobalLineage(),
 		listWorkLineage: (workId) => service().listWorkLineage(workId),
 		createItem: (input) => service().createItem(input),

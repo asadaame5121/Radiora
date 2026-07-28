@@ -7,7 +7,8 @@ export type UiEntityCode =
 	| "branch"
 	| "merge"
 	| "globalLineage"
-	| "workLineage";
+	| "workLineage"
+	| "recoverySnapshot";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -21,4 +22,5 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	merge: "混成稿",
 	globalLineage: "全体系統",
 	workLineage: "版系統",
+	recoverySnapshot: "復元用保存",
 });

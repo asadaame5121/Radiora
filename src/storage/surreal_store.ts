@@ -52,6 +52,36 @@ export function evolvedFromEndpoints(
 	return { inId: parentId, outId: childId };
 }
 
+export function recoveryRestoreTransactionQuery(
+	hasSourceRevision: boolean,
+	hasName: boolean,
+): string {
+	return `BEGIN TRANSACTION;
+			CREATE $beforeRestore CONTENT {
+				work: $work, branch: $branch, text: $beforeText, content_hash: $contentHash,
+				created_at: $createdAt,
+				source_revision: ${hasSourceRevision ? "$sourceRevision" : "NONE"},
+				name: ${hasName ? "$name" : "NONE"},
+				protection_reason: NONE, protected_at: NONE, protection_expires_at: NONE
+			};
+			UPDATE working_copy SET text = $targetText, updated_at = $updatedAt
+				WHERE branch = $branch;
+			UPDATE $work SET updated_at = $updatedAt;
+			COMMIT TRANSACTION;`;
+}
+
+export function recoveryPromotionTransactionQuery(hasMessage: boolean): string {
+	return `BEGIN TRANSACTION;
+			CREATE $revision CONTENT {
+				work: $work, text: $text, parent_revisions: $parents, kind: $kind,
+				created_at: $createdAt, message: ${hasMessage ? "$message" : "NONE"}
+			};
+			UPDATE $branch SET head_revision = $revision;
+			UPDATE $snapshot SET protection_reason = "revision-source",
+				protected_at = $protectedAt, protection_expires_at = NONE;
+			COMMIT TRANSACTION;`;
+}
+
 function domainId(
 	value: unknown,
 	field: "id" | "work_id" | "parent_id" | "branch_id" | "revision_id",
@@ -544,6 +574,88 @@ export class SurrealGraphStore implements GraphStore {
 		const snapshot = snapshots.find((candidate) => candidate.id === snapshotId);
 		if (!snapshot) throw new Error(`Recovery Snapshot not found: ${snapshotId}`);
 		await this.updateBranchWorkingCopy(snapshot.branchId, snapshot.text, updatedAt);
+	}
+
+	async restoreRecoverySnapshot(
+		snapshotId: string,
+		beforeRestore: RecoverySnapshot,
+		updatedAt: string,
+	): Promise<void> {
+		const [snapshots, copies] = await Promise.all([
+			this.listRecoverySnapshots(),
+			this.listWorkingCopies(),
+		]);
+		const target = snapshots.find((candidate) => candidate.id === snapshotId);
+		if (!target) throw new Error(`Recovery Snapshot not found: ${snapshotId}`);
+		const copy = copies.find((candidate) => candidate.branchId === target.branchId);
+		if (
+			!copy || copy.workId !== target.workId ||
+			beforeRestore.workId !== target.workId ||
+			beforeRestore.branchId !== target.branchId
+		) {
+			throw new Error("Recovery Snapshot scope does not match Working Copy");
+		}
+		if (snapshots.some((candidate) => candidate.id === beforeRestore.id)) {
+			throw new Error(`Recovery Snapshot already exists: ${beforeRestore.id}`);
+		}
+		if (beforeRestore.text !== copy.text) {
+			throw new Error("Recovery Snapshot does not capture current Working Copy");
+		}
+		await this.#db.query(
+			recoveryRestoreTransactionQuery(
+				beforeRestore.sourceRevisionId !== null,
+				beforeRestore.name !== undefined,
+			),
+			{
+				beforeRestore: new RecordId("recovery_snapshot", beforeRestore.id),
+				work: new RecordId("work", target.workId),
+				branch: new RecordId("branch", target.branchId),
+				beforeText: beforeRestore.text,
+				contentHash: beforeRestore.contentHash,
+				createdAt: beforeRestore.createdAt,
+				targetText: target.text,
+				updatedAt,
+				...(beforeRestore.sourceRevisionId
+					? { sourceRevision: new RecordId("revision", beforeRestore.sourceRevisionId) }
+					: {}),
+				...(beforeRestore.name ? { name: beforeRestore.name } : {}),
+			},
+		);
+	}
+
+	async promoteRecoverySnapshot(
+		snapshotId: string,
+		revision: Revision,
+		branchId: string,
+		protectedAt: string,
+	): Promise<void> {
+		const [snapshots, branches, revisions] = await Promise.all([
+			this.listRecoverySnapshots(),
+			this.listBranches(),
+			this.listRevisions(),
+		]);
+		const snapshot = snapshots.find((candidate) => candidate.id === snapshotId);
+		const branch = branches.find((candidate) => candidate.id === branchId);
+		if (!snapshot) throw new Error(`Recovery Snapshot not found: ${snapshotId}`);
+		if (
+			snapshot.branchId !== branchId || snapshot.workId !== revision.workId ||
+			branch?.workId !== snapshot.workId || revision.text !== snapshot.text
+		) {
+			throw new Error("Recovery Snapshot scope does not match Revision");
+		}
+		validateRevisionCreation(revision, branch, revisions);
+		await this.#db.query(
+			recoveryPromotionTransactionQuery(revision.message !== undefined),
+			{
+				...revision,
+				revision: new RecordId("revision", revision.id),
+				work: new RecordId("work", revision.workId),
+				branch: new RecordId("branch", branchId),
+				snapshot: new RecordId("recovery_snapshot", snapshotId),
+				parents: revision.parentRevisionIds.map((id) => new RecordId("revision", id)),
+				protectedAt,
+			},
+		);
 	}
 
 	async updateOccurrence(occurrence: Occurrence): Promise<void> {

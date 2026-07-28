@@ -46,6 +46,25 @@ export interface GraphStore {
 	createRecoverySnapshot(snapshot: RecoverySnapshot): Promise<void>;
 	/** Applies Snapshot text to its Working Copy without creating a Revision. */
 	applyRecoverySnapshot(snapshotId: string, updatedAt: string): Promise<void>;
+	/**
+	 * Atomically saves the current Working Copy as a new Snapshot, then applies
+	 * the selected Snapshot text. Neither the Branch head nor Revisions change.
+	 */
+	restoreRecoverySnapshot(
+		snapshotId: string,
+		beforeRestore: RecoverySnapshot,
+		updatedAt: string,
+	): Promise<void>;
+	/**
+	 * Atomically creates a Revision from a Snapshot, advances its Branch head,
+	 * and protects the source Snapshot.
+	 */
+	promoteRecoverySnapshot(
+		snapshotId: string,
+		revision: Revision,
+		branchId: string,
+		protectedAt: string,
+	): Promise<void>;
 	updateOccurrence(occurrence: Occurrence): Promise<void>;
 	deleteOccurrence(id: string): Promise<void>;
 	trashWork(workId: string, deletedAt: string): Promise<void>;
