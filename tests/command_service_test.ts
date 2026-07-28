@@ -12,7 +12,7 @@ const context = (overrides: Partial<CommandContext> = {}): CommandContext => ({
 	startupReady: true,
 	selectedOccurrenceId: "occurrence-1",
 	hasSelectedBranch: true,
-	hasRecoverySnapshot: true,
+	hasSelectedRecoverySnapshot: true,
 	hasLinkTarget: true,
 	quickCaptureText: "capture",
 	quickCaptureSubmitting: false,
@@ -36,7 +36,7 @@ Deno.test("command applicability returns one authoritative disabled reason", () 
 		enabled: false,
 		reason: "絞り込み表示中ではありません。",
 	});
-	assertEquals(commandAvailability(context({ hasRecoverySnapshot: false })).saveRevision, {
+	assertEquals(commandAvailability(context({ hasSelectedRecoverySnapshot: false })).saveRevision, {
 		enabled: false,
 		reason: "保存する復元用保存を選択してください。",
 	});

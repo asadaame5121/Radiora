@@ -160,6 +160,63 @@ header span {
 	border-color: var(--cyan);
 	box-shadow: 0 0 0 2px rgb(37 198 209 / 10%);
 }
+.command-palette {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	display: grid;
+	place-items: start center;
+	padding-top: min(18vh, 160px);
+	background: rgb(0 0 0 / 52%);
+}
+.command-palette__content {
+	width: min(560px, calc(100vw - 32px));
+	overflow: hidden;
+	background: var(--surface-raised);
+	border: 1px solid var(--border-bright);
+	border-radius: 10px;
+	box-shadow: 0 20px 60px #000c;
+}
+.command-palette input {
+	box-sizing: border-box;
+	width: 100%;
+	border: 0;
+	border-bottom: 1px solid var(--border);
+	background: #04080d;
+	color: var(--text);
+	padding: 14px;
+	outline: none;
+}
+.command-palette [role="listbox"] {
+	max-height: min(50vh, 400px);
+	overflow: auto;
+}
+.command-palette [role="option"] {
+	display: flex;
+	justify-content: space-between;
+	width: 100%;
+	border: 0;
+	border-bottom: 1px solid var(--border);
+	padding: 11px 14px;
+	text-align: left;
+	background: transparent;
+	color: var(--text);
+	cursor: pointer;
+}
+.command-palette [role="option"].active,
+.command-palette [role="option"]:hover {
+	background: var(--surface-hover);
+}
+.command-palette [role="option"]:disabled {
+	color: var(--muted);
+	cursor: not-allowed;
+}
+.command-palette__reason,
+.command-palette [role="listbox"] > p {
+	margin: 0;
+	padding: 10px 14px;
+	color: var(--muted);
+}
 .search-results {
 	position: absolute;
 	inset: 43px 0 auto;
