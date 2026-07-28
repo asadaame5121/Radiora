@@ -12,7 +12,9 @@ export type UiEntityCode =
 	| "tag"
 	| "bookmark"
 	| "resumePosition"
-	| "today";
+	| "today"
+	| "quickCapture"
+	| "unplacedInbox";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -31,4 +33,6 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	bookmark: "栞",
 	resumePosition: "作業再開位置",
 	today: "今日",
+	quickCapture: "クイック入力",
+	unplacedInbox: "未配置箱",
 });

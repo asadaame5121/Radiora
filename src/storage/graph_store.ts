@@ -36,6 +36,8 @@ export interface GraphStore {
 		workingCopy: WorkingCopy,
 		occurrence: Occurrence,
 	): Promise<void>;
+	/** Atomically creates a Work and its editable main Branch without a placement. */
+	createUnplacedWork(work: Work, branch: Branch, workingCopy: WorkingCopy): Promise<void>;
 	createOccurrence(occurrence: Occurrence): Promise<void>;
 	createBookmark(bookmark: Bookmark): Promise<void>;
 	deleteBookmark(id: string): Promise<void>;
@@ -96,6 +98,51 @@ export interface GraphStore {
 	listSavedRuleQueries(): Promise<SavedRuleQuery[]>;
 	upsertSavedRuleQuery(query: SavedRuleQuery): Promise<void>;
 	deleteSavedRuleQuery(id: string): Promise<void>;
+}
+
+export function validateUnplacedWorkCreation(
+	work: Work,
+	branch: Branch,
+	workingCopy: WorkingCopy,
+	existingWorks: readonly Work[],
+	existingBranches: readonly Branch[],
+	existingWorkingCopies: readonly WorkingCopy[],
+): void {
+	if (!work.id || !branch.id) throw new Error("Work and Branch IDs are required");
+	if (!workingCopy.text.trim()) throw new Error("Quick Capture text must not be blank");
+	if (
+		branch.workId !== work.id || workingCopy.workId !== work.id ||
+		workingCopy.branchId !== branch.id
+	) {
+		throw new Error("Work, Branch, and Working Copy identity must match");
+	}
+	if (
+		branch.name !== "main" || branch.headRevisionId !== null || branch.promotedAt ||
+		branch.archivedAt
+	) {
+		throw new Error("Quick Capture requires an active main Branch without a Revision");
+	}
+	const parsedCreatedAt = Date.parse(work.createdAt);
+	if (
+		!Number.isFinite(parsedCreatedAt) || new Date(parsedCreatedAt).toISOString() !== work.createdAt
+	) {
+		throw new Error("Quick Capture requires a valid ISO creation instant");
+	}
+	if (
+		work.deletedAt || work.createdAt !== work.updatedAt ||
+		branch.createdAt !== work.createdAt || workingCopy.updatedAt !== work.updatedAt
+	) {
+		throw new Error("Quick Capture timestamps must describe one new active Work");
+	}
+	if (existingWorks.some((candidate) => candidate.id === work.id)) {
+		throw new Error(`Work already exists: ${work.id}`);
+	}
+	if (existingBranches.some((candidate) => candidate.id === branch.id)) {
+		throw new Error(`Branch already exists: ${branch.id}`);
+	}
+	if (existingWorkingCopies.some((candidate) => candidate.branchId === workingCopy.branchId)) {
+		throw new Error(`Working Copy already exists for Branch: ${workingCopy.branchId}`);
+	}
 }
 
 /**

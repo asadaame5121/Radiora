@@ -28,6 +28,7 @@ import type {
 	TagSearchRequest,
 	TagSummary,
 	TrashEntry,
+	UnplacedWork,
 } from "../domain/models.ts";
 import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
 import type { GraphStore } from "../storage/graph_store.ts";
@@ -45,6 +46,7 @@ import {
 import { TagService } from "./tag_service.ts";
 import { NavigationService } from "./navigation_service.ts";
 import { type DateProjection, DateProjectionService, type DateRange } from "./date_projection.ts";
+import { QuickCaptureService } from "./quick_capture_service.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -90,6 +92,26 @@ export class OutlineService {
 
 	projectDates(range: DateRange): Promise<DateProjection> {
 		return new DateProjectionService(this.store).project(range);
+	}
+
+	quickCapture(text: string): Promise<UnplacedWork> {
+		return new QuickCaptureService(this.store).capture(text);
+	}
+
+	listUnplacedWorks(): Promise<UnplacedWork[]> {
+		return new QuickCaptureService(this.store).list();
+	}
+
+	updateUnplacedWorkText(workId: string, text: string): Promise<void> {
+		return new QuickCaptureService(this.store).updateText(workId, text);
+	}
+
+	async placeUnplacedWork(input: CreateOccurrenceInput): Promise<OutlineItem> {
+		const unplaced = await this.listUnplacedWorks();
+		if (!unplaced.some((candidate) => candidate.workId === input.workId)) {
+			throw new Error(`Unplaced Work not found: ${input.workId}`);
+		}
+		return this.createOccurrence(input);
 	}
 
 	async listOutline(): Promise<OutlineSnapshot> {
@@ -198,8 +220,38 @@ export class OutlineService {
 
 	async createOccurrence(input: CreateOccurrenceInput): Promise<OutlineItem> {
 		const items = await this.store.listItems();
-		const source = items.find((item) => item.workId === input.workId);
-		if (!source) throw new Error(`Work not found: ${input.workId}`);
+		if (input.parentId && !items.some((item) => item.id === input.parentId)) {
+			throw new Error(`Parent Occurrence not found: ${input.parentId}`);
+		}
+		let source = items.find((item) => item.workId === input.workId);
+		if (!source) {
+			const work = (await this.store.listWorks()).find((candidate) =>
+				candidate.id === input.workId
+			);
+			if (!work) throw new Error(`Work not found: ${input.workId}`);
+			const mains = (await this.store.listBranches(input.workId)).filter((branch) =>
+				branch.name === "main" && !branch.archivedAt
+			);
+			if (mains.length !== 1) {
+				throw new Error(`Expected one active main Branch for Work: ${input.workId}`);
+			}
+			const main = mains[0];
+			const copy = (await this.store.listWorkingCopies(input.workId)).find((candidate) =>
+				candidate.branchId === main.id
+			);
+			if (!copy) throw new Error(`Working Copy not found for Branch: ${main.id}`);
+			source = {
+				id: "",
+				workId: work.id,
+				text: copy.text,
+				parentId: null,
+				orderKey: 0,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId: main.id },
+				createdAt: work.createdAt,
+				updatedAt: copy.updatedAt,
+			};
+		}
 		const occurrence = {
 			id: crypto.randomUUID(),
 			workId: input.workId,
@@ -322,12 +374,42 @@ export class OutlineService {
 
 	async createLink(input: CreateLinkInput): Promise<void> {
 		if (!LINK_TYPES.includes(input.type)) throw new Error(`Unsupported link type: ${input.type}`);
-		const [fromItem, toItem] = await Promise.all([
-			this.requireItem(input.fromId),
-			this.requireItem(input.toId),
+		const [works, occurrences, revisions] = await Promise.all([
+			this.store.listWorks(),
+			this.store.listOccurrences(),
+			this.store.listRevisions(),
 		]);
-		const from = input.fromEndpoint ?? { scope: "work" as const, workId: fromItem.workId };
-		const to = input.toEndpoint ?? { scope: "work" as const, workId: toItem.workId };
+		const workIds = new Set(works.map((work) => work.id));
+		const resolveWorkId = (id: string): string => {
+			const occurrence = occurrences.find((candidate) => candidate.id === id);
+			const workId = workIds.has(id) ? id : occurrence?.workId;
+			if (!workId || !workIds.has(workId)) throw new Error(`Active link endpoint not found: ${id}`);
+			return workId;
+		};
+		const resolvedFromWorkId = resolveWorkId(input.fromId);
+		const resolvedToWorkId = resolveWorkId(input.toId);
+		const from = input.fromEndpoint ?? { scope: "work" as const, workId: resolvedFromWorkId };
+		const to = input.toEndpoint ?? { scope: "work" as const, workId: resolvedToWorkId };
+		const validateEndpoint = (
+			endpoint: LinkEndpoint,
+			resolvedWorkId: string,
+			label: string,
+		): void => {
+			if (endpoint.scope !== "work" && endpoint.scope !== "revision") {
+				throw new Error(`${label} endpoint scope is invalid`);
+			}
+			if (endpoint.workId !== resolvedWorkId || !workIds.has(endpoint.workId)) {
+				throw new Error(`${label} endpoint does not match the resolved active Work`);
+			}
+			if (endpoint.scope === "revision") {
+				const revision = revisions.find((candidate) => candidate.id === endpoint.revisionId);
+				if (!revision || revision.workId !== endpoint.workId) {
+					throw new Error(`${label} Revision endpoint does not belong to its Work`);
+				}
+			}
+		};
+		validateEndpoint(from, resolvedFromWorkId, "From");
+		validateEndpoint(to, resolvedToWorkId, "To");
 		if (from.workId === to.workId) throw new Error("A related link cannot target the same work");
 		let fromId = from.workId;
 		let toId = to.workId;

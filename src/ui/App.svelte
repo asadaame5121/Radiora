@@ -24,6 +24,7 @@
 		RecoverySnapshot,
 		Suggestion,
 		TrashEntry,
+		UnplacedWork,
 	} from "../domain/models";
 	import { LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
@@ -54,7 +55,14 @@
 	}) as RadioraBindings;
 
 	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
-	type ViewMode = "outline" | "today" | "globalLineage" | "workLineage" | "comparison" | "trash";
+	type ViewMode =
+		| "outline"
+		| "today"
+		| "unplaced"
+		| "globalLineage"
+		| "workLineage"
+		| "comparison"
+		| "trash";
 	type AsideMode = "links" | "discover" | "tags" | "query";
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
@@ -65,6 +73,12 @@
 	let loading = $state(true);
 	let startup = $state<StartupStatus>({ phase: "starting", message: "Radioraを起動しています…" });
 	let error = $state("");
+	let quickCaptureText = $state("");
+	let quickCaptureSubmitting = $state(false);
+	let unplacedWorks = $state<UnplacedWork[]>([]);
+	let unplacedLinkTargets = $state<Record<string, string>>({});
+	let unplacedLinkDirections = $state<Record<string, "from" | "to">>({});
+	let unplacedLinkType = $state<LinkType>("RELATED");
 	let viewMode = $state<ViewMode>("outline");
 	let dateStart = $state(localDateValue(new Date()));
 	let dateEnd = $state(localDateValue(addDays(new Date(), 1)));
@@ -144,6 +158,15 @@
 			link.fromId === selectedItem.workId || link.toId === selectedItem.workId
 		)
 		: []);
+	const linkableWorks = $derived([
+		...new Map([
+			...snapshot.items.map((item) => [item.workId, { workId: item.workId, text: item.text }] as const),
+			...unplacedWorks.map((work) => [
+				work.workId,
+				{ workId: work.workId, text: work.text },
+			] as const),
+		]).values(),
+	]);
 	const linkTargets = $derived([
 		...new Map(
 			snapshot.items
@@ -363,6 +386,70 @@
 		}
 		autosave.queue(item.workId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
+	}
+
+	async function captureQuickText(): Promise<void> {
+		if (!quickCaptureText.trim() || quickCaptureSubmitting) return;
+		quickCaptureSubmitting = true;
+		try {
+			await api.quickCapture(quickCaptureText);
+			quickCaptureText = "";
+			await Promise.all([load(), loadUnplacedWorks()]);
+		} catch (cause) {
+			error = errorMessage(cause);
+		} finally {
+			quickCaptureSubmitting = false;
+		}
+	}
+
+	async function loadUnplacedWorks(): Promise<void> {
+		unplacedWorks = await api.listUnplacedWorks();
+	}
+
+	async function openUnplaced(): Promise<void> {
+		try {
+			await loadUnplacedWorks();
+			viewMode = "unplaced";
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function updateUnplacedText(work: UnplacedWork, text: string): Promise<void> {
+		try {
+			await api.updateUnplacedWorkText(work.workId, text);
+			await loadUnplacedWorks();
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function placeUnplaced(workId: string, parentId: string | null): Promise<void> {
+		try {
+			const created = await api.placeUnplacedWork({ workId, parentId });
+			await Promise.all([load(created.id), loadUnplacedWorks()]);
+			viewMode = "outline";
+			selectedId = created.id;
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function linkUnplaced(workId: string): Promise<void> {
+		const targetId = unplacedLinkTargets[workId]?.trim();
+		if (!targetId) return;
+		try {
+			const unplacedIsTarget = unplacedLinkDirections[workId] === "to";
+			await api.createLink({
+				fromId: unplacedIsTarget ? targetId : workId,
+				toId: unplacedIsTarget ? workId : targetId,
+				type: unplacedLinkType,
+			});
+			unplacedLinkTargets[workId] = "";
+			await load();
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
 	}
 
 	async function openToday(): Promise<void> {
@@ -947,6 +1034,8 @@
 				onclick={() => (viewMode = "outline")}>Outline</button>
 			<button class:active={viewMode === "today"} aria-pressed={viewMode === "today"}
 				onclick={openToday}>{vocabulary.today}</button>
+			<button class:active={viewMode === "unplaced"} aria-pressed={viewMode === "unplaced"}
+				onclick={openUnplaced}>{vocabulary.unplacedInbox}</button>
 			<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
 				onclick={() => (viewMode = "globalLineage")}>{vocabulary.globalLineage}</button>
 			<button class:active={viewMode === "workLineage"} aria-pressed={viewMode === "workLineage"}
@@ -956,6 +1045,17 @@
 			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
 				onclick={openTrash}>ゴミ箱</button>
 		</nav>
+		<form class="quick-capture" onsubmit={(event) => { event.preventDefault(); void captureQuickText(); }}>
+			<input
+				aria-label={vocabulary.quickCapture}
+				placeholder={`${vocabulary.quickCapture}…`}
+				bind:value={quickCaptureText}
+				disabled={startup.phase !== "ready" || quickCaptureSubmitting}
+			/>
+			<button disabled={!quickCaptureText.trim() || quickCaptureSubmitting}>
+				{quickCaptureSubmitting ? "保存中…" : vocabulary.quickCapture}
+			</button>
+		</form>
 		<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
 		{#each bookmarks as bookmark}
 			<span class="bookmark-control">
@@ -1109,6 +1209,65 @@
 						{:else}<p class="empty">この期間に更新した既存{vocabulary.work}はありません。</p>{/each}
 					</section>
 				{/if}
+			</section>
+		{:else if viewMode === "unplaced"}
+			<section class="outline-panel unplaced-inbox" aria-label={vocabulary.unplacedInbox}>
+				<div class="section-title">
+					<span>{vocabulary.unplacedInbox}</span><small>{unplacedWorks.length}件</small>
+				</div>
+				<p class="hint">
+					配置先を決めずに保存した{vocabulary.work}です。本文へ #タグ を入力するとタグ付けできます。
+				</p>
+				<div class="unplaced-list">
+					{#each unplacedWorks as work (work.workId)}
+						<article class="unplaced-entry">
+							<textarea
+								rows="3"
+								aria-label={`${vocabulary.workingCopy}を編集`}
+								value={work.text}
+								onchange={(event) => updateUnplacedText(work, event.currentTarget.value)}
+							></textarea>
+							<small>{formatCreatedAt(work.createdAt)}</small>
+							<div class="unplaced-actions">
+								<button onclick={() => placeUnplaced(work.workId, null)}>Rootへ配置</button>
+								<button
+									onclick={() => placeUnplaced(work.workId, selectedId)}
+									disabled={!selectedId}
+								>選択中の{vocabulary.occurrence}の下へ配置</button>
+							</div>
+							<div class="unplaced-actions">
+								<select
+									aria-label={`${vocabulary.semanticLink}の方向`}
+									value={unplacedLinkDirections[work.workId] ?? "from"}
+									onchange={(event) =>
+										unplacedLinkDirections[work.workId] =
+											event.currentTarget.value as "from" | "to"}
+								>
+									<option value="from">この{vocabulary.work}から</option>
+									<option value="to">この{vocabulary.work}へ</option>
+								</select>
+								<select
+									aria-label={`${vocabulary.semanticLink}相手`}
+									value={unplacedLinkTargets[work.workId] ?? ""}
+									onchange={(event) =>
+										unplacedLinkTargets[work.workId] = event.currentTarget.value}
+								>
+									<option value="">相手を選択…</option>
+									{#each linkableWorks.filter((candidate) => candidate.workId !== work.workId) as target}
+										<option value={target.workId}>{target.text.split("\n")[0] || `(空の${vocabulary.work})`}</option>
+									{/each}
+								</select>
+								<select aria-label={`${vocabulary.semanticLink}種別`} bind:value={unplacedLinkType}>
+									{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}
+								</select>
+								<button onclick={() => linkUnplaced(work.workId)}
+								>{vocabulary.semanticLink}作成</button>
+							</div>
+						</article>
+					{:else}
+						<p class="empty">{vocabulary.unplacedInbox}は空です。</p>
+					{/each}
+				</div>
 			</section>
 		{:else if viewMode === "trash"}
 			<section class="outline-panel">

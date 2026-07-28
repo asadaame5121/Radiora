@@ -37,6 +37,14 @@ export interface WorkingCopy {
 	updatedAt: string;
 }
 
+export interface UnplacedWork {
+	workId: string;
+	branchId: string;
+	text: string;
+	createdAt: string;
+	updatedAt: string;
+}
+
 export type RevisionKind = "checkpoint" | "edition" | "merge";
 
 export interface Revision {
