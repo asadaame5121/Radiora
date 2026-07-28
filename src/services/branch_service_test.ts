@@ -100,6 +100,114 @@ Deno.test("global lineage lists only explicitly promoted, active Branches", asyn
 	assertEquals(await branches.listGlobalLineageBranches(), []);
 });
 
+Deno.test("global lineage projects one node per Work and only promoted confirmed heads", async () => {
+	const store = await createStore();
+	await store.createOccurrence({
+		id: "mirror",
+		workId: "work",
+		parentOccurrenceId: "occurrence",
+		orderKey: 2,
+		collapsed: true,
+		revisionSelector: { mode: "branch", branchId: "main" },
+	});
+	await store.createWorkBundle(
+		{ id: "other-work", createdAt: CREATED_AT, updatedAt: CREATED_AT },
+		{
+			id: "other-main",
+			workId: "other-work",
+			name: "main",
+			headRevisionId: null,
+			createdAt: CREATED_AT,
+		},
+		{
+			branchId: "other-main",
+			workId: "other-work",
+			text: "other",
+			updatedAt: CREATED_AT,
+		},
+		{
+			id: "other-occurrence",
+			workId: "other-work",
+			parentOccurrenceId: null,
+			orderKey: 3,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "other-main" },
+		},
+	);
+	await store.createLink({
+		id: "meaning",
+		fromId: "work",
+		toId: "other-work",
+		from: { scope: "work", workId: "work" },
+		to: { scope: "work", workId: "other-work" },
+		type: "FROM",
+		status: "asserted",
+		origin: "human",
+		createdAt: CREATED_AT,
+	});
+	const branches = service(store);
+	await branches.promoteBranch("source");
+
+	const projection = await branches.listGlobalLineage();
+
+	assertEquals(projection.snapshot.items.map((item) => item.workId), ["work", "other-work"]);
+	assertEquals(projection.snapshot.items.every((item) => item.parentId === null), true);
+	assertEquals(projection.snapshot.links.map((link) => link.id), ["meaning"]);
+	assertEquals(
+		projection.promotedBranches.map((entry) => ({
+			branchId: entry.branch.id,
+			revisionId: entry.headRevision?.id,
+		})),
+		[{ branchId: "source", revisionId: "source-head" }],
+	);
+	assertEquals(
+		projection.promotedBranches.some((entry) => entry.headRevision?.id === "main-head"),
+		false,
+	);
+});
+
+Deno.test("Work lineage contains only its Branches and Revision ancestry", async () => {
+	const store = await createStore();
+	await store.createWorkBundle(
+		{ id: "other-work", createdAt: CREATED_AT, updatedAt: CREATED_AT },
+		{
+			id: "other-main",
+			workId: "other-work",
+			name: "main",
+			headRevisionId: null,
+			createdAt: CREATED_AT,
+		},
+		{
+			branchId: "other-main",
+			workId: "other-work",
+			text: "other",
+			updatedAt: CREATED_AT,
+		},
+		{
+			id: "other-occurrence",
+			workId: "other-work",
+			parentOccurrenceId: null,
+			orderKey: 3,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "other-main" },
+		},
+	);
+	const projection = await service(store).listWorkLineage("work");
+
+	assertEquals(projection.work.id, "work");
+	assertEquals(projection.branches.map((branch) => branch.id), ["main", "source"]);
+	assertEquals(projection.revisions.map((revision) => revision.id), ["main-head", "source-head"]);
+	assertEquals(
+		projection.revisions.every((revision) =>
+			revision.workId === "work" &&
+			revision.parentRevisionIds.every((parentId) =>
+				projection.revisions.some((candidate) => candidate.id === parentId)
+			)
+		),
+		true,
+	);
+});
+
 Deno.test("unpromoting a Branch removes it from global lineage", async () => {
 	const store = await createStore();
 	const branches = service(store);

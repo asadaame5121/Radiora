@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
-	import PhylogeneticTree from "./PhylogeneticTree.svelte";
+	import GlobalLineage from "./GlobalLineage.svelte";
 	import RevisionComparison from "./RevisionComparison.svelte";
+	import WorkLineage from "./WorkLineage.svelte";
 	import type {
 		EmergenceAction,
 		EmergenceSuggestion,
@@ -19,6 +20,10 @@
 	} from "../domain/models";
 	import { LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
+	import type {
+		GlobalLineageProjection,
+	WorkLineageProjection,
+	} from "../services/branch_service";
 	import {
 		WorkingCopyAutosaveCoordinator,
 		type WorkingCopySaveStatus,
@@ -39,7 +44,7 @@
 	}) as RadioraBindings;
 
 	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
-	type ViewMode = "outline" | "tree" | "comparison" | "trash";
+	type ViewMode = "outline" | "globalLineage" | "workLineage" | "comparison" | "trash";
 	type AsideMode = "links" | "discover" | "query";
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
@@ -74,6 +79,11 @@
 	let revisions = $state<Revision[]>([]);
 	let revisionsLoading = $state(false);
 	let revisionLoadRequest = 0;
+	let globalLineage = $state<GlobalLineageProjection | null>(null);
+	let workLineage = $state<WorkLineageProjection | null>(null);
+	let workLineageLoading = $state(false);
+	let workLineageLoadRequest = 0;
+	let comparisonPreferredRevisionId = $state<string | undefined>();
 	let pendingConfirmation = $state<PendingConfirmation | null>(null);
 	let confirmationSubmitting = $state(false);
 	let confirmationDialog: HTMLDialogElement;
@@ -125,8 +135,13 @@
 
 	$effect(() => {
 		const workId = selectedItem?.workId;
-		if (workId && startup.phase === "ready") void loadRevisions(workId);
-		else revisions = [];
+		if (workId && startup.phase === "ready") {
+			void loadRevisions(workId);
+			void loadWorkLineage(workId);
+		} else {
+			revisions = [];
+			workLineage = null;
+		}
 	});
 
 	onMount(() => {
@@ -182,13 +197,17 @@
 	async function load(focusId?: string): Promise<void> {
 		try {
 			error = "";
-			const next = await api.listOutline();
+			const [next, nextGlobalLineage] = await Promise.all([
+				api.listOutline(),
+				api.listGlobalLineage(),
+			]);
 			const drafts = new Map(autosave.drafts().map((draft) => [draft.workId, draft.text]));
 			next.items = next.items.map((item) => {
 				const draft = drafts.get(item.workId);
 				return draft === undefined ? item : { ...item, text: draft };
 			});
 			snapshot = next;
+			globalLineage = nextGlobalLineage;
 			if (focusId) requestFocus(focusId);
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -301,6 +320,26 @@
 		} finally {
 			if (request === revisionLoadRequest) revisionsLoading = false;
 		}
+	}
+
+	async function loadWorkLineage(workId: string): Promise<void> {
+		const request = ++workLineageLoadRequest;
+		workLineageLoading = true;
+		try {
+			const next = await api.listWorkLineage(workId);
+			if (request === workLineageLoadRequest && selectedItem?.workId === workId) {
+				workLineage = next;
+			}
+		} catch (cause) {
+			if (request === workLineageLoadRequest) error = errorMessage(cause);
+		} finally {
+			if (request === workLineageLoadRequest) workLineageLoading = false;
+		}
+	}
+
+	function openRevisionComparison(revisionId: string): void {
+		comparisonPreferredRevisionId = revisionId;
+		viewMode = "comparison";
 	}
 
 	async function retryWorkingCopySave(): Promise<void> {
@@ -659,8 +698,10 @@
 		<nav class="view-switcher" aria-label="表示モード">
 			<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
 				onclick={() => (viewMode = "outline")}>Outline</button>
-			<button class:active={viewMode === "tree"} aria-pressed={viewMode === "tree"}
-				onclick={() => (viewMode = "tree")}>Tree</button>
+			<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
+				onclick={() => (viewMode = "globalLineage")}>{vocabulary.globalLineage}</button>
+			<button class:active={viewMode === "workLineage"} aria-pressed={viewMode === "workLineage"}
+				onclick={() => (viewMode = "workLineage")} disabled={!selectedItem}>{vocabulary.workLineage}</button>
 			<button class:active={viewMode === "comparison"} aria-pressed={viewMode === "comparison"}
 				onclick={() => (viewMode = "comparison")} disabled={!selectedItem}>版比較</button>
 			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
@@ -792,23 +833,34 @@
 					{#key selectedItem.workId}
 						<RevisionComparison
 							{revisions}
-							preferredRevisionId={selectedItem.revisionSelector.mode === "pinned"
-								? selectedItem.revisionSelector.revisionId
-								: undefined}
+							preferredRevisionId={comparisonPreferredRevisionId ??
+								(selectedItem.revisionSelector.mode === "pinned"
+									? selectedItem.revisionSelector.revisionId
+									: undefined)}
 						/>
 					{/key}
 				{/if}
 			{:else}
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.work}を選択してください。</p></section>
 			{/if}
+		{:else if viewMode === "workLineage"}
+			{#if workLineageLoading}
+				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.workLineage}を読み込んでいます…</p></section>
+			{:else if workLineage}
+				{#key workLineage.work.id}
+					<WorkLineage projection={workLineage} onCompare={openRevisionComparison} />
+				{/key}
+			{:else}
+				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.work}を選択してください。</p></section>
+			{/if}
+		{:else if globalLineage}
+			<GlobalLineage
+				projection={globalLineage}
+				{selectedId}
+				onSelect={(id) => (selectedId = id)}
+			/>
 		{:else}
-			<section class="tree-panel" aria-label="Phylogenetic Tree">
-				<PhylogeneticTree
-					{snapshot}
-					{selectedId}
-					onSelect={(id) => (selectedId = id)}
-				/>
-			</section>
+			<section class="tree-panel"><p class="empty">{vocabulary.globalLineage}を読み込んでいます…</p></section>
 		{/if}
 
 		<aside>

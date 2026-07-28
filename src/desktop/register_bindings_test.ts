@@ -51,6 +51,12 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 		"source-version",
 	]);
 	assertEquals(await handlers.listRevisions(target.workId), []);
+	assertEquals((await handlers.listGlobalLineage()).snapshot.items.length, 2);
+	assertEquals((await handlers.listWorkLineage(source.workId)).work.id, source.workId);
+	assertEquals(
+		(await handlers.listWorkLineage(source.workId)).revisions.map((revision) => revision.id),
+		["source-version"],
+	);
 
 	await handlers.trashWork(source.id);
 	assertEquals((await handlers.listTrash())[0].occurrenceCount, 2);

@@ -22,6 +22,11 @@ import type {
 } from "../domain/models.ts";
 import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
 import type { GraphStore } from "../storage/graph_store.ts";
+import {
+	BranchService,
+	type GlobalLineageProjection,
+	type WorkLineageProjection,
+} from "./branch_service.ts";
 import { normalizeSearchText, titleOf } from "./search_text.ts";
 import { runRuleQuery } from "./rule_query.ts";
 
@@ -58,6 +63,14 @@ export class OutlineService {
 		return revisions.sort((left, right) =>
 			left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
 		);
+	}
+
+	listGlobalLineage(): Promise<GlobalLineageProjection> {
+		return new BranchService(this.store).listGlobalLineage();
+	}
+
+	listWorkLineage(workId: string): Promise<WorkLineageProjection> {
+		return new BranchService(this.store).listWorkLineage(workId);
 	}
 
 	async createItem(input: CreateItemInput): Promise<OutlineItem> {

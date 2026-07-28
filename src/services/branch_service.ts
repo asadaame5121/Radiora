@@ -1,7 +1,9 @@
 import type {
 	Branch,
 	Occurrence,
+	OutlineItem,
 	OutlineLink,
+	OutlineSnapshot,
 	Revision,
 	Work,
 	WorkingCopy,
@@ -36,6 +38,27 @@ export interface DetachedWorkBundle {
 export interface DetachAsIndependentWorkResult {
 	bundle: DetachedWorkBundle;
 	link: OutlineLink;
+}
+
+export interface GlobalLineageBranch {
+	branch: Branch;
+	/** The explicitly confirmed edition represented by this promoted Branch, when one exists. */
+	headRevision: Revision | null;
+}
+
+/**
+ * The global projection deliberately uses one representative per Work. Outline placement,
+ * Branch internals, and ordinary Revisions do not become additional tree nodes.
+ */
+export interface GlobalLineageProjection {
+	snapshot: OutlineSnapshot;
+	promotedBranches: GlobalLineageBranch[];
+}
+
+export interface WorkLineageProjection {
+	work: Work;
+	branches: Branch[];
+	revisions: Revision[];
 }
 
 /**
@@ -118,6 +141,90 @@ export class BranchService {
 		return branches.filter((branch) =>
 			activeWorkIds.has(branch.workId) && branch.promotedAt && !branch.archivedAt
 		);
+	}
+
+	/**
+	 * Projects the application-wide semantic lineage independently from any outline placement.
+	 *
+	 * Explicitly promoted Branch heads are returned beside the Work graph so consumers do not
+	 * have to reinterpret a Revision or Branch as a Work node.
+	 */
+	async listGlobalLineage(): Promise<GlobalLineageProjection> {
+		const [works, items, links, revisions, promotedBranches] = await Promise.all([
+			this.store.listWorks(),
+			this.store.listItems(),
+			this.store.listLinks(),
+			this.store.listRevisions(),
+			this.listGlobalLineageBranches(),
+		]);
+		const activeWorkIds = new Set(works.map((work) => work.id));
+		const representativeByWork = new Map<string, OutlineItem>();
+		for (
+			const item of [...items].sort((left, right) =>
+				left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+			)
+		) {
+			if (activeWorkIds.has(item.workId) && !representativeByWork.has(item.workId)) {
+				representativeByWork.set(item.workId, {
+					...item,
+					parentId: null,
+					collapsed: false,
+				});
+			}
+		}
+
+		const snapshot: OutlineSnapshot = {
+			items: [...representativeByWork.values()],
+			links: links.filter((link) =>
+				link.status !== "retracted" &&
+				activeWorkIds.has(link.from.workId) &&
+				activeWorkIds.has(link.to.workId)
+			),
+			knots: [],
+			stashItemIds: [],
+		};
+		const revisionById = new Map(revisions.map((revision) => [revision.id, revision]));
+		return {
+			snapshot,
+			promotedBranches: promotedBranches
+				.map((branch) => {
+					const headRevision = branch.headRevisionId
+						? revisionById.get(branch.headRevisionId) ?? null
+						: null;
+					if (headRevision && headRevision.workId !== branch.workId) {
+						throw new Error(`Branch head Revision belongs to another Work: ${branch.id}`);
+					}
+					return { branch, headRevision };
+				})
+				.sort((left, right) =>
+					(left.branch.promotedAt ?? "").localeCompare(right.branch.promotedAt ?? "") ||
+					left.branch.id.localeCompare(right.branch.id)
+				),
+		};
+	}
+
+	/**
+	 * Projects only the version lineage of the selected Work. Semantic links and other Works
+	 * are intentionally absent; merge ancestry is expressed solely by Revision parents.
+	 */
+	async listWorkLineage(workId: string): Promise<WorkLineageProjection> {
+		const [works, branches, revisions] = await Promise.all([
+			this.store.listWorks(),
+			this.store.listBranches(workId),
+			this.store.listRevisions(workId),
+		]);
+		const work = works.find((candidate) => candidate.id === workId);
+		if (!work) throw new Error(`Work not found: ${workId}`);
+		this.#requireUniqueMain(branches, workId);
+		return {
+			work,
+			branches: branches.sort((left, right) =>
+				left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+			),
+			revisions: revisions.sort((left, right) =>
+				left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+			),
+		};
 	}
 
 	/**

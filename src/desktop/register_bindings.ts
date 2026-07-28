@@ -19,6 +19,8 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		retryStartup: () => context.retryStartup(),
 		listOutline: () => service().listOutline(),
 		listRevisions: (workId) => service().listRevisions(workId),
+		listGlobalLineage: () => service().listGlobalLineage(),
+		listWorkLineage: (workId) => service().listWorkLineage(workId),
 		createItem: (input) => service().createItem(input),
 		createOccurrence: (input) => service().createOccurrence(input),
 		updateItemText: (id, text) => service().updateItemText(id, text),
