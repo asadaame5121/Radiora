@@ -165,8 +165,11 @@ export class MemoryGraphStore implements GraphStore {
 		return Promise.resolve();
 	}
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
-		this.links = this.links.filter((link) =>
-			!(link.fromId === fromId && link.toId === toId && link.type === type)
+		this.links = this.links.map((link) =>
+			link.fromId === fromId && link.toId === toId && link.type === type &&
+				link.status !== "retracted"
+				? { ...link, status: "retracted" }
+				: link
 		);
 		return Promise.resolve();
 	}

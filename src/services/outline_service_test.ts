@@ -121,6 +121,32 @@ Deno.test("Datalog semantic links resolve Work endpoints to visible Occurrences"
 	assert(result.rows.some(([from, to]) => from === source.id && to === target.id));
 });
 
+Deno.test("symmetric links are normalized, deduplicated, and retracted without losing history", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const first = await service.createItem({ text: "First", parentId: null });
+	const second = await service.createItem({ text: "Second", parentId: null });
+
+	await service.createLink({ fromId: second.id, toId: first.id, type: "RELATED" });
+	await service.createLink({ fromId: first.id, toId: second.id, type: "RELATED" });
+	const [original] = await store.listLinks();
+	assertEquals((await store.listLinks()).length, 1);
+	assertEquals(original.fromId.localeCompare(original.toId) < 0, true);
+
+	await service.deleteLink(second.id, first.id, "RELATED");
+	assertEquals((await store.listLinks())[0].status, "retracted");
+	assertEquals((await service.listOutline()).links, []);
+	assertEquals((await service.runRuleQuery(`?- link("RELATED", X, Y).`)).rows, []);
+
+	await service.createLink({ fromId: first.id, toId: second.id, type: "RELATED" });
+	const history = await store.listLinks();
+	assertEquals(history.length, 2);
+	assertEquals(history.filter((link) => link.status === "retracted").map((link) => link.id), [
+		original.id,
+	]);
+	assertEquals((await service.listOutline()).links.map((link) => link.status), ["asserted"]);
+});
+
 Deno.test("one Work can appear in multiple independent Occurrences with shared text", async () => {
 	const service = new OutlineService(new MemoryGraphStore());
 	const first = await service.createItem({ text: "共有本文", parentId: null });
@@ -221,6 +247,29 @@ Deno.test("each Occurrence owns an independent child structure", async () => {
 	assertEquals(items.filter((item) => item.parentId === mirror.id).map((item) => item.id), [
 		child.id,
 	]);
+});
+
+Deno.test("placing a Work below its descendant projects the recursive placement as a reference stub", async () => {
+	const service = new OutlineService(new MemoryGraphStore());
+	const ancestor = await service.createItem({ text: "Ancestor", parentId: null });
+	const descendant = await service.createItem({ text: "Descendant", parentId: ancestor.id });
+	const recursive = await service.createOccurrence({
+		workId: ancestor.workId,
+		parentId: descendant.id,
+	});
+	const childOfRecursive = await service.createItem({
+		text: "Hidden child",
+		parentId: recursive.id,
+	});
+
+	const snapshot = await service.listOutline();
+	assertEquals(snapshot.items.find((item) => item.id === ancestor.id)?.referenceStub, undefined);
+	assertEquals(snapshot.items.find((item) => item.id === recursive.id)?.referenceStub, true);
+	assertEquals(
+		snapshot.items.find((item) => item.id === childOfRecursive.id)?.referenceStub,
+		undefined,
+	);
+	assertEquals(snapshot.stashItemIds, []);
 });
 
 Deno.test("restoring a Work whose parent was purged places its Occurrence at root", async () => {
