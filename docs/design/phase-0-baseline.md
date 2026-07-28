@@ -69,6 +69,19 @@ parent (drawing source)             -> child (drawing target)
 読み込みは子からincoming `evolved_from`を辿って親を得る。Phase 1でWork間の`FROM`へ
 変換するときも正準方向を変えない。
 
+## Store共通契約
+
+`tests/support/graph_store_contract.ts`をMemory、JSON、SurrealDBへ同じまま適用する。
+backend固有のテストから分離するdomain invariantは次のとおり。
+
+- Work bundle
+- 共有本文と独立配置
+- 意味リンクと検索補助データ
+- ゴミ箱、復元、完全消去
+
+MemoryとJSONは通常のテストで検証する。SurrealDBは実プロセスを起動する
+`deno task test:integration`で検証する。
+
 ## Migrationとロールバック
 
 起動時は[[schema-evolution]]の手順に従い、一段ずつ`up`と`validate`を実行する。

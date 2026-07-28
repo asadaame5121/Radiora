@@ -1,5 +1,6 @@
 import { OutlineService } from "../src/services/outline_service.ts";
 import { SurrealGraphStore } from "../src/storage/surreal_store.ts";
+import { assertGraphStoreContract } from "../tests/support/graph_store_contract.ts";
 import { Surreal } from "surrealdb";
 
 const port = 18012;
@@ -239,6 +240,9 @@ try {
 	) {
 		throw new Error(`Purge manifest verification failed: ${JSON.stringify(manifests)}`);
 	}
+	trace("integration.store-contract.begin");
+	await assertGraphStoreContract(store);
+	trace("integration.store-contract.ready");
 	await store.close();
 	trace("integration.ready");
 	console.log(
