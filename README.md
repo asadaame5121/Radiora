@@ -35,8 +35,10 @@ Desktop Backendを起動せず、固定の高密度グラフでOutlineとTreeを
 npm run dev:mock
 ```
 
-Treeはヘッダーの`Outline / Tree`から切り替えます。時間軸の表示密度に応じて
-`Detail / Context / Overview`が切り替わり、Overviewの件数Nodeをクリックすると対象期間へ
+Treeはヘッダーの`Outline / Tree`から切り替えます。Tree内では、実時間をX軸にする
+`Chronology`と、`FROM`系譜の世代をX軸にする`Lineage`を切り替えられます。`FROM`の循環は
+Lineageの世代計算から隔離され、右端の`Knot`列へ退避されます。表示密度に応じて
+`Detail / Context / Overview`が切り替わり、Overviewの件数Nodeをクリックすると対象範囲へ
 拡大します。Nodeへポインターを合わせるかキーボードフォーカスすると、直接接続されたNodeと
 Linkだけが強調されます。
 
