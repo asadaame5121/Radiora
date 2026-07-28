@@ -1,5 +1,5 @@
 import type { Plugin } from "vite";
-import type { OutlineItem, OutlineLink, OutlineSnapshot } from "../src/domain/models.ts";
+import type { OutlineItem, OutlineLink, OutlineSnapshot, Revision } from "../src/domain/models.ts";
 
 const TITLES = [
 	"観察と問いのはじまり",
@@ -62,7 +62,7 @@ function mockSnapshot(): OutlineSnapshot {
 		id: `mock-link-${index + 1}`,
 		fromId,
 		toId,
-		from: { scope: "work" as const, workId },
+		from: { scope: "work" as const, workId: fromId },
 		to: { scope: "work" as const, workId: toId },
 		type: type as OutlineLink["type"],
 		status: "asserted" as const,
@@ -75,6 +75,30 @@ function mockSnapshot(): OutlineSnapshot {
 		knots: [{ id: "mock-knot", cycleIds: ["mock-12"], createdAt: items[11].createdAt }],
 		stashItemIds: ["mock-12"],
 	};
+}
+
+function mockRevisions(workId: string): Revision[] {
+	return [
+		{
+			id: `${workId}-version-1`,
+			workId,
+			text: "観察から問いが生まれる。\n\nまだ名前のない輪郭を記録する。",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: "2025-03-10T09:00:00.000Z",
+			message: "最初の版",
+		},
+		{
+			id: `${workId}-version-2`,
+			workId,
+			text:
+				"観察から問いが生まれる。\n言葉になる前の違和感を残す。\n\nまだ名前のない輪郭を記録する。",
+			parentRevisionIds: [`${workId}-version-1`],
+			kind: "edition",
+			createdAt: "2025-03-14T15:30:00.000Z",
+			message: "加筆した版",
+		},
+	];
 }
 
 export function mockUiPlugin(): Plugin {
@@ -109,6 +133,9 @@ export function mockUiPlugin(): Plugin {
 						break;
 					case "listOutline":
 						result = snapshot;
+						break;
+					case "listRevisions":
+						result = mockRevisions(String(args[0]));
 						break;
 					case "setCollapsed": {
 						const item = snapshot.items.find((candidate) => candidate.id === String(args[0]));

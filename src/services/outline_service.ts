@@ -11,6 +11,7 @@ import type {
 	OutlineItem,
 	OutlineSnapshot,
 	PurgeManifest,
+	Revision,
 	RuleQueryResult,
 	SavedRuleQuery,
 	SearchAlias,
@@ -49,6 +50,14 @@ export class OutlineService {
 			knots,
 			stashItemIds,
 		};
+	}
+
+	async listRevisions(workId: string): Promise<Revision[]> {
+		if (!workId) return [];
+		const revisions = await this.store.listRevisions(workId);
+		return revisions.sort((left, right) =>
+			left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+		);
 	}
 
 	async createItem(input: CreateItemInput): Promise<OutlineItem> {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
 	import PhylogeneticTree from "./PhylogeneticTree.svelte";
+	import RevisionComparison from "./RevisionComparison.svelte";
 	import type {
 		EmergenceAction,
 		EmergenceSuggestion,
@@ -12,6 +13,7 @@
 		SavedRuleQuery,
 		SearchAlias,
 		SearchResult,
+		Revision,
 		Suggestion,
 		TrashEntry,
 	} from "../domain/models";
@@ -37,7 +39,7 @@
 	}) as RadioraBindings;
 
 	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
-	type ViewMode = "outline" | "tree" | "trash";
+	type ViewMode = "outline" | "tree" | "comparison" | "trash";
 	type AsideMode = "links" | "discover" | "query";
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
@@ -69,6 +71,9 @@
 	let newLinkType = $state<LinkType>("LIKE");
 	let draggedId = $state<string | null>(null);
 	let trashEntries = $state<TrashEntry[]>([]);
+	let revisions = $state<Revision[]>([]);
+	let revisionsLoading = $state(false);
+	let revisionLoadRequest = 0;
 	let pendingConfirmation = $state<PendingConfirmation | null>(null);
 	let confirmationSubmitting = $state(false);
 	let confirmationDialog: HTMLDialogElement;
@@ -116,6 +121,12 @@
 		const id = selectedId;
 		if (id && startup.phase === "ready") void loadEmergence(id);
 		else emergenceSuggestions = [];
+	});
+
+	$effect(() => {
+		const workId = selectedItem?.workId;
+		if (workId && startup.phase === "ready") void loadRevisions(workId);
+		else revisions = [];
 	});
 
 	onMount(() => {
@@ -277,6 +288,19 @@
 			if (placement.workId === item.workId) placement.text = text;
 		}
 		autosave.queue(item.workId, id, text);
+	}
+
+	async function loadRevisions(workId: string): Promise<void> {
+		const request = ++revisionLoadRequest;
+		revisionsLoading = true;
+		try {
+			const next = await api.listRevisions(workId);
+			if (request === revisionLoadRequest && selectedItem?.workId === workId) revisions = next;
+		} catch (cause) {
+			if (request === revisionLoadRequest) error = errorMessage(cause);
+		} finally {
+			if (request === revisionLoadRequest) revisionsLoading = false;
+		}
 	}
 
 	async function retryWorkingCopySave(): Promise<void> {
@@ -637,6 +661,8 @@
 				onclick={() => (viewMode = "outline")}>Outline</button>
 			<button class:active={viewMode === "tree"} aria-pressed={viewMode === "tree"}
 				onclick={() => (viewMode = "tree")}>Tree</button>
+			<button class:active={viewMode === "comparison"} aria-pressed={viewMode === "comparison"}
+				onclick={() => (viewMode = "comparison")} disabled={!selectedItem}>版比較</button>
 			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
 				onclick={openTrash}>ゴミ箱</button>
 		</nav>
@@ -758,6 +784,23 @@
 					{/each}
 				</div>
 			</section>
+		{:else if viewMode === "comparison"}
+			{#if selectedItem}
+				{#if revisionsLoading}
+					<section class="revision-comparison"><p class="comparison-empty">版を読み込んでいます…</p></section>
+				{:else}
+					{#key selectedItem.workId}
+						<RevisionComparison
+							{revisions}
+							preferredRevisionId={selectedItem.revisionSelector.mode === "pinned"
+								? selectedItem.revisionSelector.revisionId
+								: undefined}
+						/>
+					{/key}
+				{/if}
+			{:else}
+				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.work}を選択してください。</p></section>
+			{/if}
 		{:else}
 			<section class="tree-panel" aria-label="Phylogenetic Tree">
 				<PhylogeneticTree

@@ -2,6 +2,49 @@ import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { OutlineService } from "./outline_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 
+Deno.test("lists only the selected Work's immutable versions in a stable order", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const selected = await service.createItem({ text: "編集中", parentId: null });
+	const other = await service.createItem({ text: "別の思索", parentId: null });
+	const selectedBranch = selected.revisionSelector.mode === "branch"
+		? selected.revisionSelector.branchId
+		: "";
+	const otherBranch = other.revisionSelector.mode === "branch"
+		? other.revisionSelector.branchId
+		: "";
+	await store.createRevision({
+		id: "later",
+		workId: selected.workId,
+		text: "第二版",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt: "2026-07-28T02:00:00.000Z",
+	}, selectedBranch);
+	await store.createRevision({
+		id: "other",
+		workId: other.workId,
+		text: "対象外",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt: "2026-07-28T00:00:00.000Z",
+	}, otherBranch);
+	await store.createRevision({
+		id: "earlier",
+		workId: selected.workId,
+		text: "第一版",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt: "2026-07-28T01:00:00.000Z",
+	}, selectedBranch);
+
+	const revisions = await service.listRevisions(selected.workId);
+
+	assertEquals(revisions.map((revision) => revision.id), ["earlier", "later"]);
+	revisions[0].text = "呼び出し側から変更";
+	assertEquals((await service.listRevisions(selected.workId))[0].text, "第一版");
+});
+
 Deno.test("creates ordered siblings and moves an item under a parent", async () => {
 	const store = new MemoryGraphStore();
 	const service = new OutlineService(store);

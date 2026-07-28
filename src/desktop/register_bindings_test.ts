@@ -36,6 +36,22 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 	assertEquals(snapshot.links[0].fromId, source.workId);
 	assertEquals(snapshot.links[0].toId, target.workId);
 
+	const sourceBranchId = source.revisionSelector.mode === "branch"
+		? source.revisionSelector.branchId
+		: "";
+	await store.createRevision({
+		id: "source-version",
+		workId: source.workId,
+		text: "読み取り専用の版",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt: "2026-07-28T00:00:00.000Z",
+	}, sourceBranchId);
+	assertEquals((await handlers.listRevisions(source.workId)).map((revision) => revision.id), [
+		"source-version",
+	]);
+	assertEquals(await handlers.listRevisions(target.workId), []);
+
 	await handlers.trashWork(source.id);
 	assertEquals((await handlers.listTrash())[0].occurrenceCount, 2);
 	await handlers.restoreWork(source.workId);
