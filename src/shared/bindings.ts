@@ -18,12 +18,15 @@ import type {
 	Suggestion,
 	TrashEntry,
 } from "../domain/models.ts";
+import type { GlobalLineageProjection, WorkLineageProjection } from "../services/branch_service.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	listOutline(): Promise<OutlineSnapshot>;
 	listRevisions(workId: string): Promise<Revision[]>;
+	listGlobalLineage(): Promise<GlobalLineageProjection>;
+	listWorkLineage(workId: string): Promise<WorkLineageProjection>;
 	createItem(input: CreateItemInput): Promise<OutlineItem>;
 	createOccurrence(input: CreateOccurrenceInput): Promise<OutlineItem>;
 	updateItemText(id: string, text: string): Promise<void>;

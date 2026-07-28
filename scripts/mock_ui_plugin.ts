@@ -137,6 +137,41 @@ export function mockUiPlugin(): Plugin {
 					case "listRevisions":
 						result = mockRevisions(String(args[0]));
 						break;
+					case "listGlobalLineage":
+						result = {
+							snapshot,
+							promotedBranches: [{
+								branch: {
+									id: "mock-promoted",
+									workId: "mock-7",
+									name: "公開向け",
+									headRevisionId: "mock-7-version-2",
+									createdAt: "2025-03-10T09:00:00.000Z",
+									promotedAt: "2025-03-15T09:00:00.000Z",
+								},
+								headRevision: mockRevisions("mock-7")[1],
+							}],
+						};
+						break;
+					case "listWorkLineage": {
+						const workId = String(args[0]);
+						result = {
+							work: {
+								id: workId,
+								createdAt: "2025-03-10T09:00:00.000Z",
+								updatedAt: "2025-03-14T15:30:00.000Z",
+							},
+							branches: [{
+								id: `${workId}-main`,
+								workId,
+								name: "main",
+								headRevisionId: `${workId}-version-2`,
+								createdAt: "2025-03-10T09:00:00.000Z",
+							}],
+							revisions: mockRevisions(workId),
+						};
+						break;
+					}
 					case "setCollapsed": {
 						const item = snapshot.items.find((candidate) => candidate.id === String(args[0]));
 						if (item) item.collapsed = Boolean(args[1]);
