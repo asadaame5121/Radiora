@@ -67,8 +67,23 @@ async function createStore(): Promise<MemoryGraphStore> {
 	return store;
 }
 
-function service(store: MemoryGraphStore): BranchService {
-	return new BranchService(store, { now: () => MUTATED_AT });
+function service(store: MemoryGraphStore, ids?: string[]): BranchService {
+	let index = 0;
+	return new BranchService(store, {
+		now: () => MUTATED_AT,
+		createId: () => ids?.[index++] ?? `generated-${index++}`,
+	});
+}
+
+async function graphState(store: MemoryGraphStore) {
+	return {
+		works: await store.listWorks(true),
+		branches: await store.listBranches(),
+		workingCopies: await store.listWorkingCopies(),
+		revisions: await store.listRevisions(),
+		occurrences: await store.listOccurrences(true),
+		links: await store.listLinks(),
+	};
 }
 
 Deno.test("global lineage lists only explicitly promoted, active Branches", async () => {
@@ -184,6 +199,116 @@ Deno.test("making a confirmed source main advances only main and synchronizes it
 		(await store.listRevisions("work")).map((revision) => revision.id),
 		["main-head", "source-head"],
 	);
+});
+
+Deno.test("making a confirmed Branch independent creates a new Work and canonical FROM link", async () => {
+	const store = await createStore();
+	const before = await graphState(store);
+
+	const result = await service(store, ["new-work", "new-main", "new-occurrence", "from-link"])
+		.detachAsIndependentWork("source", { parentOccurrenceId: "occurrence", orderKey: 2048 });
+
+	assertEquals(result.bundle, {
+		work: { id: "new-work", createdAt: MUTATED_AT, updatedAt: MUTATED_AT },
+		branch: {
+			id: "new-main",
+			workId: "new-work",
+			name: "main",
+			headRevisionId: null,
+			createdAt: MUTATED_AT,
+		},
+		workingCopy: {
+			branchId: "new-main",
+			workId: "new-work",
+			text: "confirmed source",
+			updatedAt: MUTATED_AT,
+		},
+		occurrence: {
+			id: "new-occurrence",
+			workId: "new-work",
+			parentOccurrenceId: "occurrence",
+			orderKey: 2048,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "new-main" },
+		},
+	});
+	assertEquals(result.link, {
+		id: "from-link",
+		fromId: "new-work",
+		toId: "work",
+		from: { scope: "work", workId: "new-work" },
+		to: { scope: "work", workId: "work" },
+		type: "FROM",
+		status: "asserted",
+		origin: "human",
+		createdAt: MUTATED_AT,
+	});
+	assertEquals(await store.listRevisions("new-work"), []);
+	assertEquals(
+		(await store.listBranches("work")).find((branch) => branch.id === "source"),
+		before.branches.find((branch) => branch.id === "source"),
+	);
+	assertEquals(
+		(await store.listWorkingCopies("work")).find((copy) => copy.branchId === "source"),
+		before.workingCopies.find((copy) => copy.branchId === "source"),
+	);
+	assertEquals(await store.listRevisions("work"), before.revisions);
+});
+
+for (
+	const scenario of [
+		{
+			name: "dirty source",
+			prepare: (store: MemoryGraphStore) =>
+				store.updateBranchWorkingCopy("source", "uncommitted source", MUTATED_AT),
+			message: "Source Branch has uncommitted Working Copy changes",
+		},
+		{
+			name: "archived source",
+			prepare: (store: MemoryGraphStore) => service(store).archiveBranch("source"),
+			message: "Archived Branch cannot be made independent",
+		},
+		{
+			name: "source without a head",
+			prepare: async (store: MemoryGraphStore) => {
+				const source = (await store.listBranches("work")).find((branch) => branch.id === "source");
+				if (!source) throw new Error("test source missing");
+				await store.updateBranch({ ...source, headRevisionId: null });
+			},
+			message: "Confirmed head Revision not found",
+		},
+	]
+) {
+	Deno.test(`making ${scenario.name} independent rejects without writes`, async () => {
+		const store = await createStore();
+		await scenario.prepare(store);
+		const before = await graphState(store);
+
+		await assertRejects(
+			() =>
+				service(store).detachAsIndependentWork("source", {
+					parentOccurrenceId: "occurrence",
+					orderKey: 2048,
+				}),
+			Error,
+			scenario.message,
+		);
+		assertEquals(await graphState(store), before);
+	});
+}
+
+Deno.test("making a Branch independent rejects generated ID collisions before writing", async () => {
+	const store = await createStore();
+	const before = await graphState(store);
+
+	await assertRejects(
+		() =>
+			service(store, ["work", "new-main", "new-occurrence", "from-link"])
+				.detachAsIndependentWork("source", { parentOccurrenceId: null, orderKey: 1 }),
+		Error,
+		"Generated identifier already exists",
+	);
+	assertEquals(await graphState(store), before);
 });
 
 Deno.test("Branch operations reject a Work without exactly one main Branch", async () => {
