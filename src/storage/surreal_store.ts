@@ -481,11 +481,13 @@ export class SurrealGraphStore implements GraphStore {
 
 	async deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
 		await this.#db.query(
-			`DELETE semantic_link WHERE from_work = $from AND to_work = $to AND type = $type;`,
+			`UPDATE semantic_link SET status = $retracted
+				WHERE from_work = $from AND to_work = $to AND type = $type AND status != $retracted;`,
 			{
 				from: new RecordId("work", fromId),
 				to: new RecordId("work", toId),
 				type,
+				retracted: "retracted",
 			},
 		);
 	}
