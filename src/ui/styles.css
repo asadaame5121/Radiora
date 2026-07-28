@@ -274,6 +274,11 @@ main {
 .disclosure.hidden {
 	visibility: hidden;
 }
+.reference-stub {
+	color: var(--cyan);
+	font-size: 0.75rem;
+	line-height: 1;
+}
 .delete {
 	opacity: 0;
 }

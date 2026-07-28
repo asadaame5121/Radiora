@@ -1,5 +1,15 @@
 export const LINK_TYPES = ["RELATED", "FROM", "LIKE", "SUPPORT", "VS", "FIX", "CITE"] as const;
 export type LinkType = (typeof LINK_TYPES)[number];
+export const SYMMETRIC_LINK_TYPES = [
+	"RELATED",
+	"LIKE",
+	"VS",
+] as const satisfies readonly LinkType[];
+
+export function isSymmetricLinkType(type: LinkType): boolean {
+	return (SYMMETRIC_LINK_TYPES as readonly LinkType[]).includes(type);
+}
+
 export type LinkStatus = "provisional" | "asserted" | "retracted";
 export type LinkOrigin = "human" | "suggestion" | "import";
 
@@ -54,6 +64,7 @@ export interface OutlineItem {
 	collapsed: boolean;
 	revisionSelector: RevisionSelector;
 	contextualHeading?: string;
+	referenceStub?: boolean;
 	createdAt: string;
 	updatedAt: string;
 }

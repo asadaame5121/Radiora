@@ -31,6 +31,49 @@ Deno.test("persists and reloads graph data", async () => {
 	}
 });
 
+Deno.test("persists retracted semantic links as history", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	const timestamp = "2026-01-01T00:00:00.000Z";
+	try {
+		const first = new JsonGraphStore(path);
+		await first.initialize();
+		for (const id of ["one", "two"]) {
+			await first.createWorkBundle(
+				{ id, createdAt: timestamp, updatedAt: timestamp },
+				{ id: `${id}-main`, workId: id, name: "main", headRevisionId: null, createdAt: timestamp },
+				{ branchId: `${id}-main`, workId: id, text: id, updatedAt: timestamp },
+				{
+					id: `${id}-occurrence`,
+					workId: id,
+					parentOccurrenceId: null,
+					orderKey: 1,
+					collapsed: false,
+					revisionSelector: { mode: "branch", branchId: `${id}-main` },
+				},
+			);
+		}
+		await first.createLink({
+			id: "related-one-two",
+			fromId: "one",
+			toId: "two",
+			from: { scope: "work", workId: "one" },
+			to: { scope: "work", workId: "two" },
+			type: "RELATED",
+			status: "asserted",
+			origin: "human",
+			createdAt: timestamp,
+		});
+		await first.deleteLink("one", "two", "RELATED");
+
+		const second = new JsonGraphStore(path);
+		await second.initialize();
+		assertEquals((await second.listLinks())[0].status, "retracted");
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
 Deno.test("loads the complete version 0 JSON fixture without data loss", async () => {
 	const fixture = new URL("../../tests/fixtures/backup-v0.json", import.meta.url);
 	const directory = await Deno.makeTempDir();

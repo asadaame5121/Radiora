@@ -36,6 +36,7 @@ export interface GraphStore {
 	listPurgeManifests(): Promise<PurgeManifest[]>;
 	listLinks(): Promise<OutlineLink[]>;
 	createLink(link: OutlineLink): Promise<void>;
+	/** Marks matching active links as retracted while retaining them for history. */
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;
 	listSystemRelations(): Promise<SystemRelation[]>;
 	listKnots(): Promise<Knot[]>;
