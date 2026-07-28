@@ -64,6 +64,11 @@
 		type CommandContext,
 		type CommandId,
 	} from "./command_service";
+	import {
+	commandPaletteItems,
+	nextCommandPaletteIndex,
+	type CommandPaletteItem,
+	} from "./command_palette.ts";
 
 	const api = new Proxy({}, {
 		get: (_target, property) => async (...args: unknown[]) => {
@@ -155,6 +160,11 @@
 	let pendingConfirmation = $state<PendingConfirmation | null>(null);
 	let confirmationSubmitting = $state(false);
 	let confirmationDialog: HTMLDialogElement;
+	let commandPaletteOpen = $state(false);
+	let commandPaletteQuery = $state("");
+	let commandPaletteActiveIndex = $state(-1);
+	let commandPaletteInput = $state<HTMLInputElement | null>(null);
+	let commandPaletteRestoreFocus: HTMLElement | null = null;
 	let workingCopySaveStatuses = $state<WorkingCopySaveStatus[]>([]);
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
@@ -225,7 +235,7 @@
 		startupReady: startup.phase === "ready",
 		selectedOccurrenceId: selectedId,
 		hasSelectedBranch: Boolean(selectedBranchId),
-		hasRecoverySnapshot: recoverySnapshots.length > 0,
+		hasSelectedRecoverySnapshot: false,
 		hasLinkTarget: Boolean(newLinkTarget),
 		quickCaptureText,
 		quickCaptureSubmitting,
@@ -234,6 +244,14 @@
 		isHoisted: Boolean(browsingLocation.hoistOccurrenceId),
 	});
 	const commands = $derived(commandAvailability(commandContext));
+	const commandPaletteCommands = $derived(commandPaletteItems(
+		commandPaletteQuery,
+		commandContext,
+		vocabulary,
+	));
+	const activeCommandPaletteItem = $derived(
+		commandPaletteActiveIndex < 0 ? null : commandPaletteCommands[commandPaletteActiveIndex] ?? null,
+	);
 	const shortcuts = validateShortcuts(COMMAND_DEFINITIONS.flatMap((command) =>
 		command.shortcut ? [{ commandId: command.id, shortcut: command.shortcut }] : []
 	));
@@ -242,6 +260,14 @@
 		const id = selectedId;
 		if (id && startup.phase === "ready") void loadEmergence(id);
 		else emergenceSuggestions = [];
+	});
+
+	$effect(() => {
+		if (commandPaletteCommands.length === 0) {
+			commandPaletteActiveIndex = -1;
+		} else if (commandPaletteActiveIndex < 0 || commandPaletteActiveIndex >= commandPaletteCommands.length) {
+			commandPaletteActiveIndex = 0;
+		}
 	});
 
 	$effect(() => {
@@ -276,6 +302,18 @@
 			}
 		};
 		const handleGlobalShortcut = (event: KeyboardEvent) => {
+			if (event.defaultPrevented) return;
+			if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLocaleLowerCase() === "k") {
+				event.preventDefault();
+				if (commandPaletteOpen) void closeCommandPalette();
+				else void openCommandPalette();
+				return;
+			}
+			if (commandPaletteOpen && event.key === "Escape") {
+				event.preventDefault();
+				void closeCommandPalette();
+				return;
+			}
 			if (event.defaultPrevented || isEditableTarget(event.target)) return;
 			const shortcut = shortcutForKeyboardEvent(event);
 			const binding = shortcuts.bindings.find((candidate) => candidate.shortcut === shortcut);
@@ -1029,7 +1067,10 @@
 	}
 
 	async function executeCommand(id: CommandId, snapshotId?: string): Promise<void> {
-		const result = await dispatchCommand(id, commandContext, async (commandId) => {
+		const executionContext: CommandContext = snapshotId
+			? { ...commandContext, hasSelectedRecoverySnapshot: true }
+			: commandContext;
+		const result = await dispatchCommand(id, executionContext, async (commandId) => {
 			switch (commandId) {
 				case "quickCapture": await performQuickCapture(); break;
 				case "hoist": hoistSelected(); break;
@@ -1043,6 +1084,51 @@
 			}
 		});
 		if (!result.executed && result.reason) error = result.reason;
+	}
+
+	async function openCommandPalette(): Promise<void> {
+		commandPaletteRestoreFocus = document.activeElement instanceof HTMLElement
+			? document.activeElement
+			: null;
+		commandPaletteQuery = "";
+		commandPaletteActiveIndex = 0;
+		commandPaletteOpen = true;
+		await tick();
+		commandPaletteInput?.focus();
+	}
+
+	async function closeCommandPalette(): Promise<void> {
+		commandPaletteOpen = false;
+		await tick();
+		commandPaletteRestoreFocus?.focus();
+		commandPaletteRestoreFocus = null;
+	}
+
+	function handleCommandPaletteKeydown(event: KeyboardEvent): void {
+		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+			event.preventDefault();
+			commandPaletteActiveIndex = nextCommandPaletteIndex(
+				commandPaletteActiveIndex,
+				event.key === "ArrowDown" ? 1 : -1,
+				commandPaletteCommands.length,
+			);
+			return;
+		}
+		if (event.key === "Enter") {
+			event.preventDefault();
+			if (activeCommandPaletteItem) executeCommandPaletteItem(activeCommandPaletteItem);
+			return;
+		}
+		if (event.key === "Escape") {
+			event.preventDefault();
+			void closeCommandPalette();
+		}
+	}
+
+	function executeCommandPaletteItem(command: CommandPaletteItem): void {
+		if (!command?.availability.enabled) return;
+		void executeCommand(command.id);
+		void closeCommandPalette();
 	}
 
 	function captureQuickText(): void { void executeCommand("quickCapture"); }
@@ -1158,6 +1244,52 @@
 </script>
 
 <svelte:head><title>Radiora v2 PoC</title></svelte:head>
+
+{#if commandPaletteOpen}
+	<dialog
+		open
+		class="command-palette"
+		aria-modal="true"
+		aria-label={vocabulary.commandPalette}
+	>
+		<div class="command-palette__content">
+			<input
+				bind:this={commandPaletteInput}
+				bind:value={commandPaletteQuery}
+				aria-label={`${vocabulary.commandPalette}を検索`}
+				aria-controls="command-palette-results"
+				aria-activedescendant={activeCommandPaletteItem
+					? `command-palette-${activeCommandPaletteItem.id}`
+					: undefined}
+				placeholder={`${vocabulary.commandPalette}を検索…`}
+				onkeydown={handleCommandPaletteKeydown}
+				autocomplete="off"
+			/>
+			<div id="command-palette-results" role="listbox" aria-label={vocabulary.commandPalette}>
+				{#each commandPaletteCommands as command, index (command.id)}
+					<button
+						id={`command-palette-${command.id}`}
+						class:active={index === commandPaletteActiveIndex}
+						role="option"
+						aria-selected={index === commandPaletteActiveIndex}
+						disabled={!command.availability.enabled}
+						title={command.availability.reason}
+						onclick={() => executeCommandPaletteItem(command)}
+					>
+						<span>{command.label}</span>
+						{#if command.shortcut}<small>{command.shortcut}</small>{/if}
+					</button>
+				{/each}
+				{#if commandPaletteCommands.length === 0}<p>一致するコマンドはありません。</p>{/if}
+			</div>
+			{#if activeCommandPaletteItem && !activeCommandPaletteItem.availability.enabled}
+				<p class="command-palette__reason" aria-live="polite">
+					{activeCommandPaletteItem.availability.reason}
+				</p>
+			{/if}
+		</div>
+	</dialog>
+{/if}
 
 <div class="shell">
 	<header>

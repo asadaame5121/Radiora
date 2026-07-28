@@ -5,7 +5,7 @@ export interface CommandContext {
 	startupReady: boolean;
 	selectedOccurrenceId: string | null;
 	hasSelectedBranch: boolean;
-	hasRecoverySnapshot: boolean;
+	hasSelectedRecoverySnapshot: boolean;
 	hasLinkTarget: boolean;
 	quickCaptureText: string;
 	quickCaptureSubmitting: boolean;
@@ -89,7 +89,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 				? selection(context)
 				: !context.hasSelectedBranch
 				? { enabled: false, reason: "保存対象の別稿を選択してください。" }
-				: !context.hasRecoverySnapshot
+				: !context.hasSelectedRecoverySnapshot
 				? { enabled: false, reason: "保存する復元用保存を選択してください。" }
 				: { enabled: true },
 	},
