@@ -20,8 +20,9 @@ tags:
 - `tests/fixtures/storage-v0.surql`: SurrealDB schemaと代表データ
 - `tests/fixtures/backup-v0.json`: envelopeのないJSON
 
-両fixtureは同じ二項目と一つの意味リンクを持ち、日本語、改行、Markdown、
-`radiora://`内部参照、時刻、折りたたみ、別名、保存済みクエリを含む。
+両fixtureは同じ五項目と一つの意味リンクを持ち、日本語、改行、Markdown、
+`radiora://`内部参照、時刻、折りたたみ、別名、保存済みクエリに加え、親が存在しない
+孤児一件と相互参照する循環二件を含む。
 
 ## 現行DBの棚卸し
 

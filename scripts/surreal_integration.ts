@@ -153,8 +153,19 @@ try {
 		items: snapshot.items.length,
 		links: snapshot.links.length,
 	});
-	if (snapshot.items.length !== 4 || snapshot.links.length !== 2) {
+	if (snapshot.items.length !== 7 || snapshot.links.length !== 2) {
 		throw new Error(`Persistence verification failed: ${JSON.stringify(snapshot)}`);
+	}
+	const expectedStashIds = [
+		"33333333-3333-4333-8333-333333333333",
+		"44444444-4444-4444-8444-444444444444",
+		"55555555-5555-4555-8555-555555555555",
+	];
+	if (
+		expectedStashIds.some((id) => !snapshot.stashItemIds.includes(id)) ||
+		snapshot.stashItemIds.some((id) => !expectedStashIds.includes(id))
+	) {
+		throw new Error(`Orphan and cycle isolation failed: ${JSON.stringify(snapshot)}`);
 	}
 	const migratedLegacy = snapshot.items.find((item) =>
 		item.id === "11111111-1111-4111-8111-111111111111"
