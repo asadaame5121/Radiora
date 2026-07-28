@@ -293,7 +293,10 @@ function aggregateOverview(
 
 function rawEdges(snapshot: OutlineSnapshot): RawEdge[] {
 	const occurrenceByWork = new Map<string, string>();
-	for (const item of snapshot.items) {
+	// A semantic link belongs to Works, not to the outline placement hierarchy.
+	// Pick one stable visible Occurrence for each Work so reordering or moving an
+	// Occurrence cannot change the link projection.
+	for (const item of [...snapshot.items].sort(compareProjectionOccurrence)) {
 		if (!occurrenceByWork.has(item.workId)) occurrenceByWork.set(item.workId, item.id);
 	}
 	const result: RawEdge[] = [];
@@ -308,6 +311,10 @@ function rawEdges(snapshot: OutlineSnapshot): RawEdge[] {
 		);
 	}
 	return result;
+}
+
+function compareProjectionOccurrence(a: OutlineItem, b: OutlineItem): number {
+	return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
 }
 
 function materializeEdges(
