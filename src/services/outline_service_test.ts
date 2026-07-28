@@ -164,6 +164,27 @@ Deno.test("one Work can appear in multiple independent Occurrences with shared t
 	assertEquals(items.find((item) => item.id === second.id)?.contextualHeading, "別の文脈");
 });
 
+Deno.test("contextual heading stays local to its placement", async () => {
+	const service = new OutlineService(new MemoryGraphStore());
+	const source = await service.createItem({ text: "共有本文\n本文", parentId: null });
+	const mirror = await service.createOccurrence({
+		workId: source.workId,
+		parentId: null,
+		contextualHeading: "別の文脈",
+	});
+	const alias = await service.saveSearchAlias({ canonical: "共有本文", variants: ["共通原稿"] });
+	const before = (await service.listOutline()).items.find((item) => item.id === mirror.id);
+
+	await service.setContextualHeading(mirror.id, "更新した文脈");
+
+	const items = (await service.listOutline()).items.filter((item) => item.workId === source.workId);
+	const updated = items.find((item) => item.id === mirror.id);
+	assertEquals(items.map((item) => item.text), ["共有本文\n本文", "共有本文\n本文"]);
+	assertEquals(updated?.contextualHeading, "更新した文脈");
+	assertEquals(updated?.revisionSelector, before?.revisionSelector);
+	assertEquals(await service.listSearchAliases(), [alias]);
+});
+
 Deno.test("moving an Occurrence never changes semantic FROM", async () => {
 	const store = new MemoryGraphStore();
 	const service = new OutlineService(store);
