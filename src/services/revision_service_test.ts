@@ -50,6 +50,142 @@ Deno.test("explicit checkpoint copies the selected Branch Working Copy immutably
 	assertEquals((await store.listBranches("work"))[0].headRevisionId, "revision-2");
 });
 
+Deno.test("manual merge preserves the hand-edited Working Copy and ordered parents without combining parent text", async () => {
+	const store = await createStore();
+	const checkpointService = new RevisionService(store, {
+		now: () => TIMESTAMP,
+		createId: () => "main-head",
+	});
+	const mainHead = await checkpointService.createCheckpoint("branch");
+	await store.createBranch(
+		{ id: "other", workId: "work", name: "other", headRevisionId: null, createdAt: TIMESTAMP },
+		{ branchId: "other", workId: "work", text: "other parent text", updatedAt: TIMESTAMP },
+	);
+	const otherParent: import("../domain/models.ts").Revision = {
+		id: "other-parent",
+		workId: "work",
+		text: "other parent text",
+		parentRevisionIds: [],
+		kind: "checkpoint",
+		createdAt: TIMESTAMP,
+	};
+	await store.createRevision(otherParent, "other");
+	await store.updateBranchWorkingCopy(
+		"branch",
+		"hand-edited merge text",
+		"2026-07-28T12:01:00.000Z",
+	);
+
+	const service = new RevisionService(store, {
+		now: () => "2026-07-28T12:02:00.000Z",
+		createId: () => "manual-merge",
+	});
+	const merge = await service.createManualMerge(
+		"branch",
+		[otherParent.id, mainHead.id],
+		"resolved manually",
+	);
+
+	assertEquals(merge, {
+		id: "manual-merge",
+		workId: "work",
+		text: "hand-edited merge text",
+		parentRevisionIds: ["other-parent", "main-head"],
+		kind: "merge",
+		createdAt: "2026-07-28T12:02:00.000Z",
+		message: "resolved manually",
+	});
+	assertEquals(await store.listRevisions("work"), [mainHead, otherParent, merge]);
+	assertEquals(
+		(await store.listBranches("work")).find((branch) => branch.id === "branch")?.headRevisionId,
+		"manual-merge",
+	);
+	assertEquals(mainHead.text, "first");
+	assertEquals(otherParent.text, "other parent text");
+});
+
+Deno.test("manual merge rejects invalid parents before writing", async (t) => {
+	const cases = [
+		{ name: "one parent", parentIds: ["main-head"] },
+		{ name: "duplicate parents", parentIds: ["main-head", "main-head"] },
+		{ name: "missing parent", parentIds: ["main-head", "missing"] },
+		{ name: "head omitted", parentIds: ["other-parent", "missing"] },
+	];
+	for (const testCase of cases) {
+		await t.step(testCase.name, async () => {
+			const store = await createStore();
+			const checkpointService = new RevisionService(store, {
+				now: () => TIMESTAMP,
+				createId: () => "main-head",
+			});
+			await checkpointService.createCheckpoint("branch");
+			const before = {
+				branches: await store.listBranches("work"),
+				workingCopies: await store.listWorkingCopies("work"),
+				revisions: await store.listRevisions("work"),
+			};
+			const service = new RevisionService(store, {
+				now: () => {
+					throw new Error("invalid merge must not request a timestamp");
+				},
+				createId: () => {
+					throw new Error("invalid merge must not request an id");
+				},
+			});
+
+			await assertRejects(() => service.createManualMerge("branch", testCase.parentIds));
+			assertEquals(await store.listBranches("work"), before.branches);
+			assertEquals(await store.listWorkingCopies("work"), before.workingCopies);
+			assertEquals(await store.listRevisions("work"), before.revisions);
+		});
+	}
+});
+
+Deno.test("manual merge rejects a parent from another Work before writing", async () => {
+	const store = await createStore();
+	const checkpointService = new RevisionService(store, {
+		now: () => TIMESTAMP,
+		createId: () => "main-head",
+	});
+	await checkpointService.createCheckpoint("branch");
+	await store.createWorkBundle(
+		{ id: "other-work", createdAt: TIMESTAMP, updatedAt: TIMESTAMP },
+		{
+			id: "other-branch",
+			workId: "other-work",
+			name: "main",
+			headRevisionId: null,
+			createdAt: TIMESTAMP,
+		},
+		{ branchId: "other-branch", workId: "other-work", text: "other", updatedAt: TIMESTAMP },
+		{
+			id: "other-occurrence",
+			workId: "other-work",
+			parentOccurrenceId: null,
+			orderKey: 1,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "other-branch" },
+		},
+	);
+	await store.createRevision({
+		id: "other-parent",
+		workId: "other-work",
+		text: "other",
+		parentRevisionIds: [],
+		kind: "checkpoint",
+		createdAt: TIMESTAMP,
+	}, "other-branch");
+	const before = await store.listRevisions();
+
+	await assertRejects(
+		() => new RevisionService(store).createManualMerge("branch", ["main-head", "other-parent"]),
+		Error,
+		"Parent Revision does not belong to Branch Work: other-parent",
+	);
+	assertEquals(await store.listRevisions(), before);
+	assertEquals((await store.listBranches("work"))[0].headRevisionId, "main-head");
+});
+
 Deno.test("ordinary saves, autosave, snapshot policy, and snapshot restore do not create Revisions", async () => {
 	const store = await createStore();
 	await store.updateBranchWorkingCopy("branch", "ordinary save", "2026-07-28T12:01:00.000Z");
