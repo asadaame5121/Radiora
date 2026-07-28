@@ -14,7 +14,11 @@ export type UiEntityCode =
 	| "resumePosition"
 	| "today"
 	| "quickCapture"
-	| "unplacedInbox";
+	| "unplacedInbox"
+	| "hoist"
+	| "breadcrumb"
+	| "browsingHistory"
+	| "pane";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -35,4 +39,8 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	today: "今日",
 	quickCapture: "クイック入力",
 	unplacedInbox: "未配置箱",
+	hoist: "絞り込み表示",
+	breadcrumb: "祖先",
+	browsingHistory: "閲覧履歴",
+	pane: "ペイン",
 });

@@ -19,6 +19,10 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"today",
 		"quickCapture",
 		"unplacedInbox",
+		"hoist",
+		"breadcrumb",
+		"browsingHistory",
+		"pane",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -39,5 +43,9 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		today: "今日",
 		quickCapture: "クイック入力",
 		unplacedInbox: "未配置箱",
+		hoist: "絞り込み表示",
+		breadcrumb: "祖先",
+		browsingHistory: "閲覧履歴",
+		pane: "ペイン",
 	});
 });

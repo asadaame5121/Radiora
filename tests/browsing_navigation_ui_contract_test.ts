@@ -1,0 +1,44 @@
+import { assert, assertFalse } from "jsr:@std/assert@1";
+
+Deno.test("App exposes hoist, breadcrumb, history, and independent pane controls through vocabulary", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+
+	assert(app.includes("createBrowsingNavigationState"));
+	assert(app.includes("projectBrowsingOutline"));
+	assert(app.includes("vocabulary.hoist"));
+	assert(app.includes("vocabulary.breadcrumb"));
+	assert(app.includes("vocabulary.browsingHistory"));
+	assert(app.includes("vocabulary.pane"));
+	assert(app.includes("goBrowsingHistory(-1)"));
+	assert(app.includes("goBrowsingHistory(1)"));
+	assert(app.includes("openBrowsingPane"));
+	assert(app.includes("activateBrowsingPane"));
+});
+
+Deno.test("App browsing routes do not persist expansion or placement", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const selectItem = app.slice(
+		app.indexOf("async function selectItem"),
+		app.indexOf("async function loadEmergence"),
+	);
+	const browsingControls = app.slice(
+		app.indexOf("function selectOccurrence"),
+		app.indexOf("async function createRoot"),
+	);
+
+	assert(selectItem.includes("transientExpandedIds = ancestorIds"));
+	assertFalse(selectItem.includes("api.setCollapsed"));
+	assert(browsingControls.includes("browseToOutlineOccurrence"));
+	assert(browsingControls.includes("reconcileBrowsingState"));
+	const hoistSelected = browsingControls.slice(
+		browsingControls.indexOf("function hoistSelected"),
+		browsingControls.indexOf("function clearHoist"),
+	);
+	assert(hoistSelected.includes("transientExpandedIds"));
+	assert(hoistSelected.includes("selectedId"));
+	assertFalse(hoistSelected.includes("setCollapsed"));
+	assertFalse(browsingControls.includes("api."));
+	assertFalse(browsingControls.includes("parentId ="));
+	assertFalse(browsingControls.includes("orderKey ="));
+	assertFalse(browsingControls.includes("collapsed ="));
+});
