@@ -65,6 +65,60 @@ export class RevisionService {
 	}
 
 	/**
+	 * Explicitly records a hand-authored merge revision from the selected Branch's
+	 * current Working Copy. Parent texts are deliberately never read or combined:
+	 * the caller has already resolved the desired text in the Working Copy.
+	 */
+	async createManualMerge(
+		branchId: string,
+		parentRevisionIds: string[],
+		message?: string,
+	): Promise<Revision> {
+		if (parentRevisionIds.length < 2) {
+			throw new Error("Manual merge requires at least two parents");
+		}
+		if (new Set(parentRevisionIds).size !== parentRevisionIds.length) {
+			throw new Error("Manual merge parents must be unique");
+		}
+
+		const [branches, workingCopies, revisions] = await Promise.all([
+			this.store.listBranches(),
+			this.store.listWorkingCopies(),
+			this.store.listRevisions(),
+		]);
+		const branch = branches.find((candidate) => candidate.id === branchId);
+		if (!branch) throw new Error(`Branch not found: ${branchId}`);
+		const workingCopy = workingCopies.find((candidate) => candidate.branchId === branchId);
+		if (!workingCopy || workingCopy.workId !== branch.workId) {
+			throw new Error(`Working Copy not found for Branch: ${branchId}`);
+		}
+		if (!branch.headRevisionId || !parentRevisionIds.includes(branch.headRevisionId)) {
+			throw new Error(`Manual merge parents must include Branch head: ${branchId}`);
+		}
+
+		const revisionsById = new Map(revisions.map((revision) => [revision.id, revision]));
+		for (const parentId of parentRevisionIds) {
+			const parent = revisionsById.get(parentId);
+			if (!parent) throw new Error(`Parent Revision not found: ${parentId}`);
+			if (parent.workId !== branch.workId) {
+				throw new Error(`Parent Revision does not belong to Branch Work: ${parentId}`);
+			}
+		}
+
+		const revision: Revision = {
+			id: this.#createId(),
+			workId: branch.workId,
+			text: workingCopy.text,
+			parentRevisionIds: [...parentRevisionIds],
+			kind: "merge",
+			createdAt: this.#now(),
+			...(message === undefined ? {} : { message }),
+		};
+		await this.store.createRevision(revision, branch.id);
+		return revision;
+	}
+
+	/**
 	 * Starts a rewrite on a new Branch only after explicit user confirmation.
 	 *
 	 * If the source Working Copy is already identical to its head Revision, that
