@@ -789,6 +789,11 @@ AI生成物と人間作成物を明確に区別し、採用履歴を残す。
 - Node Diffを実装する
 - 全体系統と版系統の表示を分ける
 
+現行PoCではstorage／service境界、版系統と全体系統の読み取り表示、任意2版の比較、
+既存Recovery Snapshotの差分確認・復元・Revision昇格まで到達している。明示的な版保存、
+Branch lifecycle、手動merge、Snapshot自動生成・間引きはservice／policyと自動テストまでで、
+UI導線とruntime接続は後続課題である。以下は製品としてのPhase完了条件を示す。
+
 完了条件:
 
 - 元稿を変更せず全面改稿を開始できる
