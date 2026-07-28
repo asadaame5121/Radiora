@@ -81,10 +81,10 @@ async function bootstrap(): Promise<StartupStatus> {
 				await Deno.mkdir(surrealDir, { recursive: true });
 				const databasePath = `${surrealDir}\\main.db`;
 				storageVersionMarker = `${surrealDir}\\storage-schema-version`;
-				const backupPath = `${surrealDir}\\migration-backups\\storage-v0`;
+				const backupRoot = `${surrealDir}\\migration-backups`;
 				const protectedBackup = await prepareStorageMigrationBackup(
 					databasePath,
-					backupPath,
+					backupRoot,
 					storageVersionMarker,
 					CURRENT_STORAGE_SCHEMA_VERSION,
 				);

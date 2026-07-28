@@ -39,9 +39,14 @@ Phase 0時点のPoCは次の状態にあった。
 
 version `0`は互換入力として扱うlegacy形式であり、今後同じ形へ新規出力しない。
 
-2026-07-27に`0001_work_occurrence`を導入し、現在のstorage schemaとbackup schemaは
-version `1`である。Work、main Branch、Working Copy、Occurrence、意味リンク、システム関係へ
-分離した。詳細は[[../log/2026-07-27-phase-1-work-occurrence]]を参照する。
+2026-07-27に`0001_work_occurrence`を導入し、Work、main Branch、Working Copy、Occurrence、
+意味リンク、システム関係へ分離した。詳細は
+[[../log/2026-07-27-phase-1-work-occurrence]]を参照する。
+
+2026-07-28に`0002_revision_snapshot`を導入し、現在のstorage schemaとbackup schemaは
+version `2`である。複数Branch、変更不能なRevision、Working Copy単位のRecovery Snapshotを
+永続化する。version `1`のWork、Branch、Working Copy、Occurrence、リンクなどはそのまま保持し、
+RevisionとRecovery Snapshotを空集合として追加する。
 
 ## 3. 二つのschema version
 
@@ -125,7 +130,7 @@ interface MigrationJournalEntry {
 src/storage/migrations/
   mod.ts
   0001_work_occurrence.ts
-  0002_revision_branch.ts
+  0002_revision_snapshot.ts
 ```
 
 最低限、次の契約を持つ。
@@ -226,3 +231,32 @@ version `0`から`1`へのmigrationは、少なくとも次を明示的に検証
 - 既存JSON version `0`とSurrealDB version `0`の双方から同じdomain状態を得られる
 
 この移行はRadioraの配置と系譜を分離する境界になるため、単なるtable renameとして扱わない。
+
+## 11. Revision / Recovery Snapshot移行
+
+version `1`から`2`へのmigrationは、Phase 1で先行導入した`revision`を保持したまま
+`recovery_snapshot`をExpandする。JSONでは次の配列を追加する。
+
+```json
+{
+  "revisions": [],
+  "recoverySnapshots": []
+}
+```
+
+最低限、次を検証する。
+
+- 複数BranchのWorking Copy本文が互いに上書きされない
+- Revision本文と複数の親Revision IDがround-trip後も変化しない
+- Revision追加時は親IDの重複・自己参照・孤児・Work越境を拒否する。Revisionは変更不能かつ
+  既存Revisionだけを親にできるため、追加後も親子関係はDAGになる
+- Revision追加の検証失敗時はRevisionを作成せず、対象Branch headも変更しない
+- Branch追従のOccurrenceは対象Working Copy、固定Occurrenceは対象Revisionの本文を投影する
+- Recovery Snapshotの作成と復元が暗黙にRevisionを生成しない
+- Workの完全消去でRevisionとRecovery Snapshot本文を削除し、manifestにはIDだけを残す
+- version `1` JSONを上書きする前に`.v1.bak`へ一度だけ保護する
+- SurrealDBのcold backupをsource schema versionごとに分離し、失敗時に同じversionへ復元する
+
+JSON version `1`の日本語、改行、Markdown、`radiora://`を含む既存本文は変換せず、
+version `2` envelopeへ保持する。自動のRevision生成、Snapshot保持ポリシー、Branch操作の
+サービス手順はこのschema migrationへ含めない。

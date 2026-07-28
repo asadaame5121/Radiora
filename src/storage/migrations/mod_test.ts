@@ -1,4 +1,5 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects, assertStringIncludes } from "jsr:@std/assert@1";
+import { revisionSnapshotMigration } from "./0002_revision_snapshot.ts";
 import {
 	type MigrationContext,
 	type MigrationJournalEntry,
@@ -135,4 +136,37 @@ Deno.test("newer storage schema is rejected before writing", async () => {
 		"newer than supported",
 	);
 	assertEquals(state.journal, []);
+});
+
+Deno.test("version 1 storage expands to revision and snapshot schema version 2", async () => {
+	const state = new MemoryMigrationState();
+	state.metadata = {
+		id: "radiora",
+		version: 1,
+		updatedAt: "2026-07-27T00:00:00.000Z",
+		lastMigrationId: "0001_work_occurrence",
+		appVersion: "0.1.0",
+	};
+	const statements: string[] = [];
+
+	assertEquals(
+		await runStorageMigrations({
+			state,
+			context: {
+				execute: (statement) => {
+					statements.push(statement);
+					return Promise.resolve(undefined);
+				},
+			},
+			migrations: [revisionSnapshotMigration],
+			appVersion: "0.1.0",
+			targetVersion: 2,
+		}),
+		2,
+	);
+	assertEquals(state.metadata.version, 2);
+	assertEquals(state.metadata.lastMigrationId, "0002_revision_snapshot");
+	assertStringIncludes(statements[0], "DEFINE TABLE IF NOT EXISTS recovery_snapshot");
+	assertStringIncludes(statements[0], "source_revision");
+	assertStringIncludes(statements[1], "INFO FOR TABLE recovery_snapshot");
 });
