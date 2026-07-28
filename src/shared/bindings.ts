@@ -9,6 +9,7 @@ import type {
 	OutlineItem,
 	OutlineSnapshot,
 	PurgeManifest,
+	Revision,
 	RuleQueryResult,
 	SavedRuleQuery,
 	SearchAlias,
@@ -22,6 +23,7 @@ export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	listOutline(): Promise<OutlineSnapshot>;
+	listRevisions(workId: string): Promise<Revision[]>;
 	createItem(input: CreateItemInput): Promise<OutlineItem>;
 	createOccurrence(input: CreateOccurrenceInput): Promise<OutlineItem>;
 	updateItemText(id: string, text: string): Promise<void>;
