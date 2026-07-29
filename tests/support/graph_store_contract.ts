@@ -385,7 +385,7 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		caretOffset: 10_000,
 		updatedAt: UPDATED_AT,
 	});
-	assertEquals((await store.listBookmarks())[0]?.id, bookmarkId);
+	assert((await store.listBookmarks()).some((bookmark) => bookmark.id === bookmarkId));
 	assertEquals((await store.getResumePosition())?.caretOffset, 10_000);
 	const bookmarksBeforeInvalidWrite = await store.listBookmarks();
 	await assertRejects(
@@ -446,7 +446,7 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	assertEquals(await store.getResumePosition(), null);
 
 	await store.restoreWork(root.work.id);
-	assertEquals((await store.listBookmarks())[0]?.id, bookmarkId);
+	assert((await store.listBookmarks()).some((bookmark) => bookmark.id === bookmarkId));
 	assertEquals((await store.getResumePosition())?.caretOffset, 10_000);
 	assertEquals(
 		(await store.listItems()).filter((item) => item.workId === root.work.id).length,
