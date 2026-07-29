@@ -130,6 +130,33 @@ Deno.test("buildQueryProjection skips rows without a matching item", async () =>
 	assertEquals(nodes.length, 0);
 });
 
+Deno.test("buildQueryProjection extracts occurrence IDs from any column", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const item = await service.createItem({ text: "Target", parentId: null });
+	const items = await store.listItems();
+	const itemsById = new Map(items.map((item) => [item.id, item]));
+
+	const transient = new TransientProjectionService();
+	const nodes = transient.buildQueryProjection([["TYPE", item.id]], itemsById);
+
+	assertEquals(nodes.length, 1);
+	assertEquals(nodes[0].occurrenceId, item.id);
+});
+
+Deno.test("buildQueryProjection deduplicates repeated occurrence IDs", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const item = await service.createItem({ text: "Target", parentId: null });
+	const items = await store.listItems();
+	const itemsById = new Map(items.map((item) => [item.id, item]));
+
+	const transient = new TransientProjectionService();
+	const nodes = transient.buildQueryProjection([[item.id, item.id, item.id]], itemsById);
+
+	assertEquals(nodes.length, 1);
+});
+
 async function addWork(
 	store: MemoryGraphStore,
 	id: string,
