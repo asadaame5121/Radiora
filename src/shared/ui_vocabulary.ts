@@ -36,7 +36,12 @@ export type UiEntityCode =
 	| "comparisonAdded"
 	| "comparisonRemoved"
 	| "comparisonUnchanged"
-	| "unknownTime";
+	| "unknownTime"
+	| "markdownEditor"
+	| "editorMode"
+	| "editorNormal"
+	| "editorPlain"
+	| "editorPreview";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -79,4 +84,9 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	comparisonRemoved: "削除",
 	comparisonUnchanged: "変更なし",
 	unknownTime: "日時不明",
+	markdownEditor: "Markdown編集",
+	editorMode: "表示",
+	editorNormal: "通常",
+	editorPlain: "Markdown",
+	editorPreview: "プレビュー",
 });

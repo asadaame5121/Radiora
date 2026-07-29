@@ -6,6 +6,7 @@
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
 	import AdvancedLinkEditor from "./AdvancedLinkEditor.svelte";
+	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import type {
 		Bookmark,
 		CreateLinkInput,
@@ -72,10 +73,7 @@
 	nextCommandPaletteIndex,
 	type CommandPaletteItem,
 	} from "./command_palette.ts";
-	import {
-		findInternalReferenceTrigger,
-		replaceInternalReferenceTrigger,
-	} from "../services/internal_reference";
+	import { findInternalReferenceTrigger } from "../services/internal_reference";
 	import { parseMarkdownCandidates } from "../services/markdown_parser";
 	import type {
 		InternalReferenceBacklink,
@@ -405,6 +403,8 @@
 				return draft === undefined ? item : { ...item, text: draft };
 			});
 			snapshot = next;
+			internalReferenceCompletionRequest++;
+			internalReferenceCompletion = null;
 			browsing = reconcileBrowsingState(browsing, snapshot);
 			selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
 			globalLineage = nextGlobalLineage;
@@ -501,8 +501,13 @@
 		await load(item.id);
 	}
 
-	async function handleKeydown(event: KeyboardEvent, row: VisibleRow): Promise<void> {
-		const textarea = event.currentTarget as HTMLTextAreaElement;
+	async function handleKeydown(
+		event: KeyboardEvent,
+		row: VisibleRow,
+		textarea: HTMLTextAreaElement,
+		compositionGuard = false,
+	): Promise<void> {
+		if (compositionGuard || event.isComposing || event.keyCode === 229) return;
 		if (internalReferenceCompletion?.itemId === row.item.id) {
 			if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 				event.preventDefault();
@@ -589,6 +594,10 @@
 		void updateInternalReferenceCompletion(id, textarea);
 	}
 
+	function updateEditorSelection(id: string, textarea: HTMLTextAreaElement): void {
+		if (selectedId === id) resumeAutosave.queue(id, textarea.selectionStart);
+	}
+
 	async function updateInternalReferenceCompletion(
 		itemId: string,
 		textarea: HTMLTextAreaElement,
@@ -624,23 +633,23 @@
 		const state = internalReferenceCompletion;
 		const item = snapshot.items.find((entry) => entry.id === itemId);
 		if (!state || state.itemId !== itemId || !item) return;
-		const replacement = replaceInternalReferenceTrigger(
-			item.text,
-			state.range,
-			candidate.canonicalMarkdown,
-		);
-		for (const placement of snapshot.items) {
-			if (placement.workId === item.workId) placement.text = replacement.text;
-		}
-		autosave.queue(item.workId, item.id, replacement.text);
-		internalReferenceCompletion = null;
-		await tick();
 		const textarea = document.querySelector<HTMLTextAreaElement>(
 			`textarea[data-item-id="${CSS.escape(itemId)}"]`,
 		);
-		textarea?.focus();
-		textarea?.setSelectionRange(replacement.caretOffset, replacement.caretOffset);
-		resumeAutosave.queue(itemId, replacement.caretOffset);
+		if (!textarea) return;
+		internalReferenceCompletion = null;
+		textarea.focus();
+		textarea.setRangeText(
+			candidate.canonicalMarkdown,
+			state.range.start,
+			state.range.end,
+			"end",
+		);
+		textarea.dispatchEvent(new InputEvent("input", {
+			bubbles: true,
+			inputType: "insertReplacementText",
+			data: candidate.canonicalMarkdown,
+		}));
 	}
 
 	function referencesIn(text: string) {
@@ -683,6 +692,16 @@
 		} catch (cause) {
 			internalReferenceNotice = errorMessage(cause);
 		}
+	}
+
+	async function openEditorInternalReference(destination: string): Promise<void> {
+		const match = /^radiora:\/\/(work|revision)\/([^/?#\s]+)(?:#[^\s]*)?$/u.exec(destination);
+		if (!match) return;
+		await openInternalReference(
+			`[ref](${destination})`,
+			match[1] as "work" | "revision",
+			match[2],
+		);
 	}
 
 	async function loadInternalReferenceBacklinks(workId: string): Promise<void> {
@@ -1687,10 +1706,16 @@
 								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
 								<button class="bullet" aria-label={`${vocabulary.work}を選択`} onclick={() => selectOccurrence(row.item.id)}>•</button>
 								<div class="internal-reference-editor">
-									<textarea rows="1" data-item-id={row.item.id} value={row.item.text}
-										onfocus={() => selectOccurrence(row.item.id)}
-										oninput={(event) => updateLocalText(row.item.id, event.currentTarget)}
-										onkeydown={(event) => handleKeydown(event, row)}></textarea>
+									<MarkdownEditor
+										value={row.item.text}
+										itemId={row.item.id}
+										onFocus={() => selectOccurrence(row.item.id)}
+										onChange={(_value, textarea) => updateLocalText(row.item.id, textarea)}
+										onSelectionChange={(textarea) => updateEditorSelection(row.item.id, textarea)}
+										onKeydown={(event, textarea, compositionGuard) =>
+											handleKeydown(event, row, textarea, compositionGuard)}
+										onInternalReference={openEditorInternalReference}
+									/>
 									{#if internalReferenceCompletion?.itemId === row.item.id}
 										<div class="internal-reference-completions" role="listbox"
 											aria-label={`${vocabulary.internalReference}候補`}>

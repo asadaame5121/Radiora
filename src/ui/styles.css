@@ -491,6 +491,50 @@ main {
 	position: relative;
 	min-width: 0;
 }
+.markdown-editor {
+	position: relative;
+	min-width: 0;
+}
+.markdown-editor-host {
+	height: 86px;
+	min-height: 60px;
+	max-height: 140px;
+	overflow: hidden;
+	border-radius: 5px;
+}
+.markdown-editor.fallback .markdown-editor-host textarea {
+	width: 100%;
+	height: 100%;
+	resize: vertical;
+}
+.markdown-editor-mode {
+	position: absolute;
+	z-index: 5;
+	top: 4px;
+	right: 6px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	opacity: .25;
+	transition: opacity .12s ease;
+}
+.markdown-editor:hover .markdown-editor-mode,
+.row.selected .markdown-editor-mode,
+.markdown-editor-mode:focus-within {
+	opacity: 1;
+}
+.markdown-editor-mode span {
+	color: var(--muted);
+	font-size: 9px;
+}
+.markdown-editor-mode select {
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 2px 4px;
+	color: var(--muted);
+	background: var(--surface-raised);
+	font-size: 9px;
+}
 .internal-reference-completions {
 	position: absolute;
 	z-index: 20;
