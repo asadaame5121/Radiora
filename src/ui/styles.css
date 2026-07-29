@@ -324,6 +324,18 @@ main {
 	color: var(--muted);
 	font-size: 10px;
 }
+.comparison-context {
+	display: flex;
+	flex-direction: column;
+	align-items: end;
+	gap: 3px;
+	color: var(--muted);
+	font-size: 10px;
+}
+.comparison-context strong {
+	color: var(--cyan);
+	font-weight: normal;
+}
 .comparison-grid {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -332,7 +344,7 @@ main {
 }
 .comparison-side {
 	display: grid;
-	grid-template-rows: auto auto minmax(0, 1fr);
+	grid-template-rows: auto auto auto minmax(0, 1fr);
 	min-width: 0;
 	min-height: 0;
 	border: 1px solid var(--border);
@@ -355,11 +367,35 @@ main {
 	background: #04080d;
 	color: var(--text);
 }
+.comparison-source-label {
+	margin: 0 10px 10px;
+	padding: 7px;
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	color: var(--text);
+	background: #04080d;
+	font-size: 11px;
+}
+.comparison-side > small {
+	padding: 0 12px 8px;
+	color: var(--muted);
+	font-size: 9px;
+}
 .comparison-scroll {
 	min-height: 0;
 	overflow: auto;
 	border-top: 1px solid var(--border);
 	background: #050a10;
+}
+.comparison-scroll pre {
+	margin: 0;
+	padding: 12px;
+	color: #c4d3d9;
+	font-family: ui-monospace, "Noto Sans Mono CJK JP", monospace;
+	font-size: 11px;
+	line-height: 1.65;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 .diff-line {
 	display: grid;

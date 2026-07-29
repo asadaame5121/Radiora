@@ -32,6 +32,15 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"directionPreview",
 		"internalReference",
 		"backlink",
+		"comparisonPane",
+		"comparisonLeft",
+		"comparisonRight",
+		"comparisonReason",
+		"fixedRevision",
+		"comparisonAdded",
+		"comparisonRemoved",
+		"comparisonUnchanged",
+		"unknownTime",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -65,5 +74,14 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		directionPreview: "保存方向",
 		internalReference: "内部参照",
 		backlink: "被参照",
+		comparisonPane: "比較",
+		comparisonLeft: "左",
+		comparisonRight: "右",
+		comparisonReason: "理由",
+		fixedRevision: "固定版",
+		comparisonAdded: "追加",
+		comparisonRemoved: "削除",
+		comparisonUnchanged: "変更なし",
+		unknownTime: "日時不明",
 	});
 });

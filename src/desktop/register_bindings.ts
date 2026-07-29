@@ -66,6 +66,8 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		resolveInternalReferences: (markdown) => service().resolveInternalReferences(markdown),
 		listInternalReferenceBacklinks: (scope, id) =>
 			service().listInternalReferenceBacklinks(scope, id),
+		resolveLinkComparison: (linkId) => service().resolveLinkComparison(linkId),
+		listWorkComparisonDocuments: (workId) => service().listWorkComparisonDocuments(workId),
 		deleteLink: (fromId, toId, type) => service().deleteLink(fromId, toId, type),
 		suggestItems: (prefix, limit) => service().suggestItems(prefix, limit),
 		searchItems: (request) => service().searchItems(request),

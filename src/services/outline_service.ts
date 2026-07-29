@@ -59,6 +59,11 @@ import {
 	InternalReferenceService,
 } from "./internal_reference_service.ts";
 import type { RadioraReferenceScope } from "./markdown_parser.ts";
+import {
+	ComparisonService,
+	type LinkComparisonProjection,
+	type WorkComparisonDocuments,
+} from "./comparison_service.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -475,6 +480,14 @@ export class OutlineService {
 		id: string,
 	): Promise<InternalReferenceBacklink[]> {
 		return new InternalReferenceService(this.store).listBacklinks(scope, id);
+	}
+
+	resolveLinkComparison(linkId: string): Promise<LinkComparisonProjection> {
+		return new ComparisonService(this.store).resolveLink(linkId);
+	}
+
+	listWorkComparisonDocuments(workId: string): Promise<WorkComparisonDocuments> {
+		return new ComparisonService(this.store).listWorkDocuments(workId);
 	}
 
 	async deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {

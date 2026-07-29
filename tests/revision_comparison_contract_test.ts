@@ -4,11 +4,16 @@ Deno.test("version comparison UI keeps arbitrary selectors and independent scrol
 	const component = await Deno.readTextFile(
 		new URL("../src/ui/RevisionComparison.svelte", import.meta.url),
 	);
+	const pane = await Deno.readTextFile(
+		new URL("../src/ui/ComparisonPane.svelte", import.meta.url),
+	);
 	const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
 
-	assertMatch(component, /bind:value=\{leftRevisionId\}/);
-	assertMatch(component, /bind:value=\{rightRevisionId\}/);
-	assert(component.includes('data-comparison-pane="left"'));
-	assert(component.includes('data-comparison-pane="right"'));
+	assertMatch(component, /<ComparisonPane/);
+	assertMatch(component, /chooseInitialRevisionComparison/);
+	assertMatch(pane, /selectLeft\(event\.currentTarget\.value\)/);
+	assertMatch(pane, /selectRight\(event\.currentTarget\.value\)/);
+	assert(pane.includes('data-comparison-pane="left"'));
+	assert(pane.includes('data-comparison-pane="right"'));
 	assertMatch(styles, /\.comparison-scroll\s*\{[^}]*overflow:\s*auto/s);
 });

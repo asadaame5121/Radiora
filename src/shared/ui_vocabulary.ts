@@ -27,7 +27,16 @@ export type UiEntityCode =
 	| "linkTarget"
 	| "directionPreview"
 	| "internalReference"
-	| "backlink";
+	| "backlink"
+	| "comparisonPane"
+	| "comparisonLeft"
+	| "comparisonRight"
+	| "comparisonReason"
+	| "fixedRevision"
+	| "comparisonAdded"
+	| "comparisonRemoved"
+	| "comparisonUnchanged"
+	| "unknownTime";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -61,4 +70,13 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	directionPreview: "保存方向",
 	internalReference: "内部参照",
 	backlink: "被参照",
+	comparisonPane: "比較",
+	comparisonLeft: "左",
+	comparisonRight: "右",
+	comparisonReason: "理由",
+	fixedRevision: "固定版",
+	comparisonAdded: "追加",
+	comparisonRemoved: "削除",
+	comparisonUnchanged: "変更なし",
+	unknownTime: "日時不明",
 });

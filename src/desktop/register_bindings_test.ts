@@ -49,6 +49,14 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 	assertEquals(placements.find((item) => item.id === mirror.id)?.parentId, null);
 	assertEquals(snapshot.links[0].fromId, source.workId);
 	assertEquals(snapshot.links[0].toId, target.workId);
+	assertEquals(
+		(await handlers.resolveLinkComparison(snapshot.links[0].id)).left.workId,
+		source.workId,
+	);
+	assertEquals(
+		(await handlers.listWorkComparisonDocuments(source.workId)).documents[0].scope,
+		"branch",
+	);
 
 	const sourceBranchId = source.revisionSelector.mode === "branch"
 		? source.revisionSelector.branchId

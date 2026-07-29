@@ -8,7 +8,7 @@
 		onCompare,
 	}: {
 		projection: WorkLineageProjection;
-		onCompare: (revisionId: string) => void;
+		onCompare: (scope: "branch" | "revision", id: string) => void;
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
@@ -80,19 +80,31 @@
 							{/each}
 						</div>
 
-						<button onclick={() => onCompare(revision.id)}>この{vocabulary.revision}を比較</button>
+						<button onclick={() => onCompare("revision", revision.id)}>
+							この{vocabulary.revision}を{vocabulary.comparisonPane}
+						</button>
 					</div>
 				</li>
 			{/each}
 		</ol>
 	{/if}
 
-	<section class="unconfirmed-branches" aria-label={`未確定の${vocabulary.branch}`}>
+	<section class="unconfirmed-branches" aria-label={vocabulary.branch}>
 		<h2>{vocabulary.branch}</h2>
-		{#each projection.branches.filter((branch) => branch.headRevisionId === null) as branch (branch.id)}
-			<p><strong>{branch.name}</strong><span>確定した{vocabulary.revision}はありません</span></p>
+		{#each projection.branches as branch (branch.id)}
+			<p>
+				<strong>{branch.name}</strong>
+				<span>
+					{branch.headRevisionId
+						? `${vocabulary.revision}あり`
+						: `未確定の${vocabulary.workingCopy}`}
+				</span>
+				<button onclick={() => onCompare("branch", branch.id)}>
+					{vocabulary.workingCopy}を{vocabulary.comparisonPane}
+				</button>
+			</p>
 		{:else}
-			<p class="lineage-empty">先端未確定の{vocabulary.branch}はありません。</p>
+			<p class="lineage-empty">{vocabulary.branch}はありません。</p>
 		{/each}
 	</section>
 </section>
@@ -253,6 +265,14 @@
 		margin: 6px 0;
 		color: #dce7ec;
 		font-size: 11px;
+	}
+	.unconfirmed-branches button {
+		border: 1px solid #28546a;
+		border-radius: 5px;
+		background: #0d1b26;
+		color: #b6c9d1;
+		font-size: 10px;
+		cursor: pointer;
 	}
 	.unconfirmed-branches span,
 	.lineage-empty {
