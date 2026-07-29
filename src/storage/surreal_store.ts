@@ -127,6 +127,15 @@ function optionalRecordDomainId(value: unknown): string | null {
 	return separator < 0 ? raw : raw.slice(separator + 1).replace(/^`|`$/g, "");
 }
 
+export function snapshotProtectionFromRow(row: Row): SnapshotProtection | undefined {
+	if (row.protection_reason == null) return undefined;
+	return {
+		reason: String(row.protection_reason) as SnapshotProtection["reason"],
+		protectedAt: String(row.protected_at ?? ""),
+		...(row.protection_expires_at == null ? {} : { expiresAt: String(row.protection_expires_at) }),
+	};
+}
+
 export function itemFromRow(row: Row): OutlineItem {
 	const selectorMode = row.selector_mode === "pinned" ? "pinned" : "branch";
 	return {
@@ -407,13 +416,7 @@ export class SurrealGraphStore implements GraphStore {
 			createdAt: String(row.created_at ?? ""),
 			sourceRevisionId: optionalRecordDomainId(row.source_revision),
 			name: row.name == null ? undefined : String(row.name),
-			protection: row.protection_reason == null ? undefined : {
-				reason: String(row.protection_reason) as SnapshotProtection["reason"],
-				protectedAt: String(row.protected_at ?? ""),
-				expiresAt: row.protection_expires_at == null
-					? undefined
-					: String(row.protection_expires_at),
-			},
+			protection: snapshotProtectionFromRow(row),
 		}));
 	}
 

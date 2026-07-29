@@ -12,6 +12,7 @@ import {
 	recoveryRestoreTransactionQuery,
 	resumePositionUpsertQuery,
 	revisionFromRow,
+	snapshotProtectionFromRow,
 } from "./surreal_store.ts";
 
 Deno.test("Quick Capture Surreal writes are enclosed in one transaction", () => {
@@ -174,6 +175,34 @@ Deno.test("Surreal Snapshot promotion atomically advances head and protects its 
 	assertEquals(query.indexOf("UPDATE $branch") < query.indexOf("UPDATE $snapshot"), true);
 	assertEquals(query.includes('protection_reason = "revision-source"'), true);
 	assertEquals(query.trimEnd().endsWith("COMMIT TRANSACTION;"), true);
+});
+
+Deno.test("Surreal Snapshot protection omits an absent optional expiry", () => {
+	const protection = snapshotProtectionFromRow({
+		protection_reason: "revision-source",
+		protected_at: "2026-07-28T00:02:00.000Z",
+		protection_expires_at: null,
+	});
+	assertEquals(protection, {
+		reason: "revision-source",
+		protectedAt: "2026-07-28T00:02:00.000Z",
+	});
+	assertEquals(Object.hasOwn(protection ?? {}, "expiresAt"), false);
+});
+
+Deno.test("Surreal Snapshot protection preserves a concrete expiry", () => {
+	assertEquals(
+		snapshotProtectionFromRow({
+			protection_reason: "user",
+			protected_at: "2026-07-28T00:02:00.000Z",
+			protection_expires_at: "2026-08-28T00:02:00.000Z",
+		}),
+		{
+			reason: "user",
+			protectedAt: "2026-07-28T00:02:00.000Z",
+			expiresAt: "2026-08-28T00:02:00.000Z",
+		},
+	);
 });
 
 Deno.test("Surreal resume position uses one fixed upsert record", () => {
