@@ -1,10 +1,19 @@
 import type { RadioraBindings, StartupStatus } from "../shared/bindings.ts";
 import type { OutlineService } from "../services/outline_service.ts";
+import type {
+	RewriteAsNewBranchResult,
+	RewriteConfirmation,
+} from "../services/revision_service.ts";
 
 export interface BindingContext {
 	getService(): OutlineService | null;
 	getStartupStatus(): StartupStatus;
 	retryStartup(): Promise<StartupStatus>;
+	rewriteAsNewBranch(
+		sourceBranchId: string,
+		newBranchName: string,
+		confirmation: RewriteConfirmation,
+	): Promise<RewriteAsNewBranchResult>;
 }
 
 export function createBindingHandlers(context: BindingContext): RadioraBindings {
@@ -43,6 +52,10 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 			),
 		listGlobalLineage: () => service().listGlobalLineage(),
 		listWorkLineage: (workId) => service().listWorkLineage(workId),
+		rewriteAsNewBranch: (sourceBranchId, newBranchName, confirmation) => {
+			service();
+			return context.rewriteAsNewBranch(sourceBranchId, newBranchName, confirmation);
+		},
 		createItem: (input) => service().createItem(input),
 		quickCapture: (text) => service().quickCapture(text),
 		listUnplacedWorks: () => service().listUnplacedWorks(),

@@ -1,6 +1,7 @@
 import { createBindingHandlers } from "./desktop/register_bindings.ts";
 import { SurrealProcess } from "./desktop/surreal_process.ts";
 import { OutlineService } from "./services/outline_service.ts";
+import { RevisionService } from "./services/revision_service.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
 import type { GraphStore } from "./storage/graph_store.ts";
 import { JsonGraphStore } from "./storage/json_store.ts";
@@ -194,6 +195,19 @@ const handlers = createBindingHandlers({
 	getService: () => service,
 	getStartupStatus: () => startupStatus,
 	retryStartup: bootstrap,
+	rewriteAsNewBranch: (sourceBranchId, newBranchName, confirmation) => {
+		const currentStore = store;
+		if (!currentStore) {
+			throw new Error(
+				startupStatus.phase === "failed" ? startupStatus.message : "Radiora is still starting.",
+			);
+		}
+		return new RevisionService(currentStore).rewriteAsNewBranch(
+			sourceBranchId,
+			newBranchName,
+			confirmation,
+		);
+	},
 });
 await log("Desktop runtime initialized; waiting for the UI server", { storageMode, surrealPort });
 

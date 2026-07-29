@@ -112,7 +112,13 @@
 	type AsideMode = "links" | "discover" | "tags" | "query";
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
-		| { action: "purge"; workId: string; occurrenceCount: number; linkCount: number };
+		| { action: "purge"; workId: string; occurrenceCount: number; linkCount: number }
+		| {
+			action: "rewrite";
+			occurrenceId: string;
+			workId: string;
+			sourceBranchId: string;
+		};
 	type InternalReferenceCompletionState = {
 		itemId: string;
 		range: { start: number; end: number };
@@ -186,6 +192,8 @@
 	let pendingConfirmation = $state<PendingConfirmation | null>(null);
 	let confirmationSubmitting = $state(false);
 	let confirmationDialog: HTMLDialogElement;
+	let rewriteBranchName = $state("");
+	let rewriteBranchNameInput = $state<HTMLInputElement | null>(null);
 	let commandPaletteOpen = $state(false);
 	let commandPaletteQuery = $state("");
 	let commandPaletteActiveIndex = $state(-1);
@@ -259,7 +267,7 @@
 		selectedOccurrenceId: selectedId,
 		hasSelectedBranch: Boolean(selectedBranchId),
 		hasSelectedRecoverySnapshot: false,
-		hasLinkTarget: false,
+		canOpenLinkEditor: Boolean(selectedItem),
 		quickCaptureText,
 		quickCaptureSubmitting,
 		ruleSource,
@@ -327,19 +335,24 @@
 			}
 		};
 		const handleGlobalShortcut = (event: KeyboardEvent) => {
-			if (event.defaultPrevented) return;
 			if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLocaleLowerCase() === "k") {
 				event.preventDefault();
 				if (commandPaletteOpen) void closeCommandPalette();
 				else void openCommandPalette();
 				return;
 			}
+			if (event.ctrlKey && !event.altKey && event.shiftKey && event.key.toLocaleLowerCase() === "l") {
+				event.preventDefault();
+				void executeCommand("createLink");
+				return;
+			}
+			if (event.defaultPrevented) return;
 			if (commandPaletteOpen && event.key === "Escape") {
 				event.preventDefault();
 				void closeCommandPalette();
 				return;
 			}
-			if (event.defaultPrevented || isEditableTarget(event.target)) return;
+			if (isEditableTarget(event.target)) return;
 			const shortcut = shortcutForKeyboardEvent(event);
 			const binding = shortcuts.bindings.find((candidate) => candidate.shortcut === shortcut);
 			if (!binding) return;
@@ -348,7 +361,9 @@
 		};
 		window.addEventListener("beforeunload", warnAboutUnsavedChanges);
 		document.addEventListener("visibilitychange", flushWhenHidden);
-		window.addEventListener("keydown", handleGlobalShortcut);
+		// Capture before editor libraries so Ctrl+K cannot be consumed as a
+		// Markdown link-formatting shortcut while the textarea has focus.
+		window.addEventListener("keydown", handleGlobalShortcut, true);
 		async function monitorStartup(): Promise<void> {
 			while (!cancelled) {
 				try {
@@ -373,7 +388,7 @@
 			cancelled = true;
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
 			document.removeEventListener("visibilitychange", flushWhenHidden);
-			window.removeEventListener("keydown", handleGlobalShortcut);
+			window.removeEventListener("keydown", handleGlobalShortcut, true);
 			void autosave.flush().catch(() => {
 				// beforeunload already warns while an unsaved draft exists.
 			});
@@ -1320,8 +1335,6 @@
 	): Promise<void> {
 		const executionContext: CommandContext = snapshotId
 			? { ...commandContext, hasSelectedRecoverySnapshot: true }
-			: linkInput
-			? { ...commandContext, hasLinkTarget: true }
 			: commandContext;
 		const result = await dispatchCommand(id, executionContext, async (commandId) => {
 			switch (commandId) {
@@ -1329,11 +1342,14 @@
 				case "hoist": hoistSelected(); break;
 				case "clearHoist": clearHoist(); break;
 				case "addBookmark": await performAddBookmark(); break;
-				case "createLink": if (linkInput) await performAddLink(linkInput); break;
+				case "createLink":
+					if (linkInput) await performAddLink(linkInput);
+					else await openAdvancedLinkEditor();
+					break;
 				case "runQuery": await performExecuteRule(); break;
 				case "saveQuery": await performSaveRule(); break;
 				case "saveRevision": if (snapshotId) await performPromoteRecoverySnapshot(snapshotId); break;
-				case "createBranch": break;
+				case "createBranch": await requestRewriteAsNewBranch(); break;
 			}
 		});
 		if (!result.executed && result.reason) error = result.reason;
@@ -1378,10 +1394,31 @@
 		}
 	}
 
-	function executeCommandPaletteItem(command: CommandPaletteItem): void {
+	async function executeCommandPaletteItem(command: CommandPaletteItem): Promise<void> {
 		if (!command?.availability.enabled) return;
-		void executeCommand(command.id);
-		void closeCommandPalette();
+		await closeCommandPalette();
+		await executeCommand(command.id);
+	}
+
+	async function openAdvancedLinkEditor(): Promise<void> {
+		if (!selectedItem) return;
+		asideMode = "links";
+		await tick();
+		const input = document.querySelector<HTMLTextAreaElement>(
+			".advanced-link-editor textarea",
+		);
+		input?.focus();
+	}
+
+	async function requestRewriteAsNewBranch(): Promise<void> {
+		if (!selectedItem || !selectedBranchId) return;
+		rewriteBranchName = "";
+		await requestConfirmation({
+			action: "rewrite",
+			occurrenceId: selectedItem.id,
+			workId: selectedItem.workId,
+			sourceBranchId: selectedBranchId,
+		});
 	}
 
 	function captureQuickText(): void { void executeCommand("quickCapture"); }
@@ -1408,6 +1445,10 @@
 		pendingConfirmation = confirmation;
 		await tick();
 		if (!confirmationDialog.open) confirmationDialog.showModal();
+		if (confirmation.action === "rewrite") {
+			await tick();
+			rewriteBranchNameInput?.focus();
+		}
 	}
 
 	function closeConfirmation(): void {
@@ -1415,7 +1456,10 @@
 	}
 
 	function resetConfirmation(): void {
-		if (!confirmationSubmitting) pendingConfirmation = null;
+		if (!confirmationSubmitting) {
+			pendingConfirmation = null;
+			rewriteBranchName = "";
+		}
 	}
 
 	function preventCloseWhileSubmitting(event: Event): void {
@@ -1425,6 +1469,7 @@
 	async function confirmPendingAction(): Promise<void> {
 		const confirmation = pendingConfirmation;
 		if (!confirmation || confirmationSubmitting) return;
+		if (confirmation.action === "rewrite" && !rewriteBranchName.trim()) return;
 		confirmationSubmitting = true;
 		try {
 			await autosave.flush();
@@ -1432,10 +1477,24 @@
 				await api.trashWork(confirmation.occurrenceId);
 				selectOccurrence(null);
 				await load();
-			} else {
+			} else if (confirmation.action === "purge") {
 				await api.purgeWork(confirmation.workId);
 				trashEntries = await api.listTrash();
 				bookmarks = await api.listBookmarks();
+			} else {
+				const result = await api.rewriteAsNewBranch(
+					confirmation.sourceBranchId,
+					rewriteBranchName,
+					"confirmed",
+				);
+				if (result.status === "created") {
+					await load(confirmation.occurrenceId);
+					await Promise.all([
+						loadRevisions(confirmation.workId),
+						loadWorkLineage(confirmation.workId),
+					]);
+					viewMode = "workLineage";
+				}
 			}
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -2134,19 +2193,53 @@
 		<div class="confirmation-dialog__content">
 			<p class="eyebrow">CONFIRM ACTION</p>
 			<h2 id="confirmation-title">
-				{pendingConfirmation.action === "trash" ? `${vocabulary.work}をゴミ箱へ移しますか？` : "完全消去しますか？"}
+				{pendingConfirmation.action === "trash"
+					? `${vocabulary.work}をゴミ箱へ移しますか？`
+					: pendingConfirmation.action === "rewrite"
+					? `新しい${vocabulary.branch}として書き直しますか？`
+					: "完全消去しますか？"}
 			</h2>
 			<p id="confirmation-description">
 				{#if pendingConfirmation.action === "trash"}
 					{pendingConfirmation.occurrenceCount}件の{vocabulary.occurrence}と{vocabulary.semanticLink}は保持されます。
+				{:else if pendingConfirmation.action === "rewrite"}
+					現在の{vocabulary.workingCopy}を分岐点として保存し、元の{vocabulary.branch}を残したまま
+					独立した{vocabulary.workingCopy}を作ります。
 				{:else}
 					{vocabulary.occurrence}{pendingConfirmation.occurrenceCount}件、{vocabulary.semanticLink}{pendingConfirmation.linkCount}件と本文を復元できなくなります。
 				{/if}
 			</p>
+			{#if pendingConfirmation.action === "rewrite"}
+				<label>
+					{vocabulary.branch}名
+					<input
+						bind:this={rewriteBranchNameInput}
+						bind:value={rewriteBranchName}
+						autocomplete="off"
+						onkeydown={(event) => {
+							if (event.key === "Enter" && rewriteBranchName.trim()) {
+								event.preventDefault();
+								void confirmPendingAction();
+							}
+						}}
+					/>
+				</label>
+			{/if}
 			<div class="confirmation-dialog__actions">
 				<button onclick={closeConfirmation} disabled={confirmationSubmitting}>キャンセル</button>
-				<button class="delete" onclick={confirmPendingAction} disabled={confirmationSubmitting}>
-					{confirmationSubmitting ? "処理中…" : pendingConfirmation.action === "trash" ? "ゴミ箱へ移す" : "完全消去"}
+				<button
+					class:delete={pendingConfirmation.action !== "rewrite"}
+					onclick={confirmPendingAction}
+					disabled={confirmationSubmitting ||
+						(pendingConfirmation.action === "rewrite" && !rewriteBranchName.trim())}
+				>
+					{confirmationSubmitting
+						? "処理中…"
+						: pendingConfirmation.action === "trash"
+						? "ゴミ箱へ移す"
+						: pendingConfirmation.action === "rewrite"
+						? `新しい${vocabulary.branch}を作る`
+						: "完全消去"}
 				</button>
 			</div>
 		</div>

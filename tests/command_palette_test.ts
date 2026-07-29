@@ -12,7 +12,7 @@ const context = (overrides: Partial<CommandContext> = {}): CommandContext => ({
 	selectedOccurrenceId: "occurrence-1",
 	hasSelectedBranch: true,
 	hasSelectedRecoverySnapshot: true,
-	hasLinkTarget: true,
+	canOpenLinkEditor: true,
 	quickCaptureText: "本文",
 	quickCaptureSubmitting: false,
 	ruleSource: '?- link("LIKE", From, To).',

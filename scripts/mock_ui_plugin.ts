@@ -103,6 +103,16 @@ function mockRevisions(workId: string): Revision[] {
 
 export function mockUiPlugin(): Plugin {
 	const snapshot = mockSnapshot();
+	const rewriteBranches = new Map<
+		string,
+		Array<{
+			id: string;
+			workId: string;
+			name: string;
+			headRevisionId: string;
+			createdAt: string;
+		}>
+	>();
 	return {
 		name: "radiora-mock-ui-api",
 		configureServer(server) {
@@ -137,6 +147,9 @@ export function mockUiPlugin(): Plugin {
 					case "listRevisions":
 						result = mockRevisions(String(args[0]));
 						break;
+					case "listRecoverySnapshots":
+						result = [];
+						break;
 					case "listGlobalLineage":
 						result = {
 							snapshot,
@@ -167,8 +180,46 @@ export function mockUiPlugin(): Plugin {
 								name: "main",
 								headRevisionId: `${workId}-version-2`,
 								createdAt: "2025-03-10T09:00:00.000Z",
-							}],
+							}, ...(rewriteBranches.get(workId) ?? [])],
 							revisions: mockRevisions(workId),
+						};
+						break;
+					}
+					case "rewriteAsNewBranch": {
+						if (args[2] !== "confirmed") {
+							throw new Error("Explicit confirmation is required");
+						}
+						const sourceBranchId = String(args[0]);
+						const name = String(args[1] ?? "").trim();
+						if (!name) throw new Error("Branch name must not be empty");
+						const source = snapshot.items.find((item) =>
+							item.revisionSelector.mode === "branch" &&
+							item.revisionSelector.branchId === sourceBranchId
+						);
+						if (!source) throw new Error(`Branch not found: ${sourceBranchId}`);
+						const baseRevision = mockRevisions(source.workId).at(-1)!;
+						const branch = {
+							id: `mock-branch-${crypto.randomUUID()}`,
+							workId: source.workId,
+							name,
+							headRevisionId: baseRevision.id,
+							createdAt: new Date().toISOString(),
+						};
+						rewriteBranches.set(source.workId, [
+							...(rewriteBranches.get(source.workId) ?? []),
+							branch,
+						]);
+						result = {
+							status: "created",
+							branch,
+							workingCopy: {
+								branchId: branch.id,
+								workId: branch.workId,
+								text: source.text,
+								updatedAt: branch.createdAt,
+							},
+							baseRevision,
+							checkpointCreated: false,
 						};
 						break;
 					}
