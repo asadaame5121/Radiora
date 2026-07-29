@@ -348,3 +348,16 @@ export interface SavedRuleQuery {
 	createdAt: string;
 	updatedAt: string;
 }
+
+export type TransientProjectionSource = "search" | "today" | "query";
+
+export interface TransientProjectionNode {
+	workId: string;
+	occurrenceId?: string;
+	text: string;
+	parentNodeIndex?: number;
+	sourceType: TransientProjectionSource;
+	breadcrumb?: string[];
+	reasons?: SearchReason[];
+	score?: number;
+}

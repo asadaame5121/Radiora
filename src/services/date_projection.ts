@@ -1,4 +1,4 @@
-import type { OutlineItem, Work } from "../domain/models.ts";
+import type { OutlineItem, TransientProjectionNode, Work } from "../domain/models.ts";
 import type { GraphStore } from "../storage/graph_store.ts";
 
 export interface DateRange {
@@ -56,6 +56,46 @@ export class DateProjectionService {
 			created: created.sort((left, right) => compareEntries(left, right, "createdAt")),
 			updated: updated.sort((left, right) => compareEntries(left, right, "updatedAt")),
 		};
+	}
+
+	async projectNodes(range: DateRange): Promise<TransientProjectionNode[]> {
+		const { start, end } = validateDateRange(range);
+		const [works, items] = await Promise.all([this.store.listWorks(), this.store.listItems()]);
+		const itemsByWork = new Map<string, OutlineItem[]>();
+		for (const item of items) {
+			const placements = itemsByWork.get(item.workId) ?? [];
+			placements.push(item);
+			itemsByWork.set(item.workId, placements);
+		}
+		const itemById = new Map(items.map((item) => [item.id, item]));
+		const nodes: TransientProjectionNode[] = [];
+		for (const work of works) {
+			const placements = itemsByWork.get(work.id);
+			const entry = toEntry(work, placements ?? [], itemById);
+			const inRange = isInRange(work.createdAt, start, end)
+				? "created"
+				: isInRange(work.updatedAt, start, end)
+				? "updated"
+				: null;
+			if (!inRange) continue;
+			for (const placement of entry.placements) {
+				nodes.push({
+					workId: placement.occurrence.workId,
+					occurrenceId: placement.occurrence.id,
+					text: placement.occurrence.text,
+					sourceType: "today",
+					breadcrumb: placement.breadcrumb.map((item) => item.id),
+				});
+			}
+			if (!entry.placements.length) {
+				nodes.push({
+					workId: work.id,
+					text: work.id,
+					sourceType: "today",
+				});
+			}
+		}
+		return nodes;
 	}
 }
 
