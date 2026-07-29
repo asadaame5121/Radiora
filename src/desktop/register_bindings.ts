@@ -60,6 +60,7 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		purgeWork: (workId) => service().purgeWork(workId),
 		setCollapsed: (id, collapsed) => service().setCollapsed(id, collapsed),
 		createLink: (input) => service().createLink(input),
+		resolveAdvancedLink: (input, selections) => service().resolveAdvancedLink(input, selections),
 		deleteLink: (fromId, toId, type) => service().deleteLink(fromId, toId, type),
 		suggestItems: (prefix, limit) => service().suggestItems(prefix, limit),
 		searchItems: (request) => service().searchItems(request),

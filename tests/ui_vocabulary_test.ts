@@ -25,6 +25,11 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"pane",
 		"query",
 		"commandPalette",
+		"advancedLinkEditor",
+		"linkSource",
+		"linkType",
+		"linkTarget",
+		"directionPreview",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -51,5 +56,10 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		pane: "ペイン",
 		query: "Query",
 		commandPalette: "コマンドパレット",
+		advancedLinkEditor: "高度なリンク編集",
+		linkSource: "起点",
+		linkType: "種別",
+		linkTarget: "終点",
+		directionPreview: "保存方向",
 	});
 });

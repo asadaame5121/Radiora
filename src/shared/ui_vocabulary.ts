@@ -20,7 +20,12 @@ export type UiEntityCode =
 	| "browsingHistory"
 	| "pane"
 	| "query"
-	| "commandPalette";
+	| "commandPalette"
+	| "advancedLinkEditor"
+	| "linkSource"
+	| "linkType"
+	| "linkTarget"
+	| "directionPreview";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -47,4 +52,9 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	pane: "ペイン",
 	query: "Query",
 	commandPalette: "コマンドパレット",
+	advancedLinkEditor: "高度なリンク編集",
+	linkSource: "起点",
+	linkType: "種別",
+	linkTarget: "終点",
+	directionPreview: "保存方向",
 });

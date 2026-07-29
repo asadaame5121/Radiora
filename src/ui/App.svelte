@@ -4,8 +4,10 @@
 	import RevisionComparison from "./RevisionComparison.svelte";
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
+	import AdvancedLinkEditor from "./AdvancedLinkEditor.svelte";
 	import type {
 		Bookmark,
+		CreateLinkInput,
 		EmergenceAction,
 		EmergenceSuggestion,
 		LinkType,
@@ -144,8 +146,6 @@
 	let ruleName = $state("");
 	let savedRuleQueries = $state<SavedRuleQuery[]>([]);
 	let ruleError = $state("");
-	let newLinkTarget = $state("");
-	let newLinkType = $state<LinkType>("LIKE");
 	let draggedId = $state<string | null>(null);
 	let trashEntries = $state<TrashEntry[]>([]);
 	let revisions = $state<Revision[]>([]);
@@ -210,13 +210,6 @@
 			] as const),
 		]).values(),
 	]);
-	const linkTargets = $derived([
-		...new Map(
-			snapshot.items
-				.filter((item) => item.workId !== selectedItem?.workId)
-				.map((item) => [item.workId, item]),
-		).values(),
-	]);
 	const visibleRows = $derived.by(() => buildVisibleRows(snapshot, browsingProjection));
 	const searchEntries = $derived([
 		...suggestions.map((suggestion) => ({ kind: "suggestion" as const, value: suggestion })),
@@ -236,7 +229,7 @@
 		selectedOccurrenceId: selectedId,
 		hasSelectedBranch: Boolean(selectedBranchId),
 		hasSelectedRecoverySnapshot: false,
-		hasLinkTarget: Boolean(newLinkTarget),
+		hasLinkTarget: false,
 		quickCaptureText,
 		quickCaptureSubmitting,
 		ruleSource,
@@ -954,10 +947,8 @@
 		savedRuleQueries = await api.listSavedRuleQueries();
 	}
 
-	async function performAddLink(): Promise<void> {
-		if (!selectedId || !newLinkTarget || selectedId === newLinkTarget) return;
-		await api.createLink({ fromId: selectedId, toId: newLinkTarget, type: newLinkType });
-		newLinkTarget = "";
+	async function performAddLink(input: CreateLinkInput): Promise<void> {
+		await api.createLink(input);
 		await load();
 	}
 
@@ -1066,9 +1057,15 @@
 		await load();
 	}
 
-	async function executeCommand(id: CommandId, snapshotId?: string): Promise<void> {
+	async function executeCommand(
+		id: CommandId,
+		snapshotId?: string,
+		linkInput?: CreateLinkInput,
+	): Promise<void> {
 		const executionContext: CommandContext = snapshotId
 			? { ...commandContext, hasSelectedRecoverySnapshot: true }
+			: linkInput
+			? { ...commandContext, hasLinkTarget: true }
 			: commandContext;
 		const result = await dispatchCommand(id, executionContext, async (commandId) => {
 			switch (commandId) {
@@ -1076,7 +1073,7 @@
 				case "hoist": hoistSelected(); break;
 				case "clearHoist": clearHoist(); break;
 				case "addBookmark": await performAddBookmark(); break;
-				case "createLink": await performAddLink(); break;
+				case "createLink": if (linkInput) await performAddLink(linkInput); break;
 				case "runQuery": await performExecuteRule(); break;
 				case "saveQuery": await performSaveRule(); break;
 				case "saveRevision": if (snapshotId) await performPromoteRecoverySnapshot(snapshotId); break;
@@ -1137,7 +1134,6 @@
 	function addBookmark(): void { void executeCommand("addBookmark"); }
 	function executeRule(): void { void executeCommand("runQuery"); }
 	function saveRule(): void { void executeCommand("saveQuery"); }
-	function addLink(): void { void executeCommand("createLink"); }
 	function promoteRecoverySnapshot(snapshotId: string): Promise<void> {
 		return executeCommand("saveRevision", snapshotId);
 	}
@@ -1685,16 +1681,11 @@
 					<div class="thought-meta"><span>作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
 				{/if}
 				{#if asideMode === "links"}
-					<div class="link-form">
-						<select bind:value={newLinkType}>{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}</select>
-						<select bind:value={newLinkTarget}>
-							<option value="">{vocabulary.semanticLink}先を選択</option>
-							{#each linkTargets as item}
-								<option value={item.id}>{item.text || `(空の${vocabulary.work})`}</option>
-							{/each}
-						</select>
-						<button onclick={addLink} disabled={!commands.createLink.enabled} title={commands.createLink.reason}>{vocabulary.semanticLink}を追加</button>
-					</div>
+					<AdvancedLinkEditor
+						selectedWorkId={selectedItem.workId}
+						selectedDisplayName={titleFor(selectedItem)}
+						onConfirm={(input) => executeCommand("createLink", undefined, input)}
+					/>
 					<div class="links">
 						{#each selectedLinks as link}
 							<div><span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span><span>{link.fromId === selectedItem.workId ? "→" : "←"} {otherName(link)}</span><button onclick={() => removeLink(link)}>×</button></div>

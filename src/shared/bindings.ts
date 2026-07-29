@@ -31,6 +31,10 @@ import type {
 import type { GlobalLineageProjection, WorkLineageProjection } from "../services/branch_service.ts";
 import type { DateProjection, DateRange } from "../services/date_projection.ts";
 import type { RecoverySnapshotPreview } from "../services/recovery_snapshot_service.ts";
+import type {
+	AdvancedLinkResolution,
+	AdvancedLinkSelections,
+} from "../services/advanced_link_resolver.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
@@ -82,6 +86,10 @@ export interface RadioraBindings {
 	purgeWork(workId: string): Promise<PurgeManifest>;
 	setCollapsed(id: string, collapsed: boolean): Promise<void>;
 	createLink(input: CreateLinkInput): Promise<void>;
+	resolveAdvancedLink(
+		input: string,
+		selections?: AdvancedLinkSelections,
+	): Promise<AdvancedLinkResolution>;
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;
 	suggestItems(prefix: string, limit?: number): Promise<Suggestion[]>;
 	searchItems(request: SearchRequest | string): Promise<SearchResult[]>;
