@@ -71,6 +71,16 @@
 	nextCommandPaletteIndex,
 	type CommandPaletteItem,
 	} from "./command_palette.ts";
+	import {
+		findInternalReferenceTrigger,
+		replaceInternalReferenceTrigger,
+	} from "../services/internal_reference";
+	import { parseMarkdownCandidates } from "../services/markdown_parser";
+	import type {
+		InternalReferenceBacklink,
+		InternalReferenceCompletion,
+		InternalReferenceResolution,
+	} from "../services/internal_reference_service";
 
 	const api = new Proxy({}, {
 		get: (_target, property) => async (...args: unknown[]) => {
@@ -98,6 +108,12 @@
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
 		| { action: "purge"; workId: string; occurrenceCount: number; linkCount: number };
+	type InternalReferenceCompletionState = {
+		itemId: string;
+		range: { start: number; end: number };
+		candidates: InternalReferenceCompletion[];
+		activeIndex: number;
+	};
 
 	const vocabulary = useUiVocabulary();
 	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
@@ -166,6 +182,10 @@
 	let commandPaletteInput = $state<HTMLInputElement | null>(null);
 	let commandPaletteRestoreFocus: HTMLElement | null = null;
 	let workingCopySaveStatuses = $state<WorkingCopySaveStatus[]>([]);
+	let internalReferenceCompletion = $state<InternalReferenceCompletionState | null>(null);
+	let internalReferenceBacklinks = $state<InternalReferenceBacklink[]>([]);
+	let internalReferenceNotice = $state("");
+	let internalReferenceCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
 		onStatusChange: (statuses) => workingCopySaveStatuses = statuses,
@@ -270,10 +290,12 @@
 			void loadWorkLineage(workId);
 			if (selectedBranchId) void loadRecoverySnapshots(workId, selectedBranchId);
 			else recoverySnapshots = [];
+			void loadInternalReferenceBacklinks(workId);
 		} else {
 			revisions = [];
 			recoverySnapshots = [];
 			workLineage = null;
+			internalReferenceBacklinks = [];
 		}
 	});
 
@@ -469,6 +491,32 @@
 
 	async function handleKeydown(event: KeyboardEvent, row: VisibleRow): Promise<void> {
 		const textarea = event.currentTarget as HTMLTextAreaElement;
+		if (internalReferenceCompletion?.itemId === row.item.id) {
+			if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+				event.preventDefault();
+				const direction = event.key === "ArrowDown" ? 1 : -1;
+				const count = internalReferenceCompletion.candidates.length;
+				if (count) {
+					internalReferenceCompletion.activeIndex =
+						(internalReferenceCompletion.activeIndex + direction + count) % count;
+				}
+				return;
+			}
+			if ((event.key === "Enter" || event.key === "Tab") &&
+				internalReferenceCompletion.candidates.length) {
+				event.preventDefault();
+				await applyInternalReferenceCompletion(
+					row.item.id,
+					internalReferenceCompletion.candidates[internalReferenceCompletion.activeIndex],
+				);
+				return;
+			}
+			if (event.key === "Escape") {
+				event.preventDefault();
+				internalReferenceCompletion = null;
+				return;
+			}
+		}
 		if (event.key === "Enter" && !event.shiftKey) {
 			event.preventDefault();
 			try {
@@ -526,6 +574,124 @@
 		}
 		autosave.queue(item.workId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
+		void updateInternalReferenceCompletion(id, textarea);
+	}
+
+	async function updateInternalReferenceCompletion(
+		itemId: string,
+		textarea: HTMLTextAreaElement,
+	): Promise<void> {
+		const trigger = findInternalReferenceTrigger(
+			textarea.value,
+			textarea.selectionStart,
+			textarea.selectionEnd,
+		);
+		if (!trigger) {
+			internalReferenceCompletion = null;
+			return;
+		}
+		const request = ++internalReferenceCompletionRequest;
+		try {
+			const candidates = await api.listInternalReferenceCompletions(trigger.query, 12);
+			if (request !== internalReferenceCompletionRequest) return;
+			internalReferenceCompletion = {
+				itemId,
+				range: trigger.range,
+				candidates,
+				activeIndex: 0,
+			};
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function applyInternalReferenceCompletion(
+		itemId: string,
+		candidate: InternalReferenceCompletion,
+	): Promise<void> {
+		const state = internalReferenceCompletion;
+		const item = snapshot.items.find((entry) => entry.id === itemId);
+		if (!state || state.itemId !== itemId || !item) return;
+		const replacement = replaceInternalReferenceTrigger(
+			item.text,
+			state.range,
+			candidate.canonicalMarkdown,
+		);
+		for (const placement of snapshot.items) {
+			if (placement.workId === item.workId) placement.text = replacement.text;
+		}
+		autosave.queue(item.workId, item.id, replacement.text);
+		internalReferenceCompletion = null;
+		await tick();
+		const textarea = document.querySelector<HTMLTextAreaElement>(
+			`textarea[data-item-id="${CSS.escape(itemId)}"]`,
+		);
+		textarea?.focus();
+		textarea?.setSelectionRange(replacement.caretOffset, replacement.caretOffset);
+		resumeAutosave.queue(itemId, replacement.caretOffset);
+	}
+
+	function referencesIn(text: string) {
+		return parseMarkdownCandidates(text).internalReferences;
+	}
+
+	async function openInternalReference(
+		markdown: string,
+		scope: "work" | "revision",
+		id: string,
+		start?: number,
+	): Promise<void> {
+		try {
+			const resolutions = await api.resolveInternalReferences(markdown);
+			const resolution = resolutions.find((candidate) =>
+				candidate.reference.scope === scope && candidate.reference.id === id &&
+				(start === undefined || candidate.reference.range.start === start)
+			);
+			if (!resolution) {
+				internalReferenceNotice = "参照を解析できませんでした。";
+				return;
+			}
+			if (resolution.status !== "resolved" || !resolution.navigationTarget) {
+				internalReferenceNotice = resolution.reason ?? "参照先へ移動できません。";
+				return;
+			}
+			internalReferenceNotice = "";
+			if (resolution.reference.scope === "revision" && resolution.revision) {
+				if (resolution.navigationTarget.kind === "work") {
+					internalReferenceNotice =
+						`固定${vocabulary.revision}は存在しますが、所有${vocabulary.work}に表示可能な${vocabulary.occurrence}がありません。`;
+					return;
+				}
+				await openNavigationTarget(resolution.navigationTarget);
+				await loadRevisions(resolution.workId!);
+				comparisonPreferredRevisionId = resolution.revision.id;
+				viewMode = "comparison";
+				return;
+			}
+			await openNavigationTarget(resolution.navigationTarget);
+		} catch (cause) {
+			internalReferenceNotice = errorMessage(cause);
+		}
+	}
+
+	async function loadInternalReferenceBacklinks(workId: string): Promise<void> {
+		try {
+			internalReferenceBacklinks = await api.listInternalReferenceBacklinks("work", workId);
+		} catch (cause) {
+			internalReferenceNotice = errorMessage(cause);
+		}
+	}
+
+	async function openInternalReferenceBacklink(backlink: InternalReferenceBacklink): Promise<void> {
+		const source = backlink.source;
+		const markdown = source.scope === "work"
+			? `[source](radiora://work/${source.workId})`
+			: `[source](radiora://revision/${source.revisionId})`;
+		await openInternalReference(
+			markdown,
+			source.scope,
+			source.scope === "work" ? source.workId : source.revisionId,
+		);
 	}
 
 	async function performQuickCapture(): Promise<void> {
@@ -1447,10 +1613,43 @@
 								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
 								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
 								<button class="bullet" aria-label={`${vocabulary.work}を選択`} onclick={() => selectOccurrence(row.item.id)}>•</button>
-								<textarea rows="1" data-item-id={row.item.id} value={row.item.text}
-									onfocus={() => selectOccurrence(row.item.id)}
-									oninput={(event) => updateLocalText(row.item.id, event.currentTarget)}
-									onkeydown={(event) => handleKeydown(event, row)}></textarea>
+								<div class="internal-reference-editor">
+									<textarea rows="1" data-item-id={row.item.id} value={row.item.text}
+										onfocus={() => selectOccurrence(row.item.id)}
+										oninput={(event) => updateLocalText(row.item.id, event.currentTarget)}
+										onkeydown={(event) => handleKeydown(event, row)}></textarea>
+									{#if internalReferenceCompletion?.itemId === row.item.id}
+										<div class="internal-reference-completions" role="listbox"
+											aria-label={`${vocabulary.internalReference}候補`}>
+											{#each internalReferenceCompletion.candidates as candidate, index (candidate.scope + candidate.id)}
+												<button class:active={index === internalReferenceCompletion.activeIndex}
+													role="option" aria-selected={index === internalReferenceCompletion.activeIndex}
+													onmousedown={(event) => event.preventDefault()}
+													onclick={() => applyInternalReferenceCompletion(row.item.id, candidate)}>
+													<strong>{candidate.displayName}</strong>
+													<span>{candidate.scopeLabel} · {candidate.shortId}</span>
+												</button>
+											{:else}
+												<p>一致する候補はありません。</p>
+											{/each}
+										</div>
+									{/if}
+									{#if referencesIn(row.item.text).length}
+										<div class="internal-reference-chips" aria-label={vocabulary.internalReference}>
+											{#each referencesIn(row.item.text) as reference (reference.range.start)}
+												<button onclick={() => openInternalReference(
+													row.item.text,
+													reference.scope,
+													reference.id,
+													reference.range.start,
+												)}>
+													{reference.scope === "work" ? vocabulary.work : vocabulary.revision}
+													· {reference.id.slice(0, 8)}
+												</button>
+											{/each}
+										</div>
+									{/if}
+								</div>
 								<button class="delete" title={`この${vocabulary.occurrence}を外す`} onclick={() => remove(row.item.id)}>×</button>
 							</div>
 						{/each}
@@ -1747,6 +1946,23 @@
 						<div class="alias-list">{#each tagAliases as alias}<div><span>#{alias.variants.join(", #")} → #{alias.canonicalName}</span></div>{/each}</div>
 						<p class="hint">名前変更・統合は表示と検索の正準名だけを変更し、{vocabulary.workingCopy}と過去の{vocabulary.revision}本文は書き換えません。</p>
 					</div>
+					<section class="internal-reference-backlinks">
+						<h3>{vocabulary.backlink}<small>{internalReferenceBacklinks.length}件</small></h3>
+						{#each internalReferenceBacklinks as backlink (JSON.stringify(backlink.source))}
+							<button onclick={() => openInternalReferenceBacklink(backlink)}>
+								<strong>{backlink.displayName}</strong>
+								<span>
+									{backlink.source.scope === "work" ? vocabulary.workingCopy : `固定${vocabulary.revision}`}
+									· {backlink.count}箇所
+								</span>
+							</button>
+						{:else}
+							<p class="empty">{vocabulary.backlink}はありません</p>
+						{/each}
+					</section>
+					{#if internalReferenceNotice}
+						<p class="internal-reference-notice" role="status">{internalReferenceNotice}</p>
+					{/if}
 				{:else}
 					<div class="query-panel">
 						<label for="rule-source">読み取り専用Datalog</label>

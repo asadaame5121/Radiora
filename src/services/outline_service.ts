@@ -52,6 +52,13 @@ import {
 	AdvancedLinkResolverService,
 	type AdvancedLinkSelections,
 } from "./advanced_link_resolver.ts";
+import {
+	type InternalReferenceBacklink,
+	type InternalReferenceCompletion,
+	type InternalReferenceResolution,
+	InternalReferenceService,
+} from "./internal_reference_service.ts";
+import type { RadioraReferenceScope } from "./markdown_parser.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -450,6 +457,24 @@ export class OutlineService {
 		selections?: AdvancedLinkSelections,
 	): Promise<AdvancedLinkResolution> {
 		return new AdvancedLinkResolverService(this.store).resolve(input, selections);
+	}
+
+	listInternalReferenceCompletions(
+		query?: string,
+		limit?: number,
+	): Promise<InternalReferenceCompletion[]> {
+		return new InternalReferenceService(this.store).listCompletions(query, limit);
+	}
+
+	resolveInternalReferences(markdown: string): Promise<InternalReferenceResolution[]> {
+		return new InternalReferenceService(this.store).resolve(markdown);
+	}
+
+	listInternalReferenceBacklinks(
+		scope: RadioraReferenceScope,
+		id: string,
+	): Promise<InternalReferenceBacklink[]> {
+		return new InternalReferenceService(this.store).listBacklinks(scope, id);
 	}
 
 	async deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {

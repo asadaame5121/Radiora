@@ -30,6 +30,16 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 		(await handlers.resolveAdvancedLink("共有後 :: FROM :: Target")).source.selectedWorkId,
 		source.workId,
 	);
+	assertEquals(
+		(await handlers.listInternalReferenceCompletions("共有後")).map((candidate) => candidate.id),
+		[source.workId],
+	);
+	assertEquals(
+		(await handlers.resolveInternalReferences(
+			`[共有](radiora://work/${source.workId})`,
+		))[0].status,
+		"resolved",
+	);
 
 	let snapshot = await handlers.listOutline();
 	const placements = snapshot.items.filter((item) => item.workId === source.workId);

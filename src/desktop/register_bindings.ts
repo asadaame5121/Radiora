@@ -61,6 +61,11 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		setCollapsed: (id, collapsed) => service().setCollapsed(id, collapsed),
 		createLink: (input) => service().createLink(input),
 		resolveAdvancedLink: (input, selections) => service().resolveAdvancedLink(input, selections),
+		listInternalReferenceCompletions: (query, limit) =>
+			service().listInternalReferenceCompletions(query, limit),
+		resolveInternalReferences: (markdown) => service().resolveInternalReferences(markdown),
+		listInternalReferenceBacklinks: (scope, id) =>
+			service().listInternalReferenceBacklinks(scope, id),
 		deleteLink: (fromId, toId, type) => service().deleteLink(fromId, toId, type),
 		suggestItems: (prefix, limit) => service().suggestItems(prefix, limit),
 		searchItems: (request) => service().searchItems(request),

@@ -35,6 +35,12 @@ import type {
 	AdvancedLinkResolution,
 	AdvancedLinkSelections,
 } from "../services/advanced_link_resolver.ts";
+import type {
+	InternalReferenceBacklink,
+	InternalReferenceCompletion,
+	InternalReferenceResolution,
+} from "../services/internal_reference_service.ts";
+import type { RadioraReferenceScope } from "../services/markdown_parser.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
@@ -90,6 +96,15 @@ export interface RadioraBindings {
 		input: string,
 		selections?: AdvancedLinkSelections,
 	): Promise<AdvancedLinkResolution>;
+	listInternalReferenceCompletions(
+		query?: string,
+		limit?: number,
+	): Promise<InternalReferenceCompletion[]>;
+	resolveInternalReferences(markdown: string): Promise<InternalReferenceResolution[]>;
+	listInternalReferenceBacklinks(
+		scope: RadioraReferenceScope,
+		id: string,
+	): Promise<InternalReferenceBacklink[]>;
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;
 	suggestItems(prefix: string, limit?: number): Promise<Suggestion[]>;
 	searchItems(request: SearchRequest | string): Promise<SearchResult[]>;

@@ -30,6 +30,8 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"linkType",
 		"linkTarget",
 		"directionPreview",
+		"internalReference",
+		"backlink",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -61,5 +63,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		linkType: "種別",
 		linkTarget: "終点",
 		directionPreview: "保存方向",
+		internalReference: "内部参照",
+		backlink: "被参照",
 	});
 });

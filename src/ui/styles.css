@@ -451,6 +451,81 @@ main {
 	background: transparent;
 	line-height: 1.45;
 }
+.internal-reference-editor {
+	position: relative;
+	min-width: 0;
+}
+.internal-reference-completions {
+	position: absolute;
+	z-index: 20;
+	inset: 100% 0 auto 0;
+	max-height: 240px;
+	overflow: auto;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface-raised);
+	box-shadow: 0 12px 28px rgb(0 0 0 / 24%);
+}
+.internal-reference-completions button,
+.internal-reference-backlinks button {
+	display: flex;
+	width: 100%;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 7px 9px;
+	border: 0;
+	border-radius: 5px;
+	color: var(--text);
+	background: transparent;
+	text-align: left;
+	cursor: pointer;
+}
+.internal-reference-completions button:hover,
+.internal-reference-completions button.active,
+.internal-reference-backlinks button:hover {
+	background: var(--surface-hover);
+}
+.internal-reference-completions span,
+.internal-reference-backlinks span {
+	color: var(--muted);
+	font-size: 11px;
+	white-space: nowrap;
+}
+.internal-reference-completions p {
+	margin: 6px 8px;
+	color: var(--muted);
+	font-size: 12px;
+}
+.internal-reference-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 0 4px 4px;
+}
+.internal-reference-chips button {
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	padding: 2px 7px;
+	color: var(--cyan);
+	background: var(--surface-raised);
+	font-size: 10px;
+	cursor: pointer;
+}
+.internal-reference-backlinks {
+	margin-top: 14px;
+}
+.internal-reference-backlinks h3 {
+	display: flex;
+	justify-content: space-between;
+}
+.internal-reference-notice {
+	padding: 8px 10px;
+	border-left: 2px solid var(--amber);
+	color: var(--muted);
+	background: var(--surface-hover);
+	font-size: 12px;
+}
 .disclosure,
 .delete {
 	border: 0;

@@ -25,7 +25,9 @@ export type UiEntityCode =
 	| "linkSource"
 	| "linkType"
 	| "linkTarget"
-	| "directionPreview";
+	| "directionPreview"
+	| "internalReference"
+	| "backlink";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -57,4 +59,6 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	linkType: "種別",
 	linkTarget: "終点",
 	directionPreview: "保存方向",
+	internalReference: "内部参照",
+	backlink: "被参照",
 });
