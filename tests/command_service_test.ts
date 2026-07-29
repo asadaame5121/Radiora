@@ -75,6 +75,7 @@ Deno.test("command metadata covers the shared primary actions", () => {
 			"quickCapture",
 			"hoist",
 			"clearHoist",
+			"exportMarkdown",
 			"addBookmark",
 			"saveRevision",
 			"createBranch",
@@ -83,4 +84,12 @@ Deno.test("command metadata covers the shared primary actions", () => {
 			"saveQuery",
 		],
 	);
+});
+
+Deno.test("Markdown export is available only after startup is ready", () => {
+	assertEquals(commandAvailability(context()).exportMarkdown, { enabled: true });
+	assertEquals(commandAvailability(context({ startupReady: false })).exportMarkdown, {
+		enabled: false,
+		reason: "起動の完了後に実行できます。",
+	});
 });

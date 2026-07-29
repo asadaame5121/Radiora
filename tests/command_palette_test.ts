@@ -50,6 +50,17 @@ Deno.test("command palette exposes command-service disabled reasons", () => {
 	});
 });
 
+Deno.test("command palette includes Markdown export", () => {
+	const [exportMarkdown] = commandPaletteItems(
+		"Markdown",
+		context(),
+		DEFAULT_UI_VOCABULARY,
+	);
+	assertEquals(exportMarkdown.id, "exportMarkdown");
+	assertEquals(exportMarkdown.label, "Markdownでエクスポート");
+	assertEquals(exportMarkdown.availability, { enabled: true });
+});
+
 Deno.test("command palette cannot dispatch a revision save without a selected recovery snapshot", async () => {
 	const [saveRevision] = commandPaletteItems(
 		"版として残す",
