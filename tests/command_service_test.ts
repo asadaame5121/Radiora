@@ -13,7 +13,7 @@ const context = (overrides: Partial<CommandContext> = {}): CommandContext => ({
 	selectedOccurrenceId: "occurrence-1",
 	hasSelectedBranch: true,
 	hasSelectedRecoverySnapshot: true,
-	hasLinkTarget: true,
+	canOpenLinkEditor: true,
 	quickCaptureText: "capture",
 	quickCaptureSubmitting: false,
 	ruleSource: "?- item(X).",
@@ -40,6 +40,11 @@ Deno.test("command applicability returns one authoritative disabled reason", () 
 		enabled: false,
 		reason: "保存する復元用保存を選択してください。",
 	});
+	assertEquals(commandAvailability(context({ hasSelectedBranch: false })).createBranch, {
+		enabled: false,
+		reason: "別稿を作る元の作業中の本文を選択してください。",
+	});
+	assertEquals(commandAvailability(context()).createBranch, { enabled: true });
 });
 
 Deno.test("shortcut normalization rejects empty, malformed, and conflicting bindings", () => {

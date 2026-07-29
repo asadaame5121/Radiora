@@ -21,8 +21,9 @@ Deno.test("Advanced Link Editor exposes three-field gate, candidate metadata, an
 	assertMatch(editor, /initializedWorkId = ""/);
 	assertMatch(editor, /reconcileAdvancedLinkSelections\(parsed, selections, selectionQueries\)/);
 	assertMatch(app, /executeCommand\("createLink", undefined, input\)/);
-	assertMatch(app, /\{ \.\.\.commandContext, hasLinkTarget: true \}/);
-	assertMatch(app, /case "createLink": if \(linkInput\) await performAddLink\(linkInput\)/);
+	assertMatch(app, /canOpenLinkEditor: Boolean\(selectedItem\)/);
+	assertMatch(app, /else await openAdvancedLinkEditor\(\)/);
+	assertMatch(app, /case "createLink":[\s\S]*?if \(linkInput\) await performAddLink\(linkInput\)/);
 });
 
 Deno.test("Advanced Link Editor does not create unresolved Works, Occurrences, or Stubs", async () => {

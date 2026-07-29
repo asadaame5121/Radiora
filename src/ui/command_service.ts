@@ -6,7 +6,7 @@ export interface CommandContext {
 	selectedOccurrenceId: string | null;
 	hasSelectedBranch: boolean;
 	hasSelectedRecoverySnapshot: boolean;
-	hasLinkTarget: boolean;
+	canOpenLinkEditor: boolean;
 	quickCaptureText: string;
 	quickCaptureSubmitting: boolean;
 	ruleSource: string;
@@ -99,7 +99,9 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 		availability: (context) =>
 			!selection(context).enabled
 				? selection(context)
-				: { enabled: false, reason: "別稿の新規作成はまだこの画面からは実行できません。" },
+				: !context.hasSelectedBranch
+				? { enabled: false, reason: "別稿を作る元の作業中の本文を選択してください。" }
+				: { enabled: true },
 	},
 	{
 		id: "createLink",
@@ -108,8 +110,8 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 		availability: (context) =>
 			!selection(context).enabled
 				? selection(context)
-				: !context.hasLinkTarget
-				? { enabled: false, reason: "リンク先を選択してください。" }
+				: !context.canOpenLinkEditor
+				? { enabled: false, reason: "リンクを追加する項目を選択してください。" }
 				: { enabled: true },
 	},
 	{

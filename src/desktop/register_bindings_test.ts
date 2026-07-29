@@ -1,5 +1,6 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
 import { OutlineService } from "../services/outline_service.ts";
+import { RevisionService } from "../services/revision_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import type { StartupStatus } from "../shared/bindings.ts";
 import { createBindingHandlers } from "./register_bindings.ts";
@@ -12,6 +13,8 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 		getService: () => service,
 		getStartupStatus: () => ready,
 		retryStartup: () => Promise.resolve(ready),
+		rewriteAsNewBranch: (sourceBranchId, name, confirmation) =>
+			new RevisionService(store).rewriteAsNewBranch(sourceBranchId, name, confirmation),
 	});
 
 	const source = await handlers.createItem({ text: "共有前", parentId: null });
@@ -79,6 +82,16 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 		(await handlers.listWorkLineage(source.workId)).revisions.map((revision) => revision.id),
 		["source-version"],
 	);
+	const rewrite = await handlers.rewriteAsNewBranch(
+		sourceBranchId,
+		"別の観点",
+		"confirmed",
+	);
+	assertEquals(rewrite.status, "created");
+	assertEquals(
+		(await handlers.listWorkLineage(source.workId)).branches.map((branch) => branch.name).sort(),
+		["main", "別の観点"],
+	);
 
 	await handlers.trashWork(source.id);
 	assertEquals((await handlers.listTrash())[0].occurrenceCount, 2);
@@ -106,6 +119,9 @@ Deno.test("desktop bindings expose startup failure and retry without dereferenci
 		retryStartup: () => {
 			retries++;
 			return Promise.resolve({ phase: "starting", message: "retrying" });
+		},
+		rewriteAsNewBranch: () => {
+			throw new Error("unreachable");
 		},
 	});
 

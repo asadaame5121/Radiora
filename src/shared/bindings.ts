@@ -45,6 +45,10 @@ import type {
 	LinkComparisonProjection,
 	WorkComparisonDocuments,
 } from "../services/comparison_service.ts";
+import type {
+	RewriteAsNewBranchResult,
+	RewriteConfirmation,
+} from "../services/revision_service.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
@@ -80,6 +84,11 @@ export interface RadioraBindings {
 	): Promise<Revision | null>;
 	listGlobalLineage(): Promise<GlobalLineageProjection>;
 	listWorkLineage(workId: string): Promise<WorkLineageProjection>;
+	rewriteAsNewBranch(
+		sourceBranchId: string,
+		newBranchName: string,
+		confirmation: RewriteConfirmation,
+	): Promise<RewriteAsNewBranchResult>;
 	createItem(input: CreateItemInput): Promise<OutlineItem>;
 	quickCapture(text: string): Promise<UnplacedWork>;
 	listUnplacedWorks(): Promise<UnplacedWork[]>;
