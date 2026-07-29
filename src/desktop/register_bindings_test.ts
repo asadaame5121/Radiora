@@ -26,6 +26,10 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 	await handlers.setCollapsed(mirror.id, true);
 	await handlers.moveItem({ id: mirror.id, parentId: null });
 	await handlers.createLink({ fromId: source.id, toId: target.id, type: "FROM" });
+	assertEquals(
+		(await handlers.resolveAdvancedLink("共有後 :: FROM :: Target")).source.selectedWorkId,
+		source.workId,
+	);
 
 	let snapshot = await handlers.listOutline();
 	const placements = snapshot.items.filter((item) => item.workId === source.workId);

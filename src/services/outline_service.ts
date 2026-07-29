@@ -47,6 +47,11 @@ import { TagService } from "./tag_service.ts";
 import { NavigationService } from "./navigation_service.ts";
 import { type DateProjection, DateProjectionService, type DateRange } from "./date_projection.ts";
 import { QuickCaptureService } from "./quick_capture_service.ts";
+import {
+	type AdvancedLinkResolution,
+	AdvancedLinkResolverService,
+	type AdvancedLinkSelections,
+} from "./advanced_link_resolver.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -438,6 +443,13 @@ export class OutlineService {
 			createdAt: new Date().toISOString(),
 			reason: input.reason?.trim() || undefined,
 		});
+	}
+
+	resolveAdvancedLink(
+		input: string,
+		selections?: AdvancedLinkSelections,
+	): Promise<AdvancedLinkResolution> {
+		return new AdvancedLinkResolverService(this.store).resolve(input, selections);
 	}
 
 	async deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {

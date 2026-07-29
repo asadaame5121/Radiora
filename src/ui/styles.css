@@ -635,27 +635,51 @@ aside h2 {
 	border-bottom: 1px solid var(--border);
 	padding-bottom: 18px;
 }
-.link-form {
+.advanced-link-editor {
 	display: grid;
-	grid-template-columns: 82px 1fr;
-	gap: 7px;
+	gap: 8px;
 	margin-top: 18px;
-}
-.link-form select,
-.link-form button {
+	padding: 12px;
 	border: 1px solid var(--border);
-	background: var(--surface-raised);
+	border-radius: 10px;
+}
+.advanced-link-editor h3,
+.advanced-link-editor p {
+	margin: 0;
+}
+.advanced-link-status {
+	display: grid;
+	gap: 4px;
+}
+.advanced-link-status p {
+	display: grid;
+	grid-template-columns: 56px 1fr;
+	gap: 8px;
+	color: var(--muted);
+}
+.advanced-link-status p.resolved {
 	color: var(--text);
-	border-radius: 5px;
-	padding: 7px;
-	min-width: 0;
 }
-.link-form button {
-	grid-column: 1 / -1;
-	cursor: pointer;
+.advanced-link-candidates {
+	display: grid;
+	gap: 6px;
 }
-.link-form button:disabled {
-	opacity: .35;
+.advanced-link-candidates button {
+	display: grid;
+	gap: 3px;
+	text-align: left;
+}
+.advanced-link-candidates span,
+.advanced-link-candidates small {
+	display: block;
+	font-size: .75rem;
+}
+.advanced-link-preview {
+	display: grid;
+	gap: 4px;
+	padding: 8px;
+	background: var(--surface-raised);
+	border-radius: 6px;
 }
 .links {
 	margin-top: 18px;
