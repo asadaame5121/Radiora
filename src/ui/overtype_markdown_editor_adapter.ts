@@ -37,6 +37,7 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 		const generation = this.#generation;
 		const [instance] = new OverType(options.host, {
 			value: options.value,
+			theme: "cave",
 			autoResize: false,
 			smartLists: false,
 			toolbar: false,

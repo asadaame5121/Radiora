@@ -18,6 +18,7 @@ export type CommandId =
 	| "quickCapture"
 	| "hoist"
 	| "clearHoist"
+	| "exportMarkdown"
 	| "addBookmark"
 	| "saveRevision"
 	| "createBranch"
@@ -74,6 +75,11 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 			!context.isHoisted
 				? { enabled: false, reason: "絞り込み表示中ではありません。" }
 				: ready(context),
+	},
+	{
+		id: "exportMarkdown",
+		label: () => "Markdownでエクスポート",
+		availability: ready,
 	},
 	{
 		id: "addBookmark",

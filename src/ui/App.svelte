@@ -42,6 +42,7 @@
 		type WorkingCopySaveStatus,
 	} from "../services/working_copy_autosave";
 	import { ResumePositionAutosaveCoordinator } from "../services/resume_position_autosave";
+	import { renderOutlineSnapshotMarkdown } from "../services/markdown_export";
 	import {
 		activateBrowsingPane,
 		activeBrowsingPane,
@@ -109,7 +110,7 @@
 		| "workLineage"
 		| "comparison"
 		| "trash";
-	type AsideMode = "links" | "discover" | "tags" | "query";
+	type AsideMode = "overview" | "relation" | "history" | "tags" | "query";
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
 		| { action: "purge"; workId: string; occurrenceCount: number; linkCount: number }
@@ -147,11 +148,10 @@
 	let nextPaneNumber = 2;
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
-	let searchQuery = $state("");
 	let suggestions = $state<Suggestion[]>([]);
 	let searchResults = $state<SearchResult[]>([]);
 	let searchActiveIndex = $state(-1);
-	let asideMode = $state<AsideMode>("links");
+	let asideMode = $state<AsideMode>("overview");
 	let emergenceSuggestions = $state<EmergenceSuggestion[]>([]);
 	let emergenceLoading = $state(false);
 	let aliases = $state<SearchAlias[]>([]);
@@ -199,10 +199,12 @@
 	let commandPaletteActiveIndex = $state(-1);
 	let commandPaletteInput = $state<HTMLInputElement | null>(null);
 	let commandPaletteRestoreFocus: HTMLElement | null = null;
+	let inspectorElement = $state<HTMLElement | null>(null);
 	let workingCopySaveStatuses = $state<WorkingCopySaveStatus[]>([]);
 	let internalReferenceCompletion = $state<InternalReferenceCompletionState | null>(null);
 	let internalReferenceBacklinks = $state<InternalReferenceBacklink[]>([]);
 	let internalReferenceNotice = $state("");
+	let markdownExportNotice = $state("");
 	let internalReferenceCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
@@ -253,6 +255,10 @@
 		...suggestions.map((suggestion) => ({ kind: "suggestion" as const, value: suggestion })),
 		...searchResults.map((result) => ({ kind: "result" as const, value: result })),
 	]);
+	const omniEntryCount = $derived(searchEntries.length + (quickCaptureText.trim() ? 1 : 0));
+	const dedicatedView = $derived(
+		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison",
+	);
 	const workingCopySaveStatus = $derived.by(() => {
 		const failed = workingCopySaveStatuses.find((status) => status.phase === "failed");
 		if (failed) return failed;
@@ -487,6 +493,19 @@
 
 	function clearHoist(): void {
 		browsing = setBrowsingHoist(browsing, null);
+	}
+
+	async function revealInspector(): Promise<void> {
+		asideMode = "overview";
+		await tick();
+		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
+	}
+
+	async function openInspectorTool(mode: Extract<AsideMode, "tags" | "query">): Promise<void> {
+		asideMode = mode;
+		if (dedicatedView) viewMode = "outline";
+		await tick();
+		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
 
 	function addBrowsingPane(): void {
@@ -743,7 +762,7 @@
 		quickCaptureSubmitting = true;
 		try {
 			await api.quickCapture(quickCaptureText);
-			quickCaptureText = "";
+			clearOmniwindow();
 			await Promise.all([load(), loadUnplacedWorks()]);
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -1097,14 +1116,14 @@
 		clearTimeout(searchTimer);
 		const requestId = ++searchRequestId;
 		searchActiveIndex = -1;
-		if (!searchQuery.trim()) {
+		if (!quickCaptureText.trim()) {
 			suggestions = [];
 			searchResults = [];
 			return;
 		}
 		suggestTimer = window.setTimeout(async () => {
 			try {
-				const next = await api.suggestItems(searchQuery, 8);
+				const next = await api.suggestItems(quickCaptureText, 8);
 				if (requestId === searchRequestId) suggestions = next;
 			} catch (cause) {
 				if (requestId === searchRequestId) error = errorMessage(cause);
@@ -1112,7 +1131,7 @@
 		}, 100);
 		searchTimer = window.setTimeout(async () => {
 			try {
-				const next = await api.searchItems({ query: searchQuery, contextItemId: selectedId, limit: 20 });
+				const next = await api.searchItems({ query: quickCaptureText, contextItemId: selectedId, limit: 20 });
 				if (requestId === searchRequestId) searchResults = next;
 			} catch (cause) {
 				if (requestId === searchRequestId) error = errorMessage(cause);
@@ -1120,25 +1139,47 @@
 		}, 250);
 	}
 
+	function clearOmniwindow(): void {
+		quickCaptureText = "";
+		searchRequestId++;
+		clearTimeout(suggestTimer);
+		clearTimeout(searchTimer);
+		suggestions = [];
+		searchResults = [];
+		searchActiveIndex = -1;
+	}
+
 	function handleSearchKeydown(event: KeyboardEvent): void {
+		if (event.isComposing) return;
 		if (event.key === "Escape") {
-			searchQuery = "";
-			suggestions = [];
-			searchResults = [];
-			searchActiveIndex = -1;
+			clearOmniwindow();
 			return;
 		}
 		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 			event.preventDefault();
 			const delta = event.key === "ArrowDown" ? 1 : -1;
-			searchActiveIndex = Math.max(-1, Math.min(searchEntries.length - 1, searchActiveIndex + delta));
+			searchActiveIndex = Math.max(-1, Math.min(omniEntryCount - 1, searchActiveIndex + delta));
 			return;
 		}
-		if (event.key === "Enter" && searchActiveIndex >= 0) {
+		if (event.key === "Enter" && event.shiftKey && quickCaptureText.trim()) {
 			event.preventDefault();
-			const entry = searchEntries[searchActiveIndex];
-			if (entry.kind === "suggestion") void selectItem(entry.value.item, entry.value.ancestorIds);
-			else void selectItem(entry.value.item, entry.value.ancestorIds);
+			void executeCommand("quickCapture");
+			return;
+		}
+		if (event.key === "Enter") {
+			event.preventDefault();
+			const exactMatchIndex = searchEntries.findIndex((entry) =>
+				titleFor(entry.value.item).trim() === quickCaptureText.trim()
+			);
+			const index = searchActiveIndex >= 0
+				? searchActiveIndex
+				: exactMatchIndex >= 0 ? exactMatchIndex : searchEntries.length > 0 ? 0 : -1;
+			if (index === searchEntries.length && quickCaptureText.trim()) {
+				void executeCommand("quickCapture");
+				return;
+			}
+			const entry = searchEntries[index];
+			if (entry) void selectItem(entry.value.item, entry.value.ancestorIds);
 		}
 	}
 
@@ -1148,10 +1189,7 @@
 
 	async function selectItem(item: OutlineItem, ancestorIds: string[]): Promise<void> {
 		transientExpandedIds = ancestorIds;
-		searchQuery = "";
-		suggestions = [];
-		searchResults = [];
-		searchActiveIndex = -1;
+		clearOmniwindow();
 		selectOccurrence(item.id);
 		await load(item.id);
 	}
@@ -1341,6 +1379,7 @@
 				case "quickCapture": await performQuickCapture(); break;
 				case "hoist": hoistSelected(); break;
 				case "clearHoist": clearHoist(); break;
+				case "exportMarkdown": await performMarkdownExport(); break;
 				case "addBookmark": await performAddBookmark(); break;
 				case "createLink":
 					if (linkInput) await performAddLink(linkInput);
@@ -1402,7 +1441,7 @@
 
 	async function openAdvancedLinkEditor(): Promise<void> {
 		if (!selectedItem) return;
-		asideMode = "links";
+		asideMode = "relation";
 		await tick();
 		const input = document.querySelector<HTMLTextAreaElement>(
 			".advanced-link-editor textarea",
@@ -1424,6 +1463,7 @@
 	function captureQuickText(): void { void executeCommand("quickCapture"); }
 	function requestHoist(): void { void executeCommand("hoist"); }
 	function requestClearHoist(): void { void executeCommand("clearHoist"); }
+	function exportMarkdown(): void { void executeCommand("exportMarkdown"); }
 	function addBookmark(): void { void executeCommand("addBookmark"); }
 	function executeRule(): void { void executeCommand("runQuery"); }
 	function saveRule(): void { void executeCommand("saveQuery"); }
@@ -1438,6 +1478,27 @@
 			occurrenceCount: entry.occurrenceCount,
 			linkCount: entry.linkCount,
 		});
+	}
+
+	async function performMarkdownExport(): Promise<void> {
+		markdownExportNotice = "";
+		try {
+			await autosave.flush();
+			const markdown = renderOutlineSnapshotMarkdown(snapshot);
+			const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = `radiora-${localDateValue(new Date())}.md`;
+			anchor.hidden = true;
+			document.body.append(anchor);
+			anchor.click();
+			anchor.remove();
+			globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
+			markdownExportNotice = "Markdownをエクスポートしました。";
+		} catch (cause) {
+			error = `Markdownをエクスポートできませんでした: ${errorMessage(cause)}`;
+		}
 	}
 
 	async function requestConfirmation(confirmation: PendingConfirmation): Promise<void> {
@@ -1603,53 +1664,58 @@
 {/if}
 
 <div class="shell">
-	<header>
+	<nav class="primary-nav" aria-label="主な画面">
 		<div class="brand"><strong>Radiora</strong><span>v2</span></div>
-		<nav class="view-switcher" aria-label="表示モード">
+		<section>
+			<p>作業</p>
 			<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
-				onclick={() => (viewMode = "outline")}>Outline</button>
+				onclick={() => (viewMode = "outline")}>アウトライン</button>
 			<button class:active={viewMode === "today"} aria-pressed={viewMode === "today"}
 				onclick={openToday}>{vocabulary.today}</button>
 			<button class:active={viewMode === "unplaced"} aria-pressed={viewMode === "unplaced"}
 				onclick={openUnplaced}>{vocabulary.unplacedInbox}</button>
+		</section>
+		<section>
+			<p>探索</p>
 			<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
 				onclick={() => (viewMode = "globalLineage")}>{vocabulary.globalLineage}</button>
-			<button class:active={viewMode === "workLineage"} aria-pressed={viewMode === "workLineage"}
-				onclick={() => (viewMode = "workLineage")} disabled={!selectedItem}>{vocabulary.workLineage}</button>
-			<button class:active={viewMode === "comparison"} aria-pressed={viewMode === "comparison"}
-				onclick={openSelectedRevisionComparison} disabled={!selectedItem}>
-				{vocabulary.revision}{vocabulary.comparisonPane}
-			</button>
+		</section>
+		<section>
+			<p>管理</p>
 			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
 				onclick={openTrash}>ゴミ箱</button>
-		</nav>
-		<form class="quick-capture" onsubmit={(event) => { event.preventDefault(); void captureQuickText(); }}>
+		</section>
+		<section class="nav-tools">
+			<p>ツール</p>
+			<button class:active={asideMode === "tags"} onclick={() => openInspectorTool("tags")}
+				disabled={!selectedItem}>{vocabulary.tag}管理</button>
+			<button class:active={asideMode === "query"} onclick={() => openInspectorTool("query")}
+				disabled={!selectedItem}>Query・検索別名</button>
+			<button onclick={() => openCommandPalette()}>{vocabulary.commandPalette}<kbd>Ctrl K</kbd></button>
+		</section>
+	</nav>
+
+	<header class="top-bar">
+		<div class="current-location">
+			<small>現在地</small>
+			<strong>{viewMode === "outline" ? "アウトライン" : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</strong>
+		</div>
+		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
 			<input
-				aria-label={vocabulary.quickCapture}
-				placeholder={`${vocabulary.quickCapture}…`}
+				aria-label={`${vocabulary.quickCapture}・思索を検索`}
+				placeholder="思索を検索、Shift+Enterで未配置箱へ作成…"
 				bind:value={quickCaptureText}
+				oninput={queueSearch}
+				onkeydown={handleSearchKeydown}
+				autocomplete="off"
 				disabled={startup.phase !== "ready" || quickCaptureSubmitting}
+				aria-expanded={Boolean(quickCaptureText.trim())}
 			/>
-			<button disabled={!commands.quickCapture.enabled} title={commands.quickCapture.reason}>
-				{quickCaptureSubmitting ? "保存中…" : vocabulary.quickCapture}
-			</button>
-		</form>
-		<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
-		{#each bookmarks as bookmark}
-			<span class="bookmark-control">
-				<button onclick={() => openBookmark(bookmark.id)}>{vocabulary.bookmark} {bookmark.id.slice(0, 4)}</button>
-				<button aria-label={`${vocabulary.bookmark}を削除`} onclick={() => removeBookmark(bookmark.id)}>×</button>
-			</span>
-		{/each}
-		<div class="search-wrap" class:disabled={startup.phase !== "ready"}>
-			<input aria-label="思索を検索" placeholder="思索を検索…" bind:value={searchQuery}
-				oninput={queueSearch} onkeydown={handleSearchKeydown} autocomplete="off"
-				aria-expanded={searchEntries.length > 0} />
-			{#if searchEntries.length}
-				<div class="search-results" role="listbox" aria-label="検索候補">
+			{#if quickCaptureText.trim()}
+				<div class="search-results" role="listbox" aria-label="検索と新規作成の候補">
 					{#if suggestions.length}<p class="search-section">タイトル</p>{/if}
 					{#each suggestions as suggestion, index}
-						<button class:active={searchActiveIndex === index}
+						<button type="button" class:active={searchActiveIndex === index}
 							onclick={() => selectItem(suggestion.item, suggestion.ancestorIds)}>
 							<strong>{suggestion.title || `(空の${vocabulary.work})`}</strong>
 							<small>先頭一致</small>
@@ -1657,14 +1723,44 @@
 					{/each}
 					{#if searchResults.length}<p class="search-section">本文・関連</p>{/if}
 					{#each searchResults as result, index}
-						<button class:active={searchActiveIndex === suggestions.length + index}
+						<button type="button" class:active={searchActiveIndex === suggestions.length + index}
 							onclick={() => selectSearch(result)}>
 							<strong>{titleFor(result.item)}</strong>
 							<small>{result.reasons.map((reason) => reason.label).slice(0, 2).join(" · ")}</small>
 						</button>
 					{/each}
+					<p class="search-section">新規作成</p>
+					<button type="button" class="create-candidate"
+						class:active={searchActiveIndex === searchEntries.length}
+						disabled={!commands.quickCapture.enabled}
+						title={commands.quickCapture.reason}
+						onclick={() => executeCommand("quickCapture")}>
+						<strong>「{quickCaptureText.trim()}」を未配置箱へ作成</strong>
+						<small>Shift+Enter</small>
+					</button>
 				</div>
 			{/if}
+		</form>
+		<div class="top-actions">
+			<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
+			<button
+				onclick={exportMarkdown}
+				disabled={!commands.exportMarkdown.enabled}
+				title={commands.exportMarkdown.reason}
+			>Markdownでエクスポート</button>
+			{#if markdownExportNotice}
+				<small class="markdown-export-notice" role="status">{markdownExportNotice}</small>
+			{/if}
+			{#if selectedItem}
+				<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆</button>
+			{/if}
+			{#each bookmarks as bookmark}
+				<span class="bookmark-control">
+					<button onclick={() => openBookmark(bookmark.id)}>{vocabulary.bookmark} {bookmark.id.slice(0, 4)}</button>
+					<button aria-label={`${vocabulary.bookmark}を削除`} onclick={() => removeBookmark(bookmark.id)}>×</button>
+				</span>
+			{/each}
+			<button class="inspector-jump" onclick={revealInspector}>詳細</button>
 		</div>
 		{#if workingCopySaveStatus}
 			<div
@@ -1694,7 +1790,7 @@
 	{#if error}<div class="error">{error}<button onclick={() => (error = "")}>×</button></div>{/if}
 
 	{#if startup.phase !== "ready"}
-		<main class="startup-main">
+		<main class="app-main startup-main">
 			<section class="startup-card" aria-live="polite">
 				<div class:failed={startup.phase === "failed"} class="startup-indicator"></div>
 				<p class="eyebrow">{startup.phase === "failed" ? "STARTUP FAILED" : "STARTING"}</p>
@@ -1705,7 +1801,7 @@
 			</section>
 		</main>
 	{:else}
-	<main>
+	<main class="app-main" class:full-workspace={dedicatedView}>
 		{#if viewMode === "outline"}
 			<section class="outline-panel">
 				<nav class="browsing-navigation" aria-label={vocabulary.browsingHistory}>
@@ -1986,20 +2082,22 @@
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.workLineage}を読み込んでいます…</p></section>
 			{:else if workLineage}
 				{#key workLineage.work.id}
-					<WorkLineage projection={workLineage} onCompare={openWorkComparison} />
-					{#if selectedItem && selectedBranchId}
-						<RecoverySnapshots
-							snapshots={recoverySnapshots}
-							loadPreview={(snapshotId) =>
-								api.previewRecoverySnapshot(
-									snapshotId,
-									selectedItem.workId,
-									selectedBranchId,
-								)}
-							onRestore={restoreRecoverySnapshot}
-							onPromote={promoteRecoverySnapshot}
-						/>
-					{/if}
+					<div class="work-lineage-workspace">
+						<WorkLineage projection={workLineage} onCompare={openWorkComparison} />
+						{#if selectedItem && selectedBranchId}
+							<RecoverySnapshots
+								snapshots={recoverySnapshots}
+								loadPreview={(snapshotId) =>
+									api.previewRecoverySnapshot(
+										snapshotId,
+										selectedItem.workId,
+										selectedBranchId,
+									)}
+								onRestore={restoreRecoverySnapshot}
+								onPromote={promoteRecoverySnapshot}
+							/>
+						{/if}
+					</div>
 				{/key}
 			{:else}
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.work}を選択してください。</p></section>
@@ -2014,17 +2112,17 @@
 			<section class="tree-panel"><p class="empty">{vocabulary.globalLineage}を読み込んでいます…</p></section>
 		{/if}
 
-		<aside>
+		{#if !dedicatedView}
+			<aside bind:this={inspectorElement} class="inspector">
 			{#if selectedItem}
 				<nav class="aside-tabs" aria-label="詳細表示">
-					<button class:active={asideMode === "links"} onclick={() => (asideMode = "links")}>{vocabulary.semanticLink}</button>
-					<button class:active={asideMode === "discover"} onclick={() => (asideMode = "discover")}>発見</button>
-					<button class:active={asideMode === "tags"} onclick={() => (asideMode = "tags")}>{vocabulary.tag}</button>
-					<button class:active={asideMode === "query"} onclick={() => (asideMode = "query")}>Query</button>
+					<button class:active={asideMode === "overview"} onclick={() => (asideMode = "overview")}>概要</button>
+					<button class:active={asideMode === "relation"} onclick={() => (asideMode = "relation")}>関係</button>
+					<button class:active={asideMode === "history"} onclick={() => (asideMode = "history")}>履歴</button>
 				</nav>
 				<p class="eyebrow">SELECTED THOUGHT</p>
 				<h2>{titleFor(selectedItem)}</h2>
-				{#if asideMode === "links"}
+				{#if asideMode === "overview"}
 					<label>
 						{vocabulary.occurrence}固有の見出し
 						<input value={selectedItem.contextualHeading ?? ""}
@@ -2053,15 +2151,15 @@
 						<button onclick={trashSelectedWork}>{vocabulary.work}をゴミ箱へ</button>
 					</div>
 				{/if}
-				{#if asideMode === "links" && bodyFor(selectedItem)}
+				{#if asideMode === "overview" && bodyFor(selectedItem)}
 					<p class="thought-body">{bodyFor(selectedItem)}</p>
 				{/if}
-				{#if asideMode === "links" && viewMode === "outline"}
+				{#if asideMode === "overview" && viewMode === "outline"}
 					<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
-				{:else if asideMode === "links"}
+				{:else if asideMode === "overview"}
 					<div class="thought-meta"><span>作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
 				{/if}
-				{#if asideMode === "links"}
+				{#if asideMode === "relation"}
 					<AdvancedLinkEditor
 						selectedWorkId={selectedItem.workId}
 						selectedDisplayName={titleFor(selectedItem)}
@@ -2079,7 +2177,6 @@
 							</div>
 						{:else}<p class="empty">任意の{vocabulary.semanticLink}はありません</p>{/each}
 					</div>
-				{:else if asideMode === "discover"}
 					<div class="discoveries">
 						{#if emergenceLoading}<p class="empty">関係を探索中…</p>{/if}
 						{#each emergenceSuggestions as suggestion}
@@ -2097,6 +2194,24 @@
 						{:else}
 							{#if !emergenceLoading}<p class="empty">新しい関係候補はありません</p>{/if}
 						{/each}
+					</div>
+				{:else if asideMode === "history"}
+					<div class="history-panel">
+						<p class="hint">選択中の{vocabulary.work}に従属する履歴です。</p>
+						<button onclick={() => (viewMode = "workLineage")} disabled={!selectedItem}>
+							{vocabulary.workLineage}を開く
+						</button>
+						<button onclick={openSelectedRevisionComparison} disabled={!selectedItem}>
+							{vocabulary.revision}{vocabulary.comparisonPane}を開く
+						</button>
+						{#if selectedBranchId}
+							<button onclick={() => (viewMode = "workLineage")}>
+								Recovery snapshotsを開く
+							</button>
+							<small>{recoverySnapshots.length}件のRecovery snapshot</small>
+						{:else}
+							<small>Recoveryは{vocabulary.branch}を選択すると利用できます。</small>
+						{/if}
 					</div>
 				{:else if asideMode === "tags"}
 					<div class="query-panel">
@@ -2176,6 +2291,7 @@
 				<div class="aside-empty"><span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p></div>
 			{/if}
 		</aside>
+		{/if}
 	</main>
 	{/if}
 </div>
