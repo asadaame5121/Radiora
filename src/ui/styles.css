@@ -508,6 +508,7 @@ button {
 	min-width: 0;
 }
 .markdown-editor-host {
+	position: relative;
 	height: 34px;
 	min-height: 34px;
 	max-height: 140px;
@@ -518,9 +519,19 @@ button {
 .row:focus-within .markdown-editor-host {
 	height: 96px;
 }
+.markdown-editor-host :is(.overtype-container, .overtype-wrapper) {
+	height: 100% !important;
+	min-height: 0 !important;
+	max-height: 100% !important;
+	overflow: hidden !important;
+}
 .markdown-editor-host :is(.overtype-container, .overtype-wrapper, .overtype-input, .overtype-preview) {
 	background: transparent !important;
 	color: var(--text);
+}
+.markdown-editor-host :is(.overtype-input, .overtype-preview) {
+	max-height: 100% !important;
+	overflow: auto !important;
 }
 .markdown-editor.fallback .markdown-editor-host textarea {
 	width: 100%;
@@ -530,18 +541,21 @@ button {
 .markdown-editor-mode {
 	position: absolute;
 	z-index: 5;
-	top: 4px;
+	top: 0;
 	right: 6px;
-	display: flex;
+	display: none;
 	align-items: center;
 	gap: 4px;
-	opacity: .25;
-	transition: opacity .12s ease;
+	height: 18px;
 }
-.markdown-editor:hover .markdown-editor-mode,
 .row.selected .markdown-editor-mode,
 .markdown-editor-mode:focus-within {
+	display: flex;
 	opacity: 1;
+}
+.row.selected .markdown-editor,
+.row:focus-within .markdown-editor {
+	padding-top: 22px;
 }
 .markdown-editor-mode span {
 	color: var(--muted);
@@ -661,6 +675,10 @@ button {
 	border: 0;
 	background: transparent;
 }
+.bullet:focus-visible {
+	outline: 1px solid var(--cyan);
+	border-radius: 4px;
+}
 .first-item {
 	margin: 80px auto;
 	display: block;
@@ -731,12 +749,34 @@ button {
 	letter-spacing: .18em;
 }
 .app-main > .inspector h2 {
+	margin: 0;
 	font-family: Georgia, serif;
 	font-size: 18px;
 	line-height: 1.5;
 	font-weight: normal;
 	color: #edf9fa;
 	word-break: break-word;
+}
+.inspector-heading {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+	margin: 12px 0 16px;
+}
+.clear-selection {
+	flex: none;
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	padding: 4px 6px;
+	background: transparent;
+	color: var(--muted);
+	font-size: 10px;
+	cursor: pointer;
+}
+.clear-selection:hover {
+	border-color: var(--border-bright);
+	color: var(--text);
 }
 .thought-body {
 	color: #afc1c9;
