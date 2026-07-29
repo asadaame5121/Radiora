@@ -41,6 +41,10 @@ import type {
 	InternalReferenceResolution,
 } from "../services/internal_reference_service.ts";
 import type { RadioraReferenceScope } from "../services/markdown_parser.ts";
+import type {
+	LinkComparisonProjection,
+	WorkComparisonDocuments,
+} from "../services/comparison_service.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
@@ -105,6 +109,8 @@ export interface RadioraBindings {
 		scope: RadioraReferenceScope,
 		id: string,
 	): Promise<InternalReferenceBacklink[]>;
+	resolveLinkComparison(linkId: string): Promise<LinkComparisonProjection>;
+	listWorkComparisonDocuments(workId: string): Promise<WorkComparisonDocuments>;
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;
 	suggestItems(prefix: string, limit?: number): Promise<Suggestion[]>;
 	searchItems(request: SearchRequest | string): Promise<SearchResult[]>;

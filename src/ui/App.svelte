@@ -2,6 +2,7 @@
 	import { onMount, tick } from "svelte";
 	import GlobalLineage from "./GlobalLineage.svelte";
 	import RevisionComparison from "./RevisionComparison.svelte";
+	import ComparisonPane from "./ComparisonPane.svelte";
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
 	import AdvancedLinkEditor from "./AdvancedLinkEditor.svelte";
@@ -81,6 +82,12 @@
 		InternalReferenceCompletion,
 		InternalReferenceResolution,
 	} from "../services/internal_reference_service";
+	import {
+		comparisonDocumentKey,
+		isComparableLinkType,
+		type LinkComparisonProjection,
+		type WorkComparisonDocuments,
+	} from "../services/comparison_service";
 
 	const api = new Proxy({}, {
 		get: (_target, property) => async (...args: unknown[]) => {
@@ -173,6 +180,11 @@
 	let workLineageLoading = $state(false);
 	let workLineageLoadRequest = 0;
 	let comparisonPreferredRevisionId = $state<string | undefined>();
+	let linkComparison = $state<LinkComparisonProjection | null>(null);
+	let workComparison = $state<
+		(WorkComparisonDocuments & { preferredLeftKey?: string; preferredRightKey?: string }) | null
+	>(null);
+	let comparisonRequest = 0;
 	let pendingConfirmation = $state<PendingConfirmation | null>(null);
 	let confirmationSubmitting = $state(false);
 	let confirmationDialog: HTMLDialogElement;
@@ -664,8 +676,7 @@
 				}
 				await openNavigationTarget(resolution.navigationTarget);
 				await loadRevisions(resolution.workId!);
-				comparisonPreferredRevisionId = resolution.revision.id;
-				viewMode = "comparison";
+				openRevisionComparison(resolution.revision.id);
 				return;
 			}
 			await openNavigationTarget(resolution.navigationTarget);
@@ -910,8 +921,68 @@
 	}
 
 	function openRevisionComparison(revisionId: string): void {
+		comparisonRequest++;
+		linkComparison = null;
+		workComparison = null;
 		comparisonPreferredRevisionId = revisionId;
 		viewMode = "comparison";
+	}
+
+	function openSelectedRevisionComparison(): void {
+		openRevisionComparison(
+			selectedItem?.revisionSelector.mode === "pinned"
+				? selectedItem.revisionSelector.revisionId
+				: "",
+		);
+	}
+
+	async function openWorkComparison(
+		scope: "branch" | "revision",
+		id: string,
+	): Promise<void> {
+		if (!selectedItem) return;
+		const requestedWorkId = selectedItem.workId;
+		const request = ++comparisonRequest;
+		linkComparison = null;
+		workComparison = null;
+		try {
+			const result = await api.listWorkComparisonDocuments(requestedWorkId);
+			if (request !== comparisonRequest || selectedItem?.workId !== requestedWorkId) return;
+			const selected = result.documents.find((document) =>
+				document.scope === scope &&
+				(scope === "branch" ? document.branchId === id : document.revisionId === id)
+			);
+			if (!selected) throw new Error(`${vocabulary.comparisonPane}対象が見つかりません。`);
+			const key = comparisonDocumentKey(selected);
+			linkComparison = null;
+			workComparison = {
+				...result,
+				...(scope === "revision" ? { preferredRightKey: key } : { preferredLeftKey: key }),
+			};
+			viewMode = "comparison";
+		} catch (cause) {
+			if (request !== comparisonRequest) return;
+			linkComparison = null;
+			workComparison = null;
+			error = errorMessage(cause);
+		}
+	}
+
+	async function openLinkComparison(linkId: string): Promise<void> {
+		const request = ++comparisonRequest;
+		linkComparison = null;
+		workComparison = null;
+		try {
+			const result = await api.resolveLinkComparison(linkId);
+			if (request !== comparisonRequest) return;
+			linkComparison = result;
+			viewMode = "comparison";
+		} catch (cause) {
+			if (request !== comparisonRequest) return;
+			linkComparison = null;
+			workComparison = null;
+			error = errorMessage(cause);
+		}
 	}
 
 	async function retryWorkingCopySave(): Promise<void> {
@@ -1468,7 +1539,9 @@
 			<button class:active={viewMode === "workLineage"} aria-pressed={viewMode === "workLineage"}
 				onclick={() => (viewMode = "workLineage")} disabled={!selectedItem}>{vocabulary.workLineage}</button>
 			<button class:active={viewMode === "comparison"} aria-pressed={viewMode === "comparison"}
-				onclick={() => (viewMode = "comparison")} disabled={!selectedItem}>版比較</button>
+				onclick={openSelectedRevisionComparison} disabled={!selectedItem}>
+				{vocabulary.revision}{vocabulary.comparisonPane}
+			</button>
 			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
 				onclick={openTrash}>ゴミ箱</button>
 		</nav>
@@ -1782,7 +1855,32 @@
 				</div>
 			</section>
 		{:else if viewMode === "comparison"}
-			{#if selectedItem}
+			{#if linkComparison}
+				{#key linkComparison.linkId}
+					<ComparisonPane
+						documents={[linkComparison.left, linkComparison.right]}
+						context={{
+							kind: "semantic-link",
+							type: linkComparison.type,
+							direction: linkComparison.direction,
+							createdAt: linkComparison.createdAt,
+							reason: linkComparison.reason,
+						}}
+						preferredLeftKey={comparisonDocumentKey(linkComparison.left)}
+						preferredRightKey={comparisonDocumentKey(linkComparison.right)}
+						locked
+					/>
+				{/key}
+			{:else if workComparison}
+				{#key workComparison.workId}
+					<ComparisonPane
+						documents={workComparison.documents}
+						context={{ kind: "branch" }}
+						preferredLeftKey={workComparison.preferredLeftKey}
+						preferredRightKey={workComparison.preferredRightKey}
+					/>
+				{/key}
+			{:else if selectedItem}
 				{#if revisionsLoading}
 					<section class="revision-comparison"><p class="comparison-empty">版を読み込んでいます…</p></section>
 				{:else}
@@ -1804,7 +1902,7 @@
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.workLineage}を読み込んでいます…</p></section>
 			{:else if workLineage}
 				{#key workLineage.work.id}
-					<WorkLineage projection={workLineage} onCompare={openRevisionComparison} />
+					<WorkLineage projection={workLineage} onCompare={openWorkComparison} />
 					{#if selectedItem && selectedBranchId}
 						<RecoverySnapshots
 							snapshots={recoverySnapshots}
@@ -1887,7 +1985,14 @@
 					/>
 					<div class="links">
 						{#each selectedLinks as link}
-							<div><span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span><span>{link.fromId === selectedItem.workId ? "→" : "←"} {otherName(link)}</span><button onclick={() => removeLink(link)}>×</button></div>
+							<div>
+								<span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span>
+								<span>{link.fromId === selectedItem.workId ? "→" : "←"} {otherName(link)}</span>
+								{#if isComparableLinkType(link.type)}
+									<button onclick={() => openLinkComparison(link.id)}>{vocabulary.comparisonPane}</button>
+								{/if}
+								<button onclick={() => removeLink(link)}>×</button>
+							</div>
 						{:else}<p class="empty">任意の{vocabulary.semanticLink}はありません</p>{/each}
 					</div>
 				{:else if asideMode === "discover"}
