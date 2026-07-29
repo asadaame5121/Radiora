@@ -41,6 +41,11 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"comparisonRemoved",
 		"comparisonUnchanged",
 		"unknownTime",
+		"markdownEditor",
+		"editorMode",
+		"editorNormal",
+		"editorPlain",
+		"editorPreview",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -83,5 +88,10 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		comparisonRemoved: "削除",
 		comparisonUnchanged: "変更なし",
 		unknownTime: "日時不明",
+		markdownEditor: "Markdown編集",
+		editorMode: "表示",
+		editorNormal: "通常",
+		editorPlain: "Markdown",
+		editorPreview: "プレビュー",
 	});
 });

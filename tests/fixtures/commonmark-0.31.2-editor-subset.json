@@ -1,0 +1,40 @@
+{
+	"specVersion": "0.31.2",
+	"examples": [
+		{
+			"name": "ATX heading",
+			"markdown": "# foo",
+			"commonmarkHtml": "<h1>foo</h1>\n",
+			"overtypeHtml": "<div><h1><span class=\"syntax-marker\"># </span>foo</h1></div>",
+			"difference": "syntax markers and alignment wrapper are intentionally retained"
+		},
+		{
+			"name": "strong emphasis",
+			"markdown": "**bold**",
+			"commonmarkHtml": "<p><strong>bold</strong></p>\n",
+			"overtypeHtml": "<div><strong><span class=\"syntax-marker\">**</span>bold<span class=\"syntax-marker\">**</span></strong></div>",
+			"difference": "syntax markers and alignment wrapper are intentionally retained"
+		},
+		{
+			"name": "bullet list",
+			"markdown": "- one\n- two",
+			"commonmarkHtml": "<ul>\n<li>one</li>\n<li>two</li>\n</ul>\n",
+			"overtypeHtml": "<ul><li class=\"bullet-list\"><span class=\"syntax-marker\">- </span>one</li><li class=\"bullet-list\"><span class=\"syntax-marker\">- </span>two</li></ul>",
+			"difference": "list markers and alignment classes are intentionally retained"
+		},
+		{
+			"name": "block quote",
+			"markdown": "> quote",
+			"commonmarkHtml": "<blockquote>\n<p>quote</p>\n</blockquote>\n",
+			"overtypeHtml": "<div><span class=\"blockquote\"><span class=\"syntax-marker\">&gt;</span> quote</span></div>",
+			"difference": "edit-layer alignment uses spans instead of CommonMark block structure"
+		},
+		{
+			"name": "indented code block",
+			"markdown": "    indented",
+			"commonmarkHtml": "<pre><code>indented\n</code></pre>\n",
+			"overtypeHtml": "<div>&nbsp;&nbsp;&nbsp;&nbsp;indented</div>",
+			"difference": "Overtype 2.4.0 does not parse four-space indented code blocks"
+		}
+	]
+}

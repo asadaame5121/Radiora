@@ -1,24 +1,26 @@
 {
-  "name": "radiora-v2-poc",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "build": "vite build",
-    "dev:web": "vite",
-    "dev:mock": "vite --mode mock",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
-  },
-  "dependencies": {
-    "d3": "^7.9.0",
-    "surrealdb": "^2.0.4",
-    "svelte": "^5.45.6"
-  },
-  "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^6.2.1",
-    "@types/d3": "^7.4.3",
-    "svelte-check": "^4.3.4",
-    "typescript": "^5.9.3",
-    "vite": "^7.2.6"
-  }
+	"name": "radiora-v2-poc",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"build": "vite build",
+		"dev:web": "vite",
+		"dev:mock": "vite --mode mock",
+		"check": "svelte-check --tsconfig ./tsconfig.json"
+	},
+	"dependencies": {
+		"d3": "^7.9.0",
+		"overtype": "2.4.0",
+		"surrealdb": "^2.0.4",
+		"svelte": "^5.45.6"
+	},
+	"devDependencies": {
+		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@types/d3": "^7.4.3",
+		"commonmark": "0.31.2",
+		"svelte-check": "^4.3.4",
+		"typescript": "^5.9.3",
+		"vite": "^7.2.6"
+	}
 }

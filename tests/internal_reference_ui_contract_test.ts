@@ -7,9 +7,9 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 	);
 
 	assertMatch(app, /findInternalReferenceTrigger/);
-	assertMatch(app, /replaceInternalReferenceTrigger/);
+	assertMatch(app, /textarea\.setRangeText\(/);
+	assertMatch(app, /inputType: "insertReplacementText"/);
 	assertMatch(app, /listInternalReferenceCompletions/);
-	assertMatch(app, /setSelectionRange\(replacement\.caretOffset/);
 	assertMatch(app, /resolveInternalReferences/);
 	assertMatch(app, /resolution\.status !== "resolved"/);
 	assertMatch(app, /openRevisionComparison\(resolution\.revision\.id\)/);
