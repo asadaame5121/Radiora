@@ -491,6 +491,11 @@
 		browsing = setBrowsingHoist(browsing, selectedId);
 	}
 
+	function hoistOccurrence(id: string): void {
+		selectOccurrence(id);
+		void executeCommand("hoist");
+	}
+
 	function clearHoist(): void {
 		browsing = setBrowsingHoist(browsing, null);
 	}
@@ -1461,7 +1466,6 @@
 	}
 
 	function captureQuickText(): void { void executeCommand("quickCapture"); }
-	function requestHoist(): void { void executeCommand("hoist"); }
 	function requestClearHoist(): void { void executeCommand("clearHoist"); }
 	function exportMarkdown(): void { void executeCommand("exportMarkdown"); }
 	function addBookmark(): void { void executeCommand("addBookmark"); }
@@ -1816,7 +1820,6 @@
 							disabled={!canMoveBrowsingHistory(browsing, 1)}
 							onclick={() => goBrowsingHistory(1)}
 						>→</button>
-						<button onclick={requestHoist} disabled={!commands.hoist.enabled} title={commands.hoist.reason}>{vocabulary.hoist}</button>
 						{#if browsingLocation.hoistOccurrenceId}
 							<button onclick={requestClearHoist} disabled={!commands.clearHoist.enabled} title={commands.clearHoist.reason}>{vocabulary.hoist}を解除</button>
 						{/if}
@@ -1859,7 +1862,8 @@
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
 								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
 								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
-								<button class="bullet" aria-label={`${vocabulary.work}を選択`} onclick={() => selectOccurrence(row.item.id)}>•</button>
+								<button class="bullet" aria-label={`${vocabulary.work}を選択`} title={`ダブルクリックでこの${vocabulary.work}へZoom`}
+									onclick={() => selectOccurrence(row.item.id)} ondblclick={() => hoistOccurrence(row.item.id)}>•</button>
 								<div class="internal-reference-editor">
 									<MarkdownEditor
 										value={row.item.text}
@@ -2121,7 +2125,7 @@
 					<button class:active={asideMode === "history"} onclick={() => (asideMode = "history")}>履歴</button>
 				</nav>
 				<p class="eyebrow">SELECTED THOUGHT</p>
-				<h2>{titleFor(selectedItem)}</h2>
+				<div class="inspector-heading"><h2>{titleFor(selectedItem)}</h2><button class="clear-selection" onclick={() => selectOccurrence(null)}>選択解除</button></div>
 				{#if asideMode === "overview"}
 					<label>
 						{vocabulary.occurrence}固有の見出し
@@ -2150,16 +2154,15 @@
 						<button onclick={() => remove(selectedItem.id)}>この{vocabulary.occurrence}を外す</button>
 						<button onclick={trashSelectedWork}>{vocabulary.work}をゴミ箱へ</button>
 					</div>
-				{/if}
-				{#if asideMode === "overview" && bodyFor(selectedItem)}
-					<p class="thought-body">{bodyFor(selectedItem)}</p>
-				{/if}
-				{#if asideMode === "overview" && viewMode === "outline"}
-					<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
-				{:else if asideMode === "overview"}
-					<div class="thought-meta"><span>作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
-				{/if}
-				{#if asideMode === "relation"}
+					{#if bodyFor(selectedItem)}
+						<p class="thought-body">{bodyFor(selectedItem)}</p>
+					{/if}
+					{#if viewMode === "outline"}
+						<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
+					{:else}
+						<div class="thought-meta"><span>作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
+					{/if}
+				{:else if asideMode === "relation"}
 					<AdvancedLinkEditor
 						selectedWorkId={selectedItem.workId}
 						selectedDisplayName={titleFor(selectedItem)}
