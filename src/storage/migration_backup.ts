@@ -7,7 +7,7 @@ export async function prepareStorageMigrationBackup(
 	const recordedVersion = await readRecordedVersion(versionMarkerPath);
 	if (recordedVersion >= targetVersion) return null;
 	if (!(await exists(databasePath))) return null;
-	const backupPath = `${backupRoot}\\storage-v${recordedVersion}`;
+	const backupPath = `${backupRoot}/storage-v${recordedVersion}`;
 	assertSeparatePaths(databasePath, backupRoot);
 	if (await exists(backupPath)) return backupPath;
 
@@ -112,7 +112,7 @@ async function copyPath(source: string, destination: string): Promise<void> {
 
 	await Deno.mkdir(destination, { recursive: true });
 	for await (const entry of Deno.readDir(source)) {
-		await copyPath(`${source}\\${entry.name}`, `${destination}\\${entry.name}`);
+		await copyPath(`${source}/${entry.name}`, `${destination}/${entry.name}`);
 	}
 }
 
