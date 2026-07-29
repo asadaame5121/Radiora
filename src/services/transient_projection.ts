@@ -27,17 +27,21 @@ export class TransientProjectionService {
 		rows: string[][],
 		itemsById: Map<string, OutlineItem>,
 	): TransientProjectionNode[] {
+		const seen = new Set<string>();
 		const result: TransientProjectionNode[] = [];
 		for (const row of rows) {
-			const id = row[0];
-			const item = id ? itemsById.get(id) : undefined;
-			if (!item) continue;
-			result.push({
-				workId: item.workId,
-				occurrenceId: item.id,
-				text: item.text,
-				sourceType: "query" as const,
-			});
+			for (const cell of row) {
+				if (seen.has(cell)) continue;
+				const item = itemsById.get(cell);
+				if (!item) continue;
+				seen.add(cell);
+				result.push({
+					workId: item.workId,
+					occurrenceId: item.id,
+					text: item.text,
+					sourceType: "query" as const,
+				});
+			}
 		}
 		return result;
 	}

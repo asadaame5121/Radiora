@@ -60,7 +60,12 @@ export class DateProjectionService {
 
 	async projectNodes(range: DateRange): Promise<TransientProjectionNode[]> {
 		const { start, end } = validateDateRange(range);
-		const [works, items] = await Promise.all([this.store.listWorks(), this.store.listItems()]);
+		const [works, items, workingCopies] = await Promise.all([
+			this.store.listWorks(),
+			this.store.listItems(),
+			this.store.listWorkingCopies(),
+		]);
+		const workingCopyByWorkId = new Map(workingCopies.map((wc) => [wc.workId, wc.text]));
 		const itemsByWork = new Map<string, OutlineItem[]>();
 		for (const item of items) {
 			const placements = itemsByWork.get(item.workId) ?? [];
@@ -90,7 +95,7 @@ export class DateProjectionService {
 			if (!entry.placements.length) {
 				nodes.push({
 					workId: work.id,
-					text: work.id,
+					text: workingCopyByWorkId.get(work.id) ?? "",
 					sourceType: "today",
 				});
 			}
