@@ -4,6 +4,7 @@ import type {
 	SearchReason,
 	SearchResult,
 	TransientProjectionNode,
+	TransientProjectionSource,
 } from "../domain/models.ts";
 
 interface SparseEntry {
@@ -17,6 +18,7 @@ export function buildSparseOutline(
 	results: SearchResult[],
 	items: OutlineItem[],
 	links: OutlineLink[],
+	sourceType: TransientProjectionSource = "search",
 ): TransientProjectionNode[] {
 	const itemsById = new Map(items.map((i) => [i.id, i]));
 	const itemsByWorkId = new Map<string, OutlineItem>();
@@ -106,7 +108,7 @@ export function buildSparseOutline(
 			workId: entry.item.workId,
 			occurrenceId: entry.item.id,
 			text: entry.item.text,
-			sourceType: "search" as const,
+			sourceType,
 			reasons: entry.reasons,
 			score: entry.score,
 		};

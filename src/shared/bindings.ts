@@ -25,6 +25,7 @@ import type {
 	TagAlias,
 	TagSearchRequest,
 	TagSummary,
+	TransientProjectionNode,
 	TrashEntry,
 	UnplacedWork,
 } from "../domain/models.ts";
@@ -141,6 +142,10 @@ export interface RadioraBindings {
 	listSavedRuleQueries(): Promise<SavedRuleQuery[]>;
 	saveRuleQuery(input: { id?: string; name: string; source: string }): Promise<SavedRuleQuery>;
 	deleteRuleQuery(id: string): Promise<void>;
+	buildQueryProjectionNodes(
+		queryId: string,
+		limit?: number,
+	): Promise<{ nodes: TransientProjectionNode[]; result: RuleQueryResult }>;
 }
 
 export type StartupPhase = "starting" | "ready" | "failed";

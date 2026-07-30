@@ -7,6 +7,7 @@
 	import WorkLineage from "./WorkLineage.svelte";
 	import AdvancedLinkEditor from "./AdvancedLinkEditor.svelte";
 	import MarkdownEditor from "./MarkdownEditor.svelte";
+	import SparseOutlineView from "./SparseOutlineView.svelte";
 	import type {
 		Bookmark,
 		CreateLinkInput,
@@ -28,6 +29,7 @@
 		RecoverySnapshot,
 		Suggestion,
 		TrashEntry,
+		TransientProjectionNode,
 		UnplacedWork,
 	} from "../domain/models";
 	import { LINK_TYPES } from "../domain/models";
@@ -173,6 +175,9 @@
 	let ruleName = $state("");
 	let savedRuleQueries = $state<SavedRuleQuery[]>([]);
 	let ruleError = $state("");
+	let sparseOutlineNodes = $state<TransientProjectionNode[]>([]);
+	let sparseOutlineQueryName = $state("");
+	let showSparseOutline = $state(false);
 	let draggedId = $state<string | null>(null);
 	let trashEntries = $state<TrashEntry[]>([]);
 	let revisions = $state<Revision[]>([]);
@@ -1238,10 +1243,40 @@
 	async function performExecuteRule(): Promise<void> {
 		ruleError = "";
 		ruleResult = null;
+		sparseOutlineNodes = [];
 		try {
 			ruleResult = await api.runRuleQuery(ruleSource, 500);
 		} catch (cause) {
 			ruleError = errorMessage(cause);
+		}
+	}
+
+	async function loadSparseOutlineForQuery(query: SavedRuleQuery): Promise<void> {
+		ruleError = "";
+		sparseOutlineNodes = [];
+		sparseOutlineQueryName = query.name;
+		ruleSource = query.source;
+		ruleName = query.name;
+		showSparseOutline = true;
+		try {
+			const projection = await api.buildQueryProjectionNodes(query.id, 500);
+			sparseOutlineNodes = projection.nodes;
+			ruleResult = projection.result;
+		} catch (cause) {
+			ruleError = errorMessage(cause);
+		}
+	}
+
+	async function handleSparseOutlineSelect(node: TransientProjectionNode): Promise<void> {
+		const ancestorIds = node.breadcrumb ?? [];
+		transientExpandedIds = ancestorIds;
+		const occurrenceId = node.occurrenceId;
+		if (occurrenceId && itemById.has(occurrenceId)) {
+			selectOccurrence(occurrenceId);
+			await load(occurrenceId);
+			viewMode = "outline";
+		} else {
+			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
 		}
 	}
 
@@ -2278,11 +2313,34 @@
 						{#if ruleError}<p class="query-error">{ruleError}</p>{/if}
 						{#if ruleResult}
 							<p class="query-meta">{ruleResult.rows.length}件・{ruleResult.elapsedMs.toFixed(1)}ms</p>
-							<div class="query-table"><table><thead><tr>{#each ruleResult.columns as column}<th>{column}</th>{/each}</tr></thead>
-								<tbody>{#each ruleResult.rows as row}<tr>{#each row as value}<td>{titleForId(value)}</td>{/each}</tr>{/each}</tbody>
-							</table></div>
+							{#if sparseOutlineNodes.length}
+								<div class="sparse-outline-section">
+									<div class="sparse-outline-header">
+										<h3>{vocabulary.sparseOutline}<small>{sparseOutlineQueryName}</small></h3>
+										<button class="sparse-toggle" onclick={() => (showSparseOutline = !showSparseOutline)}>
+											{showSparseOutline ? "テーブル表示" : "投影表示"}
+										</button>
+									</div>
+									{#if showSparseOutline}
+										<SparseOutlineView nodes={sparseOutlineNodes} onSelectNode={handleSparseOutlineSelect} />
+									{:else}
+										<div class="query-table"><table><thead><tr>{#each ruleResult.columns as column}<th>{column}</th>{/each}</tr></thead>
+											<tbody>{#each ruleResult.rows as row}<tr>{#each row as value}<td>{titleForId(value)}</td>{/each}</tr>{/each}</tbody>
+										</table></div>
+									{/if}
+								</div>
+							{:else}
+								<div class="query-table"><table><thead><tr>{#each ruleResult.columns as column}<th>{column}</th>{/each}</tr></thead>
+									<tbody>{#each ruleResult.rows as row}<tr>{#each row as value}<td>{titleForId(value)}</td>{/each}</tr>{/each}</tbody>
+								</table></div>
+							{/if}
 						{/if}
-						<div class="saved-queries">{#each savedRuleQueries as saved}<button onclick={() => { ruleSource = saved.source; ruleName = saved.name; }}>{saved.name}</button><button class="remove-saved" onclick={() => removeRule(saved.id)}>×</button>{/each}</div>
+						<div class="saved-queries">
+							{#each savedRuleQueries as saved}
+								<button onclick={() => void loadSparseOutlineForQuery(saved)}>{saved.name}</button>
+								<button class="remove-saved" onclick={() => removeRule(saved.id)}>×</button>
+							{/each}
+						</div>
 						<h3>検索別名</h3>
 						<input placeholder="基準語" bind:value={aliasCanonical} />
 						<textarea rows="2" placeholder="別名（カンマ区切り）" bind:value={aliasVariants}></textarea>
