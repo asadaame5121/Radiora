@@ -264,3 +264,53 @@ version `1`から`2`へのmigrationは、Phase 1で先行導入した`revision`�
 JSON version `1`の日本語、改行、Markdown、`radiora://`を含む既存本文は変換せず、
 version `2` envelopeへ保持する。自動のRevision生成、Snapshot保持ポリシー、Branch操作の
 サービス手順はこのschema migrationへ含めない。
+
+## 12. Stub state 移行(version 3 から 4)
+
+2026-07-30に`0004_stub_state`を導入し、現在のstorage schemaとbackup schemaは
+version `4`である。Stubは、本文をこれから書くために利用者が明示的に作成した未配置Workを表す
+任意のマーカーであり、Workへ次のoptional値を追加する。
+
+```ts
+interface WorkStub {
+	createdAt: string; // ISO 8601
+	createdVia: "stub-list" | "advanced-link-editor";
+	context?: string; // Advanced Link Editor では未解決名
+}
+```
+
+versionを上げる理由: version `3`のままStubを書き込むと、旧アプリはそのJSONをversion `3`と
+して受理し、再保存時にStubを黙って落とす。黙示のデータ損失を防ぐため、Stubを含む形式は
+version `4`として旧アプリに明示拒否させる。
+
+SurrealDBでは`work` tableへ`stub` objectと`stub.created_at`、`stub.created_via`、
+`stub.context`の各`option<string>` fieldをExpandする。既存recordは`stub = NONE`のままで
+変換しない。変更前後のデータ例:
+
+```json
+// version 3
+{ "id": "…", "created_at": "…", "updated_at": "…", "deleted_at": null }
+// version 4(Stubあり)
+{
+	"id": "…", "created_at": "…", "updated_at": "…", "deleted_at": null,
+	"stub": {
+		"created_at": "2026-07-30T00:00:00.000Z",
+		"created_via": "advanced-link-editor",
+		"context": "未解決の名前"
+	}
+}
+```
+
+JSON backupは`StoredGraphV4`が`StoredGraphV3`をそのまま継承する。配列の追加や改名はなく、
+`Work`へoptionalな`stub`が乗るだけである。それでもbackup schemaを`4`へ上げるのは、上記の
+黙示損失を防ぐためであり、storage schemaと同じ番号で併走させて運用上の対応関係を保つ。
+version `3`のJSONを上書きする前に`.v3.bak`へ一度だけ保護する。
+
+最低限、次を検証する。
+
+- 有効なStubを持つWorkは空本文のWorking Copyで作成できる
+- Stubを持たないWorkの空本文作成は従来どおり拒否される
+- Stub解除はmain BranchのWorking Copy本文が非空の場合に限り、`updatedAt`を更新する
+- Stubの`createdAt`、`createdVia`、`context`がJSON round-tripで壊れない
+- 未解決入力からStub・Work・Occurrence・リンクを暗黙作成しない
+- version `3` JSONを上書きする前に`.v3.bak`へ一度だけ保護する

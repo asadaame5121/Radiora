@@ -49,6 +49,9 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"sparseOutline",
 		"queryResult",
 		"noQueryResult",
+		"stub",
+		"stubList",
+		"stubContext",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -99,5 +102,8 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		sparseOutline: "投影表示",
 		queryResult: "結果",
 		noQueryResult: "一致する項目はありません",
+		stub: "Stub",
+		stubList: "Stub一覧",
+		stubContext: "作成文脈",
 	});
 });

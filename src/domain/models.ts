@@ -13,11 +13,24 @@ export function isSymmetricLinkType(type: LinkType): boolean {
 export type LinkStatus = "provisional" | "asserted" | "retracted";
 export type LinkOrigin = "human" | "suggestion" | "import";
 
+export type StubCreationKind = "stub-list" | "advanced-link-editor";
+
+/**
+ * Explicit placeholder state recorded on a Work created before its content exists.
+ * Distinct from `OutlineItem.referenceStub`, which marks a recursive display item.
+ */
+export interface WorkStub {
+	createdAt: string; // ISO 8601
+	createdVia: StubCreationKind;
+	context?: string; // Creation context; the unresolved name for the Advanced Link Editor
+}
+
 export interface Work {
 	id: string;
 	createdAt: string;
 	updatedAt: string;
 	deletedAt?: string;
+	stub?: WorkStub;
 }
 
 export interface Branch {

@@ -1,5 +1,12 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
-import type { Branch, Occurrence, Revision, Work, WorkingCopy } from "../../src/domain/models.ts";
+import type {
+	Branch,
+	Occurrence,
+	Revision,
+	StubCreationKind,
+	Work,
+	WorkingCopy,
+} from "../../src/domain/models.ts";
 import type { GraphStore } from "../../src/storage/graph_store.ts";
 
 const CREATED_AT = "2026-07-28T00:00:00.000Z";
@@ -333,6 +340,52 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	assertEquals(link?.to.workId, target.work.id);
 	assertEquals(link?.reason, "contract");
 
+	// A valid Stub permits an empty Working Copy; a plain Work still requires text.
+	const stubbed = blankUnplaced({
+		createdAt: CREATED_AT,
+		createdVia: "stub-list",
+		context: "contract stub",
+	});
+	await store.createUnplacedWork(stubbed.work, stubbed.branch, stubbed.copy);
+	assertEquals(
+		(await store.listWorks()).find((work) => work.id === stubbed.work.id)?.stub,
+		{ createdAt: CREATED_AT, createdVia: "stub-list", context: "contract stub" },
+	);
+
+	const plainBlank = blankUnplaced();
+	await assertRejects(
+		() => store.createUnplacedWork(plainBlank.work, plainBlank.branch, plainBlank.copy),
+		Error,
+		"must not be blank",
+	);
+	const unknownKind = blankUnplaced({
+		createdAt: CREATED_AT,
+		createdVia: "import" as StubCreationKind,
+	});
+	await assertRejects(
+		() => store.createUnplacedWork(unknownKind.work, unknownKind.branch, unknownKind.copy),
+		Error,
+		"must not be blank",
+	);
+	const invalidInstant = blankUnplaced({ createdAt: "not-a-date", createdVia: "stub-list" });
+	await assertRejects(
+		() => store.createUnplacedWork(invalidInstant.work, invalidInstant.branch, invalidInstant.copy),
+		Error,
+		"must not be blank",
+	);
+
+	// Resolving a Stub removes the marker, records the instant, and is not repeatable.
+	await store.resolveWorkStub(stubbed.work.id, UPDATED_AT);
+	const resolvedStub = (await store.listWorks()).find((work) => work.id === stubbed.work.id);
+	assertEquals(resolvedStub?.stub, undefined);
+	assertEquals(Object.hasOwn(resolvedStub ?? {}, "stub"), false);
+	assertEquals(resolvedStub?.updatedAt, UPDATED_AT);
+	await assertRejects(
+		() => store.resolveWorkStub(stubbed.work.id, UPDATED_AT),
+		Error,
+		"not a Stub",
+	);
+
 	const aliasId = crypto.randomUUID();
 	await store.upsertAlias({
 		id: aliasId,
@@ -503,6 +556,32 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	assert((await store.listBookmarks()).some((bookmark) => bookmark.id === dependentBookmarkId));
 	await store.trashWork(dependent.work.id, DELETED_AT);
 	await store.purgeWork(dependent.work.id);
+}
+
+function blankUnplaced(stub?: Work["stub"]): { work: Work; branch: Branch; copy: WorkingCopy } {
+	const workId = crypto.randomUUID();
+	const branchId = crypto.randomUUID();
+	return {
+		work: {
+			id: workId,
+			createdAt: CREATED_AT,
+			updatedAt: CREATED_AT,
+			...(stub ? { stub } : {}),
+		},
+		branch: {
+			id: branchId,
+			workId,
+			name: "main",
+			headRevisionId: null,
+			createdAt: CREATED_AT,
+		},
+		copy: {
+			branchId,
+			workId,
+			text: "",
+			updatedAt: CREATED_AT,
+		},
+	};
 }
 
 function bundle(text: string): {

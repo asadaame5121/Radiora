@@ -23,6 +23,7 @@ import type {
 	SearchAlias,
 	SearchRequest,
 	SearchResult,
+	StubCreationKind,
 	Suggestion,
 	TagAlias,
 	TagSearchRequest,
@@ -66,6 +67,7 @@ import {
 	type LinkComparisonProjection,
 	type WorkComparisonDocuments,
 } from "./comparison_service.ts";
+import { type CreatedStub, type StubListEntry, StubService } from "./stub_service.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -482,6 +484,18 @@ export class OutlineService {
 		id: string,
 	): Promise<InternalReferenceBacklink[]> {
 		return new InternalReferenceService(this.store).listBacklinks(scope, id);
+	}
+
+	listStubs(): Promise<StubListEntry[]> {
+		return new StubService(this.store).listStubs();
+	}
+
+	createStub(createdVia: StubCreationKind, context?: string): Promise<CreatedStub> {
+		return new StubService(this.store).createStub(createdVia, context);
+	}
+
+	resolveStub(workId: string): Promise<void> {
+		return new StubService(this.store).resolveStub(workId);
 	}
 
 	resolveLinkComparison(linkId: string): Promise<LinkComparisonProjection> {

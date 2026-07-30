@@ -15,9 +15,11 @@ import type {
 	SavedRuleQuery,
 	SearchAlias,
 	SnapshotProtection,
+	StubCreationKind,
 	SystemRelation,
 	Work,
 	WorkingCopy,
+	WorkStub,
 } from "../domain/models.ts";
 import {
 	type GraphStore,
@@ -34,6 +36,7 @@ import {
 import { workOccurrenceMigration } from "./migrations/0001_work_occurrence.ts";
 import { revisionSnapshotMigration } from "./migrations/0002_revision_snapshot.ts";
 import { bookmarkResumeMigration } from "./migrations/0003_bookmark_resume.ts";
+import { stubStateMigration } from "./migrations/0004_stub_state.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
@@ -49,6 +52,7 @@ const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
 	workOccurrenceMigration,
 	revisionSnapshotMigration,
 	bookmarkResumeMigration,
+	stubStateMigration,
 ];
 
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
@@ -90,10 +94,18 @@ export function recoveryPromotionTransactionQuery(hasMessage: boolean): string {
 			COMMIT TRANSACTION;`;
 }
 
-export function quickCaptureTransactionQuery(): string {
+export function quickCaptureTransactionQuery(hasStub = false, hasStubContext = false): string {
 	return `BEGIN TRANSACTION;
 			CREATE $work CONTENT {
-				created_at: $createdAt, updated_at: $updatedAt, deleted_at: NONE
+				created_at: $createdAt, updated_at: $updatedAt, deleted_at: NONE${
+		hasStub
+			? `,
+				stub: {
+					created_at: $stubCreatedAt, created_via: $stubCreatedVia,
+					context: ${hasStubContext ? "$stubContext" : "NONE"}
+				}`
+			: ""
+	}
 			};
 			CREATE $branch CONTENT {
 				work: $work, name: "main", head_revision: NONE,
@@ -133,6 +145,29 @@ export function snapshotProtectionFromRow(row: Row): SnapshotProtection | undefi
 		reason: String(row.protection_reason) as SnapshotProtection["reason"],
 		protectedAt: String(row.protected_at ?? ""),
 		...(row.protection_expires_at == null ? {} : { expiresAt: String(row.protection_expires_at) }),
+	};
+}
+
+export function workStubFromRow(row: Row): WorkStub | undefined {
+	const stub = row.stub;
+	if (stub == null || typeof stub !== "object" || Array.isArray(stub)) return undefined;
+	const record = stub as Row;
+	if (record.created_at == null || record.created_via == null) return undefined;
+	return {
+		createdAt: String(record.created_at),
+		createdVia: String(record.created_via) as StubCreationKind,
+		...(record.context == null ? {} : { context: String(record.context) }),
+	};
+}
+
+export function workFromRow(row: Row): Work {
+	const stub = workStubFromRow(row);
+	return {
+		id: domainId(row.id, "id"),
+		createdAt: String(row.created_at ?? ""),
+		updatedAt: String(row.updated_at ?? ""),
+		deletedAt: row.deleted_at == null ? undefined : String(row.deleted_at),
+		...(stub ? { stub } : {}),
 	};
 }
 
@@ -333,15 +368,10 @@ export class SurrealGraphStore implements GraphStore {
 
 	async listWorks(includeDeleted = false): Promise<Work[]> {
 		const [rows] = await this.#db.query<[Row[]]>(
-			`SELECT record::id(id) AS id, created_at, updated_at, deleted_at
+			`SELECT record::id(id) AS id, created_at, updated_at, deleted_at, stub
 				FROM work ${includeDeleted ? "" : "WHERE deleted_at IS NONE"};`,
 		);
-		return rows.map((row) => ({
-			id: domainId(row.id, "id"),
-			createdAt: String(row.created_at ?? ""),
-			updatedAt: String(row.updated_at ?? ""),
-			deletedAt: row.deleted_at == null ? undefined : String(row.deleted_at),
-		}));
+		return rows.map(workFromRow);
 	}
 
 	async listOccurrences(includeDeletedWorks = false): Promise<Occurrence[]> {
@@ -515,14 +545,34 @@ export class SurrealGraphStore implements GraphStore {
 			this.listWorkingCopies(),
 		]);
 		validateUnplacedWorkCreation(work, branch, workingCopy, works, branches, copies);
-		await this.#db.query(quickCaptureTransactionQuery(), {
-			work: new RecordId("work", work.id),
-			branch: new RecordId("branch", branch.id),
-			copy: new RecordId("working_copy", branch.id),
-			text: workingCopy.text,
-			createdAt: work.createdAt,
-			updatedAt: work.updatedAt,
-		});
+		await this.#db.query(
+			quickCaptureTransactionQuery(Boolean(work.stub), Boolean(work.stub?.context)),
+			{
+				work: new RecordId("work", work.id),
+				branch: new RecordId("branch", branch.id),
+				copy: new RecordId("working_copy", branch.id),
+				text: workingCopy.text,
+				createdAt: work.createdAt,
+				updatedAt: work.updatedAt,
+				...(work.stub
+					? {
+						stubCreatedAt: work.stub.createdAt,
+						stubCreatedVia: work.stub.createdVia,
+						...(work.stub.context ? { stubContext: work.stub.context } : {}),
+					}
+					: {}),
+			},
+		);
+	}
+
+	async resolveWorkStub(workId: string, updatedAt: string): Promise<void> {
+		const work = (await this.listWorks(true)).find((candidate) => candidate.id === workId);
+		if (!work) throw new Error(`Work not found: ${workId}`);
+		if (!work.stub) throw new Error(`Work is not a Stub: ${workId}`);
+		await this.#db.query(
+			`UPDATE $work SET stub = NONE, updated_at = $updatedAt;`,
+			{ work: new RecordId("work", workId), updatedAt },
+		);
 	}
 
 	async createOccurrence(occurrence: Occurrence): Promise<void> {

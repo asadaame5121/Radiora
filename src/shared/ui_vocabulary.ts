@@ -44,7 +44,10 @@ export type UiEntityCode =
 	| "editorPreview"
 	| "sparseOutline"
 	| "queryResult"
-	| "noQueryResult";
+	| "noQueryResult"
+	| "stub"
+	| "stubList"
+	| "stubContext";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -95,4 +98,7 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	sparseOutline: "投影表示",
 	queryResult: "結果",
 	noQueryResult: "一致する項目はありません",
+	stub: "Stub",
+	stubList: "Stub一覧",
+	stubContext: "作成文脈",
 });
