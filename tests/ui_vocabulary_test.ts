@@ -79,6 +79,10 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"markdownExportRadiora",
 		"markdownExportPortable",
 		"markdownExportObsidian",
+		"opmlExport",
+		"opmlImport",
+		"opmlExportSuccess",
+		"opmlImportSuccess",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -160,5 +164,9 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		markdownExportRadiora: "Radiora（内部参照を保持）",
 		markdownExportPortable: "ポータブル（表示名のみ）",
 		markdownExportObsidian: "Obsidian（Wikiリンク）",
+		opmlExport: "OPMLを書き出す",
+		opmlImport: "OPMLを取り込む",
+		opmlExportSuccess: "OPMLを書き出しました",
+		opmlImportSuccess: "OPMLを取り込みました",
 	});
 });

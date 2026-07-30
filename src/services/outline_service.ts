@@ -68,6 +68,7 @@ import { SemanticLinkOperations } from "./semantic_link_operations.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
 import { DiscoveryOperations } from "./discovery_operations.ts";
 import { ManuscriptProjectionService, type ManuscriptSection } from "./manuscript_projection.ts";
+import { type OpmlImportResult, OpmlService } from "./opml_service.ts";
 
 /** Compatibility façade for the desktop binding contract. */
 export class OutlineService {
@@ -104,6 +105,14 @@ export class OutlineService {
 
 	projectManuscript(rootOccurrenceId: string): Promise<ManuscriptSection[]> {
 		return new ManuscriptProjectionService(this.store).project(rootOccurrenceId);
+	}
+
+	exportOpml(): Promise<string> {
+		return new OpmlService(this.store).export();
+	}
+
+	importOpml(source: string): Promise<OpmlImportResult> {
+		return new OpmlService(this.store).import(source);
 	}
 	quickCapture(text: string): Promise<UnplacedWork> {
 		return new QuickCaptureService(this.store).capture(text);

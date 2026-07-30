@@ -222,6 +222,8 @@
 	let internalReferenceNotice = $state("");
 	let markdownExportNotice = $state("");
 	let markdownExportReferenceMode = $state<MarkdownExportReferenceMode>("radiora");
+	let opmlNotice = $state("");
+	let opmlFileInput: HTMLInputElement;
 	let manuscriptSections = $state<ManuscriptSection[]>([]);
 	let manuscriptLoading = $state(false);
 	let internalReferenceCompletionRequest = 0;
@@ -1686,6 +1688,43 @@
 		}
 	}
 
+	async function performOpmlExport(): Promise<void> {
+		opmlNotice = "";
+		try {
+			await autosave.flush();
+			const source = await api.exportOpml();
+			const blob = new Blob([source], { type: "text/x-opml;charset=utf-8" });
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = `radiora-${localDateValue(new Date())}.opml`;
+			anchor.hidden = true;
+			document.body.append(anchor);
+			anchor.click();
+			anchor.remove();
+			globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
+			opmlNotice = `${vocabulary.opmlExportSuccess}。`;
+		} catch (cause) {
+			error = `${vocabulary.opmlExport}ことができませんでした: ${errorMessage(cause)}`;
+		}
+	}
+
+	async function importOpmlFile(event: Event): Promise<void> {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = "";
+		if (!file) return;
+		opmlNotice = "";
+		try {
+			await autosave.flush();
+			const result = await api.importOpml(await file.text());
+			await load();
+			opmlNotice = `${vocabulary.opmlImportSuccess}: ${result.importedCount}件。`;
+		} catch (cause) {
+			error = `${vocabulary.opmlImport}ことができませんでした: ${errorMessage(cause)}`;
+		}
+	}
+
 	async function requestConfirmation(confirmation: PendingConfirmation): Promise<void> {
 		if (pendingConfirmation) return;
 		pendingConfirmation = confirmation;
@@ -1941,6 +1980,25 @@
 		</form>
 		<div class="top-actions">
 			<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
+			<input
+				class="sr-only"
+				type="file"
+				accept=".opml,.xml,text/x-opml,application/xml,text/xml"
+				aria-label={vocabulary.opmlImport}
+				bind:this={opmlFileInput}
+				onchange={importOpmlFile}
+			/>
+			<button
+				onclick={() => opmlFileInput.click()}
+				disabled={startup.phase !== "ready"}
+			>{vocabulary.opmlImport}</button>
+			<button
+				onclick={performOpmlExport}
+				disabled={startup.phase !== "ready"}
+			>{vocabulary.opmlExport}</button>
+			{#if opmlNotice}
+				<small class="opml-notice" role="status">{opmlNotice}</small>
+			{/if}
 			<label>
 				<span class="sr-only">{vocabulary.markdownExportMode}</span>
 				<select

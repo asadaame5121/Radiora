@@ -26,6 +26,8 @@ import {
 	type MergeWorksInput,
 	validateRevisionCreation,
 	validateUnplacedWorkCreation,
+	validateWorkBundleImport,
+	type WorkBundle,
 } from "./graph_store.ts";
 import {
 	countOccurrences,
@@ -207,6 +209,30 @@ export class MemoryGraphStore implements GraphStore {
 		this.branches.push(structuredClone(branch));
 		this.workingCopies.push(structuredClone(workingCopy));
 		this.occurrences.push(structuredClone(occurrence));
+		return Promise.resolve();
+	}
+
+	importWorkBundles(bundles: readonly WorkBundle[]): Promise<void> {
+		try {
+			validateWorkBundleImport(bundles, {
+				works: this.works,
+				branches: this.branches,
+				workingCopies: this.workingCopies,
+				occurrences: this.occurrences,
+			});
+		} catch (error) {
+			return Promise.reject(error);
+		}
+		this.works = [...this.works, ...bundles.map((bundle) => structuredClone(bundle.work))];
+		this.branches = [...this.branches, ...bundles.map((bundle) => structuredClone(bundle.branch))];
+		this.workingCopies = [
+			...this.workingCopies,
+			...bundles.map((bundle) => structuredClone(bundle.workingCopy)),
+		];
+		this.occurrences = [
+			...this.occurrences,
+			...bundles.map((bundle) => structuredClone(bundle.occurrence)),
+		];
 		return Promise.resolve();
 	}
 

@@ -29,6 +29,13 @@ export interface MergeWorksInput {
 	alias?: SearchAlias;
 }
 
+export interface WorkBundle {
+	work: Work;
+	branch: Branch;
+	workingCopy: WorkingCopy;
+	occurrence: Occurrence;
+}
+
 export interface GraphStore {
 	initialize(): Promise<void>;
 	close(): Promise<void>;
@@ -47,6 +54,8 @@ export interface GraphStore {
 		workingCopy: WorkingCopy,
 		occurrence: Occurrence,
 	): Promise<void>;
+	/** Atomically appends a fully validated collection of outline Work bundles. */
+	importWorkBundles(bundles: readonly WorkBundle[]): Promise<void>;
 	/** Atomically creates a Work and its editable main Branch without a placement. */
 	createUnplacedWork(work: Work, branch: Branch, workingCopy: WorkingCopy): Promise<void>;
 	/** Removes the Stub state from a Work and records the resolution instant. */
@@ -125,6 +134,64 @@ export interface GraphStore {
 	listSavedRuleQueries(): Promise<SavedRuleQuery[]>;
 	upsertSavedRuleQuery(query: SavedRuleQuery): Promise<void>;
 	deleteSavedRuleQuery(id: string): Promise<void>;
+}
+
+export function validateWorkBundleImport(
+	bundles: readonly WorkBundle[],
+	existing: {
+		works: readonly Work[];
+		branches: readonly Branch[];
+		workingCopies: readonly WorkingCopy[];
+		occurrences: readonly Occurrence[];
+	},
+): void {
+	if (bundles.length === 0) throw new Error("Outline import contains no items");
+	const workIds = new Set(existing.works.map((entry) => entry.id));
+	const branchIds = new Set(existing.branches.map((entry) => entry.id));
+	const copyBranchIds = new Set(existing.workingCopies.map((entry) => entry.branchId));
+	const occurrenceIds = new Set(existing.occurrences.map((entry) => entry.id));
+	const importedOccurrenceIds = new Set(bundles.map((bundle) => bundle.occurrence.id));
+
+	for (const { work, branch, workingCopy, occurrence } of bundles) {
+		requireFreshId(work.id, workIds, "Work");
+		requireFreshId(branch.id, branchIds, "Branch");
+		requireFreshId(workingCopy.branchId, copyBranchIds, "Working Copy");
+		requireFreshId(occurrence.id, occurrenceIds, "Occurrence");
+		if (
+			branch.workId !== work.id || branch.name !== "main" ||
+			workingCopy.workId !== work.id || workingCopy.branchId !== branch.id ||
+			occurrence.workId !== work.id ||
+			occurrence.revisionSelector.mode !== "branch" ||
+			occurrence.revisionSelector.branchId !== branch.id
+		) {
+			throw new Error(`Invalid imported Work bundle: ${work.id}`);
+		}
+		const parentId = occurrence.parentOccurrenceId;
+		if (
+			parentId === occurrence.id ||
+			(parentId !== null && !occurrenceIds.has(parentId) && !importedOccurrenceIds.has(parentId))
+		) {
+			throw new Error(`Imported parent Occurrence not found: ${parentId}`);
+		}
+	}
+
+	const parentById = new Map(
+		bundles.map((bundle) => [bundle.occurrence.id, bundle.occurrence.parentOccurrenceId]),
+	);
+	for (const start of parentById.keys()) {
+		const path = new Set<string>();
+		let cursor: string | null | undefined = start;
+		while (cursor && parentById.has(cursor)) {
+			if (path.has(cursor)) throw new Error(`Imported Occurrence cycle: ${cursor}`);
+			path.add(cursor);
+			cursor = parentById.get(cursor);
+		}
+	}
+}
+
+function requireFreshId(id: string, ids: Set<string>, label: string): void {
+	if (!id || ids.has(id)) throw new Error(`${label} ID collision: ${id}`);
+	ids.add(id);
 }
 
 const STUB_CREATION_KINDS: readonly StubCreationKind[] = ["stub-list", "advanced-link-editor"];

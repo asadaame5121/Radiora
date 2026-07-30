@@ -3,6 +3,7 @@ import {
 	emergenceAcceptanceTransactionQuery,
 	emergenceSuggestionUpsertQuery,
 	evolvedFromEndpoints,
+	importWorkBundlesTransactionQuery,
 	mergeWorksTransactionQuery,
 	navigationPurgeStatements,
 	quickCaptureTransactionQuery,
@@ -32,6 +33,21 @@ Deno.test("Surreal query builders preserve capture and merge statement ordering"
 	assert(merge.indexOf("UPDATE branch") < merge.indexOf("UPDATE semantic_link"));
 	assert(merge.indexOf("UPDATE semantic_link") < merge.indexOf("UPSERT $alias"));
 	assertFalse(mergeWorksTransactionQuery(false).includes("UPSERT $alias"));
+});
+
+Deno.test("Surreal outline import encloses every Work bundle in one transaction", () => {
+	const query = importWorkBundlesTransactionQuery([
+		{ hasParent: false, hasContextualHeading: false },
+		{ hasParent: true, hasContextualHeading: true },
+	]);
+	assert(query.startsWith("BEGIN TRANSACTION;"));
+	assert(query.endsWith("COMMIT TRANSACTION;"));
+	assertEquals(query.match(/BEGIN TRANSACTION;/g)?.length, 1);
+	assertEquals(query.match(/COMMIT TRANSACTION;/g)?.length, 1);
+	assert(query.indexOf("CREATE $work0") < query.indexOf("CREATE $occurrence0"));
+	assert(query.indexOf("CREATE $occurrence0") < query.indexOf("CREATE $work1"));
+	assert(query.includes("parent_occurrence: $parent1"));
+	assert(query.includes("contextual_heading: $contextualHeading1"));
 });
 
 Deno.test("Surreal query builders preserve suggestion-link symmetry guard and variable branches", () => {
