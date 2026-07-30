@@ -1,7 +1,8 @@
-# 将来リファクタリング計画
+# リファクタリング計画（実施完了）
 
 - 作成日: 2026-07-30
-- 状態: 提案（個別の着手は親エージェントが判断する）
+- 完了日: 2026-07-30
+- 状態: 完了
 - 対象: UI の表示導出、低依存パネル、`OutlineService`、`SurrealGraphStore`、RPC transport
 
 ## 目的
@@ -52,6 +53,21 @@
 
 WP1 と WP3 は異なる新規ファイルを排他的に所有できる場合のみ並行可能とする。WP1、WP2、
 WP4、WP5 は hot spot に触れるため、同じ領域の変更と重ねず逐次実施する。
+
+## 実施結果
+
+| Package | change | bookmark | 結果 |
+|---|---|---|---|
+| WP0 | `llvsnosl` / `8d74ab0e` | `codex/refactor-wp0-density-baseline` | 3,000 Work・500一致・24,000リンクの共通fixtureと、検索・Sparse Outlineの性能回帰境界を追加 |
+| WP1 | `lrqlrrnp` / `eae2e131` | `codex/refactor-wp1-outline-view-model` | 通常アウトラインの行導出を純粋view modelへ抽出し、collapse・stash・hoist・reference stubを単体テスト化 |
+| WP2 | `vklouqyn` / `0b9a87de` | `codex/refactor-wp2-duplicate-panel` | 重複候補画面をprops / callback境界へ分離し、RPC・状態・確認処理を親へ維持 |
+| WP3 | `plnqossy` / `45a1d634` | `codex/refactor-wp3-outline-facade` | `OutlineService`の公開APIを保ち、Occurrence / Semantic Link / Discoveryを独立モジュールへ分離 |
+| WP4 | `xmyywpuw` / `e477c329` | `codex/refactor-wp4-surreal-boundaries` | Surreal row mapper・Record ID正規化・transaction query builderをI/O本体から分離 |
+| WP5 | `norxxowu` / `fd8aa6bb` | `codex/refactor-wp5-rpc-adapter` | UIのRPC transportを共有adapterへ集約し、両コンポーネントのエラー契約を統一 |
+
+各packageは確定前に`deno task verify`を通し、最後のWP5時点で356テスト、Svelte型検査、
+本番ビルドが成功した。`GraphStore`、schema、migration、`RadioraBindings`の公開契約は変更して
+いない。
 
 ## 作業パッケージ
 
