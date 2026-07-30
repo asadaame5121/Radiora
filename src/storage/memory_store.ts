@@ -147,6 +147,19 @@ export class MemoryGraphStore implements GraphStore {
 		return Promise.resolve();
 	}
 
+	resolveWorkStub(workId: string, updatedAt: string): Promise<void> {
+		const work = this.works.find((candidate) => candidate.id === workId);
+		if (!work) return Promise.reject(new Error(`Work not found: ${workId}`));
+		if (!work.stub) return Promise.reject(new Error(`Work is not a Stub: ${workId}`));
+		this.works = this.works.map((candidate) => {
+			if (candidate.id !== workId) return candidate;
+			const resolved = { ...candidate, updatedAt };
+			delete resolved.stub;
+			return resolved;
+		});
+		return Promise.resolve();
+	}
+
 	createOccurrence(occurrence: Occurrence): Promise<void> {
 		this.occurrences.push(structuredClone(occurrence));
 		return Promise.resolve();

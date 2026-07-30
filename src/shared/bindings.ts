@@ -21,6 +21,7 @@ import type {
 	SearchAlias,
 	SearchRequest,
 	SearchResult,
+	StubCreationKind,
 	Suggestion,
 	TagAlias,
 	TagSearchRequest,
@@ -50,6 +51,7 @@ import type {
 	RewriteAsNewBranchResult,
 	RewriteConfirmation,
 } from "../services/revision_service.ts";
+import type { CreatedStub, StubListEntry } from "../services/stub_service.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
@@ -119,6 +121,9 @@ export interface RadioraBindings {
 		scope: RadioraReferenceScope,
 		id: string,
 	): Promise<InternalReferenceBacklink[]>;
+	listStubs(): Promise<StubListEntry[]>;
+	createStub(createdVia: StubCreationKind, context?: string): Promise<CreatedStub>;
+	resolveStub(workId: string): Promise<void>;
 	resolveLinkComparison(linkId: string): Promise<LinkComparisonProjection>;
 	listWorkComparisonDocuments(workId: string): Promise<WorkComparisonDocuments>;
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;

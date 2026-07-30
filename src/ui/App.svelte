@@ -89,6 +89,7 @@
 		type LinkComparisonProjection,
 		type WorkComparisonDocuments,
 	} from "../services/comparison_service";
+	import type { StubListEntry } from "../services/stub_service";
 
 	const api = new Proxy({}, {
 		get: (_target, property) => async (...args: unknown[]) => {
@@ -108,6 +109,7 @@
 		| "outline"
 		| "today"
 		| "unplaced"
+		| "stubs"
 		| "globalLineage"
 		| "workLineage"
 		| "comparison"
@@ -137,6 +139,7 @@
 	let quickCaptureText = $state("");
 	let quickCaptureSubmitting = $state(false);
 	let unplacedWorks = $state<UnplacedWork[]>([]);
+	let stubEntries = $state<StubListEntry[]>([]);
 	let unplacedLinkTargets = $state<Record<string, string>>({});
 	let unplacedLinkDirections = $state<Record<string, "from" | "to">>({});
 	let unplacedLinkType = $state<LinkType>("RELATED");
@@ -801,6 +804,56 @@
 		} catch (cause) {
 			error = errorMessage(cause);
 		}
+	}
+
+	async function loadStubs(): Promise<void> {
+		stubEntries = await api.listStubs();
+	}
+
+	async function openStubs(): Promise<void> {
+		try {
+			await loadStubs();
+			viewMode = "stubs";
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function createStubFromList(): Promise<void> {
+		try {
+			await api.createStub("stub-list");
+			await loadStubs();
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function updateStubText(entry: StubListEntry, text: string): Promise<void> {
+		if (!text.trim() || text === entry.text) return;
+		try {
+			await api.updateUnplacedWorkText(entry.workId, text);
+			await loadStubs();
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function resolveStubEntry(workId: string): Promise<void> {
+		try {
+			await api.resolveStub(workId);
+			await Promise.all([loadStubs(), loadUnplacedWorks()]);
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	function stubCreatedViaLabel(entry: StubListEntry): string {
+		return entry.createdVia === "stub-list" ? vocabulary.stubList : vocabulary.advancedLinkEditor;
+	}
+
+	function formatStubInstant(value: string): string {
+		const date = new Date(value);
+		return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ja-JP");
 	}
 
 	async function placeUnplaced(workId: string, parentId: string | null): Promise<void> {
@@ -1713,6 +1766,8 @@
 				onclick={openToday}>{vocabulary.today}</button>
 			<button class:active={viewMode === "unplaced"} aria-pressed={viewMode === "unplaced"}
 				onclick={openUnplaced}>{vocabulary.unplacedInbox}</button>
+			<button class:active={viewMode === "stubs"} aria-pressed={viewMode === "stubs"}
+				onclick={openStubs}>{vocabulary.stubList}</button>
 		</section>
 		<section>
 			<p>探索</p>
@@ -1737,7 +1792,7 @@
 	<header class="top-bar">
 		<div class="current-location">
 			<small>現在地</small>
-			<strong>{viewMode === "outline" ? "アウトライン" : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</strong>
+			<strong>{viewMode === "outline" ? "アウトライン" : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "stubs" ? vocabulary.stubList : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</strong>
 		</div>
 		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
 			<input
@@ -2055,6 +2110,52 @@
 						</article>
 					{:else}
 						<p class="empty">{vocabulary.unplacedInbox}は空です。</p>
+					{/each}
+				</div>
+			</section>
+		{:else if viewMode === "stubs"}
+			<section class="outline-panel stub-list" aria-label={vocabulary.stubList}>
+				<div class="section-title">
+					<span>{vocabulary.stubList}</span><small>{stubEntries.length}件</small>
+				</div>
+				<p class="hint">
+					{vocabulary.stub}は本文をこれから書くために明示作成された未配置の{vocabulary.work}です。
+					本文を書き足してから明示的に解除してください。
+				</p>
+				<button type="button" onclick={createStubFromList}>新規{vocabulary.stub}を作成</button>
+				<div class="unplaced-list">
+					{#each stubEntries as entry (entry.workId)}
+						<article class="unplaced-entry stub-entry">
+							<small>
+								{formatStubInstant(entry.createdAt)} · {stubCreatedViaLabel(entry)}
+								{#if entry.context} · {vocabulary.stubContext}: {entry.context}{/if}
+							</small>
+							<textarea
+								rows="3"
+								aria-label={`${vocabulary.stub}の${vocabulary.workingCopy}を編集`}
+								placeholder={`${vocabulary.workingCopy}をここに書き足す`}
+								value={entry.text}
+								onchange={(event) => updateStubText(entry, event.currentTarget.value)}
+							></textarea>
+							{#if entry.backlinks.length}
+								<div class="stub-backlinks" aria-label={vocabulary.backlink}>
+									{#each entry.backlinks as backlink, index (index)}
+										<small>
+											{vocabulary.backlink}: {backlink.displayName || `(空の${vocabulary.work})`}
+											× {backlink.count}
+										</small>
+									{/each}
+								</div>
+							{/if}
+							<div class="unplaced-actions">
+								<button
+									onclick={() => resolveStubEntry(entry.workId)}
+									disabled={!entry.hasText}
+								>{vocabulary.stub}を解除</button>
+							</div>
+						</article>
+					{:else}
+						<p class="empty">{vocabulary.stubList}は空です。</p>
 					{/each}
 				</div>
 			</section>

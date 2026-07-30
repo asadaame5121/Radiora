@@ -13,6 +13,7 @@ import {
 	resumePositionUpsertQuery,
 	revisionFromRow,
 	snapshotProtectionFromRow,
+	workFromRow,
 } from "./surreal_store.ts";
 
 Deno.test("Quick Capture Surreal writes are enclosed in one transaction", () => {
@@ -217,4 +218,70 @@ Deno.test("Surreal Work purge removes both navigation records by Work", () => {
 	const statements = navigationPurgeStatements();
 	assertEquals(statements.includes("DELETE bookmark WHERE work = $work;"), true);
 	assertEquals(statements.includes("DELETE resume_position WHERE work = $work;"), true);
+});
+
+Deno.test("Surreal Work rows preserve Stub metadata", () => {
+	const work = workFromRow({
+		id: ITEM_ID,
+		created_at: "2026-07-30T00:00:00.000Z",
+		updated_at: "2026-07-30T00:00:00.000Z",
+		deleted_at: null,
+		stub: {
+			created_at: "2026-07-30T00:00:00.000Z",
+			created_via: "advanced-link-editor",
+			context: "未解決の名前",
+		},
+	});
+
+	assertEquals(work.id, ITEM_ID);
+	assertEquals(work.stub, {
+		createdAt: "2026-07-30T00:00:00.000Z",
+		createdVia: "advanced-link-editor",
+		context: "未解決の名前",
+	});
+});
+
+Deno.test("Surreal Work rows omit an absent or partial Stub", () => {
+	const base = {
+		id: ITEM_ID,
+		created_at: "2026-07-30T00:00:00.000Z",
+		updated_at: "2026-07-30T00:00:00.000Z",
+		deleted_at: null,
+	};
+
+	const withoutStub = workFromRow({ ...base, stub: null });
+	assertEquals(withoutStub.stub, undefined);
+	assertEquals(Object.hasOwn(withoutStub, "stub"), false);
+
+	const withoutContext = workFromRow({
+		...base,
+		stub: { created_at: "2026-07-30T00:00:00.000Z", created_via: "stub-list", context: null },
+	});
+	assertEquals(withoutContext.stub, {
+		createdAt: "2026-07-30T00:00:00.000Z",
+		createdVia: "stub-list",
+	});
+	assertEquals(Object.hasOwn(withoutContext.stub ?? {}, "context"), false);
+
+	assertEquals(
+		workFromRow({ ...base, stub: { created_via: "stub-list" } }).stub,
+		undefined,
+	);
+});
+
+Deno.test("Quick Capture transaction embeds Stub metadata only on demand", () => {
+	const plain = quickCaptureTransactionQuery();
+	assertEquals(plain.includes("stub"), false);
+
+	const withStub = quickCaptureTransactionQuery(true, true);
+	assertEquals(withStub.match(/\bCREATE\b/g)?.length, 3);
+	assertEquals(withStub.match(/BEGIN TRANSACTION/g)?.length, 1);
+	assertEquals(withStub.match(/COMMIT TRANSACTION/g)?.length, 1);
+	assertEquals(withStub.includes("stub: {"), true);
+	assertEquals(withStub.includes("created_via: $stubCreatedVia"), true);
+	assertEquals(withStub.includes("context: $stubContext"), true);
+
+	const withoutContext = quickCaptureTransactionQuery(true, false);
+	assertEquals(withoutContext.includes("context: NONE"), true);
+	assertEquals(withoutContext.includes("$stubContext"), false);
 });

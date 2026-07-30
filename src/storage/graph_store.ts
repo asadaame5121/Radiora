@@ -13,9 +13,11 @@ import type {
 	Revision,
 	SavedRuleQuery,
 	SearchAlias,
+	StubCreationKind,
 	SystemRelation,
 	Work,
 	WorkingCopy,
+	WorkStub,
 } from "../domain/models.ts";
 
 export interface GraphStore {
@@ -38,6 +40,8 @@ export interface GraphStore {
 	): Promise<void>;
 	/** Atomically creates a Work and its editable main Branch without a placement. */
 	createUnplacedWork(work: Work, branch: Branch, workingCopy: WorkingCopy): Promise<void>;
+	/** Removes the Stub state from a Work and records the resolution instant. */
+	resolveWorkStub(workId: string, updatedAt: string): Promise<void>;
 	createOccurrence(occurrence: Occurrence): Promise<void>;
 	createBookmark(bookmark: Bookmark): Promise<void>;
 	deleteBookmark(id: string): Promise<void>;
@@ -100,6 +104,23 @@ export interface GraphStore {
 	deleteSavedRuleQuery(id: string): Promise<void>;
 }
 
+const STUB_CREATION_KINDS: readonly StubCreationKind[] = ["stub-list", "advanced-link-editor"];
+
+/**
+ * A blank Working Copy is accepted only for an explicitly recorded Stub:
+ * a valid ISO creation instant and a known creation path are both required.
+ */
+export function isValidWorkStub(stub: WorkStub | undefined): boolean {
+	if (!stub) return false;
+	const parsedCreatedAt = Date.parse(stub.createdAt);
+	if (
+		!Number.isFinite(parsedCreatedAt) || new Date(parsedCreatedAt).toISOString() !== stub.createdAt
+	) {
+		return false;
+	}
+	return (STUB_CREATION_KINDS as readonly string[]).includes(stub.createdVia);
+}
+
 export function validateUnplacedWorkCreation(
 	work: Work,
 	branch: Branch,
@@ -109,7 +130,9 @@ export function validateUnplacedWorkCreation(
 	existingWorkingCopies: readonly WorkingCopy[],
 ): void {
 	if (!work.id || !branch.id) throw new Error("Work and Branch IDs are required");
-	if (!workingCopy.text.trim()) throw new Error("Quick Capture text must not be blank");
+	if (!workingCopy.text.trim() && !isValidWorkStub(work.stub)) {
+		throw new Error("Quick Capture text must not be blank");
+	}
 	if (
 		branch.workId !== work.id || workingCopy.workId !== work.id ||
 		workingCopy.branchId !== branch.id

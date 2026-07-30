@@ -94,6 +94,22 @@ interface BackupV3 {
 	data: StoredGraphV3;
 }
 
+/** Structurally identical to V3; `Work` now carries an optional `stub`. */
+export interface StoredGraphV4 extends StoredGraphV3 {}
+
+interface BackupV4 {
+	format: "radiora-backup";
+	schemaVersion: 4;
+	exportedAt: string;
+	appVersion: string;
+	source: { storageSchemaVersion: 4 };
+	data: StoredGraphV4;
+}
+
+export function migrateBackupV3(data: StoredGraphV3): StoredGraphV4 {
+	return { ...data };
+}
+
 export function migrateBackupV2(data: StoredGraphV2): StoredGraphV3 {
 	return { ...data, bookmarks: [], resumePosition: null };
 }
@@ -185,10 +201,11 @@ export class JsonGraphStore extends MemoryGraphStore {
 				| BackupV0
 				| BackupV1
 				| BackupV2
-				| BackupV3;
+				| BackupV3
+				| BackupV4;
 			const data = "schemaVersion" in parsed
 				? this.readVersioned(parsed)
-				: migrateBackupV2(migrateBackupV1(migrateBackupV0(parsed)));
+				: migrateBackupV3(migrateBackupV2(migrateBackupV1(migrateBackupV0(parsed))));
 			this.load(data);
 			if (!("schemaVersion" in parsed)) {
 				await this.protectVersionZeroInput();
@@ -198,6 +215,9 @@ export class JsonGraphStore extends MemoryGraphStore {
 				await this.persist();
 			} else if (parsed.schemaVersion === 2) {
 				await this.protectVersionTwoInput();
+				await this.persist();
+			} else if (parsed.schemaVersion === 3) {
+				await this.protectVersionThreeInput();
 				await this.persist();
 			}
 		} catch (cause) {
@@ -234,6 +254,11 @@ export class JsonGraphStore extends MemoryGraphStore {
 			this.workingCopies = before.workingCopies;
 			throw cause;
 		}
+	}
+
+	override async resolveWorkStub(workId: string, updatedAt: string): Promise<void> {
+		await super.resolveWorkStub(workId, updatedAt);
+		await this.persist();
 	}
 
 	override async createOccurrence(occurrence: Occurrence): Promise<void> {
@@ -404,17 +429,20 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await this.persist();
 	}
 
-	private readVersioned(parsed: BackupV1 | BackupV2 | BackupV3): StoredGraphV3 {
+	private readVersioned(parsed: BackupV1 | BackupV2 | BackupV3 | BackupV4): StoredGraphV4 {
 		if (parsed.format !== "radiora-backup") {
 			throw new Error(`Unsupported backup format: ${String(parsed.format)}`);
 		}
 		if (parsed.schemaVersion === 1) {
-			return migrateBackupV2(migrateBackupV1(parsed.data));
+			return migrateBackupV3(migrateBackupV2(migrateBackupV1(parsed.data)));
 		}
 		if (parsed.schemaVersion === 2) {
-			return migrateBackupV2(parsed.data);
+			return migrateBackupV3(migrateBackupV2(parsed.data));
 		}
-		if (parsed.schemaVersion !== 3) {
+		if (parsed.schemaVersion === 3) {
+			return migrateBackupV3(parsed.data);
+		}
+		if (parsed.schemaVersion !== 4) {
 			throw new Error(
 				`Unsupported backup schema version: ${
 					String((parsed as { schemaVersion: unknown }).schemaVersion)
@@ -424,7 +452,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		return parsed.data;
 	}
 
-	private load(data: StoredGraphV3): void {
+	private load(data: StoredGraphV4): void {
 		this.works = data.works ?? [];
 		this.branches = data.branches ?? [];
 		this.workingCopies = data.workingCopies ?? [];
@@ -443,12 +471,12 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	private async persist(): Promise<void> {
-		const backup: BackupV3 = {
+		const backup: BackupV4 = {
 			format: "radiora-backup",
-			schemaVersion: 3,
+			schemaVersion: 4,
 			exportedAt: new Date().toISOString(),
 			appVersion: "0.1.0",
-			source: { storageSchemaVersion: 3 },
+			source: { storageSchemaVersion: 4 },
 			data: {
 				works: this.works,
 				branches: this.branches,
@@ -506,6 +534,18 @@ export class JsonGraphStore extends MemoryGraphStore {
 		const backup = typeof this.path === "string"
 			? `${this.path}.v2.bak`
 			: new URL(`${this.path.href}.v2.bak`);
+		try {
+			await Deno.stat(backup);
+		} catch (cause) {
+			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
+			await Deno.copyFile(this.path, backup);
+		}
+	}
+
+	private async protectVersionThreeInput(): Promise<void> {
+		const backup = typeof this.path === "string"
+			? `${this.path}.v3.bak`
+			: new URL(`${this.path.href}.v3.bak`);
 		try {
 			await Deno.stat(backup);
 		} catch (cause) {

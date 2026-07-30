@@ -97,6 +97,22 @@
 		void resolveInput();
 	}
 
+	async function createStubFor(field: "source" | "target"): Promise<void> {
+		const endpoint = resolution?.[field];
+		const query = endpoint?.query.trim();
+		if (!endpoint || endpoint.status !== "unresolved" || !query || submitting) return;
+		try {
+			submitting = true;
+			submitError = "";
+			const created = await api.createStub("advanced-link-editor", query);
+			selectCandidate(field, created.workId);
+		} catch (cause) {
+			submitError = errorMessage(cause);
+		} finally {
+			submitting = false;
+		}
+	}
+
 	async function confirm(): Promise<void> {
 		if (!ready || !resolution?.source.selectedWorkId || !resolution.target.selectedWorkId) return;
 		try {
@@ -198,15 +214,25 @@
 		{#each [["source", resolution.source], ["target", resolution.target]] as entry}
 			{@const field = entry[0] as "source" | "target"}
 			{@const endpoint = entry[1] as AdvancedLinkEndpointResolution}
-			{#if endpoint.status === "ambiguous"}
-				<div class="advanced-link-candidates" aria-label={`${fieldLabel(field)}候補`}>
-					{#each endpoint.candidates as candidate (candidate.workId)}
-						<button type="button" onclick={() => selectCandidate(field, candidate.workId)}>
-							{@render CandidateDetails(candidate)}
+				{#if endpoint.status === "ambiguous"}
+					<div class="advanced-link-candidates" aria-label={`${fieldLabel(field)}候補`}>
+						{#each endpoint.candidates as candidate (candidate.workId)}
+							<button type="button" onclick={() => selectCandidate(field, candidate.workId)}>
+								{@render CandidateDetails(candidate)}
+							</button>
+						{/each}
+					</div>
+				{/if}
+				{#if endpoint.status === "unresolved" && endpoint.query.trim()}
+					<div class="advanced-link-stub-create">
+						<button type="button" onclick={() => createStubFor(field)} disabled={submitting}>
+							「{endpoint.query}」を{vocabulary.stub}として作成
 						</button>
-					{/each}
-				</div>
-			{/if}
+						<small>
+							未解決の名前から暗黙には作成しません。{vocabulary.stub}を作成すると{fieldLabel(field)}として選択されます。
+						</small>
+					</div>
+				{/if}
 		{/each}
 	{/if}
 	{#if resolution?.preview}
