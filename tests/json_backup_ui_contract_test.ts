@@ -33,6 +33,7 @@ Deno.test("JSON restore flushes pending edits and reloads only after the binding
 	assertMatch(app, /accept="\.json,application\/json"/);
 	assertMatch(app, /vocabulary\.jsonBackupRestore/);
 	assertMatch(app, /vocabulary\.jsonBackupRestoreSuccess/);
+	assertMatch(app, /errorMessage\(cause\).*vocabulary\.jsonBackupRestoreFailureRecovery/s);
 	assertMatch(bindings, /restoreJsonBackup\(source: string\): Promise<JsonBackupRestoreResult>/);
 	assertMatch(
 		registration,

@@ -87,6 +87,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"jsonBackupExportSuccess",
 		"jsonBackupRestore",
 		"jsonBackupRestoreSuccess",
+		"jsonBackupRestoreFailureRecovery",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -176,5 +177,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		jsonBackupExportSuccess: "完全バックアップを書き出しました",
 		jsonBackupRestore: "完全バックアップから復元",
 		jsonBackupRestoreSuccess: "完全バックアップを復元しました",
+		jsonBackupRestoreFailureRecovery:
+			"現在のデータは変更されていません。空き容量とファイル内容を確認して、もう一度お試しください。",
 	});
 });
