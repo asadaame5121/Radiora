@@ -16,6 +16,7 @@
 		type AdvancedLinkSelectionQueries,
 	} from "./advanced_link_selection";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
+	import { createRpcAdapter } from "./rpc_adapter";
 
 	let {
 		selectedWorkId,
@@ -28,18 +29,7 @@
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
-	const api = new Proxy({}, {
-		get: (_target, property) => async (...args: unknown[]) => {
-			const response = await fetch(`/api/rpc/${String(property)}`, {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ args }),
-			});
-			const payload = await response.json();
-			if (!response.ok) throw new Error(payload.message ?? "API request failed.");
-			return payload.result;
-		},
-	}) as RadioraBindings;
+	const api = createRpcAdapter<RadioraBindings>();
 
 	let input = $state("");
 	let resolution = $state<AdvancedLinkResolution | null>(null);

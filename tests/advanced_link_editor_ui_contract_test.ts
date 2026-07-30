@@ -24,6 +24,10 @@ Deno.test("Advanced Link Editor exposes three-field gate, candidate metadata, an
 	assertMatch(app, /canOpenLinkEditor: Boolean\(selectedItem\)/);
 	assertMatch(app, /else await openAdvancedLinkEditor\(\)/);
 	assertMatch(app, /case "createLink":[\s\S]*?if \(linkInput\) await performAddLink\(linkInput\)/);
+	assertMatch(app, /import \{ createRpcAdapter \} from "\.\/rpc_adapter"/);
+	assertMatch(editor, /import \{ createRpcAdapter \} from "\.\/rpc_adapter"/);
+	assertMatch(app, /createRpcAdapter<RadioraBindings>\(\)/);
+	assertMatch(editor, /createRpcAdapter<RadioraBindings>\(\)/);
 });
 
 Deno.test("Advanced Link Editor does not create unresolved Works, Occurrences, or Stubs", async () => {
