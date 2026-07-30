@@ -2,23 +2,25 @@ import { assertEquals, assertThrows } from "jsr:@std/assert@1";
 import { RecordId } from "surrealdb";
 import type { Branch, Revision } from "../domain/models.ts";
 import { validateRevisionCreation } from "./graph_store.ts";
+import { duplicateLinkIdsAfterMerge } from "./surreal_store.ts";
 import {
-	duplicateLinkIdsAfterMerge,
 	emergenceAcceptanceTransactionQuery,
 	emergenceSuggestionUpsertQuery,
 	evolvedFromEndpoints,
-	itemFromRow,
 	mergeWorksTransactionQuery,
 	navigationPurgeStatements,
-	occurrenceFromRow,
 	quickCaptureTransactionQuery,
 	recoveryPromotionTransactionQuery,
 	recoveryRestoreTransactionQuery,
 	resumePositionUpsertQuery,
+} from "./surreal_queries.ts";
+import {
+	itemFromRow,
+	occurrenceFromRow,
 	revisionFromRow,
 	snapshotProtectionFromRow,
 	workFromRow,
-} from "./surreal_store.ts";
+} from "./surreal_row_mapper.ts";
 
 Deno.test("Quick Capture Surreal writes are enclosed in one transaction", () => {
 	const query = quickCaptureTransactionQuery();
