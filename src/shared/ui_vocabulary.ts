@@ -82,7 +82,8 @@ export type UiEntityCode =
 	| "jsonBackupExport"
 	| "jsonBackupExportSuccess"
 	| "jsonBackupRestore"
-	| "jsonBackupRestoreSuccess";
+	| "jsonBackupRestoreSuccess"
+	| "jsonBackupRestoreFailureRecovery";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -172,4 +173,6 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	jsonBackupExportSuccess: "完全バックアップを書き出しました",
 	jsonBackupRestore: "完全バックアップから復元",
 	jsonBackupRestoreSuccess: "完全バックアップを復元しました",
+	jsonBackupRestoreFailureRecovery:
+		"現在のデータは変更されていません。空き容量とファイル内容を確認して、もう一度お試しください。",
 });

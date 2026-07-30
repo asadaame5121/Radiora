@@ -38,8 +38,23 @@ import {
 
 export { migrateBackupV0 } from "./backup_migrations.ts";
 
+export interface JsonRestoreFileOperations {
+	writeTextFile(path: string | URL, data: string): Promise<void>;
+	rename(oldPath: string | URL, newPath: string | URL): Promise<void>;
+	remove(path: string | URL): Promise<void>;
+}
+
+const denoRestoreFileOperations: JsonRestoreFileOperations = {
+	writeTextFile: (path, data) => Deno.writeTextFile(path, data),
+	rename: (oldPath, newPath) => Deno.rename(oldPath, newPath),
+	remove: (path) => Deno.remove(path),
+};
+
 export class JsonGraphStore extends MemoryGraphStore {
-	constructor(private readonly path: string | URL) {
+	constructor(
+		private readonly path: string | URL,
+		private readonly restoreFileOperations = denoRestoreFileOperations,
+	) {
 		super();
 	}
 
@@ -112,12 +127,15 @@ export class JsonGraphStore extends MemoryGraphStore {
 		try {
 			await super.restoreGraphState(state);
 			const backup = this.currentBackup(await this.exportGraphState());
-			await Deno.writeTextFile(temporaryPath, JSON.stringify(backup, null, 2));
-			await Deno.rename(temporaryPath, this.path);
+			await this.restoreFileOperations.writeTextFile(
+				temporaryPath,
+				JSON.stringify(backup, null, 2),
+			);
+			await this.restoreFileOperations.rename(temporaryPath, this.path);
 		} catch (cause) {
 			await super.restoreGraphState(before);
 			try {
-				await Deno.remove(temporaryPath);
+				await this.restoreFileOperations.remove(temporaryPath);
 			} catch (cleanupCause) {
 				if (!(cleanupCause instanceof Deno.errors.NotFound)) {
 					// Preserve the original restore error; a stale temp file is safe to ignore.

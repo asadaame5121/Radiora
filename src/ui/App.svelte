@@ -1761,7 +1761,8 @@
 			jsonBackupNotice =
 				`${vocabulary.jsonBackupRestoreSuccess}: ${result.workCount}件の${vocabulary.work}。`;
 		} catch (cause) {
-			error = `${vocabulary.jsonBackupRestore}に失敗しました: ${errorMessage(cause)}`;
+			error =
+				`${vocabulary.jsonBackupRestore}に失敗しました: ${errorMessage(cause)} ${vocabulary.jsonBackupRestoreFailureRecovery}`;
 		}
 	}
 
