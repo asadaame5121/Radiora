@@ -53,6 +53,7 @@ import type {
 } from "../services/revision_service.ts";
 import type { CreatedStub, StubListEntry } from "../services/stub_service.ts";
 import type { DuplicateCandidate } from "../services/duplicate_candidates.ts";
+import type { WorkMergePreview } from "../services/work_merge_service.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
@@ -126,6 +127,8 @@ export interface RadioraBindings {
 	createStub(createdVia: StubCreationKind, context?: string): Promise<CreatedStub>;
 	resolveStub(workId: string): Promise<void>;
 	listDuplicateCandidates(limit?: number): Promise<DuplicateCandidate[]>;
+	previewWorkMerge(sourceWorkId: string, survivorWorkId: string): Promise<WorkMergePreview>;
+	mergeWorks(preview: WorkMergePreview): Promise<void>;
 	resolveLinkComparison(linkId: string): Promise<LinkComparisonProjection>;
 	listWorkComparisonDocuments(workId: string): Promise<WorkComparisonDocuments>;
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;

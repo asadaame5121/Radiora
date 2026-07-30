@@ -54,6 +54,16 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"stubContext",
 		"duplicateCandidates",
 		"duplicateReason",
+		"duplicateScore",
+		"duplicateCandidateHint",
+		"duplicateCandidateActions",
+		"duplicateMerge",
+		"duplicateKeepLeft",
+		"duplicateKeepRight",
+		"duplicateCreateLike",
+		"duplicateCreateRelated",
+		"duplicateDismiss",
+		"duplicateMergeConfirm",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -109,5 +119,16 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		stubContext: "作成文脈",
 		duplicateCandidates: "重複候補",
 		duplicateReason: "根拠",
+		duplicateScore: "スコア",
+		duplicateCandidateHint:
+			"項目のタイトル・検索別名・タグ・リンクの一致を根拠に、操作を選べます。候補が自動採用されることはありません。",
+		duplicateCandidateActions: "重複候補の操作",
+		duplicateMerge: "統合する",
+		duplicateKeepLeft: "左の項目を残す",
+		duplicateKeepRight: "右の項目を残す",
+		duplicateCreateLike: "LIKEを作成",
+		duplicateCreateRelated: "RELATEDを作成",
+		duplicateDismiss: "却下（何もしない）",
+		duplicateMergeConfirm: "項目を統合しますか？",
 	});
 });

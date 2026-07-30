@@ -91,6 +91,7 @@
 	} from "../services/comparison_service";
 	import type { StubListEntry } from "../services/stub_service";
 	import type { DuplicateCandidate } from "../services/duplicate_candidates";
+	import type { WorkMergePreview } from "../services/work_merge_service";
 
 	const api = new Proxy({}, {
 		get: (_target, property) => async (...args: unknown[]) => {
@@ -125,7 +126,8 @@
 			occurrenceId: string;
 			workId: string;
 			sourceBranchId: string;
-		};
+		}
+		| { action: "merge-duplicate"; preview: WorkMergePreview };
 	type InternalReferenceCompletionState = {
 		itemId: string;
 		range: { start: number; end: number };
@@ -143,6 +145,7 @@
 	let unplacedWorks = $state<UnplacedWork[]>([]);
 	let stubEntries = $state<StubListEntry[]>([]);
 	let duplicateCandidates = $state<DuplicateCandidate[]>([]);
+	let excludedDuplicateCandidateKeys = $state<string[]>([]);
 	let unplacedLinkTargets = $state<Record<string, string>>({});
 	let unplacedLinkDirections = $state<Record<string, "from" | "to">>({});
 	let unplacedLinkType = $state<LinkType>("RELATED");
@@ -823,7 +826,10 @@
 	}
 
 	async function loadDuplicates(): Promise<void> {
-		duplicateCandidates = await api.listDuplicateCandidates();
+		const candidates = await api.listDuplicateCandidates();
+		duplicateCandidates = candidates.filter((candidate) =>
+			!excludedDuplicateCandidateKeys.includes(duplicateCandidateKey(candidate))
+		);
 	}
 
 	async function openDuplicates(): Promise<void> {
@@ -878,6 +884,56 @@
 			await Promise.all([load(created.id), loadUnplacedWorks()]);
 			viewMode = "outline";
 			selectOccurrence(created.id);
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	function duplicateCandidateKey(candidate: DuplicateCandidate): string {
+		return [candidate.workA.workId, candidate.workB.workId].sort().join(":");
+	}
+
+	function excludeDuplicateCandidate(candidate: DuplicateCandidate): void {
+		const key = duplicateCandidateKey(candidate);
+		if (!excludedDuplicateCandidateKeys.includes(key)) {
+			excludedDuplicateCandidateKeys = [...excludedDuplicateCandidateKeys, key];
+		}
+		duplicateCandidates = duplicateCandidates.filter((entry) =>
+			duplicateCandidateKey(entry) !== key
+		);
+	}
+
+	function duplicateCandidateReason(candidate: DuplicateCandidate): string {
+		return candidate.reasons.map((reason) => reason.label).join(" / ");
+	}
+
+	async function createDuplicateCandidateLink(
+		candidate: DuplicateCandidate,
+		type: "LIKE" | "RELATED",
+	): Promise<void> {
+		try {
+			await api.createLink({
+				fromId: candidate.workA.workId,
+				toId: candidate.workB.workId,
+				type,
+				origin: "human",
+				status: "asserted",
+				reason: duplicateCandidateReason(candidate),
+			});
+			excludeDuplicateCandidate(candidate);
+			await load();
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function requestDuplicateMerge(
+		sourceWorkId: string,
+		survivorWorkId: string,
+	): Promise<void> {
+		try {
+			const preview = await api.previewWorkMerge(sourceWorkId, survivorWorkId);
+			await requestConfirmation({ action: "merge-duplicate", preview });
 		} catch (cause) {
 			error = errorMessage(cause);
 		}
@@ -1650,7 +1706,7 @@
 				await api.purgeWork(confirmation.workId);
 				trashEntries = await api.listTrash();
 				bookmarks = await api.listBookmarks();
-			} else {
+			} else if (confirmation.action === "rewrite") {
 				const result = await api.rewriteAsNewBranch(
 					confirmation.sourceBranchId,
 					rewriteBranchName,
@@ -1664,6 +1720,9 @@
 					]);
 					viewMode = "workLineage";
 				}
+			} else {
+				await api.mergeWorks(confirmation.preview);
+				await Promise.all([load(), loadDuplicates()]);
 			}
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -2182,9 +2241,7 @@
 				<div class="section-title">
 					<span>{vocabulary.duplicateCandidates}</span><small>{duplicateCandidates.length}件</small>
 				</div>
-				<p class="hint">
-					{vocabulary.work}のタイトル・検索別名・{vocabulary.tag}・{vocabulary.semanticLink}の一致から計算した読み取り専用の一覧です。
-				</p>
+				<p class="hint">{vocabulary.duplicateCandidateHint}</p>
 				<div class="unplaced-list">
 					{#each duplicateCandidates as candidate (`${candidate.workA.workId}:${candidate.workB.workId}`)}
 						<article class="unplaced-entry">
@@ -2192,12 +2249,37 @@
 								{candidate.workA.title || `(空の${vocabulary.work})`}
 								⇔ {candidate.workB.title || `(空の${vocabulary.work})`}
 							</strong>
-							<small>スコア: {candidate.score}</small>
+							<small>{vocabulary.duplicateScore}: {candidate.score}</small>
 							<ul aria-label={vocabulary.duplicateReason}>
 								{#each candidate.reasons as reason, index (index)}
 									<li><small>{reason.label}(+{reason.score})</small></li>
 								{/each}
 							</ul>
+							<div class="unplaced-actions" aria-label={vocabulary.duplicateCandidateActions}>
+								<details>
+									<summary>{vocabulary.duplicateMerge}</summary>
+									<button
+										onclick={() =>
+											requestDuplicateMerge(
+												candidate.workB.workId,
+												candidate.workA.workId,
+											)}
+									>{vocabulary.duplicateKeepLeft}</button>
+									<button
+										onclick={() =>
+											requestDuplicateMerge(
+												candidate.workA.workId,
+												candidate.workB.workId,
+											)}
+									>{vocabulary.duplicateKeepRight}</button>
+								</details>
+								<button onclick={() => createDuplicateCandidateLink(candidate, "LIKE")}
+								>{vocabulary.duplicateCreateLike}</button>
+								<button onclick={() => createDuplicateCandidateLink(candidate, "RELATED")}
+								>{vocabulary.duplicateCreateRelated}</button>
+								<button onclick={() => excludeDuplicateCandidate(candidate)}
+								>{vocabulary.duplicateDismiss}</button>
+							</div>
 						</article>
 					{:else}
 						<p class="empty">{vocabulary.duplicateCandidates}はありません。</p>
@@ -2520,6 +2602,8 @@
 					? `${vocabulary.work}をゴミ箱へ移しますか？`
 					: pendingConfirmation.action === "rewrite"
 					? `新しい${vocabulary.branch}として書き直しますか？`
+					: pendingConfirmation.action === "merge-duplicate"
+					? vocabulary.duplicateMergeConfirm
 					: "完全消去しますか？"}
 			</h2>
 			<p id="confirmation-description">
@@ -2528,6 +2612,12 @@
 				{:else if pendingConfirmation.action === "rewrite"}
 					現在の{vocabulary.workingCopy}を分岐点として保存し、元の{vocabulary.branch}を残したまま
 					独立した{vocabulary.workingCopy}を作ります。
+				{:else if pendingConfirmation.action === "merge-duplicate"}
+					{pendingConfirmation.preview.sourceTitle || `(空の${vocabulary.work})`}
+					→ {pendingConfirmation.preview.survivorTitle || `(空の${vocabulary.work})`}
+					<br />
+					{vocabulary.occurrence}: {pendingConfirmation.preview.occurrenceIds.length} /
+					{vocabulary.semanticLink}: {pendingConfirmation.preview.links.length}
 				{:else}
 					{vocabulary.occurrence}{pendingConfirmation.occurrenceCount}件、{vocabulary.semanticLink}{pendingConfirmation.linkCount}件と本文を復元できなくなります。
 				{/if}
@@ -2562,6 +2652,8 @@
 						? "ゴミ箱へ移す"
 						: pendingConfirmation.action === "rewrite"
 						? `新しい${vocabulary.branch}を作る`
+						: pendingConfirmation.action === "merge-duplicate"
+						? vocabulary.duplicateMerge
 						: "完全消去"}
 				</button>
 			</div>

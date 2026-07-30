@@ -190,6 +190,48 @@ Deno.test("symmetric links are normalized, deduplicated, and retracted without l
 	assertEquals((await service.listOutline()).links.map((link) => link.status), ["asserted"]);
 });
 
+Deno.test("duplicate candidate adoption preserves explicit human evidence for LIKE and RELATED", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const source = await service.createItem({ text: "候補A", parentId: null });
+	const likeTarget = await service.createItem({ text: "候補B", parentId: null });
+	const relatedTarget = await service.createItem({ text: "候補C", parentId: null });
+	const reason = "タイトル一致(+3) / 共有タグ: #設計(+1)";
+
+	await service.createLink({
+		fromId: source.workId,
+		toId: likeTarget.workId,
+		type: "LIKE",
+		origin: "human",
+		status: "asserted",
+		reason,
+	});
+	await service.createLink({
+		fromId: source.workId,
+		toId: relatedTarget.workId,
+		type: "RELATED",
+		origin: "human",
+		status: "asserted",
+		reason,
+	});
+
+	const adopted = (await store.listLinks()).sort((left, right) =>
+		left.type.localeCompare(right.type)
+	);
+	assertEquals(
+		adopted.map(({ type, origin, status, reason }) => ({
+			type,
+			origin,
+			status,
+			reason,
+		})),
+		[
+			{ type: "LIKE", origin: "human", status: "asserted", reason },
+			{ type: "RELATED", origin: "human", status: "asserted", reason },
+		],
+	);
+});
+
 Deno.test("one Work can appear in multiple independent Occurrences with shared text", async () => {
 	const store = new MemoryGraphStore();
 	const service = new OutlineService(store);
