@@ -18,7 +18,7 @@ import type {
 	WorkingCopy,
 } from "../domain/models.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
-import type { MergeWorksInput } from "./graph_store.ts";
+import type { MergeWorksInput, WorkBundle } from "./graph_store.ts";
 
 interface LegacyItem {
 	id: string;
@@ -279,6 +279,17 @@ export class JsonGraphStore extends MemoryGraphStore {
 	): Promise<void> {
 		await super.createWorkBundle(work, branch, workingCopy, occurrence);
 		await this.persist();
+	}
+
+	override async importWorkBundles(bundles: readonly WorkBundle[]): Promise<void> {
+		const before = this.captureAllState();
+		try {
+			await super.importWorkBundles(bundles);
+			await this.persist();
+		} catch (cause) {
+			this.restoreAllState(before);
+			throw cause;
+		}
 	}
 
 	override async createUnplacedWork(

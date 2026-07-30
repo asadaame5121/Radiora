@@ -58,6 +58,34 @@ export function quickCaptureTransactionQuery(hasStub = false, hasStubContext = f
 			COMMIT TRANSACTION;`;
 }
 
+export function importWorkBundlesTransactionQuery(
+	bundles: readonly { hasParent: boolean; hasContextualHeading: boolean }[],
+): string {
+	const statements = bundles.map((bundle, index) => {
+		const parent = bundle.hasParent ? `$parent${index}` : "NONE";
+		const heading = bundle.hasContextualHeading ? `$contextualHeading${index}` : "NONE";
+		return `CREATE $work${index} CONTENT {
+				created_at: $createdAt${index}, updated_at: $updatedAt${index}, deleted_at: NONE
+			};
+			CREATE $branch${index} CONTENT {
+				work: $work${index}, name: "main", head_revision: NONE,
+				created_at: $createdAt${index}, promoted_at: NONE, archived_at: NONE
+			};
+			CREATE $copy${index} CONTENT {
+				work: $work${index}, branch: $branch${index}, text: $text${index},
+				updated_at: $updatedAt${index}
+			};
+			CREATE $occurrence${index} CONTENT {
+				work: $work${index}, parent_occurrence: ${parent}, order_key: $orderKey${index},
+				collapsed: false, selector_mode: "branch", branch: $branch${index},
+				revision: NONE, contextual_heading: ${heading}
+			};`;
+	}).join("\n");
+	return `BEGIN TRANSACTION;
+			${statements}
+			COMMIT TRANSACTION;`;
+}
+
 export function mergeWorksTransactionQuery(includeAlias = true): string {
 	return `BEGIN TRANSACTION;
 			UPDATE branch SET name = string::concat("merged/", record::id(work), "/", name)

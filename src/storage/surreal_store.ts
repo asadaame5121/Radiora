@@ -26,6 +26,8 @@ import {
 	type MergeWorksInput,
 	validateRevisionCreation,
 	validateUnplacedWorkCreation,
+	validateWorkBundleImport,
+	type WorkBundle,
 } from "./graph_store.ts";
 import {
 	CURRENT_STORAGE_SCHEMA_VERSION,
@@ -44,6 +46,7 @@ import {
 	emergenceAcceptanceTransactionQuery,
 	emergenceSuggestionUpsertQuery,
 	evolvedFromEndpoints,
+	importWorkBundlesTransactionQuery,
 	mergeWorksTransactionQuery,
 	navigationPurgeStatements,
 	quickCaptureTransactionQuery,
@@ -418,6 +421,43 @@ export class SurrealGraphStore implements GraphStore {
 				createdAt: work.createdAt,
 				updatedAt: work.updatedAt,
 			},
+		);
+	}
+
+	async importWorkBundles(bundles: readonly WorkBundle[]): Promise<void> {
+		const [works, branches, workingCopies, occurrences] = await Promise.all([
+			this.listWorks(true),
+			this.listBranches(),
+			this.listWorkingCopies(),
+			this.listOccurrences(true),
+		]);
+		validateWorkBundleImport(bundles, { works, branches, workingCopies, occurrences });
+		const parameters: Record<string, unknown> = {};
+		for (const [index, bundle] of bundles.entries()) {
+			parameters[`work${index}`] = new RecordId("work", bundle.work.id);
+			parameters[`branch${index}`] = new RecordId("branch", bundle.branch.id);
+			parameters[`copy${index}`] = new RecordId("working_copy", bundle.branch.id);
+			parameters[`occurrence${index}`] = new RecordId("occurrence", bundle.occurrence.id);
+			parameters[`createdAt${index}`] = bundle.work.createdAt;
+			parameters[`updatedAt${index}`] = bundle.work.updatedAt;
+			parameters[`text${index}`] = bundle.workingCopy.text;
+			parameters[`orderKey${index}`] = bundle.occurrence.orderKey;
+			if (bundle.occurrence.parentOccurrenceId) {
+				parameters[`parent${index}`] = new RecordId(
+					"occurrence",
+					bundle.occurrence.parentOccurrenceId,
+				);
+			}
+			if (bundle.occurrence.contextualHeading) {
+				parameters[`contextualHeading${index}`] = bundle.occurrence.contextualHeading;
+			}
+		}
+		await this.#db.query(
+			importWorkBundlesTransactionQuery(bundles.map((bundle) => ({
+				hasParent: bundle.occurrence.parentOccurrenceId !== null,
+				hasContextualHeading: Boolean(bundle.occurrence.contextualHeading),
+			}))),
+			parameters,
 		);
 	}
 

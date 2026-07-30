@@ -74,7 +74,11 @@ export type UiEntityCode =
 	| "markdownExportMode"
 	| "markdownExportRadiora"
 	| "markdownExportPortable"
-	| "markdownExportObsidian";
+	| "markdownExportObsidian"
+	| "opmlExport"
+	| "opmlImport"
+	| "opmlExportSuccess"
+	| "opmlImportSuccess";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -156,4 +160,8 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	markdownExportRadiora: "Radiora（内部参照を保持）",
 	markdownExportPortable: "ポータブル（表示名のみ）",
 	markdownExportObsidian: "Obsidian（Wikiリンク）",
+	opmlExport: "OPMLを書き出す",
+	opmlImport: "OPMLを取り込む",
+	opmlExportSuccess: "OPMLを書き出しました",
+	opmlImportSuccess: "OPMLを取り込みました",
 });
