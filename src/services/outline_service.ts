@@ -68,6 +68,7 @@ import {
 	type WorkComparisonDocuments,
 } from "./comparison_service.ts";
 import { type CreatedStub, type StubListEntry, StubService } from "./stub_service.ts";
+import { type DuplicateCandidate, DuplicateCandidateService } from "./duplicate_candidates.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -496,6 +497,10 @@ export class OutlineService {
 
 	resolveStub(workId: string): Promise<void> {
 		return new StubService(this.store).resolveStub(workId);
+	}
+
+	listDuplicateCandidates(limit?: number): Promise<DuplicateCandidate[]> {
+		return new DuplicateCandidateService(this.store).listCandidates(limit);
 	}
 
 	resolveLinkComparison(linkId: string): Promise<LinkComparisonProjection> {

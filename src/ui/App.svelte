@@ -90,6 +90,7 @@
 		type WorkComparisonDocuments,
 	} from "../services/comparison_service";
 	import type { StubListEntry } from "../services/stub_service";
+	import type { DuplicateCandidate } from "../services/duplicate_candidates";
 
 	const api = new Proxy({}, {
 		get: (_target, property) => async (...args: unknown[]) => {
@@ -110,6 +111,7 @@
 		| "today"
 		| "unplaced"
 		| "stubs"
+		| "duplicates"
 		| "globalLineage"
 		| "workLineage"
 		| "comparison"
@@ -140,6 +142,7 @@
 	let quickCaptureSubmitting = $state(false);
 	let unplacedWorks = $state<UnplacedWork[]>([]);
 	let stubEntries = $state<StubListEntry[]>([]);
+	let duplicateCandidates = $state<DuplicateCandidate[]>([]);
 	let unplacedLinkTargets = $state<Record<string, string>>({});
 	let unplacedLinkDirections = $state<Record<string, "from" | "to">>({});
 	let unplacedLinkType = $state<LinkType>("RELATED");
@@ -814,6 +817,19 @@
 		try {
 			await loadStubs();
 			viewMode = "stubs";
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function loadDuplicates(): Promise<void> {
+		duplicateCandidates = await api.listDuplicateCandidates();
+	}
+
+	async function openDuplicates(): Promise<void> {
+		try {
+			await loadDuplicates();
+			viewMode = "duplicates";
 		} catch (cause) {
 			error = errorMessage(cause);
 		}
@@ -1773,6 +1789,8 @@
 			<p>探索</p>
 			<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
 				onclick={() => (viewMode = "globalLineage")}>{vocabulary.globalLineage}</button>
+			<button class:active={viewMode === "duplicates"} aria-pressed={viewMode === "duplicates"}
+				onclick={openDuplicates}>{vocabulary.duplicateCandidates}</button>
 		</section>
 		<section>
 			<p>管理</p>
@@ -1792,7 +1810,7 @@
 	<header class="top-bar">
 		<div class="current-location">
 			<small>現在地</small>
-			<strong>{viewMode === "outline" ? "アウトライン" : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "stubs" ? vocabulary.stubList : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</strong>
+			<strong>{viewMode === "outline" ? "アウトライン" : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "stubs" ? vocabulary.stubList : viewMode === "duplicates" ? vocabulary.duplicateCandidates : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</strong>
 		</div>
 		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
 			<input
@@ -2156,6 +2174,33 @@
 						</article>
 					{:else}
 						<p class="empty">{vocabulary.stubList}は空です。</p>
+					{/each}
+				</div>
+			</section>
+		{:else if viewMode === "duplicates"}
+			<section class="outline-panel" aria-label={vocabulary.duplicateCandidates}>
+				<div class="section-title">
+					<span>{vocabulary.duplicateCandidates}</span><small>{duplicateCandidates.length}件</small>
+				</div>
+				<p class="hint">
+					{vocabulary.work}のタイトル・検索別名・{vocabulary.tag}・{vocabulary.semanticLink}の一致から計算した読み取り専用の一覧です。
+				</p>
+				<div class="unplaced-list">
+					{#each duplicateCandidates as candidate (`${candidate.workA.workId}:${candidate.workB.workId}`)}
+						<article class="unplaced-entry">
+							<strong>
+								{candidate.workA.title || `(空の${vocabulary.work})`}
+								⇔ {candidate.workB.title || `(空の${vocabulary.work})`}
+							</strong>
+							<small>スコア: {candidate.score}</small>
+							<ul aria-label={vocabulary.duplicateReason}>
+								{#each candidate.reasons as reason, index (index)}
+									<li><small>{reason.label}(+{reason.score})</small></li>
+								{/each}
+							</ul>
+						</article>
+					{:else}
+						<p class="empty">{vocabulary.duplicateCandidates}はありません。</p>
 					{/each}
 				</div>
 			</section>

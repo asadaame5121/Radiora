@@ -82,6 +82,7 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		listStubs: () => service().listStubs(),
 		createStub: (createdVia, context) => service().createStub(createdVia, context),
 		resolveStub: (workId) => service().resolveStub(workId),
+		listDuplicateCandidates: (limit) => service().listDuplicateCandidates(limit),
 		resolveLinkComparison: (linkId) => service().resolveLinkComparison(linkId),
 		listWorkComparisonDocuments: (workId) => service().listWorkComparisonDocuments(workId),
 		deleteLink: (fromId, toId, type) => service().deleteLink(fromId, toId, type),

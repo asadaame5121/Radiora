@@ -47,7 +47,9 @@ export type UiEntityCode =
 	| "noQueryResult"
 	| "stub"
 	| "stubList"
-	| "stubContext";
+	| "stubContext"
+	| "duplicateCandidates"
+	| "duplicateReason";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -101,4 +103,6 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	stub: "Stub",
 	stubList: "Stub一覧",
 	stubContext: "作成文脈",
+	duplicateCandidates: "重複候補",
+	duplicateReason: "根拠",
 });
