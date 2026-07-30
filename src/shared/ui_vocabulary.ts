@@ -65,7 +65,12 @@ export type UiEntityCode =
 	| "emergenceHold"
 	| "emergenceDismiss"
 	| "emergenceResolutionReason"
-	| "noEmergenceSuggestion";
+	| "noEmergenceSuggestion"
+	| "manuscript"
+	| "manuscriptOpen"
+	| "manuscriptTotalCount"
+	| "manuscriptBranchCount"
+	| "manuscriptReadOnly";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -138,4 +143,9 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	emergenceDismiss: "却下",
 	emergenceResolutionReason: "判断理由（却下時は必須）",
 	noEmergenceSuggestion: "新しい関係候補はありません",
+	manuscript: "原稿",
+	manuscriptOpen: "原稿として開く",
+	manuscriptTotalCount: "全体文字数",
+	manuscriptBranchCount: "枝の文字数",
+	manuscriptReadOnly: "固定版のため読み取り専用",
 });

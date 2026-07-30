@@ -132,7 +132,14 @@ export class OccurrenceOperations {
 
 	async updateItemText(id: string, text: string): Promise<void> {
 		const item = await this.requireItem(id);
-		await this.store.updateWorkingCopy(item.workId, text, new Date().toISOString());
+		if (item.revisionSelector.mode === "pinned") {
+			throw new Error(`Pinned Revision Occurrence is read-only: ${id}`);
+		}
+		await this.store.updateBranchWorkingCopy(
+			item.revisionSelector.branchId,
+			text,
+			new Date().toISOString(),
+		);
 	}
 
 	async setCollapsed(id: string, collapsed: boolean): Promise<void> {

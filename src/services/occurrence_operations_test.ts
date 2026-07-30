@@ -57,6 +57,70 @@ Deno.test("occurrence operations places an unplaced Work using its active main B
 	assertEquals(placement.text, "source");
 });
 
+Deno.test("occurrence operations edits the selected Branch and rejects pinned Revisions", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new OccurrenceOperations(store);
+	const source = await operations.createItem({ text: "main text", parentId: null });
+	const createdAt = "2026-07-30T12:00:00.000Z";
+	await store.createBranch(
+		{
+			id: "alternate",
+			workId: source.workId,
+			name: "alternate",
+			headRevisionId: null,
+			createdAt,
+		},
+		{
+			branchId: "alternate",
+			workId: source.workId,
+			text: "alternate text",
+			updatedAt: createdAt,
+		},
+	);
+	await store.createOccurrence({
+		id: "alternate-occurrence",
+		workId: source.workId,
+		parentOccurrenceId: null,
+		orderKey: 2048,
+		collapsed: false,
+		revisionSelector: { mode: "branch", branchId: "alternate" },
+	});
+
+	await operations.updateItemText("alternate-occurrence", "edited alternate");
+	assertEquals(
+		(await store.listWorkingCopies(source.workId)).map((copy) => [copy.branchId, copy.text]),
+		[
+			[
+				source.revisionSelector.mode === "branch" ? source.revisionSelector.branchId : "",
+				"main text",
+			],
+			["alternate", "edited alternate"],
+		],
+	);
+
+	await store.createRevision({
+		id: "fixed-revision",
+		workId: source.workId,
+		text: "fixed",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt,
+	}, "alternate");
+	await store.updateOccurrence({
+		id: "alternate-occurrence",
+		workId: source.workId,
+		parentOccurrenceId: null,
+		orderKey: 2048,
+		collapsed: false,
+		revisionSelector: { mode: "pinned", revisionId: "fixed-revision" },
+	});
+	await assertRejects(
+		() => operations.updateItemText("alternate-occurrence", "forbidden"),
+		Error,
+		"Pinned Revision Occurrence is read-only",
+	);
+});
+
 Deno.test("occurrence operations maintains trash guards and counts", async () => {
 	const operations = new OccurrenceOperations(new MemoryGraphStore());
 	const item = await operations.createItem({ text: "trash", parentId: null });

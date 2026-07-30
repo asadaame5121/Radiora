@@ -54,12 +54,14 @@ import type {
 import type { CreatedStub, StubListEntry } from "../services/stub_service.ts";
 import type { DuplicateCandidate } from "../services/duplicate_candidates.ts";
 import type { WorkMergePreview } from "../services/work_merge_service.ts";
+import type { ManuscriptSection } from "../services/manuscript_projection.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	listOutline(): Promise<OutlineSnapshot>;
 	projectDates(range: DateRange): Promise<DateProjection>;
+	projectManuscript(rootOccurrenceId: string): Promise<ManuscriptSection[]>;
 	listBookmarks(): Promise<Bookmark[]>;
 	createBookmark(occurrenceId: string): Promise<Bookmark>;
 	deleteBookmark(id: string): Promise<void>;
