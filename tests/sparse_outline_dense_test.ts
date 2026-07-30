@@ -1,90 +1,15 @@
 import { assert, assertEquals, assertLess } from "jsr:@std/assert@1";
-import type { OutlineItem, OutlineLink, SearchReason, SearchResult } from "../src/domain/models.ts";
 import { buildSparseOutline } from "../src/services/sparse_outline.ts";
+import {
+	createHighDensityGraphFixture,
+	HIGH_DENSITY_LINK_COUNT,
+	HIGH_DENSITY_WORK_COUNT,
+} from "./support/high_density_graph_fixture.ts";
 
-const NOW = "2026-07-30T00:00:00.000Z";
-const WORK_COUNT = 3_000;
-const MATCH_COUNT = 500;
-const LINK_COUNT = 24_000;
-
-function makeItem(id: string, parentId: string | null = null): OutlineItem {
-	return {
-		id,
-		workId: `work-${id}`,
-		text: id,
-		parentId,
-		orderKey: 1,
-		collapsed: false,
-		revisionSelector: { mode: "branch", branchId: `branch-${id}` },
-		createdAt: NOW,
-		updatedAt: NOW,
-	};
-}
-
-function makeLink(id: string, from: OutlineItem, to: OutlineItem): OutlineLink {
-	return {
-		id,
-		fromId: from.workId,
-		toId: to.workId,
-		from: { scope: "work", workId: from.workId },
-		to: { scope: "work", workId: to.workId },
-		type: "RELATED",
-		status: "asserted",
-		origin: "human",
-		createdAt: NOW,
-	};
-}
-
-function fixture(): { items: OutlineItem[]; links: OutlineLink[]; results: SearchResult[] } {
-	const roots = Array.from({ length: 10 }, (_, index) => makeItem(`root-${index}`));
-	const groups = Array.from(
-		{ length: 50 },
-		(_, index) => makeItem(`group-${index}`, roots[Math.floor(index / 5)].id),
-	);
-	const matches = Array.from(
-		{ length: MATCH_COUNT },
-		(_, index) => makeItem(`match-${index}`, groups[Math.floor(index / 10)].id),
-	);
-	const directTargets = Array.from(
-		{ length: MATCH_COUNT },
-		(_, index) => makeItem(`direct-${index}`),
-	);
-	const fillers = Array.from({
-		length: WORK_COUNT - roots.length - groups.length - matches.length - directTargets.length,
-	}, (
-		_,
-		index,
-	) => makeItem(`filler-${index}`));
-	const items = [...roots, ...groups, ...matches, ...directTargets, ...fillers];
-	const reasons: SearchReason[] = [
-		{ kind: "title", label: "タイトル一致", score: 3 },
-		{ kind: "body", label: "本文一致", score: 2 },
-		{ kind: "direct-link", label: "選択中の思索と直接接続", score: 1 },
-		{ kind: "shared-link", label: "共通リンク 2件", score: 0.5 },
-		{ kind: "shared-ancestor", label: "共通の祖先", score: 0.5 },
-	];
-	const results = matches.map((item, index) => ({
-		item,
-		ancestorIds: [roots[Math.floor(index / 50)].id, groups[Math.floor(index / 10)].id],
-		score: 1 - index / (MATCH_COUNT * 2),
-		reasons: [reasons[index % reasons.length]],
-	}));
-	const nonMatches = [...roots, ...groups, ...directTargets, ...fillers];
-	const links = matches.map((item, index) =>
-		makeLink(`direct-link-${index}`, item, directTargets[index])
-	);
-	for (let index = links.length; index < LINK_COUNT; index++) {
-		const from = nonMatches[index % nonMatches.length];
-		const to = nonMatches[(index * 17 + 1) % nonMatches.length];
-		links.push(makeLink(`dense-link-${index}`, from, to));
-	}
-	return { items, links, results };
-}
-
-Deno.test("sparse outline preserves dense search context within its performance budget", () => {
-	const { items, links, results } = fixture();
-	assertEquals(items.length, WORK_COUNT);
-	assertEquals(links.length, LINK_COUNT);
+Deno.test("sparse outline preserves dense search context within its performance budget", async () => {
+	const { items, links, projectionResults: results } = await createHighDensityGraphFixture();
+	assertEquals(items.length, HIGH_DENSITY_WORK_COUNT);
+	assertEquals(links.length, HIGH_DENSITY_LINK_COUNT);
 
 	const itemsBefore = structuredClone(items);
 	const linksBefore = structuredClone(links);
