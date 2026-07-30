@@ -24,3 +24,18 @@ Deno.test("complete JSON backup is exposed through the desktop binding", () => {
 	assertMatch(bindings, /exportJsonBackup\(\): Promise<string>/);
 	assertMatch(registration, /exportJsonBackup: \(\) => service\(\)\.exportJsonBackup\(\)/);
 });
+
+Deno.test("JSON restore flushes pending edits and reloads only after the binding succeeds", () => {
+	assertMatch(
+		app,
+		/async function restoreJsonBackupFile\(event: Event\)[\s\S]*?await autosave\.flush\(\)[\s\S]*?api\.restoreJsonBackup\(await file\.text\(\)\)[\s\S]*?await load\(\)/,
+	);
+	assertMatch(app, /accept="\.json,application\/json"/);
+	assertMatch(app, /vocabulary\.jsonBackupRestore/);
+	assertMatch(app, /vocabulary\.jsonBackupRestoreSuccess/);
+	assertMatch(bindings, /restoreJsonBackup\(source: string\): Promise<JsonBackupRestoreResult>/);
+	assertMatch(
+		registration,
+		/restoreJsonBackup: \(source\) => service\(\)\.restoreJsonBackup\(source\)/,
+	);
+});

@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
 import { JsonBackupService, type JsonBackupV6 } from "./json_backup.ts";
@@ -74,4 +74,38 @@ Deno.test("JSON backup exports every graph entity collection without mutating th
 	);
 	assertEquals(parsed.data, before);
 	assertEquals(await store.exportGraphState(), before);
+});
+
+Deno.test("current JSON backup restores only after complete validation", async () => {
+	const sourceStore = new MemoryGraphStore();
+	await new OccurrenceOperations(sourceStore).createItem({
+		text: "復元する\n\n日本語 **Markdown**",
+		parentId: null,
+	});
+	const source = await new JsonBackupService(sourceStore).export(
+		new Date("2026-07-30T09:00:00.000Z"),
+	);
+	const originalInput = source;
+	const targetStore = new MemoryGraphStore();
+	await new OccurrenceOperations(targetStore).createItem({ text: "置換前", parentId: null });
+	const service = new JsonBackupService(targetStore);
+
+	assertEquals(await service.restore(source), {
+		workCount: 1,
+		occurrenceCount: 1,
+		revisionCount: 0,
+		recoverySnapshotCount: 0,
+	});
+	assertEquals(await targetStore.exportGraphState(), await sourceStore.exportGraphState());
+	assertEquals(source, originalInput);
+
+	const malformed = JSON.parse(source) as JsonBackupV6;
+	malformed.data.branches[0].workId = "missing-work";
+	const before = await targetStore.exportGraphState();
+	await assertRejects(
+		() => service.restore(JSON.stringify(malformed)),
+		Error,
+		"Invalid Branch",
+	);
+	assertEquals(await targetStore.exportGraphState(), before);
 });

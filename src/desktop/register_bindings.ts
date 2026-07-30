@@ -32,6 +32,7 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		exportOpml: () => service().exportOpml(),
 		importOpml: (source) => service().importOpml(source),
 		exportJsonBackup: () => service().exportJsonBackup(),
+		restoreJsonBackup: (source) => service().restoreJsonBackup(source),
 		listBookmarks: () => service().listBookmarks(),
 		createBookmark: (occurrenceId) => service().createBookmark(occurrenceId),
 		deleteBookmark: (id) => service().deleteBookmark(id),

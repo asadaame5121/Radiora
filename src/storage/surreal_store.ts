@@ -25,11 +25,13 @@ import {
 	type GraphStateSnapshot,
 	type GraphStore,
 	type MergeWorksInput,
+	validatedGraphStateSnapshot,
 	validateRevisionCreation,
 	validateUnplacedWorkCreation,
 	validateWorkBundleImport,
 	type WorkBundle,
 } from "./graph_store.ts";
+import { buildSurrealRestoreTransaction } from "./surreal_backup_restore.ts";
 import {
 	CURRENT_STORAGE_SCHEMA_VERSION,
 	type MigrationJournalEntry,
@@ -310,6 +312,12 @@ export class SurrealGraphStore implements GraphStore {
 			bookmarks,
 			resumePosition,
 		};
+	}
+
+	async restoreGraphState(source: GraphStateSnapshot): Promise<void> {
+		const state = validatedGraphStateSnapshot(source);
+		const transaction = buildSurrealRestoreTransaction(state);
+		await this.#db.query(transaction.query, transaction.variables);
 	}
 
 	async listItems(): Promise<OutlineItem[]> {
