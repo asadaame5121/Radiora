@@ -41,6 +41,11 @@ Jujutsu changeへ含めない。
 `JsonGraphStore`の内部ファイル保存を、そのまま利用者向け完全backup APIとは見なさない。
 Phase 5では、純粋なencode/decode/validateと、通常のstore永続化、明示export、restoreを分離する。
 
+2026-07-30の[[2026-07-30-surreal-companion-spike]]では、SurrealKit baselineと公式CLIの
+`export -> validate -> 空DB import`を一時RocksDB間で実証した。schema 1 file/154 objects、
+Occurrence 2件、方向付きリンク1件について主要ID、親子、方向、日本語Markdownが一致した。
+以降のDB restoreはこの隔離DB方式を既定とし、利用中DBへのin-place importは採用しない。
+
 ## 先に固定する設計境界
 
 ### 原稿投影
@@ -98,12 +103,12 @@ SurrealDBで全置換を一transactionに安全に収められない場合は、
 | 3 | #64 | Markdown三参照モード | #62、#63 | 中-高 | Sol・medium | 1.5-2.5日 |
 | 3 | #65 | OPML import/export | #62 | 高 | Sol・medium | 2-3日 |
 | 4 | #68 | v0から現行versionへのmigration chain監査 | #66 | 中-高 | Sol・medium | 1-2日 |
-| 4 | #67 | transactional JSON import/restore | #66、#68 | 最難 | Sol・high | 3-5日 |
-| 5 | #69 | 破損・中断・容量不足restore試験 | #67 | 最難 | Sol・high | 2-3日 |
+| 4 | #67 | staging DB式JSON import/restore | #66、#68 | 高 | Sol・medium | 2-4日 |
+| 5 | #69 | 隔離restoreの破損・中断・容量不足試験 | #67 | 高 | Sol・medium | 2-3日 |
 | 6 | #70 | 全形式round-trip fixture | #64、#65、#67、#69 | 中 | Terra・medium | 1-2日 |
 | 7 | #71 | Windows Desktop空DB restore E2E | #70 | 高 | 親 Sol・medium | 1-2日 |
 
-総量目安は15-23 agent-day。Wave 2とWave 3の各行は論理上並行可能だが、共有ワークツリーでは
+総量目安は14-22 agent-day。Wave 2とWave 3の各行は論理上並行可能だが、共有ワークツリーでは
 同じ`bindings.ts`、`App.svelte`、codec、fixtureを同時編集しない。原則としてissueごとに
 逐次changeを積む。
 
@@ -228,16 +233,20 @@ storage schema versionは上げない。
 
 ### #67 [P5-06] JSON import・restoreをtransactionalに実装
 
-難易度は最難。現DB破損の危険が高いためSol・highを推奨する。
+難易度は高。companion検証で空DBへの一括復元とreadback一致まで確認できたため、
+Sol・mediumで開始する。現DBを直接置換するtransactional実装ではなく、隔離したstaging DBを
+完成させてから切り替える。
 
 1. parse/migrate/validateだけを行うread-only preview APIを先に実装する
 2. 現DBを置換するrestoreと、既存DBへ追加するimportを別commandに分ける
 3. restore前に保護backupを作り、source schema versionとhashを記録する
 4. Memoryはclone後commit、JSONはtemp fileとatomic replace、SurrealDBはtransactionまたは
-   staging databaseを使う
+   staging databaseを使う。SurrealDBではstaging databaseを既定とする
 5. 全entityを投入後、参照整合性と件数/hashを読み戻して検証する
 6. 成功後だけstore/runtimeを新DBへ切り替え、UI選択・履歴を安全に初期化する
 7. 失敗時は旧storeを開いたままにし、原因と保護backupの場所を返す
+8. schema正本はSurrealKitでbaselineし、baselineが0 file/0 objectなら失敗させる
+9. 公式CLIのdumpを運用保護用に使う場合は、対象table/recordを明示して`surreal validate`を通す
 
 停止条件:
 
@@ -249,7 +258,8 @@ storage schema versionは上げない。
 
 ### #69 [P5-08] 破損・中断・容量不足を含むrestore試験
 
-難易度は最難。障害注入とデータ保全を扱うためSol・highを推奨する。
+難易度は高。障害を隔離stagingとtemp出力へ閉じ込め、旧DBを試験対象から外せる間は
+Sol・mediumを推奨する。旧DBの切替境界やデータ破損リスクへ踏み込む場合だけSol・highへ昇格する。
 
 1. filesystem、codec、store swapへfault injection pointを設ける
 2. truncated JSON、hash不一致、参照切れ、未来versionを用意する
@@ -295,14 +305,16 @@ Phase 5 closeout記録へ残す。
 |---|---|
 | pure projection、fixture、機械的テスト追加 | Terra・medium |
 | UIと状態管理、形式変換の設計、複数レイヤー変更 | Sol・medium |
-| transactional restore、DB切替、障害注入、データ破損リスク | Sol・high |
+| 隔離staging restore、temp領域への障害注入 | Sol・medium |
+| 利用中DBの切替、原子性未確定、旧DBへ及ぶデータ破損リスク | Sol・high |
 | issue統合レビュー、最終verify、Desktop release gate | 親 Sol・medium |
 
 Terra担当は、同じ検証が一回の修正後も失敗する、不変条件を確定できない、UI/状態/永続化へ
 範囲が広がる、後方互換またはデータ破損リスクが判明した時点で編集を止め、親がSol・medium以上へ
 昇格する。
 
-Sol・highは#67と#69のデータ保全境界に限定する。単に実装量が多いことを理由にhighへ上げない。
+Sol・highは#67と#69でも、隔離DB方式から利用中DBの切替境界へ踏み込む場合に限定する。
+単に実装量が多いことを理由にhighへ上げない。
 
 ## changeと検証の運用
 

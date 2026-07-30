@@ -25,6 +25,7 @@
 		"desktop:preflight": "deno run -A scripts/desktop_preflight.ts",
 		"test": "deno test -A src tests",
 		"test:integration": "deno run -A scripts/surreal_integration.ts",
+		"test:surreal-companion": "deno run -A scripts/surreal_companion_spike.ts",
 		"desktop:probe": "deno task desktop:preflight && deno task desktop:probe:build && deno task desktop:probe:run",
 		"desktop:probe:build": "deno run -A scripts/surreal_desktop_probe_build.ts",
 		"desktop:probe:run": "deno run -A scripts/surreal_desktop_probe_run.ts",
