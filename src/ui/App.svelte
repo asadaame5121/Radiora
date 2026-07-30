@@ -8,6 +8,7 @@
 	import AdvancedLinkEditor from "./AdvancedLinkEditor.svelte";
 	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import SparseOutlineView from "./SparseOutlineView.svelte";
+	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
 	import type {
 		Bookmark,
 		CreateLinkInput,
@@ -2212,55 +2213,13 @@
 				</div>
 			</section>
 		{:else if viewMode === "duplicates"}
-			<section class="outline-panel" aria-label={vocabulary.duplicateCandidates}>
-				<div class="section-title">
-					<span>{vocabulary.duplicateCandidates}</span><small>{duplicateCandidates.length}件</small>
-				</div>
-				<p class="hint">{vocabulary.duplicateCandidateHint}</p>
-				<div class="unplaced-list">
-					{#each duplicateCandidates as candidate (`${candidate.workA.workId}:${candidate.workB.workId}`)}
-						<article class="unplaced-entry">
-							<strong>
-								{candidate.workA.title || `(空の${vocabulary.work})`}
-								⇔ {candidate.workB.title || `(空の${vocabulary.work})`}
-							</strong>
-							<small>{vocabulary.duplicateScore}: {candidate.score}</small>
-							<ul aria-label={vocabulary.duplicateReason}>
-								{#each candidate.reasons as reason, index (index)}
-									<li><small>{reason.label}(+{reason.score})</small></li>
-								{/each}
-							</ul>
-							<div class="unplaced-actions" aria-label={vocabulary.duplicateCandidateActions}>
-								<details>
-									<summary>{vocabulary.duplicateMerge}</summary>
-									<button
-										onclick={() =>
-											requestDuplicateMerge(
-												candidate.workB.workId,
-												candidate.workA.workId,
-											)}
-									>{vocabulary.duplicateKeepLeft}</button>
-									<button
-										onclick={() =>
-											requestDuplicateMerge(
-												candidate.workA.workId,
-												candidate.workB.workId,
-											)}
-									>{vocabulary.duplicateKeepRight}</button>
-								</details>
-								<button onclick={() => createDuplicateCandidateLink(candidate, "LIKE")}
-								>{vocabulary.duplicateCreateLike}</button>
-								<button onclick={() => createDuplicateCandidateLink(candidate, "RELATED")}
-								>{vocabulary.duplicateCreateRelated}</button>
-								<button onclick={() => excludeDuplicateCandidate(candidate)}
-								>{vocabulary.duplicateDismiss}</button>
-							</div>
-						</article>
-					{:else}
-						<p class="empty">{vocabulary.duplicateCandidates}はありません。</p>
-					{/each}
-				</div>
-			</section>
+			<DuplicateCandidatesPanel
+				candidates={duplicateCandidates}
+				{vocabulary}
+				onRequestMerge={requestDuplicateMerge}
+				onCreateLink={createDuplicateCandidateLink}
+				onDismiss={excludeDuplicateCandidate}
+			/>
 		{:else if viewMode === "trash"}
 			<section class="outline-panel">
 				<div class="section-title"><span>ゴミ箱</span><small>{trashEntries.length}件</small></div>

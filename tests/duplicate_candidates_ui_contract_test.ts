@@ -2,6 +2,9 @@ import { assert, assertFalse, assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("Duplicate candidates view is reachable and acts only through bindings", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const panel = await Deno.readTextFile(
+		new URL("../src/ui/DuplicateCandidatesPanel.svelte", import.meta.url),
+	);
 	const bindings = await Deno.readTextFile(
 		new URL("../src/shared/bindings.ts", import.meta.url),
 	);
@@ -10,8 +13,13 @@ Deno.test("Duplicate candidates view is reachable and acts only through bindings
 	assert(app.includes("api.listDuplicateCandidates("));
 	assert(app.includes('"duplicates"'));
 	assert(app.includes("openDuplicates"));
-	assert(app.includes("vocabulary.duplicateCandidates"));
-	assert(app.includes("vocabulary.duplicateReason"));
+	assert(app.includes("<DuplicateCandidatesPanel"));
+	assert(app.includes("candidates={duplicateCandidates}"));
+	assert(app.includes("onRequestMerge={requestDuplicateMerge}"));
+	assert(app.includes("onCreateLink={createDuplicateCandidateLink}"));
+	assert(app.includes("onDismiss={excludeDuplicateCandidate}"));
+	assert(panel.includes("vocabulary.duplicateCandidates"));
+	assert(panel.includes("vocabulary.duplicateReason"));
 	assertFalse(/直接|store\./.test(app));
 });
 
@@ -24,11 +32,12 @@ Deno.test("Duplicate candidates view keeps merge, link adoption, and dismissal e
 		new URL("../src/desktop/register_bindings.ts", import.meta.url),
 	);
 
-	const duplicatesSection = app.match(
-		/\{:else if viewMode === "duplicates"\}[\s\S]*?(?=\{:else if viewMode === "trash"\})/,
-	)?.[0] ?? "";
+	const panel = await Deno.readTextFile(
+		new URL("../src/ui/DuplicateCandidatesPanel.svelte", import.meta.url),
+	);
 
-	assert(duplicatesSection.length > 0, "duplicates section not found");
+	assert(panel.includes("onRequestMerge(candidate.workB.workId, candidate.workA.workId)"));
+	assert(panel.includes("onRequestMerge(candidate.workA.workId, candidate.workB.workId)"));
 	for (
 		const code of [
 			"duplicateCandidateHint",
@@ -41,11 +50,11 @@ Deno.test("Duplicate candidates view keeps merge, link adoption, and dismissal e
 			"duplicateDismiss",
 		]
 	) {
-		assert(duplicatesSection.includes(`vocabulary.${code}`), `missing vocabulary.${code}`);
+		assert(panel.includes(`vocabulary.${code}`), `missing vocabulary.${code}`);
 	}
 	assertFalse(
-		/実身|化身|項目|リンク/.test(duplicatesSection),
-		"duplicates section must not contain literal Japanese terms",
+		/実身|化身|項目|リンク/.test(panel),
+		"duplicate panel must not contain literal Japanese terms",
 	);
 	assertMatch(
 		app,
