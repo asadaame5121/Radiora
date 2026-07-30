@@ -120,15 +120,22 @@ Deno.test("App.svelte toggle button switches between table and sparse outline", 
 	assert(app.includes("sparse-toggle"), "has toggle button CSS class");
 });
 
-Deno.test("outline_service has buildQueryProjectionNodes method", async () => {
-	const source = await Deno.readTextFile(
+Deno.test("outline service delegates query projection to discovery operations", async () => {
+	const facade = await Deno.readTextFile(
 		new URL("../src/services/outline_service.ts", import.meta.url),
 	);
-	assert(source.includes("buildQueryProjectionNodes"), "has new method");
+	const discovery = await Deno.readTextFile(
+		new URL("../src/services/discovery_operations.ts", import.meta.url),
+	);
+	assert(facade.includes("buildQueryProjectionNodes"), "façade keeps the public method");
+	assert(
+		facade.includes("this.discovery.buildQueryProjectionNodes"),
+		"façade delegates query projection",
+	);
 	assertMatch(
-		source,
+		discovery,
 		/buildSparseOutline\(.*"query"\)/,
-		"calls buildSparseOutline with query sourceType",
+		"discovery operations calls buildSparseOutline with query sourceType",
 	);
 });
 
