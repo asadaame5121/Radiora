@@ -225,6 +225,7 @@
 	let opmlNotice = $state("");
 	let jsonBackupNotice = $state("");
 	let opmlFileInput: HTMLInputElement;
+	let jsonBackupFileInput: HTMLInputElement;
 	let manuscriptSections = $state<ManuscriptSection[]>([]);
 	let manuscriptLoading = $state(false);
 	let internalReferenceCompletionRequest = 0;
@@ -1747,6 +1748,23 @@
 		}
 	}
 
+	async function restoreJsonBackupFile(event: Event): Promise<void> {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = "";
+		if (!file) return;
+		jsonBackupNotice = "";
+		try {
+			await autosave.flush();
+			const result = await api.restoreJsonBackup(await file.text());
+			await load();
+			jsonBackupNotice =
+				`${vocabulary.jsonBackupRestoreSuccess}: ${result.workCount}件の${vocabulary.work}。`;
+		} catch (cause) {
+			error = `${vocabulary.jsonBackupRestore}に失敗しました: ${errorMessage(cause)}`;
+		}
+	}
+
 	async function requestConfirmation(confirmation: PendingConfirmation): Promise<void> {
 		if (pendingConfirmation) return;
 		pendingConfirmation = confirmation;
@@ -2025,6 +2043,18 @@
 				onclick={performJsonBackupExport}
 				disabled={startup.phase !== "ready"}
 			>{vocabulary.jsonBackupExport}</button>
+			<input
+				class="sr-only"
+				type="file"
+				accept=".json,application/json"
+				aria-label={vocabulary.jsonBackupRestore}
+				bind:this={jsonBackupFileInput}
+				onchange={restoreJsonBackupFile}
+			/>
+			<button
+				onclick={() => jsonBackupFileInput.click()}
+				disabled={startup.phase !== "ready"}
+			>{vocabulary.jsonBackupRestore}</button>
 			{#if jsonBackupNotice}
 				<small class="json-backup-notice" role="status">{jsonBackupNotice}</small>
 			{/if}

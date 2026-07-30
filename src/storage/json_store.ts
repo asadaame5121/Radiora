@@ -18,7 +18,7 @@ import type {
 	WorkingCopy,
 } from "../domain/models.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
-import type { MergeWorksInput, WorkBundle } from "./graph_store.ts";
+import type { GraphStateSnapshot, MergeWorksInput, WorkBundle } from "./graph_store.ts";
 
 interface LegacyItem {
 	id: string;
@@ -288,6 +288,29 @@ export class JsonGraphStore extends MemoryGraphStore {
 			await this.persist();
 		} catch (cause) {
 			this.restoreAllState(before);
+			throw cause;
+		}
+	}
+
+	override async restoreGraphState(state: GraphStateSnapshot): Promise<void> {
+		const before = await this.exportGraphState();
+		const temporaryPath = typeof this.path === "string"
+			? `${this.path}.restore-${crypto.randomUUID()}.tmp`
+			: new URL(`${this.path.href}.restore-${crypto.randomUUID()}.tmp`);
+		try {
+			await super.restoreGraphState(state);
+			const backup = this.currentBackup(await this.exportGraphState());
+			await Deno.writeTextFile(temporaryPath, JSON.stringify(backup, null, 2));
+			await Deno.rename(temporaryPath, this.path);
+		} catch (cause) {
+			await super.restoreGraphState(before);
+			try {
+				await Deno.remove(temporaryPath);
+			} catch (cleanupCause) {
+				if (!(cleanupCause instanceof Deno.errors.NotFound)) {
+					// Preserve the original restore error; a stale temp file is safe to ignore.
+				}
+			}
 			throw cause;
 		}
 	}
@@ -571,32 +594,19 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	private async persist(): Promise<void> {
-		const backup: BackupV6 = {
+		const backup = this.currentBackup(await this.exportGraphState());
+		await Deno.writeTextFile(this.path, JSON.stringify(backup, null, 2));
+	}
+
+	private currentBackup(data: GraphStateSnapshot): BackupV6 {
+		return {
 			format: "radiora-backup",
 			schemaVersion: 6,
 			exportedAt: new Date().toISOString(),
 			appVersion: "0.1.0",
 			source: { storageSchemaVersion: 6 },
-			data: {
-				works: this.works,
-				branches: this.branches,
-				workingCopies: this.workingCopies,
-				occurrences: this.occurrences,
-				links: this.links,
-				systemRelations: this.systemRelations,
-				knots: this.knots,
-				aliases: this.aliases,
-				emergenceFeedback: this.emergenceFeedback,
-				emergenceSuggestions: this.emergenceSuggestions,
-				savedRuleQueries: this.savedRuleQueries,
-				purgeManifests: this.purgeManifests,
-				revisions: this.revisions,
-				recoverySnapshots: this.recoverySnapshots,
-				bookmarks: this.bookmarks,
-				resumePosition: this.resumePosition,
-			},
+			data,
 		};
-		await Deno.writeTextFile(this.path, JSON.stringify(backup, null, 2));
 	}
 
 	private captureAllState() {

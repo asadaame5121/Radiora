@@ -56,6 +56,7 @@ import type { DuplicateCandidate } from "../services/duplicate_candidates.ts";
 import type { WorkMergePreview } from "../services/work_merge_service.ts";
 import type { ManuscriptSection } from "../services/manuscript_projection.ts";
 import type { OpmlImportResult } from "../services/opml_service.ts";
+import type { JsonBackupRestoreResult } from "../services/json_backup.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
@@ -66,6 +67,7 @@ export interface RadioraBindings {
 	exportOpml(): Promise<string>;
 	importOpml(source: string): Promise<OpmlImportResult>;
 	exportJsonBackup(): Promise<string>;
+	restoreJsonBackup(source: string): Promise<JsonBackupRestoreResult>;
 	listBookmarks(): Promise<Bookmark[]>;
 	createBookmark(occurrenceId: string): Promise<Bookmark>;
 	deleteBookmark(id: string): Promise<void>;

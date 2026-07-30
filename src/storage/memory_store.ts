@@ -25,6 +25,7 @@ import {
 	type GraphStateSnapshot,
 	type GraphStore,
 	type MergeWorksInput,
+	validatedGraphStateSnapshot,
 	validateRevisionCreation,
 	validateUnplacedWorkCreation,
 	validateWorkBundleImport,
@@ -82,6 +83,32 @@ export class MemoryGraphStore implements GraphStore {
 			bookmarks: this.bookmarks,
 			resumePosition: this.resumePosition,
 		}));
+	}
+
+	restoreGraphState(source: GraphStateSnapshot): Promise<void> {
+		let state: GraphStateSnapshot;
+		try {
+			state = validatedGraphStateSnapshot(source);
+		} catch (error) {
+			return Promise.reject(error);
+		}
+		this.works = state.works;
+		this.branches = state.branches;
+		this.workingCopies = state.workingCopies;
+		this.occurrences = state.occurrences;
+		this.links = state.links;
+		this.systemRelations = state.systemRelations;
+		this.knots = state.knots;
+		this.aliases = state.aliases;
+		this.emergenceFeedback = state.emergenceFeedback;
+		this.emergenceSuggestions = state.emergenceSuggestions;
+		this.savedRuleQueries = state.savedRuleQueries;
+		this.purgeManifests = state.purgeManifests;
+		this.revisions = state.revisions;
+		this.recoverySnapshots = state.recoverySnapshots;
+		this.bookmarks = state.bookmarks;
+		this.resumePosition = state.resumePosition;
+		return Promise.resolve();
 	}
 
 	listItems(): Promise<OutlineItem[]> {
