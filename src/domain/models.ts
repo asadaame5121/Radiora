@@ -31,6 +31,9 @@ export interface Work {
 	updatedAt: string;
 	deletedAt?: string;
 	stub?: WorkStub;
+	/** Tombstone provenance retained after an explicit duplicate merge. */
+	mergedIntoWorkId?: string;
+	mergedAt?: string;
 }
 
 export interface Branch {

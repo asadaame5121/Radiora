@@ -3,8 +3,10 @@ import { RecordId } from "surrealdb";
 import type { Branch, Revision } from "../domain/models.ts";
 import { validateRevisionCreation } from "./graph_store.ts";
 import {
+	duplicateLinkIdsAfterMerge,
 	evolvedFromEndpoints,
 	itemFromRow,
+	mergeWorksTransactionQuery,
 	navigationPurgeStatements,
 	occurrenceFromRow,
 	quickCaptureTransactionQuery,
@@ -21,6 +23,74 @@ Deno.test("Quick Capture Surreal writes are enclosed in one transaction", () => 
 	assertEquals(query.match(/BEGIN TRANSACTION/g)?.length, 1);
 	assertEquals(query.match(/COMMIT TRANSACTION/g)?.length, 1);
 	assertEquals(query.match(/\bCREATE\b/g)?.length, 3);
+});
+
+Deno.test("duplicate Work merge uses one transaction for every scoped table", () => {
+	const query = mergeWorksTransactionQuery();
+	assertEquals(query.match(/BEGIN TRANSACTION/g)?.length, 1);
+	assertEquals(query.match(/COMMIT TRANSACTION/g)?.length, 1);
+	for (
+		const table of [
+			"branch",
+			"working_copy",
+			"revision",
+			"recovery_snapshot",
+			"occurrence",
+			"bookmark",
+			"resume_position",
+			"semantic_link",
+			"system_relation",
+		]
+	) {
+		assertEquals(query.includes(`UPDATE ${table}`), true);
+	}
+	assertEquals(query.includes("merged_into_work = $survivor"), true);
+	assertEquals(query.includes("WHERE id IN $duplicateLinks"), true);
+	assertEquals(query.trimEnd().endsWith("COMMIT TRANSACTION;"), true);
+});
+
+Deno.test("duplicate Work merge cannot commit a partial Surreal failure", () => {
+	const query = mergeWorksTransactionQuery();
+	const begin = query.indexOf("BEGIN TRANSACTION;");
+	const commit = query.indexOf("COMMIT TRANSACTION;");
+	assertEquals(begin, 0);
+	assertEquals(commit, query.lastIndexOf("COMMIT TRANSACTION;"));
+	assertEquals(query.slice(commit + "COMMIT TRANSACTION;".length).trim(), "");
+	assertEquals(query.slice(begin, commit).includes("UPSERT $alias"), true);
+	assertEquals(query.slice(begin, commit).includes("UPDATE $source SET merged_into_work"), true);
+});
+
+Deno.test("duplicate Work merge omits alias write when both titles are identical", () => {
+	const query = mergeWorksTransactionQuery(false);
+	assertEquals(query.includes("UPSERT $alias"), false);
+	assertEquals(query.includes("UPDATE $source SET merged_into_work"), true);
+	assertEquals(query.trimEnd().endsWith("COMMIT TRANSACTION;"), true);
+});
+
+Deno.test("duplicate Work merge precomputes symmetric duplicates and self links for retraction", () => {
+	const link = (id: string, from: string, to: string) => ({
+		id,
+		fromId: from,
+		toId: to,
+		from: { scope: "work" as const, workId: from },
+		to: { scope: "work" as const, workId: to },
+		type: "RELATED" as const,
+		status: "asserted" as const,
+		origin: "human" as const,
+		createdAt: "2026-07-30T00:00:00.000Z",
+	});
+	assertEquals(
+		duplicateLinkIdsAfterMerge(
+			[
+				link("keep", "survivor", "third"),
+				link("duplicate", "third", "source"),
+				link("self", "source", "survivor"),
+			],
+			"source",
+			"survivor",
+		),
+		["duplicate", "self"],
+	);
 });
 
 const ITEM_ID = "31a56a11-35ac-4700-9f68-20de9c9d58dc";
@@ -239,6 +309,20 @@ Deno.test("Surreal Work rows preserve Stub metadata", () => {
 		createdVia: "advanced-link-editor",
 		context: "未解決の名前",
 	});
+});
+
+Deno.test("Surreal Work rows preserve merge provenance", () => {
+	const work = workFromRow({
+		id: ITEM_ID,
+		created_at: "2026-07-30T00:00:00.000Z",
+		updated_at: "2026-07-30T00:00:00.000Z",
+		deleted_at: null,
+		stub: null,
+		merged_into_work: new RecordId("work", PARENT_ID),
+		merged_at: "2026-07-30T01:00:00.000Z",
+	});
+	assertEquals(work.mergedIntoWorkId, PARENT_ID);
+	assertEquals(work.mergedAt, "2026-07-30T01:00:00.000Z");
 });
 
 Deno.test("Surreal Work rows omit an absent or partial Stub", () => {

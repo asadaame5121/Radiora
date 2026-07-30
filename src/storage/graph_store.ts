@@ -20,6 +20,13 @@ import type {
 	WorkStub,
 } from "../domain/models.ts";
 
+export interface MergeWorksInput {
+	sourceWorkId: string;
+	survivorWorkId: string;
+	mergedAt: string;
+	alias?: SearchAlias;
+}
+
 export interface GraphStore {
 	initialize(): Promise<void>;
 	close(): Promise<void>;
@@ -42,6 +49,8 @@ export interface GraphStore {
 	createUnplacedWork(work: Work, branch: Branch, workingCopy: WorkingCopy): Promise<void>;
 	/** Removes the Stub state from a Work and records the resolution instant. */
 	resolveWorkStub(workId: string, updatedAt: string): Promise<void>;
+	/** Atomically moves all source-owned graph state and leaves a provenance tombstone. */
+	mergeWorks(input: MergeWorksInput): Promise<void>;
 	createOccurrence(occurrence: Occurrence): Promise<void>;
 	createBookmark(bookmark: Bookmark): Promise<void>;
 	deleteBookmark(id: string): Promise<void>;
