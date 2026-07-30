@@ -22,14 +22,6 @@
 		return node.breadcrumb.map((id) => id.slice(0, 6)).join(" › ");
 	}
 
-	function computeDepth(nodeIndex: number, visited: Set<number>): number {
-		if (visited.has(nodeIndex)) return 0;
-		visited.add(nodeIndex);
-		const node = nodes[nodeIndex];
-		if (node?.parentNodeIndex === undefined) return 0;
-		return computeDepth(node.parentNodeIndex, new Set(visited)) + 1;
-	}
-
 	const childrenByIndex = $derived.by(() => {
 		const map = new Map<number | undefined, number[]>();
 		for (let i = 0; i < nodes.length; i++) {
@@ -41,7 +33,31 @@
 		return map;
 	});
 
-	const rootIndices = $derived(childrenByIndex.get(undefined) ?? []);
+	const rootIndices = $derived.by(() => {
+		const roots = [...(childrenByIndex.get(undefined) ?? [])];
+		const reachable = new Set<number>();
+
+		function markReachable(idx: number): void {
+			if (reachable.has(idx)) return;
+			reachable.add(idx);
+			for (const childIdx of childrenByIndex.get(idx) ?? []) {
+				markReachable(childIdx);
+			}
+		}
+
+		for (const rootIdx of roots) markReachable(rootIdx);
+
+		// A malformed or cyclic parent chain has no natural root. Treat its first
+		// unvisited node as an additional root so the projection remains visible.
+		for (let idx = 0; idx < nodes.length; idx++) {
+			if (!reachable.has(idx)) {
+				roots.push(idx);
+				markReachable(idx);
+			}
+		}
+
+		return roots;
+	});
 
 	const depths = $derived.by(() => {
 		const result = new Map<number, number>();
@@ -69,8 +85,9 @@
 	const visibleOrder = $derived.by(() => {
 		const order: number[] = [];
 		const expanded = new Set(expandedIds);
+		const visited = new Set<number>();
 		for (const rootIdx of rootIndices) {
-			addVisible(rootIdx, expanded, order, new Set<number>());
+			addVisible(rootIdx, expanded, order, visited);
 		}
 		return order;
 	});
