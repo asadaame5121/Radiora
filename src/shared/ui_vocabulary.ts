@@ -70,7 +70,11 @@ export type UiEntityCode =
 	| "manuscriptOpen"
 	| "manuscriptTotalCount"
 	| "manuscriptBranchCount"
-	| "manuscriptReadOnly";
+	| "manuscriptReadOnly"
+	| "markdownExportMode"
+	| "markdownExportRadiora"
+	| "markdownExportPortable"
+	| "markdownExportObsidian";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -148,4 +152,8 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	manuscriptTotalCount: "全体文字数",
 	manuscriptBranchCount: "枝の文字数",
 	manuscriptReadOnly: "固定版のため読み取り専用",
+	markdownExportMode: "Markdown参照形式",
+	markdownExportRadiora: "Radiora（内部参照を保持）",
+	markdownExportPortable: "ポータブル（表示名のみ）",
+	markdownExportObsidian: "Obsidian（Wikiリンク）",
 });

@@ -47,7 +47,11 @@
 		type WorkingCopySaveStatus,
 	} from "../services/working_copy_autosave";
 	import { ResumePositionAutosaveCoordinator } from "../services/resume_position_autosave";
-	import { renderOutlineSnapshotMarkdown } from "../services/markdown_export";
+	import {
+		type MarkdownExportReferenceMode,
+		renderOutlineSnapshotMarkdown,
+		rewriteMarkdownExportReferences,
+	} from "../services/markdown_export";
 	import {
 		activateBrowsingPane,
 		activeBrowsingPane,
@@ -217,6 +221,7 @@
 	let internalReferenceBacklinks = $state<InternalReferenceBacklink[]>([]);
 	let internalReferenceNotice = $state("");
 	let markdownExportNotice = $state("");
+	let markdownExportReferenceMode = $state<MarkdownExportReferenceMode>("radiora");
 	let manuscriptSections = $state<ManuscriptSection[]>([]);
 	let manuscriptLoading = $state(false);
 	let internalReferenceCompletionRequest = 0;
@@ -1656,7 +1661,15 @@
 		markdownExportNotice = "";
 		try {
 			await autosave.flush();
-			const markdown = renderOutlineSnapshotMarkdown(snapshot);
+			const rendered = renderOutlineSnapshotMarkdown(snapshot);
+			const resolutions = markdownExportReferenceMode === "obsidian"
+				? await api.resolveInternalReferences(rendered)
+				: [];
+			const markdown = rewriteMarkdownExportReferences(
+				rendered,
+				markdownExportReferenceMode,
+				resolutions,
+			);
 			const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
 			const url = URL.createObjectURL(blob);
 			const anchor = document.createElement("a");
@@ -1928,6 +1941,17 @@
 		</form>
 		<div class="top-actions">
 			<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
+			<label>
+				<span class="sr-only">{vocabulary.markdownExportMode}</span>
+				<select
+					bind:value={markdownExportReferenceMode}
+					aria-label={vocabulary.markdownExportMode}
+				>
+					<option value="radiora">{vocabulary.markdownExportRadiora}</option>
+					<option value="portable">{vocabulary.markdownExportPortable}</option>
+					<option value="obsidian">{vocabulary.markdownExportObsidian}</option>
+				</select>
+			</label>
 			<button
 				onclick={exportMarkdown}
 				disabled={!commands.exportMarkdown.enabled}
