@@ -2,9 +2,9 @@
 
 - 作成日: 2026-07-29
 - 対象: `#51` Phase 4: 検索と知識整備（sub-issue `#52`-`#60`）
-- 状態: 承認済み、実施中
+- 状態: 実施済み（closeout記録は`2026-07-30-phase-4-search-knowledge.md`）
 
-## 前提（調査結果）
+## 開始時点の前提（調査結果）
 
 - 現行 schema: storage / backup とも version `3`
 - 既存の足場:
