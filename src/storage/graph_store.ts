@@ -1,6 +1,8 @@
 import type {
 	Bookmark,
 	Branch,
+	EmergenceAction,
+	EmergenceSuggestion,
 	Knot,
 	LexicalHit,
 	LinkType,
@@ -108,6 +110,18 @@ export interface GraphStore {
 	deleteAlias(id: string): Promise<void>;
 	getEmergenceFeedback(id: string): Promise<"accept" | "dismiss" | "pin" | null>;
 	setEmergenceFeedback(id: string, action: "accept" | "dismiss" | "pin"): Promise<void>;
+	listEmergenceSuggestions(): Promise<EmergenceSuggestion[]>;
+	upsertEmergenceSuggestion(suggestion: EmergenceSuggestion): Promise<void>;
+	/**
+	 * Atomically records a decision and, for acceptance, creates the supplied
+	 * suggestion-origin asserted link. Repeated decisions are idempotent.
+	 */
+	resolveEmergenceSuggestion(
+		id: string,
+		action: EmergenceAction,
+		link?: OutlineLink,
+		reason?: string,
+	): Promise<void>;
 	listSavedRuleQueries(): Promise<SavedRuleQuery[]>;
 	upsertSavedRuleQuery(query: SavedRuleQuery): Promise<void>;
 	deleteSavedRuleQuery(id: string): Promise<void>;

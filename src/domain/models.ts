@@ -325,6 +325,7 @@ export interface TagAlias {
 
 export type EmergenceKind = "latent-relation" | "cross-branch-resonance" | "productive-tension";
 export type EmergenceAction = "accept" | "dismiss" | "pin";
+export type EmergenceStatus = "pending" | "accepted" | "dismissed" | "held";
 
 export interface EvidenceStep {
 	fromId: string;
@@ -335,6 +336,9 @@ export interface EvidenceStep {
 export interface EmergenceSuggestion {
 	id: string;
 	kind: EmergenceKind;
+	/** Stable endpoints. Occurrence IDs below are only the discovery-time audit snapshot. */
+	contextWorkId: string;
+	targetWorkId: string;
 	contextItemId: string;
 	targetItemId: string;
 	proposedLinkType?: LinkType;
@@ -343,6 +347,11 @@ export interface EmergenceSuggestion {
 	evidence: EvidenceStep[];
 	score: number;
 	status?: "pinned";
+	persistenceStatus: EmergenceStatus;
+	createdAt: string;
+	updatedAt: string;
+	resolvedAt?: string;
+	resolutionReason?: string;
 }
 
 export interface EmergenceFeedback {

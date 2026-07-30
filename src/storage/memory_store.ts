@@ -1,6 +1,8 @@
 import type {
 	Bookmark,
 	Branch,
+	EmergenceAction,
+	EmergenceSuggestion,
 	Knot,
 	LexicalHit,
 	LinkEndpoint,
@@ -46,6 +48,7 @@ export class MemoryGraphStore implements GraphStore {
 	protected knots: Knot[] = [];
 	protected aliases: SearchAlias[] = [];
 	protected emergenceFeedback: Record<string, "accept" | "dismiss" | "pin"> = {};
+	protected emergenceSuggestions: EmergenceSuggestion[] = [];
 	protected savedRuleQueries: SavedRuleQuery[] = [];
 	protected purgeManifests: PurgeManifest[] = [];
 
@@ -593,6 +596,84 @@ export class MemoryGraphStore implements GraphStore {
 	}
 	setEmergenceFeedback(id: string, action: "accept" | "dismiss" | "pin"): Promise<void> {
 		this.emergenceFeedback[id] = action;
+		return Promise.resolve();
+	}
+	listEmergenceSuggestions(): Promise<EmergenceSuggestion[]> {
+		return Promise.resolve(structuredClone(this.emergenceSuggestions));
+	}
+	upsertEmergenceSuggestion(suggestion: EmergenceSuggestion): Promise<void> {
+		const existing = this.emergenceSuggestions.find((candidate) => candidate.id === suggestion.id);
+		this.emergenceSuggestions = [
+			...this.emergenceSuggestions.filter((candidate) => candidate.id !== suggestion.id),
+			structuredClone(
+				existing
+					? {
+						...suggestion,
+						persistenceStatus: existing.persistenceStatus,
+						createdAt: existing.createdAt,
+						resolvedAt: existing.resolvedAt,
+						resolutionReason: existing.resolutionReason,
+					}
+					: suggestion,
+			),
+		];
+		return Promise.resolve();
+	}
+	resolveEmergenceSuggestion(
+		id: string,
+		action: EmergenceAction,
+		link?: OutlineLink,
+		reason?: string,
+	): Promise<void> {
+		const index = this.emergenceSuggestions.findIndex((candidate) => candidate.id === id);
+		if (index < 0) return Promise.reject(new Error(`Emergence suggestion not found: ${id}`));
+		const current = this.emergenceSuggestions[index];
+		const status = action === "accept" ? "accepted" : action === "dismiss" ? "dismissed" : "held";
+		if (current.persistenceStatus === status) return Promise.resolve();
+		if (current.persistenceStatus === "accepted" || current.persistenceStatus === "dismissed") {
+			return Promise.reject(new Error(`Emergence suggestion already resolved: ${id}`));
+		}
+		const normalizedReason = reason?.trim();
+		if (action === "dismiss" && !normalizedReason) {
+			return Promise.reject(new Error("Dismissed emergence suggestion requires a reason"));
+		}
+		if (action === "accept") {
+			if (!link || link.origin !== "suggestion" || link.status !== "asserted") {
+				return Promise.reject(
+					new Error("Accepted emergence suggestion requires an asserted suggestion link"),
+				);
+			}
+			const endpointsMatch = (link.from.workId === current.contextWorkId &&
+				link.to.workId === current.targetWorkId) ||
+				(isSymmetricLinkType(link.type) &&
+					link.from.workId === current.targetWorkId &&
+					link.to.workId === current.contextWorkId);
+			if (!endpointsMatch || link.type !== current.proposedLinkType) {
+				return Promise.reject(new Error("Emergence suggestion link does not match its proposal"));
+			}
+			const duplicate = this.links.some((candidate) =>
+				candidate.status !== "retracted" &&
+				candidate.origin === "suggestion" &&
+				candidate.from.scope === "work" &&
+				candidate.to.scope === "work" &&
+				candidate.type === link.type &&
+				((candidate.from.workId === link.from.workId &&
+					candidate.to.workId === link.to.workId) ||
+					(isSymmetricLinkType(link.type) &&
+						candidate.from.workId === link.to.workId &&
+						candidate.to.workId === link.from.workId))
+			);
+			if (!duplicate) this.links.push(structuredClone(link));
+		}
+		const now = new Date().toISOString();
+		this.emergenceSuggestions[index] = {
+			...current,
+			persistenceStatus: status,
+			status: status === "held" ? "pinned" : undefined,
+			updatedAt: now,
+			resolvedAt: status === "held" ? undefined : now,
+			resolutionReason: normalizedReason,
+		};
 		return Promise.resolve();
 	}
 	listSavedRuleQueries(): Promise<SavedRuleQuery[]> {

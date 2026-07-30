@@ -140,6 +140,98 @@ Deno.test("emergence finds an unlinked item through two shared neighbors", async
 	);
 });
 
+Deno.test("emergence decisions persist without automatic promotion and acceptance is idempotent", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const context = await service.createItem({ text: "Context", parentId: null });
+	const target = await service.createItem({ text: "Target", parentId: null });
+	const first = await service.createItem({ text: "First bridge", parentId: null });
+	const second = await service.createItem({ text: "Second bridge", parentId: null });
+	for (
+		const [fromId, toId] of [
+			[context.id, first.id],
+			[target.id, first.id],
+			[context.id, second.id],
+			[target.id, second.id],
+		]
+	) {
+		await service.createLink({ fromId, toId, type: "LIKE" });
+	}
+	const [candidate] = (await service.listEmergenceSuggestions(context.id)).filter((suggestion) =>
+		suggestion.kind === "latent-relation" && suggestion.targetWorkId === target.workId
+	);
+	assert(candidate);
+	assertEquals(candidate.contextWorkId, context.workId);
+	assertEquals(candidate.persistenceStatus, "pending");
+	assertEquals(
+		(await store.listLinks()).some((link) =>
+			link.from.workId === context.workId && link.to.workId === target.workId
+		),
+		false,
+	);
+
+	await service.resolveEmergenceSuggestion(candidate.id, "pin");
+	const held = (await service.listEmergenceSuggestions(context.id)).find((item) =>
+		item.id === candidate.id
+	);
+	assertEquals(held?.persistenceStatus, "held");
+	assertEquals(held?.status, "pinned");
+
+	await service.resolveEmergenceSuggestion(candidate.id, "accept");
+	assertEquals(
+		(await store.listEmergenceSuggestions()).find((item) => item.id === candidate.id)
+			?.persistenceStatus,
+		"accepted",
+	);
+	const accepted = (await store.listLinks()).filter((link) =>
+		link.origin === "suggestion" && link.status === "asserted"
+	);
+	assertEquals(accepted.length, 1);
+	assertEquals(accepted[0].type, "LIKE");
+	await store.resolveEmergenceSuggestion(candidate.id, "accept", accepted[0]);
+	assertEquals(
+		(await store.listLinks()).filter((link) => link.origin === "suggestion").length,
+		1,
+	);
+});
+
+Deno.test("legacy occurrence fingerprint feedback lazily materializes a held Work suggestion", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const context = await service.createItem({ text: "Context", parentId: null });
+	const target = await service.createItem({ text: "Target", parentId: null });
+	const first = await service.createItem({ text: "First bridge", parentId: null });
+	const second = await service.createItem({ text: "Second bridge", parentId: null });
+	for (
+		const [fromId, toId] of [
+			[context.id, first.id],
+			[target.id, first.id],
+			[context.id, second.id],
+			[target.id, second.id],
+		]
+	) {
+		await service.createLink({ fromId, toId, type: "LIKE" });
+	}
+	const fingerprint = (value: string): string => {
+		let hash = 2166136261;
+		for (const char of value) {
+			hash ^= char.codePointAt(0) ?? 0;
+			hash = Math.imul(hash, 16777619);
+		}
+		return `s-${(hash >>> 0).toString(16)}`;
+	};
+	await store.setEmergenceFeedback(
+		fingerprint(`latent-relation:${context.id}:${target.id}`),
+		"pin",
+	);
+
+	const candidate = (await service.listEmergenceSuggestions(context.id)).find((suggestion) =>
+		suggestion.targetWorkId === target.workId
+	);
+	assertEquals(candidate?.persistenceStatus, "held");
+	assertEquals((await store.listEmergenceSuggestions())[0].persistenceStatus, "held");
+});
+
 Deno.test("Datalog query supports recursive derived relations", async () => {
 	const service = new OutlineService(new MemoryGraphStore());
 	const root = await service.createItem({ text: "Root", parentId: null });

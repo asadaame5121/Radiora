@@ -804,41 +804,80 @@ export class OutlineService {
 			}
 		}
 		const visible: EmergenceSuggestion[] = [];
+		const persisted = new Map(
+			(await this.store.listEmergenceSuggestions()).map((
+				suggestion,
+			) => [suggestion.id, suggestion]),
+		);
 		for (const suggestion of suggestions.values()) {
-			const feedback = await this.store.getEmergenceFeedback(suggestion.id);
-			if (feedback === "dismiss" || feedback === "accept") continue;
-			if (feedback === "pin") suggestion.status = "pinned";
-			this.suggestionCache.set(suggestion.id, suggestion);
-			visible.push(suggestion);
+			const existing = persisted.get(suggestion.id);
+			const legacyId = this.fingerprint(
+				`${suggestion.kind}:${suggestion.contextItemId}:${suggestion.targetItemId}`,
+			);
+			const feedback = existing ? null : await this.store.getEmergenceFeedback(suggestion.id) ??
+				await this.store.getEmergenceFeedback(legacyId);
+			const persistenceStatus = existing?.persistenceStatus ??
+				(feedback === "accept"
+					? "accepted"
+					: feedback === "dismiss"
+					? "dismissed"
+					: feedback === "pin"
+					? "held"
+					: "pending");
+			const now = new Date().toISOString();
+			const materialized: EmergenceSuggestion = {
+				...suggestion,
+				persistenceStatus,
+				createdAt: existing?.createdAt ?? now,
+				updatedAt: now,
+				...(existing?.resolvedAt ? { resolvedAt: existing.resolvedAt } : {}),
+				...(existing?.resolutionReason ? { resolutionReason: existing.resolutionReason } : {}),
+				...(persistenceStatus === "held" ? { status: "pinned" as const } : {}),
+			};
+			await this.store.upsertEmergenceSuggestion(materialized);
+			if (persistenceStatus === "dismissed" || persistenceStatus === "accepted") continue;
+			this.suggestionCache.set(suggestion.id, materialized);
+			visible.push(materialized);
 		}
 		return visible.sort((a, b) =>
 			Number(b.status === "pinned") - Number(a.status === "pinned") || b.score - a.score
 		).slice(0, Math.min(Math.max(limit, 1), 30));
 	}
 
-	async resolveEmergenceSuggestion(id: string, action: EmergenceAction): Promise<void> {
+	async resolveEmergenceSuggestion(
+		id: string,
+		action: EmergenceAction,
+		reason?: string,
+	): Promise<void> {
 		const suggestion = this.suggestionCache.get(id);
 		if (!suggestion) throw new Error("提案が古くなりました。再読み込みしてください。");
-		if (action === "accept" && suggestion.proposedLinkType) {
-			const [context, target] = await Promise.all([
-				this.requireItem(suggestion.contextItemId),
-				this.requireItem(suggestion.targetItemId),
-			]);
-			const links = await this.listActiveLinks();
-			const exists = links.some((link) =>
-				link.type === suggestion.proposedLinkType &&
-				((link.fromId === context.workId && link.toId === target.workId) ||
-					(link.fromId === target.workId && link.toId === context.workId))
-			);
-			if (!exists) {
-				await this.createLink({
-					fromId: suggestion.contextItemId,
-					toId: suggestion.targetItemId,
-					type: suggestion.proposedLinkType,
-				});
+		if (action === "accept") {
+			if (!suggestion.proposedLinkType) {
+				throw new Error("リンク種別のない提案は採用できません。");
 			}
+			let fromWorkId = suggestion.contextWorkId;
+			let toWorkId = suggestion.targetWorkId;
+			if (
+				isSymmetricLinkType(suggestion.proposedLinkType) &&
+				fromWorkId.localeCompare(toWorkId) > 0
+			) {
+				[fromWorkId, toWorkId] = [toWorkId, fromWorkId];
+			}
+			await this.store.resolveEmergenceSuggestion(id, action, {
+				id: crypto.randomUUID(),
+				fromId: fromWorkId,
+				toId: toWorkId,
+				from: { scope: "work", workId: fromWorkId },
+				to: { scope: "work", workId: toWorkId },
+				type: suggestion.proposedLinkType,
+				status: "asserted",
+				origin: "suggestion",
+				reason: suggestion.explanation,
+				createdAt: new Date().toISOString(),
+			}, reason);
+			return;
 		}
-		await this.store.setEmergenceFeedback(id, action);
+		await this.store.resolveEmergenceSuggestion(id, action, undefined, reason);
 	}
 
 	async runRuleQuery(source: string, limit = 500): Promise<RuleQueryResult> {
@@ -1008,15 +1047,32 @@ export class OutlineService {
 
 	private addSuggestion(
 		target: Map<string, EmergenceSuggestion>,
-		input: Omit<EmergenceSuggestion, "id" | "contextItemId" | "targetItemId"> & {
-			context: OutlineItem;
-			target: OutlineItem;
-		},
+		input:
+			& Omit<
+				EmergenceSuggestion,
+				| "id"
+				| "contextWorkId"
+				| "targetWorkId"
+				| "contextItemId"
+				| "targetItemId"
+				| "persistenceStatus"
+				| "createdAt"
+				| "updatedAt"
+				| "resolvedAt"
+				| "resolutionReason"
+				| "status"
+			>
+			& {
+				context: OutlineItem;
+				target: OutlineItem;
+			},
 	): void {
-		const id = this.fingerprint(`${input.kind}:${input.context.id}:${input.target.id}`);
+		const id = this.fingerprint(`${input.kind}:${input.context.workId}:${input.target.workId}`);
 		target.set(id, {
 			id,
 			kind: input.kind,
+			contextWorkId: input.context.workId,
+			targetWorkId: input.target.workId,
 			contextItemId: input.context.id,
 			targetItemId: input.target.id,
 			proposedLinkType: input.proposedLinkType,
@@ -1024,6 +1080,9 @@ export class OutlineService {
 			explanation: input.explanation,
 			evidence: input.evidence,
 			score: input.score,
+			persistenceStatus: "pending",
+			createdAt: "",
+			updatedAt: "",
 		});
 	}
 

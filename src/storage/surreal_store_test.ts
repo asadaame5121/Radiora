@@ -4,6 +4,8 @@ import type { Branch, Revision } from "../domain/models.ts";
 import { validateRevisionCreation } from "./graph_store.ts";
 import {
 	duplicateLinkIdsAfterMerge,
+	emergenceAcceptanceTransactionQuery,
+	emergenceSuggestionUpsertQuery,
 	evolvedFromEndpoints,
 	itemFromRow,
 	mergeWorksTransactionQuery,
@@ -65,6 +67,33 @@ Deno.test("duplicate Work merge omits alias write when both titles are identical
 	assertEquals(query.includes("UPSERT $alias"), false);
 	assertEquals(query.includes("UPDATE $source SET merged_into_work"), true);
 	assertEquals(query.trimEnd().endsWith("COMMIT TRANSACTION;"), true);
+});
+
+Deno.test("emergence acceptance creates its link and status in one idempotent transaction", () => {
+	const query = emergenceAcceptanceTransactionQuery();
+	assertEquals(query.match(/BEGIN TRANSACTION/g)?.length, 1);
+	assertEquals(query.match(/COMMIT TRANSACTION/g)?.length, 1);
+	assertEquals(query.includes('origin: "suggestion"'), true);
+	assertEquals(query.includes('status = "accepted"'), true);
+	assertEquals(query.includes('status != "retracted"'), true);
+	assertEquals(query.includes("context_work = $fromWork"), true);
+	assertEquals(query.includes('origin = "suggestion"'), true);
+	assertEquals(query.includes('from_scope = "work"'), true);
+	assertEquals(query.includes("context_work = $toWork"), false);
+	assertEquals(query.includes('["pending", "held", "accepted"]'), false);
+	const symmetric = emergenceAcceptanceTransactionQuery(true, true);
+	assertEquals(symmetric.includes("context_work = $toWork"), true);
+});
+
+Deno.test("emergence upsert stores an absent proposed type as SurrealQL NONE", () => {
+	assertEquals(
+		emergenceSuggestionUpsertQuery(false).includes("proposed_link_type: NONE"),
+		true,
+	);
+	assertEquals(
+		emergenceSuggestionUpsertQuery(false).includes("proposed_link_type: $proposedLinkType"),
+		false,
+	);
 });
 
 Deno.test("duplicate Work merge precomputes symmetric duplicates and self links for retraction", () => {

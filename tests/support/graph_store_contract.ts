@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import type {
 	Branch,
+	EmergenceSuggestion,
 	Occurrence,
 	Revision,
 	StubCreationKind,
@@ -400,6 +401,49 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	);
 	await store.setEmergenceFeedback(aliasId, "pin");
 	assertEquals(await store.getEmergenceFeedback(aliasId), "pin");
+
+	const emergenceId = `emergence-${crypto.randomUUID()}`;
+	const emergence: EmergenceSuggestion = {
+		id: emergenceId,
+		kind: "latent-relation",
+		contextWorkId: root.work.id,
+		targetWorkId: target.work.id,
+		contextItemId: root.occurrence.id,
+		targetItemId: target.occurrence.id,
+		proposedLinkType: "LIKE",
+		title: "Persistent candidate",
+		explanation: "shared contract evidence",
+		evidence: [{
+			fromId: root.occurrence.id,
+			toId: target.occurrence.id,
+			relation: "LEXICAL",
+		}],
+		score: 0.75,
+		persistenceStatus: "pending",
+		createdAt: CREATED_AT,
+		updatedAt: CREATED_AT,
+	};
+	await store.upsertEmergenceSuggestion(emergence);
+	await store.resolveEmergenceSuggestion(emergenceId, "pin");
+	assertEquals((await store.listEmergenceSuggestions())[0].persistenceStatus, "held");
+	const suggestionLink = {
+		id: crypto.randomUUID(),
+		fromId: root.work.id,
+		toId: target.work.id,
+		from: { scope: "work" as const, workId: root.work.id },
+		to: { scope: "work" as const, workId: target.work.id },
+		type: "LIKE" as const,
+		status: "asserted" as const,
+		origin: "suggestion" as const,
+		createdAt: UPDATED_AT,
+	};
+	await store.resolveEmergenceSuggestion(emergenceId, "accept", suggestionLink);
+	await store.resolveEmergenceSuggestion(emergenceId, "accept", suggestionLink);
+	assertEquals((await store.listEmergenceSuggestions())[0].persistenceStatus, "accepted");
+	assertEquals(
+		(await store.listLinks()).filter((link) => link.origin === "suggestion").length,
+		1,
+	);
 
 	const queryId = crypto.randomUUID();
 	await store.upsertSavedRuleQuery({

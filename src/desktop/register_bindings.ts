@@ -103,7 +103,8 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		deleteSearchAlias: (id) => service().deleteSearchAlias(id),
 		listEmergenceSuggestions: (contextItemId, limit) =>
 			service().listEmergenceSuggestions(contextItemId, limit),
-		resolveEmergenceSuggestion: (id, action) => service().resolveEmergenceSuggestion(id, action),
+		resolveEmergenceSuggestion: (id, action, reason) =>
+			service().resolveEmergenceSuggestion(id, action, reason),
 		runRuleQuery: (source, limit) => service().runRuleQuery(source, limit),
 		listSavedRuleQueries: () => service().listSavedRuleQueries(),
 		saveRuleQuery: (input) => service().saveRuleQuery(input),

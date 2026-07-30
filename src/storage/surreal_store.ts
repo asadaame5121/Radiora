@@ -2,6 +2,8 @@ import { RecordId, Surreal } from "surrealdb";
 import type {
 	Bookmark,
 	Branch,
+	EmergenceAction,
+	EmergenceSuggestion,
 	Knot,
 	LexicalHit,
 	LinkType,
@@ -40,6 +42,7 @@ import { revisionSnapshotMigration } from "./migrations/0002_revision_snapshot.t
 import { bookmarkResumeMigration } from "./migrations/0003_bookmark_resume.ts";
 import { stubStateMigration } from "./migrations/0004_stub_state.ts";
 import { mergeProvenanceMigration } from "./migrations/0005_merge_provenance.ts";
+import { emergenceSuggestionMigration } from "./migrations/0006_emergence_suggestion.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
@@ -57,6 +60,7 @@ const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
 	bookmarkResumeMigration,
 	stubStateMigration,
 	mergeProvenanceMigration,
+	emergenceSuggestionMigration,
 ];
 
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
@@ -148,6 +152,50 @@ export function mergeWorksTransactionQuery(includeAlias = true): string {
 			UPDATE $source SET merged_into_work = $survivor, merged_at = $mergedAt;
 			UPDATE $survivor SET updated_at = $mergedAt;
 			COMMIT TRANSACTION;`;
+}
+
+export function emergenceAcceptanceTransactionQuery(
+	hasReason = true,
+	symmetric = false,
+	hasResolutionReason = false,
+): string {
+	const reverseSuggestion = symmetric
+		? ` OR (context_work = $toWork AND target_work = $fromWork)`
+		: "";
+	const reverseLink = symmetric ? ` OR (from_work = $toWork AND to_work = $fromWork)` : "";
+	return `BEGIN TRANSACTION;
+			IF (SELECT VALUE count() FROM $suggestion
+				WHERE status IN ["pending", "held"]
+				AND proposed_link_type = $type
+				AND ((context_work = $fromWork AND target_work = $toWork)${reverseSuggestion})) = 1 {
+				IF (SELECT VALUE count() FROM semantic_link
+					WHERE status != "retracted" AND origin = "suggestion"
+						AND from_scope = "work" AND to_scope = "work" AND type = $type
+						AND ((from_work = $fromWork AND to_work = $toWork)${reverseLink})) = 0 {
+					CREATE $link CONTENT {
+						from_scope: "work", from_work: $fromWork, from_revision: NONE,
+						to_scope: "work", to_work: $toWork, to_revision: NONE,
+						type: $type, status: "asserted", origin: "suggestion",
+						reason: ${hasReason ? "$reason" : "NONE"}, created_at: $createdAt
+					};
+				};
+				UPDATE $suggestion SET status = "accepted", updated_at = $updatedAt,
+					resolved_at = $updatedAt,
+					resolution_reason: ${hasResolutionReason ? "$resolutionReason" : "NONE"};
+			};
+			COMMIT TRANSACTION;`;
+}
+
+export function emergenceSuggestionUpsertQuery(hasProposedLinkType: boolean): string {
+	return `UPSERT $record MERGE {
+				kind: $kind, context_work: $contextWork, target_work: $targetWork,
+				context_occurrence_id: $contextItemId, target_occurrence_id: $targetItemId,
+				proposed_link_type: ${hasProposedLinkType ? "$proposedLinkType" : "NONE"},
+				title: $title, explanation: $explanation, evidence: $evidence, score: $score,
+				updated_at: $updatedAt
+			};
+			UPDATE $record SET status = $pending, created_at = $createdAt
+				WHERE status IS NONE;`;
 }
 
 export function duplicateLinkIdsAfterMerge(
@@ -364,6 +412,22 @@ export class SurrealGraphStore implements GraphStore {
 				DEFINE TABLE IF NOT EXISTS emergence_feedback SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS action ON emergence_feedback TYPE string;
 				DEFINE FIELD IF NOT EXISTS updated_at ON emergence_feedback TYPE string;
+				DEFINE TABLE IF NOT EXISTS emergence_suggestion SCHEMAFULL;
+				DEFINE FIELD IF NOT EXISTS kind ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS context_work ON emergence_suggestion TYPE record<work>;
+				DEFINE FIELD IF NOT EXISTS target_work ON emergence_suggestion TYPE record<work>;
+				DEFINE FIELD IF NOT EXISTS context_occurrence_id ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS target_occurrence_id ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS proposed_link_type ON emergence_suggestion TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS title ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS explanation ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS evidence ON emergence_suggestion TYPE array<object>;
+				DEFINE FIELD IF NOT EXISTS score ON emergence_suggestion TYPE number;
+				DEFINE FIELD IF NOT EXISTS status ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS created_at ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS updated_at ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS resolved_at ON emergence_suggestion TYPE option<string>;
+				DEFINE FIELD IF NOT EXISTS resolution_reason ON emergence_suggestion TYPE option<string>;
 				DEFINE TABLE IF NOT EXISTS saved_rule_query SCHEMAFULL;
 				DEFINE FIELD IF NOT EXISTS name ON saved_rule_query TYPE string;
 				DEFINE FIELD IF NOT EXISTS source ON saved_rule_query TYPE string;
@@ -1270,6 +1334,117 @@ export class SurrealGraphStore implements GraphStore {
 				action,
 				updatedAt: new Date().toISOString(),
 				record: new RecordId("emergence_feedback", id),
+			},
+		);
+	}
+
+	async listEmergenceSuggestions(): Promise<EmergenceSuggestion[]> {
+		const [rows] = await this.#db.query<[Row[]]>(
+			`SELECT record::id(id) AS id, kind, record::id(context_work) AS context_work_id,
+				record::id(target_work) AS target_work_id, context_occurrence_id,
+				target_occurrence_id, proposed_link_type, title, explanation, evidence,
+				score, status, created_at, updated_at, resolved_at, resolution_reason
+				FROM emergence_suggestion ORDER BY updated_at DESC;`,
+		);
+		return rows.map((row) => {
+			const persistenceStatus = String(row.status) as EmergenceSuggestion["persistenceStatus"];
+			return {
+				id: String(row.id),
+				kind: String(row.kind) as EmergenceSuggestion["kind"],
+				contextWorkId: domainId(row.context_work_id, "work_id"),
+				targetWorkId: domainId(row.target_work_id, "work_id"),
+				contextItemId: String(row.context_occurrence_id ?? ""),
+				targetItemId: String(row.target_occurrence_id ?? ""),
+				...(row.proposed_link_type == null
+					? {}
+					: { proposedLinkType: String(row.proposed_link_type) as LinkType }),
+				title: String(row.title ?? ""),
+				explanation: String(row.explanation ?? ""),
+				evidence: Array.isArray(row.evidence)
+					? row.evidence.map((step) => {
+						const value = step as Row;
+						return {
+							fromId: String(value.fromId ?? value.from_id ?? ""),
+							toId: String(value.toId ?? value.to_id ?? ""),
+							relation: String(
+								value.relation ?? "",
+							) as EmergenceSuggestion["evidence"][number]["relation"],
+						};
+					})
+					: [],
+				score: Number(row.score ?? 0),
+				...(persistenceStatus === "held" ? { status: "pinned" as const } : {}),
+				persistenceStatus,
+				createdAt: String(row.created_at ?? ""),
+				updatedAt: String(row.updated_at ?? ""),
+				...(row.resolved_at == null ? {} : { resolvedAt: String(row.resolved_at) }),
+				...(row.resolution_reason == null
+					? {}
+					: { resolutionReason: String(row.resolution_reason) }),
+			};
+		});
+	}
+
+	async upsertEmergenceSuggestion(suggestion: EmergenceSuggestion): Promise<void> {
+		await this.#db.query(
+			emergenceSuggestionUpsertQuery(suggestion.proposedLinkType !== undefined),
+			{
+				...suggestion,
+				record: new RecordId("emergence_suggestion", suggestion.id),
+				contextWork: new RecordId("work", suggestion.contextWorkId),
+				targetWork: new RecordId("work", suggestion.targetWorkId),
+				...(suggestion.proposedLinkType ? { proposedLinkType: suggestion.proposedLinkType } : {}),
+				pending: "pending",
+			},
+		);
+	}
+
+	async resolveEmergenceSuggestion(
+		id: string,
+		action: EmergenceAction,
+		link?: OutlineLink,
+		reason?: string,
+	): Promise<void> {
+		const status = action === "accept" ? "accepted" : action === "dismiss" ? "dismissed" : "held";
+		const now = new Date().toISOString();
+		const normalizedReason = reason?.trim();
+		if (action === "dismiss" && !normalizedReason) {
+			throw new Error("Dismissed emergence suggestion requires a reason");
+		}
+		if (action !== "accept") {
+			await this.#db.query(
+				`UPDATE $suggestion SET status = $status, updated_at = $updatedAt,
+					resolved_at = ${status === "held" ? "NONE" : "$updatedAt"},
+					resolution_reason = ${status === "held" ? "NONE" : "$reason"}
+					WHERE status IN ["pending", "held", $status];`,
+				{
+					suggestion: new RecordId("emergence_suggestion", id),
+					status,
+					updatedAt: now,
+					...(normalizedReason ? { reason: normalizedReason } : {}),
+				},
+			);
+			return;
+		}
+		if (!link || link.origin !== "suggestion" || link.status !== "asserted") {
+			throw new Error("Accepted emergence suggestion requires an asserted suggestion link");
+		}
+		await this.#db.query(
+			emergenceAcceptanceTransactionQuery(
+				link.reason !== undefined,
+				isSymmetricLinkType(link.type),
+				normalizedReason !== undefined,
+			),
+			{
+				suggestion: new RecordId("emergence_suggestion", id),
+				link: new RecordId("semantic_link", link.id),
+				fromWork: new RecordId("work", link.from.workId),
+				toWork: new RecordId("work", link.to.workId),
+				type: link.type,
+				...(link.reason === undefined ? {} : { reason: link.reason }),
+				...(normalizedReason === undefined ? {} : { resolutionReason: normalizedReason }),
+				createdAt: link.createdAt,
+				updatedAt: now,
 			},
 		);
 	}

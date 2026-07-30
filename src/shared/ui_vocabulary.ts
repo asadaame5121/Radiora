@@ -59,7 +59,13 @@ export type UiEntityCode =
 	| "duplicateCreateLike"
 	| "duplicateCreateRelated"
 	| "duplicateDismiss"
-	| "duplicateMergeConfirm";
+	| "duplicateMergeConfirm"
+	| "emergenceLoading"
+	| "emergenceAccept"
+	| "emergenceHold"
+	| "emergenceDismiss"
+	| "emergenceResolutionReason"
+	| "noEmergenceSuggestion";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -126,4 +132,10 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	duplicateCreateRelated: "RELATEDを作成",
 	duplicateDismiss: "却下（何もしない）",
 	duplicateMergeConfirm: "項目を統合しますか？",
+	emergenceLoading: "関係を探索中…",
+	emergenceAccept: "採用",
+	emergenceHold: "保留",
+	emergenceDismiss: "却下",
+	emergenceResolutionReason: "判断理由（却下時は必須）",
+	noEmergenceSuggestion: "新しい関係候補はありません",
 });

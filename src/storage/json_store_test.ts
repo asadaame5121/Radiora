@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { JsonGraphStore, migrateBackupV0 } from "./json_store.ts";
 
-Deno.test("new saves use the version 4 backup envelope and reload graph data", async () => {
+Deno.test("new saves use the version 6 backup envelope and reload graph data", async () => {
 	const directory = await Deno.makeTempDir();
 	const path = `${directory}/graph.json`;
 	const timestamp = "2026-01-01T00:00:00.000Z";
@@ -41,10 +41,11 @@ Deno.test("new saves use the version 4 backup envelope and reload graph data", a
 
 		const backup = JSON.parse(await Deno.readTextFile(path));
 		assertEquals(backup.format, "radiora-backup");
-		assertEquals(backup.schemaVersion, 5);
+		assertEquals(backup.schemaVersion, 6);
 		assertEquals(typeof backup.exportedAt, "string");
 		assertEquals(typeof backup.appVersion, "string");
-		assertEquals(backup.source, { storageSchemaVersion: 5 });
+		assertEquals(backup.source, { storageSchemaVersion: 6 });
+		assertEquals(backup.data.emergenceSuggestions, []);
 		assertEquals(backup.items, undefined);
 		assertEquals(backup.data.works[0].id, "one");
 		assertEquals(backup.data.workingCopies[0].text, "persistent");
@@ -72,8 +73,8 @@ Deno.test("version 4 backup migrates one step and round-trips rich text", async 
 		const store = new JsonGraphStore(path);
 		await store.initialize();
 		const parsed = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(parsed.schemaVersion, 5);
-		assertEquals(parsed.source.storageSchemaVersion, 5);
+		assertEquals(parsed.schemaVersion, 6);
+		assertEquals(parsed.source.storageSchemaVersion, 6);
 		assertEquals(
 			parsed.data.workingCopies[0].text,
 			"日本語\n\n**Markdown** と radiora://work/11111111-1111-4111-8111-111111111111",
@@ -91,10 +92,10 @@ Deno.test("rejects a future backup version without overwriting it", async () => 
 	const futureBackup = JSON.stringify(
 		{
 			format: "radiora-backup",
-			schemaVersion: 6,
+			schemaVersion: 7,
 			exportedAt: "2026-01-01T00:00:00.000Z",
 			appVersion: "9.9.9",
-			source: { storageSchemaVersion: 5 },
+			source: { storageSchemaVersion: 7 },
 			data: { future: "must remain untouched" },
 		},
 		null,
@@ -107,7 +108,7 @@ Deno.test("rejects a future backup version without overwriting it", async () => 
 		await assertRejects(
 			() => store.initialize(),
 			Error,
-			"Unsupported backup schema version: 6",
+			"Unsupported backup schema version: 7",
 		);
 		assertEquals(await Deno.readTextFile(path), futureBackup);
 		await assertRejects(
@@ -248,7 +249,7 @@ Deno.test("version 1 backup migrates losslessly to version 4 and reloads", async
 		assertEquals((await migrated.listItems())[0].text, "v1本文");
 		assertEquals(await Deno.readTextFile(`${path}.v1.bak`), versionOneInput);
 		const envelope = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(envelope.schemaVersion, 5);
+		assertEquals(envelope.schemaVersion, 6);
 		assertEquals(envelope.data.works, data.works);
 		assertEquals(envelope.data.workingCopies, data.workingCopies);
 		assertEquals(envelope.data.revisions, []);
@@ -290,7 +291,7 @@ Deno.test("loads the complete version 0 JSON fixture without data loss", async (
 		assertEquals(await store.getEmergenceFeedback("suggestion-1"), "pin");
 		assertEquals((await store.listSavedRuleQueries())[0].name, "LIKEリンク");
 		const migrated = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(migrated.schemaVersion, 5);
+		assertEquals(migrated.schemaVersion, 6);
 		assertEquals(migrated.data.works.length, 5);
 		assertEquals(migrated.data.occurrences[1].parentOccurrenceId, items[0].id);
 		assertEquals(
@@ -440,8 +441,8 @@ Deno.test("version 4 reload preserves bookmarks and the single resume position i
 		assertEquals((await second.listBookmarks())[0]?.id, "bookmark");
 		assertEquals((await second.getResumePosition())?.caretOffset, 4);
 		const parsed = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(parsed.schemaVersion, 5);
-		assertEquals(parsed.source.storageSchemaVersion, 5);
+		assertEquals(parsed.schemaVersion, 6);
+		assertEquals(parsed.source.storageSchemaVersion, 6);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -487,7 +488,7 @@ Deno.test("version 2 migrates to version 4 and preserves an exact v2 backup", as
 		assertEquals(await migrated.listBookmarks(), []);
 		assertEquals(await migrated.getResumePosition(), null);
 		assertEquals(await Deno.readTextFile(`${path}.v2.bak`), versionTwoInput);
-		assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 5);
+		assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 6);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -529,7 +530,7 @@ Deno.test("version 3 migrates to version 4 and preserves an exact v3 backup", as
 		await migrated.initialize();
 		assertEquals((await migrated.listItems())[0]?.text, "v3");
 		assertEquals(await Deno.readTextFile(`${path}.v3.bak`), versionThreeInput);
-		assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 5);
+		assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 6);
 
 		const reloaded = new JsonGraphStore(path);
 		await reloaded.initialize();
@@ -584,6 +585,143 @@ Deno.test("version 4 round-trip preserves stub metadata and rich text", async ()
 		assertEquals(Object.hasOwn(resolved ?? {}, "stub"), false);
 		assertEquals(resolved?.updatedAt, "2026-07-30T02:00:00.000Z");
 		assertEquals((await third.listWorkingCopies("stub-work"))[0]?.text, richText);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("version 6 round-trip preserves emergence state, timestamps, reasons, and link origin", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/emergence-v6.json`;
+	const timestamp = "2026-07-30T00:00:00.000Z";
+	const makeBundle = async (store: JsonGraphStore, id: string) => {
+		await store.createWorkBundle(
+			{ id, createdAt: timestamp, updatedAt: timestamp },
+			{
+				id: `${id}-branch`,
+				workId: id,
+				name: "main",
+				headRevisionId: null,
+				createdAt: timestamp,
+			},
+			{
+				branchId: `${id}-branch`,
+				workId: id,
+				text: id,
+				updatedAt: timestamp,
+			},
+			{
+				id: `${id}-occurrence`,
+				workId: id,
+				parentOccurrenceId: null,
+				orderKey: 1,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId: `${id}-branch` },
+			},
+		);
+	};
+	try {
+		const store = new JsonGraphStore(path);
+		await store.initialize();
+		await makeBundle(store, "context");
+		await makeBundle(store, "target");
+		await store.createLink({
+			id: "human-link",
+			fromId: "context",
+			toId: "target",
+			from: { scope: "work", workId: "context" },
+			to: { scope: "work", workId: "target" },
+			type: "LIKE",
+			status: "asserted",
+			origin: "human",
+			createdAt: timestamp,
+		});
+		const candidate = (id: string) => ({
+			id,
+			kind: "latent-relation" as const,
+			contextWorkId: "context",
+			targetWorkId: "target",
+			contextItemId: "context-occurrence",
+			targetItemId: "target-occurrence",
+			proposedLinkType: "LIKE" as const,
+			title: "Candidate",
+			explanation: "Evidence",
+			evidence: [{
+				fromId: "context-occurrence",
+				toId: "target-occurrence",
+				relation: "LEXICAL" as const,
+			}],
+			score: 0.8,
+			persistenceStatus: "pending" as const,
+			createdAt: timestamp,
+			updatedAt: timestamp,
+		});
+		for (const id of ["pending", "held", "dismissed", "accepted"]) {
+			await store.upsertEmergenceSuggestion(candidate(id));
+		}
+		await store.resolveEmergenceSuggestion("held", "pin");
+		await assertRejects(
+			() => store.resolveEmergenceSuggestion("dismissed", "dismiss"),
+			Error,
+			"requires a reason",
+		);
+		await store.resolveEmergenceSuggestion(
+			"dismissed",
+			"dismiss",
+			undefined,
+			"not relevant",
+		);
+		await store.resolveEmergenceSuggestion("accepted", "accept", {
+			id: "suggestion-link",
+			fromId: "context",
+			toId: "target",
+			from: { scope: "work", workId: "context" },
+			to: { scope: "work", workId: "target" },
+			type: "LIKE",
+			status: "asserted",
+			origin: "suggestion",
+			createdAt: timestamp,
+		});
+
+		const reloaded = new JsonGraphStore(path);
+		await reloaded.initialize();
+		const byId = new Map(
+			(await reloaded.listEmergenceSuggestions()).map((item) => [item.id, item]),
+		);
+		assertEquals(byId.get("pending")?.persistenceStatus, "pending");
+		assertEquals(byId.get("held")?.persistenceStatus, "held");
+		assertEquals(byId.get("dismissed")?.persistenceStatus, "dismissed");
+		assertEquals(byId.get("dismissed")?.resolutionReason, "not relevant");
+		assertEquals(typeof byId.get("dismissed")?.resolvedAt, "string");
+		assertEquals(byId.get("accepted")?.persistenceStatus, "accepted");
+		assertEquals(byId.get("accepted")?.createdAt, timestamp);
+		assertEquals((await reloaded.listLinks()).map((link) => link.origin).sort(), [
+			"human",
+			"suggestion",
+		]);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("version 5 legacy feedback migrates to v6 and preserves an exact v5 backup", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/backup-v5.json`;
+	try {
+		const fixture = JSON.parse(await Deno.readTextFile("tests/fixtures/backup-v4.json"));
+		fixture.schemaVersion = 5;
+		fixture.source.storageSchemaVersion = 5;
+		fixture.data.emergenceFeedback = { legacy: "pin" };
+		const input = JSON.stringify(fixture, null, 2);
+		await Deno.writeTextFile(path, input);
+
+		const store = new JsonGraphStore(path);
+		await store.initialize();
+		assertEquals(await store.getEmergenceFeedback("legacy"), "pin");
+		assertEquals(await Deno.readTextFile(`${path}.v5.bak`), input);
+		const migrated = JSON.parse(await Deno.readTextFile(path));
+		assertEquals(migrated.schemaVersion, 6);
+		assertEquals(migrated.data.emergenceSuggestions, []);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}

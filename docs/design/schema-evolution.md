@@ -333,3 +333,27 @@ record IDを残す。
 Memory/JSON/Surrealの統合が原子的であること、検証失敗時に全状態が不変であること、version `4`
 fixtureの日本語、改行、Markdown、`radiora://`参照がversion `5` round-tripで変化しないことを
 検証する。
+
+## 14. Emergence suggestion 移行(version 5 から 6)
+
+2026-07-30に`0006_emergence_suggestion`を導入し、storage schemaとbackup schemaはversion `6`
+になった。発見候補は確定済みの意味リンクとは分離し、`kind`、Work endpoint、発見時の
+Occurrence、根拠、score、`pending / held / accepted / dismissed`状態と時刻を持つ
+`emergence_suggestion`として永続化する。
+
+旧`emergence_feedback`には候補のendpointや根拠がないため、migrationで推測変換せず保持する。
+同じfingerprintの候補が再発見された時だけ、旧`pin / accept / dismiss`をそれぞれ
+`held / accepted / dismissed`へ遅延反映する。旧acceptが作成したリンクの由来も推測変更しない。
+
+新規acceptは、`origin = "suggestion"`かつ`status = "asserted"`のリンク作成と候補状態更新を
+一つのstore原子操作で行う。保留と却下はリンクを作成せず、候補が自動で確定リンクへ昇格する
+経路を設けない。JSON version `5`は`emergenceSuggestions: []`を追加してversion `6`へ変換し、
+上書き前に`.v5.bak`へ一度だけ保護する。
+
+最低限、次を検証する。
+
+- kind、Work/Occurrence ID、根拠、score、状態、時刻がJSON round-tripで変化しない
+- Memory/JSON/Surrealでacceptのリンク作成と状態更新が原子的かつ冪等である
+- held/dismissedでリンクを作成せず、acceptedリンクを人間由来リンクと識別できる
+- 旧feedbackは失われず、再発見時以外に不完全な候補へ推測変換されない
+- version `5` JSONを上書きする前に`.v5.bak`へ一度だけ保護する
