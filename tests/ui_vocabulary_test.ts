@@ -75,6 +75,10 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"manuscriptTotalCount",
 		"manuscriptBranchCount",
 		"manuscriptReadOnly",
+		"markdownExportMode",
+		"markdownExportRadiora",
+		"markdownExportPortable",
+		"markdownExportObsidian",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -152,5 +156,9 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		manuscriptTotalCount: "全体文字数",
 		manuscriptBranchCount: "枝の文字数",
 		manuscriptReadOnly: "固定版のため読み取り専用",
+		markdownExportMode: "Markdown参照形式",
+		markdownExportRadiora: "Radiora（内部参照を保持）",
+		markdownExportPortable: "ポータブル（表示名のみ）",
+		markdownExportObsidian: "Obsidian（Wikiリンク）",
 	});
 });

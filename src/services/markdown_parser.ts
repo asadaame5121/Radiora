@@ -29,6 +29,14 @@ export interface MarkdownCandidates {
 	internalReferences: RadioraInternalReferenceCandidate[];
 }
 
+export interface InternalReferenceRewriteContext {
+	reference: RadioraInternalReferenceCandidate;
+	/** Original Markdown label source, without its surrounding brackets. */
+	label: string;
+	/** Complete canonical Markdown link source. */
+	raw: string;
+}
+
 /**
  * Extracts Radiora's inline Markdown metadata in one source-order scan.
  *
@@ -108,6 +116,32 @@ export function parseMarkdownCandidates(source: string): MarkdownCandidates {
 	return { tags, internalReferences };
 }
 
+/**
+ * Rewrites parser-recognized canonical references without touching code, URLs,
+ * escaped link spellings, or malformed Markdown.
+ */
+export function rewriteCanonicalInternalReferences(
+	source: string,
+	replacer: (context: InternalReferenceRewriteContext) => string | null,
+): string {
+	const references = parseMarkdownCandidates(source).internalReferences;
+	let rewritten = source;
+	for (const reference of [...references].reverse()) {
+		const link = parseMarkdownLink(source, reference.range.start);
+		if (!link || link.range.end !== reference.range.end) continue;
+		const replacement = replacer({
+			reference,
+			label: source.slice(reference.range.start + 1, link.labelEnd),
+			raw: source.slice(reference.range.start, reference.range.end),
+		});
+		if (replacement === null) continue;
+		rewritten = rewritten.slice(0, reference.range.start) +
+			replacement +
+			rewritten.slice(reference.range.end);
+	}
+	return rewritten;
+}
+
 function isLineStart(source: string, index: number): boolean {
 	return index === 0 || source[index - 1] === "\n" || source[index - 1] === "\r";
 }
@@ -156,7 +190,12 @@ function findAutolinkEnd(source: string, start: number): number | null {
 function parseMarkdownLink(
 	source: string,
 	start: number,
-): { range: MarkdownSourceRange; destinationStart: number; destinationEnd: number } | null {
+): {
+	range: MarkdownSourceRange;
+	labelEnd: number;
+	destinationStart: number;
+	destinationEnd: number;
+} | null {
 	let depth = 1;
 	let labelEnd = start + 1;
 	for (; labelEnd < source.length; labelEnd++) {
@@ -189,6 +228,7 @@ function parseMarkdownLink(
 	}
 	return {
 		range: { start, end: destinationEnd + (hasAngleDestination ? 2 : 1) },
+		labelEnd,
 		destinationStart,
 		destinationEnd,
 	};

@@ -1,6 +1,10 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import type { OutlineItem, OutlineSnapshot } from "../domain/models.ts";
-import { renderOutlineSnapshotMarkdown } from "./markdown_export.ts";
+import {
+	renderOutlineSnapshotMarkdown,
+	rewriteMarkdownExportReferences,
+} from "./markdown_export.ts";
+import { parseMarkdownCandidates } from "./markdown_parser.ts";
 
 const item = (
 	id: string,
@@ -110,4 +114,56 @@ Deno.test("cycles, orphans, duplicate IDs, and stash placements are all exported
 
 Deno.test("empty snapshots export an empty document", () => {
 	assertEquals(renderOutlineSnapshotMarkdown(snapshot([])), "");
+});
+
+Deno.test("Markdown export reference modes preserve IDs or intentionally remove them", () => {
+	const markdown = [
+		"本文 [項目](radiora://work/work-1) と [初稿](radiora://revision/revision-1#節)",
+		"`[code](radiora://work/code)`",
+		"```md",
+		"[fenced](radiora://work/fenced)",
+		"```",
+	].join("\n");
+
+	assertEquals(rewriteMarkdownExportReferences(markdown, "radiora"), markdown);
+	assertEquals(
+		rewriteMarkdownExportReferences(markdown, "portable"),
+		[
+			"本文 項目 と 初稿",
+			"`[code](radiora://work/code)`",
+			"```md",
+			"[fenced](radiora://work/fenced)",
+			"```",
+		].join("\n"),
+	);
+});
+
+Deno.test("Obsidian export rewrites only resolved references and preserves unresolved IDs", () => {
+	const markdown =
+		"[旧表示](radiora://work/work-1) [未解決](radiora://revision/missing) [別項目](radiora://work/work-2)";
+	const [resolved, missing, deleted] = parseMarkdownCandidates(markdown).internalReferences;
+	const exported = rewriteMarkdownExportReferences(markdown, "obsidian", [
+		{
+			reference: resolved,
+			status: "resolved",
+			displayName: "現在の]表示|名",
+			workId: "work-1",
+		},
+		{ reference: missing, status: "missing" },
+		{ reference: deleted, status: "deleted" },
+	]);
+
+	assertEquals(
+		exported,
+		"[[現在の\\]表示\\|名]] [未解決](radiora://revision/missing) [別項目](radiora://work/work-2)",
+	);
+});
+
+Deno.test("portable export rewrites multiple escaped canonical labels without range drift", () => {
+	const markdown =
+		"[表示 \\[一\\]](radiora://work/work-1) / [A \\\\ B](radiora://revision/revision-1)";
+	assertEquals(
+		rewriteMarkdownExportReferences(markdown, "portable"),
+		"表示 \\[一\\] / A \\\\ B",
+	);
 });

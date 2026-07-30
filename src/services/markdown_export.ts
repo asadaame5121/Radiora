@@ -1,4 +1,8 @@
 import type { OutlineItem, OutlineSnapshot } from "../domain/models.ts";
+import type { InternalReferenceResolution } from "./internal_reference_service.ts";
+import { rewriteCanonicalInternalReferences } from "./markdown_parser.ts";
+
+export type MarkdownExportReferenceMode = "radiora" | "portable" | "obsidian";
 
 interface ExportNode {
 	readonly item: OutlineItem;
@@ -52,6 +56,41 @@ export function renderOutlineSnapshotMarkdown(snapshot: OutlineSnapshot): string
 	}
 
 	return rendered.length === 0 ? "" : `${rendered.join("\n\n")}\n`;
+}
+
+/**
+ * Applies a destination-specific policy to canonical Radiora references.
+ *
+ * Portable output intentionally discards internal IDs. Obsidian output only
+ * converts references proven resolvable by the caller; unresolved references
+ * retain their canonical URI so they cannot silently point at an unrelated note.
+ */
+export function rewriteMarkdownExportReferences(
+	markdown: string,
+	mode: MarkdownExportReferenceMode,
+	resolutions: readonly InternalReferenceResolution[] = [],
+): string {
+	if (mode === "radiora") return markdown;
+	const resolutionByRange = new Map(
+		resolutions.map((resolution) => [
+			rangeKey(resolution.reference.range.start, resolution.reference.range.end),
+			resolution,
+		]),
+	);
+	return rewriteCanonicalInternalReferences(markdown, ({ reference, label }) => {
+		if (mode === "portable") return label;
+		const resolution = resolutionByRange.get(rangeKey(reference.range.start, reference.range.end));
+		if (resolution?.status !== "resolved" || !resolution.displayName) return null;
+		return `[[${escapeObsidianLinkText(resolution.displayName)}]]`;
+	});
+}
+
+function rangeKey(start: number, end: number): string {
+	return `${start}:${end}`;
+}
+
+function escapeObsidianLinkText(label: string): string {
+	return label.replaceAll("\\", "\\\\").replaceAll("|", "\\|").replaceAll("]", "\\]");
 }
 
 function compareNodes(left: ExportNode, right: ExportNode): number {

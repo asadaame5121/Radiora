@@ -5,7 +5,7 @@ const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.
 Deno.test("Markdown export flushes edits, renders the active snapshot, and downloads UTF-8 Markdown", () => {
 	assertMatch(
 		app,
-		/async function performMarkdownExport\(\): Promise<void> \{[\s\S]*?await autosave\.flush\(\);[\s\S]*?renderOutlineSnapshotMarkdown\(snapshot\)/,
+		/async function performMarkdownExport\(\): Promise<void> \{[\s\S]*?await autosave\.flush\(\);[\s\S]*?renderOutlineSnapshotMarkdown\(snapshot\)[\s\S]*?rewriteMarkdownExportReferences\(/,
 	);
 	assertMatch(app, /new Blob\(\[markdown\], \{ type: "text\/markdown;charset=utf-8" \}\)/);
 	assertMatch(app, /anchor\.download = `radiora-\$\{localDateValue\(new Date\(\)\)\}\.md`/);
@@ -23,4 +23,15 @@ Deno.test("Markdown export has a visible command button and success notification
 	assertMatch(app, /<small class="markdown-export-notice" role="status">/);
 	assertMatch(app, /Markdownをエクスポートしました。/);
 	assertMatch(app, /Markdownをエクスポートできませんでした/);
+});
+
+Deno.test("Markdown export exposes all reference modes through shared vocabulary", () => {
+	assertMatch(app, /bind:value=\{markdownExportReferenceMode\}/);
+	assertMatch(app, /value="radiora">\{vocabulary\.markdownExportRadiora\}/);
+	assertMatch(app, /value="portable">\{vocabulary\.markdownExportPortable\}/);
+	assertMatch(app, /value="obsidian">\{vocabulary\.markdownExportObsidian\}/);
+	assertMatch(
+		app,
+		/markdownExportReferenceMode === "obsidian"[\s\S]*?api\.resolveInternalReferences\(rendered\)/,
+	);
 });
