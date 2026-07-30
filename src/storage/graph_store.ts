@@ -36,9 +36,30 @@ export interface WorkBundle {
 	occurrence: Occurrence;
 }
 
+export interface GraphStateSnapshot {
+	works: Work[];
+	branches: Branch[];
+	workingCopies: WorkingCopy[];
+	occurrences: Occurrence[];
+	links: OutlineLink[];
+	systemRelations: SystemRelation[];
+	knots: Knot[];
+	aliases: SearchAlias[];
+	emergenceFeedback: Record<string, "accept" | "dismiss" | "pin">;
+	emergenceSuggestions: EmergenceSuggestion[];
+	savedRuleQueries: SavedRuleQuery[];
+	purgeManifests: PurgeManifest[];
+	revisions: Revision[];
+	recoverySnapshots: RecoverySnapshot[];
+	bookmarks: Bookmark[];
+	resumePosition: ResumePosition | null;
+}
+
 export interface GraphStore {
 	initialize(): Promise<void>;
 	close(): Promise<void>;
+	/** Returns every persisted entity, including deleted and historical records. */
+	exportGraphState(): Promise<GraphStateSnapshot>;
 	listItems(): Promise<OutlineItem[]>;
 	listWorks(includeDeleted?: boolean): Promise<Work[]>;
 	listOccurrences(includeDeletedWorks?: boolean): Promise<Occurrence[]>;

@@ -78,7 +78,9 @@ export type UiEntityCode =
 	| "opmlExport"
 	| "opmlImport"
 	| "opmlExportSuccess"
-	| "opmlImportSuccess";
+	| "opmlImportSuccess"
+	| "jsonBackupExport"
+	| "jsonBackupExportSuccess";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -164,4 +166,6 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	opmlImport: "OPMLを取り込む",
 	opmlExportSuccess: "OPMLを書き出しました",
 	opmlImportSuccess: "OPMLを取り込みました",
+	jsonBackupExport: "完全バックアップを書き出す",
+	jsonBackupExportSuccess: "完全バックアップを書き出しました",
 });

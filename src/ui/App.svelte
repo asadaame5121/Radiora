@@ -223,6 +223,7 @@
 	let markdownExportNotice = $state("");
 	let markdownExportReferenceMode = $state<MarkdownExportReferenceMode>("radiora");
 	let opmlNotice = $state("");
+	let jsonBackupNotice = $state("");
 	let opmlFileInput: HTMLInputElement;
 	let manuscriptSections = $state<ManuscriptSection[]>([]);
 	let manuscriptLoading = $state(false);
@@ -1725,6 +1726,27 @@
 		}
 	}
 
+	async function performJsonBackupExport(): Promise<void> {
+		jsonBackupNotice = "";
+		try {
+			await autosave.flush();
+			const source = await api.exportJsonBackup();
+			const blob = new Blob([source], { type: "application/json;charset=utf-8" });
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = `radiora-backup-${localDateValue(new Date())}.json`;
+			anchor.hidden = true;
+			document.body.append(anchor);
+			anchor.click();
+			anchor.remove();
+			globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
+			jsonBackupNotice = `${vocabulary.jsonBackupExportSuccess}。`;
+		} catch (cause) {
+			error = `${vocabulary.jsonBackupExport}ことができませんでした: ${errorMessage(cause)}`;
+		}
+	}
+
 	async function requestConfirmation(confirmation: PendingConfirmation): Promise<void> {
 		if (pendingConfirmation) return;
 		pendingConfirmation = confirmation;
@@ -1998,6 +2020,13 @@
 			>{vocabulary.opmlExport}</button>
 			{#if opmlNotice}
 				<small class="opml-notice" role="status">{opmlNotice}</small>
+			{/if}
+			<button
+				onclick={performJsonBackupExport}
+				disabled={startup.phase !== "ready"}
+			>{vocabulary.jsonBackupExport}</button>
+			{#if jsonBackupNotice}
+				<small class="json-backup-notice" role="status">{jsonBackupNotice}</small>
 			{/if}
 			<label>
 				<span class="sr-only">{vocabulary.markdownExportMode}</span>

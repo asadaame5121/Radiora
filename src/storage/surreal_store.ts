@@ -22,6 +22,7 @@ import type {
 } from "../domain/models.ts";
 import { isSymmetricLinkType } from "../domain/models.ts";
 import {
+	type GraphStateSnapshot,
 	type GraphStore,
 	type MergeWorksInput,
 	validateRevisionCreation,
@@ -223,6 +224,92 @@ export class SurrealGraphStore implements GraphStore {
 
 	async close(): Promise<void> {
 		await this.#db.close();
+	}
+
+	async exportGraphState(): Promise<GraphStateSnapshot> {
+		const [
+			works,
+			branches,
+			workingCopies,
+			occurrences,
+			links,
+			systemRelations,
+			knots,
+			aliases,
+			emergenceSuggestions,
+			savedRuleQueries,
+			purgeManifests,
+			revisions,
+			recoverySnapshots,
+			bookmarkResult,
+			resumeResult,
+			feedbackResult,
+		] = await Promise.all([
+			this.listWorks(true),
+			this.listBranches(),
+			this.listWorkingCopies(),
+			this.listOccurrences(true),
+			this.listLinks(),
+			this.listSystemRelations(),
+			this.listKnots(),
+			this.listAliases(),
+			this.listEmergenceSuggestions(),
+			this.listSavedRuleQueries(),
+			this.listPurgeManifests(),
+			this.listRevisions(),
+			this.listRecoverySnapshots(),
+			this.#db.query<[Row[]]>(
+				`SELECT record::id(id) AS id, record::id(work) AS work_id,
+					record::id(occurrence) AS occurrence_id, created_at FROM bookmark;`,
+			),
+			this.#db.query<[Row[]]>(
+				`SELECT record::id(work) AS work_id, record::id(occurrence) AS occurrence_id,
+					caret_offset, updated_at FROM resume_position:current;`,
+			),
+			this.#db.query<[Row[]]>(
+				`SELECT record::id(id) AS id, action FROM emergence_feedback;`,
+			),
+		]);
+		const bookmarks = bookmarkResult[0].map((row) => ({
+			id: String(row.id),
+			workId: domainId(row.work_id, "work_id"),
+			occurrenceId: domainId(row.occurrence_id, "id"),
+			createdAt: String(row.created_at ?? ""),
+		}));
+		const resumeRow = resumeResult[0][0];
+		const resumePosition = resumeRow
+			? {
+				workId: domainId(resumeRow.work_id, "work_id"),
+				occurrenceId: domainId(resumeRow.occurrence_id, "id"),
+				caretOffset: Number(resumeRow.caret_offset),
+				updatedAt: String(resumeRow.updated_at ?? ""),
+			}
+			: null;
+		const emergenceFeedback = Object.fromEntries(
+			feedbackResult[0].flatMap((row) =>
+				row.action === "accept" || row.action === "dismiss" || row.action === "pin"
+					? [[String(row.id), row.action]]
+					: []
+			),
+		) as Record<string, "accept" | "dismiss" | "pin">;
+		return {
+			works,
+			branches,
+			workingCopies,
+			occurrences,
+			links,
+			systemRelations,
+			knots,
+			aliases,
+			emergenceFeedback,
+			emergenceSuggestions,
+			savedRuleQueries,
+			purgeManifests,
+			revisions,
+			recoverySnapshots,
+			bookmarks,
+			resumePosition,
+		};
 	}
 
 	async listItems(): Promise<OutlineItem[]> {

@@ -22,6 +22,7 @@ import type {
 } from "../domain/models.ts";
 import { isSymmetricLinkType } from "../domain/models.ts";
 import {
+	type GraphStateSnapshot,
 	type GraphStore,
 	type MergeWorksInput,
 	validateRevisionCreation,
@@ -60,6 +61,27 @@ export class MemoryGraphStore implements GraphStore {
 
 	close(): Promise<void> {
 		return Promise.resolve();
+	}
+
+	exportGraphState(): Promise<GraphStateSnapshot> {
+		return Promise.resolve(structuredClone({
+			works: this.works,
+			branches: this.branches,
+			workingCopies: this.workingCopies,
+			occurrences: this.occurrences,
+			links: this.links,
+			systemRelations: this.systemRelations,
+			knots: this.knots,
+			aliases: this.aliases,
+			emergenceFeedback: this.emergenceFeedback,
+			emergenceSuggestions: this.emergenceSuggestions,
+			savedRuleQueries: this.savedRuleQueries,
+			purgeManifests: this.purgeManifests,
+			revisions: this.revisions,
+			recoverySnapshots: this.recoverySnapshots,
+			bookmarks: this.bookmarks,
+			resumePosition: this.resumePosition,
+		}));
 	}
 
 	listItems(): Promise<OutlineItem[]> {

@@ -83,6 +83,8 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"opmlImport",
 		"opmlExportSuccess",
 		"opmlImportSuccess",
+		"jsonBackupExport",
+		"jsonBackupExportSuccess",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -168,5 +170,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		opmlImport: "OPMLを取り込む",
 		opmlExportSuccess: "OPMLを書き出しました",
 		opmlImportSuccess: "OPMLを取り込みました",
+		jsonBackupExport: "完全バックアップを書き出す",
+		jsonBackupExportSuccess: "完全バックアップを書き出しました",
 	});
 });
