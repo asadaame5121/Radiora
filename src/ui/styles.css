@@ -1029,6 +1029,41 @@ button {
 .saved-queries .remove-saved {
 	color: var(--muted);
 }
+.sparse-outline-section {
+	margin: 8px 0;
+}
+.sparse-outline-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 6px;
+}
+.sparse-outline-header h3 {
+	margin: 0;
+	font-size: 12px;
+	color: var(--text);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+.sparse-outline-header h3 small {
+	font-size: 10px;
+	color: var(--muted);
+	font-weight: 400;
+}
+.sparse-toggle {
+	border: 1px solid var(--border);
+	background: var(--surface-raised);
+	color: var(--muted);
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 10px;
+	cursor: pointer;
+}
+.sparse-toggle:hover {
+	color: var(--text);
+	border-color: var(--border-bright);
+}
 .alias-list {
 	display: grid;
 	gap: 4px;
