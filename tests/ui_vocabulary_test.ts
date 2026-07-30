@@ -64,6 +64,12 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"duplicateCreateRelated",
 		"duplicateDismiss",
 		"duplicateMergeConfirm",
+		"emergenceLoading",
+		"emergenceAccept",
+		"emergenceHold",
+		"emergenceDismiss",
+		"emergenceResolutionReason",
+		"noEmergenceSuggestion",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -130,5 +136,11 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		duplicateCreateRelated: "RELATEDを作成",
 		duplicateDismiss: "却下（何もしない）",
 		duplicateMergeConfirm: "項目を統合しますか？",
+		emergenceLoading: "関係を探索中…",
+		emergenceAccept: "採用",
+		emergenceHold: "保留",
+		emergenceDismiss: "却下",
+		emergenceResolutionReason: "判断理由（却下時は必須）",
+		noEmergenceSuggestion: "新しい関係候補はありません",
 	});
 });

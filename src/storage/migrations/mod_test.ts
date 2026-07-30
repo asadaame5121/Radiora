@@ -3,6 +3,7 @@ import { revisionSnapshotMigration } from "./0002_revision_snapshot.ts";
 import { bookmarkResumeMigration } from "./0003_bookmark_resume.ts";
 import { stubStateMigration } from "./0004_stub_state.ts";
 import { mergeProvenanceMigration } from "./0005_merge_provenance.ts";
+import { emergenceSuggestionMigration } from "./0006_emergence_suggestion.ts";
 import {
 	type MigrationContext,
 	type MigrationJournalEntry,
@@ -271,4 +272,39 @@ Deno.test("version 4 storage expands to merge provenance schema version 5", asyn
 	assertStringIncludes(statements[0], "merged_into_work");
 	assertStringIncludes(statements[0], "merged_at");
 	assertStringIncludes(statements[1], "INFO FOR TABLE work");
+});
+
+Deno.test("version 5 storage expands to persistent emergence suggestions schema version 6", async () => {
+	const state = new MemoryMigrationState();
+	state.metadata = {
+		id: "radiora",
+		version: 5,
+		updatedAt: "2026-07-30T00:00:00.000Z",
+		lastMigrationId: "0005_merge_provenance",
+		appVersion: "0.1.0",
+	};
+	const statements: string[] = [];
+	assertEquals(
+		await runStorageMigrations({
+			state,
+			context: {
+				execute: (statement) => {
+					statements.push(statement);
+					return Promise.resolve(undefined);
+				},
+			},
+			migrations: [emergenceSuggestionMigration],
+			appVersion: "0.1.0",
+			targetVersion: 6,
+		}),
+		6,
+	);
+	assertEquals(state.metadata.lastMigrationId, "0006_emergence_suggestion");
+	assertStringIncludes(statements[0], "DEFINE TABLE IF NOT EXISTS emergence_suggestion");
+	assertStringIncludes(statements[0], "context_work");
+	assertStringIncludes(statements[0], "status");
+	assertStringIncludes(statements[1], "INFO FOR TABLE emergence_suggestion");
+	assertStringIncludes(statements[1], "score < 0 OR score > 1");
+	assertStringIncludes(statements[1], 'status = "dismissed"');
+	assertStringIncludes(statements[1], "THROW");
 });

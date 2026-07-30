@@ -164,6 +164,7 @@
 	let searchActiveIndex = $state(-1);
 	let asideMode = $state<AsideMode>("overview");
 	let emergenceSuggestions = $state<EmergenceSuggestion[]>([]);
+	let emergenceResolutionReasons = $state<Record<string, string>>({});
 	let emergenceLoading = $state(false);
 	let aliases = $state<SearchAlias[]>([]);
 	let aliasCanonical = $state("");
@@ -1341,7 +1342,10 @@
 	}
 
 	async function resolveEmergence(suggestion: EmergenceSuggestion, action: EmergenceAction): Promise<void> {
-		await api.resolveEmergenceSuggestion(suggestion.id, action);
+		const reason = emergenceResolutionReasons[suggestion.id]?.trim();
+		await api.resolveEmergenceSuggestion(suggestion.id, action, reason || undefined);
+		const { [suggestion.id]: _resolved, ...remainingReasons } = emergenceResolutionReasons;
+		emergenceResolutionReasons = remainingReasons;
 		if (action === "accept") await load();
 		if (selectedId) await loadEmergence(selectedId);
 	}
@@ -2444,21 +2448,34 @@
 						{:else}<p class="empty">任意の{vocabulary.semanticLink}はありません</p>{/each}
 					</div>
 					<div class="discoveries">
-						{#if emergenceLoading}<p class="empty">関係を探索中…</p>{/if}
+						{#if emergenceLoading}<p class="empty">{vocabulary.emergenceLoading}</p>{/if}
 						{#each emergenceSuggestions as suggestion}
 							<article class:pinned={suggestion.status === "pinned"}>
 								<div class="discovery-title"><span>{suggestion.title}</span><small>{Math.round(suggestion.score * 100)}%</small></div>
 								<strong>{titleForId(suggestion.targetItemId)}</strong>
 								<p>{suggestion.explanation}</p>
 								<ol>{#each suggestion.evidence as step}<li>{step.relation}: {titleForId(step.fromId)} → {titleForId(step.toId)}</li>{/each}</ol>
+								<input
+									aria-label={vocabulary.emergenceResolutionReason}
+									placeholder={vocabulary.emergenceResolutionReason}
+									value={emergenceResolutionReasons[suggestion.id] ?? ""}
+									oninput={(event) =>
+										(emergenceResolutionReasons = {
+											...emergenceResolutionReasons,
+											[suggestion.id]: event.currentTarget.value,
+										})}
+								/>
 								<div class="discovery-actions">
-									{#if suggestion.proposedLinkType}<button onclick={() => resolveEmergence(suggestion, "accept")}>採用</button>{/if}
-									<button onclick={() => resolveEmergence(suggestion, "pin")}>ピン</button>
-									<button onclick={() => resolveEmergence(suggestion, "dismiss")}>却下</button>
+									{#if suggestion.proposedLinkType}<button onclick={() => resolveEmergence(suggestion, "accept")}>{vocabulary.emergenceAccept}</button>{/if}
+									<button onclick={() => resolveEmergence(suggestion, "pin")}>{vocabulary.emergenceHold}</button>
+									<button
+										onclick={() => resolveEmergence(suggestion, "dismiss")}
+										disabled={!emergenceResolutionReasons[suggestion.id]?.trim()}
+									>{vocabulary.emergenceDismiss}</button>
 								</div>
 							</article>
 						{:else}
-							{#if !emergenceLoading}<p class="empty">新しい関係候補はありません</p>{/if}
+							{#if !emergenceLoading}<p class="empty">{vocabulary.noEmergenceSuggestion}</p>{/if}
 						{/each}
 					</div>
 				{:else if asideMode === "history"}

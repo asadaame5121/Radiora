@@ -147,7 +147,7 @@ export interface RadioraBindings {
 	): Promise<SearchAlias>;
 	deleteSearchAlias(id: string): Promise<void>;
 	listEmergenceSuggestions(contextItemId: string, limit?: number): Promise<EmergenceSuggestion[]>;
-	resolveEmergenceSuggestion(id: string, action: EmergenceAction): Promise<void>;
+	resolveEmergenceSuggestion(id: string, action: EmergenceAction, reason?: string): Promise<void>;
 	runRuleQuery(source: string, limit?: number): Promise<RuleQueryResult>;
 	listSavedRuleQueries(): Promise<SavedRuleQuery[]>;
 	saveRuleQuery(input: { id?: string; name: string; source: string }): Promise<SavedRuleQuery>;
