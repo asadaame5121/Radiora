@@ -49,7 +49,17 @@ export type UiEntityCode =
 	| "stubList"
 	| "stubContext"
 	| "duplicateCandidates"
-	| "duplicateReason";
+	| "duplicateReason"
+	| "duplicateScore"
+	| "duplicateCandidateHint"
+	| "duplicateCandidateActions"
+	| "duplicateMerge"
+	| "duplicateKeepLeft"
+	| "duplicateKeepRight"
+	| "duplicateCreateLike"
+	| "duplicateCreateRelated"
+	| "duplicateDismiss"
+	| "duplicateMergeConfirm";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -105,4 +115,15 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	stubContext: "作成文脈",
 	duplicateCandidates: "重複候補",
 	duplicateReason: "根拠",
+	duplicateScore: "スコア",
+	duplicateCandidateHint:
+		"項目のタイトル・検索別名・タグ・リンクの一致を根拠に、操作を選べます。候補が自動採用されることはありません。",
+	duplicateCandidateActions: "重複候補の操作",
+	duplicateMerge: "統合する",
+	duplicateKeepLeft: "左の項目を残す",
+	duplicateKeepRight: "右の項目を残す",
+	duplicateCreateLike: "LIKEを作成",
+	duplicateCreateRelated: "RELATEDを作成",
+	duplicateDismiss: "却下（何もしない）",
+	duplicateMergeConfirm: "項目を統合しますか？",
 });

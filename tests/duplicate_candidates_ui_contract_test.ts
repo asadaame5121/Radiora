@@ -1,4 +1,4 @@
-import { assert, assertFalse } from "jsr:@std/assert@1";
+import { assert, assertFalse, assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("Duplicate candidates view is reachable and acts only through bindings", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
@@ -15,52 +15,49 @@ Deno.test("Duplicate candidates view is reachable and acts only through bindings
 	assertFalse(/直接|store\./.test(app));
 });
 
-Deno.test("Duplicate candidates view is read-only and contains no action buttons", async () => {
+Deno.test("Duplicate candidates view keeps merge, link adoption, and dismissal explicit", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const bindings = await Deno.readTextFile(
+		new URL("../src/shared/bindings.ts", import.meta.url),
+	);
+	const desktop = await Deno.readTextFile(
+		new URL("../src/desktop/register_bindings.ts", import.meta.url),
+	);
 
 	const duplicatesSection = app.match(
 		/\{:else if viewMode === "duplicates"\}[\s\S]*?(?=\{:else if viewMode === "trash"\})/,
 	)?.[0] ?? "";
 
 	assert(duplicatesSection.length > 0, "duplicates section not found");
-
-	const writeApis = [
-		"createLink",
-		"createStub",
-		"quickCapture",
-		"placeUnplacedWork",
-		"createItem",
-		"createOccurrence",
-		"updateUnplacedWorkText",
-		"resolveStub",
-		"trashWork",
-		"restoreWork",
-		"purgeWork",
-		"deleteLink",
-		"moveItem",
-		"updateItemText",
-		"saveSearchAlias",
-		"deleteSearchAlias",
-		"renameTag",
-		"mergeTags",
-	];
-
-	for (const api of writeApis) {
-		assertFalse(
-			duplicatesSection.includes(`api.${api}(`),
-			`duplicates section must not call write API: ${api}`,
-		);
+	for (
+		const code of [
+			"duplicateCandidateHint",
+			"duplicateCandidateActions",
+			"duplicateMerge",
+			"duplicateKeepLeft",
+			"duplicateKeepRight",
+			"duplicateCreateLike",
+			"duplicateCreateRelated",
+			"duplicateDismiss",
+		]
+	) {
+		assert(duplicatesSection.includes(`vocabulary.${code}`), `missing vocabulary.${code}`);
 	}
-
 	assertFalse(
 		/実身|化身|項目|リンク/.test(duplicatesSection),
 		"duplicates section must not contain literal Japanese terms",
 	);
-
-	assertFalse(
-		duplicatesSection.includes("<button"),
-		"duplicates section must not contain action buttons",
+	assertMatch(
+		app,
+		/api\.createLink\(\{[\s\S]*?origin: "human",[\s\S]*?status: "asserted",[\s\S]*?reason: duplicateCandidateReason\(candidate\)/,
 	);
+	assert(app.includes("excludedDuplicateCandidateKeys"));
+	assert(app.includes('requestConfirmation({ action: "merge-duplicate", preview })'));
+	assert(app.includes("await api.mergeWorks(confirmation.preview)"));
+	assert(bindings.includes("previewWorkMerge("));
+	assert(bindings.includes("mergeWorks("));
+	assert(desktop.includes("service().previewWorkMerge(sourceWorkId, survivorWorkId)"));
+	assert(desktop.includes("service().mergeWorks(preview)"));
 });
 
 Deno.test("loadDuplicates function only calls read-only API", async () => {
