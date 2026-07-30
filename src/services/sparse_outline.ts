@@ -10,6 +10,7 @@ import type {
 interface SparseEntry {
 	item: OutlineItem;
 	isMatched: boolean;
+	breadcrumb?: string[];
 	reasons?: SearchReason[];
 	score?: number;
 }
@@ -43,6 +44,7 @@ export function buildSparseOutline(
 		included.set(result.item.id, {
 			item: result.item,
 			isMatched: true,
+			breadcrumb: result.ancestorIds,
 			reasons: result.reasons,
 			score: result.score,
 		});
@@ -109,6 +111,7 @@ export function buildSparseOutline(
 			occurrenceId: entry.item.id,
 			text: entry.item.text,
 			sourceType,
+			breadcrumb: entry.breadcrumb,
 			reasons: entry.reasons,
 			score: entry.score,
 		};
