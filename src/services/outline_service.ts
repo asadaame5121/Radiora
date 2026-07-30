@@ -69,6 +69,7 @@ import {
 } from "./comparison_service.ts";
 import { type CreatedStub, type StubListEntry, StubService } from "./stub_service.ts";
 import { type DuplicateCandidate, DuplicateCandidateService } from "./duplicate_candidates.ts";
+import { type WorkMergePreview, WorkMergeService } from "./work_merge_service.ts";
 
 const ORDER_STEP = 1024;
 const MAX_SEARCH_LIMIT = 50;
@@ -501,6 +502,14 @@ export class OutlineService {
 
 	listDuplicateCandidates(limit?: number): Promise<DuplicateCandidate[]> {
 		return new DuplicateCandidateService(this.store).listCandidates(limit);
+	}
+
+	previewWorkMerge(sourceWorkId: string, survivorWorkId: string): Promise<WorkMergePreview> {
+		return new WorkMergeService(this.store).preview(sourceWorkId, survivorWorkId);
+	}
+
+	mergeWorks(preview: WorkMergePreview): Promise<void> {
+		return new WorkMergeService(this.store).merge(preview);
 	}
 
 	resolveLinkComparison(linkId: string): Promise<LinkComparisonProjection> {

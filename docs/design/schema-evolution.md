@@ -314,3 +314,22 @@ version `3`のJSONを上書きする前に`.v3.bak`へ一度だけ保護する�
 - Stubの`createdAt`、`createdVia`、`context`がJSON round-tripで壊れない
 - 未解決入力からStub・Work・Occurrence・リンクを暗黙作成しない
 - version `3` JSONを上書きする前に`.v3.bak`へ一度だけ保護する
+
+## 13. Duplicate merge provenance 移行(version 4 から 5)
+
+2026-07-30に`0005_merge_provenance`を導入し、storage schemaとbackup schemaはversion `5`
+になった。重複統合で吸収されたWorkは削除せず、`mergedIntoWorkId`と`mergedAt`を持つ
+provenance tombstoneとして残す。旧アプリによる統合状態の再表示や黙示損失を防ぐためversionを
+上げ、version `4` JSONは配列構造を変えず一段変換し、上書き前に`.v4.bak`へ保護する。
+
+統合transactionは、選択したsurvivorへOccurrence、Branch、Working Copy、Revision、
+Recovery Snapshot、Bookmark、Resume Position、意味リンクとSystem Relationのendpointを同時に
+移す。各ID、Revision親ID、Occurrence親IDは変更しない。source BranchはIDを保ったまま
+`merged/<source-work-id>/<old-name>`へ決定的に改名する。張替えで生じるactiveな自己リンクと
+同一意味リンクは削除せず`retracted`にし、System Relationはstatusがないため自己関係や重複も
+record IDを残す。
+
+最低限、previewが本文、配置、Branch改名、リンク、Revision、Snapshot、aliasを列挙すること、
+Memory/JSON/Surrealの統合が原子的であること、検証失敗時に全状態が不変であること、version `4`
+fixtureの日本語、改行、Markdown、`radiora://`参照がversion `5` round-tripで変化しないことを
+検証する。

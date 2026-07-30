@@ -3,6 +3,7 @@ import type {
 	Branch,
 	Knot,
 	LexicalHit,
+	LinkEndpoint,
 	LinkType,
 	Occurrence,
 	OutlineItem,
@@ -17,8 +18,10 @@ import type {
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
+import { isSymmetricLinkType } from "../domain/models.ts";
 import {
 	type GraphStore,
+	type MergeWorksInput,
 	validateRevisionCreation,
 	validateUnplacedWorkCreation,
 } from "./graph_store.ts";
@@ -60,17 +63,93 @@ export class MemoryGraphStore implements GraphStore {
 
 	listWorks(includeDeleted = false): Promise<Work[]> {
 		return Promise.resolve(structuredClone(
-			this.works.filter((work) => includeDeleted || !work.deletedAt),
+			this.works.filter((work) => includeDeleted || (!work.deletedAt && !work.mergedIntoWorkId)),
 		));
 	}
 
 	listOccurrences(includeDeletedWorks = false): Promise<Occurrence[]> {
 		const visibleWorkIds = new Set(
-			this.works.filter((work) => includeDeletedWorks || !work.deletedAt).map((work) => work.id),
+			this.works.filter((work) =>
+				includeDeletedWorks || (!work.deletedAt && !work.mergedIntoWorkId)
+			).map((work) => work.id),
 		);
 		return Promise.resolve(structuredClone(
 			this.occurrences.filter((occurrence) => visibleWorkIds.has(occurrence.workId)),
 		));
+	}
+
+	async mergeWorks(input: MergeWorksInput): Promise<void> {
+		const source = this.works.find((work) => work.id === input.sourceWorkId);
+		const survivor = this.works.find((work) => work.id === input.survivorWorkId);
+		validateMergeInput(input, source, survivor, this.aliases);
+
+		const next = structuredClone({
+			works: this.works,
+			branches: this.branches,
+			workingCopies: this.workingCopies,
+			revisions: this.revisions,
+			recoverySnapshots: this.recoverySnapshots,
+			bookmarks: this.bookmarks,
+			resumePosition: this.resumePosition,
+			occurrences: this.occurrences,
+			links: this.links,
+			systemRelations: this.systemRelations,
+			aliases: this.aliases,
+		});
+		const takenNames = new Set(
+			next.branches.filter((branch) => branch.workId === input.survivorWorkId).map((branch) =>
+				branch.name
+			),
+		);
+		for (const branch of next.branches.filter((entry) => entry.workId === input.sourceWorkId)) {
+			branch.workId = input.survivorWorkId;
+			branch.name = mergedBranchName(input.sourceWorkId, branch.name, takenNames);
+			takenNames.add(branch.name);
+		}
+		for (const copy of next.workingCopies) {
+			if (copy.workId === input.sourceWorkId) copy.workId = input.survivorWorkId;
+		}
+		for (const revision of next.revisions) {
+			if (revision.workId === input.sourceWorkId) revision.workId = input.survivorWorkId;
+		}
+		for (const snapshot of next.recoverySnapshots) {
+			if (snapshot.workId === input.sourceWorkId) snapshot.workId = input.survivorWorkId;
+		}
+		for (const occurrence of next.occurrences) {
+			if (occurrence.workId === input.sourceWorkId) occurrence.workId = input.survivorWorkId;
+		}
+		for (const bookmark of next.bookmarks) {
+			if (bookmark.workId === input.sourceWorkId) bookmark.workId = input.survivorWorkId;
+		}
+		if (next.resumePosition?.workId === input.sourceWorkId) {
+			next.resumePosition.workId = input.survivorWorkId;
+		}
+		for (const link of next.links) {
+			link.from = replaceEndpointWork(link.from, input);
+			link.to = replaceEndpointWork(link.to, input);
+			link.fromId = link.from.workId;
+			link.toId = link.to.workId;
+		}
+		retractDuplicateActiveLinks(next.links);
+		for (const relation of next.systemRelations) {
+			if (relation.fromWorkId === input.sourceWorkId) {
+				relation.fromWorkId = input.survivorWorkId;
+			}
+			if (relation.toWorkId === input.sourceWorkId) relation.toWorkId = input.survivorWorkId;
+		}
+		const sourceTombstone = next.works.find((work) => work.id === input.sourceWorkId)!;
+		sourceTombstone.mergedIntoWorkId = input.survivorWorkId;
+		sourceTombstone.mergedAt = input.mergedAt;
+		const survivorNext = next.works.find((work) => work.id === input.survivorWorkId)!;
+		survivorNext.updatedAt = input.mergedAt;
+		if (input.alias) {
+			next.aliases = [
+				...next.aliases.filter((alias) => alias.id !== input.alias!.id),
+				structuredClone(input.alias),
+			];
+		}
+
+		Object.assign(this, next);
 	}
 
 	listBranches(workId?: string): Promise<Branch[]> {
@@ -565,4 +644,74 @@ export class MemoryGraphStore implements GraphStore {
 		}
 		return [...byWork.values()];
 	}
+}
+
+function validateMergeInput(
+	input: MergeWorksInput,
+	source: Work | undefined,
+	survivor: Work | undefined,
+	aliases: readonly SearchAlias[],
+): void {
+	if (input.sourceWorkId === input.survivorWorkId) {
+		throw new Error("Duplicate merge requires two different Works");
+	}
+	if (!source || source.deletedAt || source.mergedIntoWorkId) {
+		throw new Error(`Active source Work not found: ${input.sourceWorkId}`);
+	}
+	if (!survivor || survivor.deletedAt || survivor.mergedIntoWorkId) {
+		throw new Error(`Active survivor Work not found: ${input.survivorWorkId}`);
+	}
+	const parsed = Date.parse(input.mergedAt);
+	if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== input.mergedAt) {
+		throw new Error("Duplicate merge requires a valid ISO instant");
+	}
+	if (input.alias) {
+		if (!input.alias.id || !input.alias.canonical.trim() || input.alias.variants.length === 0) {
+			throw new Error("Duplicate merge alias requires a non-empty old name");
+		}
+		const collidingAlias = aliases.find((alias) =>
+			alias.id === input.alias!.id && alias.canonical !== input.alias!.canonical
+		);
+		if (collidingAlias) throw new Error(`Search Alias ID collision: ${input.alias.id}`);
+	}
+}
+
+function mergedBranchName(
+	sourceWorkId: string,
+	original: string,
+	taken: ReadonlySet<string>,
+): string {
+	const base = `merged/${sourceWorkId}/${original}`;
+	let candidate = base;
+	let suffix = 2;
+	while (taken.has(candidate)) candidate = `${base}/${suffix++}`;
+	return candidate;
+}
+
+function replaceEndpointWork(endpoint: LinkEndpoint, input: MergeWorksInput): LinkEndpoint {
+	return endpoint.workId === input.sourceWorkId
+		? { ...endpoint, workId: input.survivorWorkId }
+		: endpoint;
+}
+
+function retractDuplicateActiveLinks(links: OutlineLink[]): void {
+	const seen = new Set<string>();
+	for (const link of links) {
+		if (link.status === "retracted") continue;
+		const left = endpointKey(link.from);
+		const right = endpointKey(link.to);
+		const self = left === right;
+		const endpoints = isSymmetricLinkType(link.type) && left > right
+			? `${right}|${left}`
+			: `${left}|${right}`;
+		const key = `${link.type}|${endpoints}`;
+		if (self || seen.has(key)) link.status = "retracted";
+		else seen.add(key);
+	}
+}
+
+function endpointKey(endpoint: LinkEndpoint): string {
+	return endpoint.scope === "revision"
+		? `revision:${endpoint.workId}:${endpoint.revisionId}`
+		: `work:${endpoint.workId}`;
 }

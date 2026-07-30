@@ -2,6 +2,7 @@ import { assertEquals, assertRejects, assertStringIncludes } from "jsr:@std/asse
 import { revisionSnapshotMigration } from "./0002_revision_snapshot.ts";
 import { bookmarkResumeMigration } from "./0003_bookmark_resume.ts";
 import { stubStateMigration } from "./0004_stub_state.ts";
+import { mergeProvenanceMigration } from "./0005_merge_provenance.ts";
 import {
 	type MigrationContext,
 	type MigrationJournalEntry,
@@ -238,5 +239,36 @@ Deno.test("version 3 storage expands to stub state schema version 4", async () =
 	assertStringIncludes(statements[0], "DEFINE FIELD IF NOT EXISTS stub.created_at ON work");
 	assertStringIncludes(statements[0], "DEFINE FIELD IF NOT EXISTS stub.created_via ON work");
 	assertStringIncludes(statements[0], "DEFINE FIELD IF NOT EXISTS stub.context ON work");
+	assertStringIncludes(statements[1], "INFO FOR TABLE work");
+});
+
+Deno.test("version 4 storage expands to merge provenance schema version 5", async () => {
+	const state = new MemoryMigrationState();
+	state.metadata = {
+		id: "radiora",
+		version: 4,
+		updatedAt: "2026-07-30T00:00:00.000Z",
+		lastMigrationId: "0004_stub_state",
+		appVersion: "0.1.0",
+	};
+	const statements: string[] = [];
+	assertEquals(
+		await runStorageMigrations({
+			state,
+			context: {
+				execute: (statement) => {
+					statements.push(statement);
+					return Promise.resolve(undefined);
+				},
+			},
+			migrations: [mergeProvenanceMigration],
+			appVersion: "0.1.0",
+			targetVersion: 5,
+		}),
+		5,
+	);
+	assertEquals(state.metadata.lastMigrationId, "0005_merge_provenance");
+	assertStringIncludes(statements[0], "merged_into_work");
+	assertStringIncludes(statements[0], "merged_at");
 	assertStringIncludes(statements[1], "INFO FOR TABLE work");
 });

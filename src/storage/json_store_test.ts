@@ -41,10 +41,10 @@ Deno.test("new saves use the version 4 backup envelope and reload graph data", a
 
 		const backup = JSON.parse(await Deno.readTextFile(path));
 		assertEquals(backup.format, "radiora-backup");
-		assertEquals(backup.schemaVersion, 4);
+		assertEquals(backup.schemaVersion, 5);
 		assertEquals(typeof backup.exportedAt, "string");
 		assertEquals(typeof backup.appVersion, "string");
-		assertEquals(backup.source, { storageSchemaVersion: 4 });
+		assertEquals(backup.source, { storageSchemaVersion: 5 });
 		assertEquals(backup.items, undefined);
 		assertEquals(backup.data.works[0].id, "one");
 		assertEquals(backup.data.workingCopies[0].text, "persistent");
@@ -64,13 +64,34 @@ Deno.test("new saves use the version 4 backup envelope and reload graph data", a
 	}
 });
 
+Deno.test("version 4 backup migrates one step and round-trips rich text", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	try {
+		await Deno.copyFile("tests/fixtures/backup-v4.json", path);
+		const store = new JsonGraphStore(path);
+		await store.initialize();
+		const parsed = JSON.parse(await Deno.readTextFile(path));
+		assertEquals(parsed.schemaVersion, 5);
+		assertEquals(parsed.source.storageSchemaVersion, 5);
+		assertEquals(
+			parsed.data.workingCopies[0].text,
+			"日本語\n\n**Markdown** と radiora://work/11111111-1111-4111-8111-111111111111",
+		);
+		assertEquals(parsed.data.revisions[0].text, parsed.data.workingCopies[0].text);
+		assertEquals(JSON.parse(await Deno.readTextFile(`${path}.v4.bak`)).schemaVersion, 4);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
 Deno.test("rejects a future backup version without overwriting it", async () => {
 	const directory = await Deno.makeTempDir();
 	const path = `${directory}/future-backup.json`;
 	const futureBackup = JSON.stringify(
 		{
 			format: "radiora-backup",
-			schemaVersion: 5,
+			schemaVersion: 6,
 			exportedAt: "2026-01-01T00:00:00.000Z",
 			appVersion: "9.9.9",
 			source: { storageSchemaVersion: 5 },
@@ -86,7 +107,7 @@ Deno.test("rejects a future backup version without overwriting it", async () => 
 		await assertRejects(
 			() => store.initialize(),
 			Error,
-			"Unsupported backup schema version: 5",
+			"Unsupported backup schema version: 6",
 		);
 		assertEquals(await Deno.readTextFile(path), futureBackup);
 		await assertRejects(
@@ -227,7 +248,7 @@ Deno.test("version 1 backup migrates losslessly to version 4 and reloads", async
 		assertEquals((await migrated.listItems())[0].text, "v1本文");
 		assertEquals(await Deno.readTextFile(`${path}.v1.bak`), versionOneInput);
 		const envelope = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(envelope.schemaVersion, 4);
+		assertEquals(envelope.schemaVersion, 5);
 		assertEquals(envelope.data.works, data.works);
 		assertEquals(envelope.data.workingCopies, data.workingCopies);
 		assertEquals(envelope.data.revisions, []);
@@ -269,7 +290,7 @@ Deno.test("loads the complete version 0 JSON fixture without data loss", async (
 		assertEquals(await store.getEmergenceFeedback("suggestion-1"), "pin");
 		assertEquals((await store.listSavedRuleQueries())[0].name, "LIKEリンク");
 		const migrated = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(migrated.schemaVersion, 4);
+		assertEquals(migrated.schemaVersion, 5);
 		assertEquals(migrated.data.works.length, 5);
 		assertEquals(migrated.data.occurrences[1].parentOccurrenceId, items[0].id);
 		assertEquals(
@@ -419,8 +440,8 @@ Deno.test("version 4 reload preserves bookmarks and the single resume position i
 		assertEquals((await second.listBookmarks())[0]?.id, "bookmark");
 		assertEquals((await second.getResumePosition())?.caretOffset, 4);
 		const parsed = JSON.parse(await Deno.readTextFile(path));
-		assertEquals(parsed.schemaVersion, 4);
-		assertEquals(parsed.source.storageSchemaVersion, 4);
+		assertEquals(parsed.schemaVersion, 5);
+		assertEquals(parsed.source.storageSchemaVersion, 5);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -466,7 +487,7 @@ Deno.test("version 2 migrates to version 4 and preserves an exact v2 backup", as
 		assertEquals(await migrated.listBookmarks(), []);
 		assertEquals(await migrated.getResumePosition(), null);
 		assertEquals(await Deno.readTextFile(`${path}.v2.bak`), versionTwoInput);
-		assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 4);
+		assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 5);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -508,7 +529,7 @@ Deno.test("version 3 migrates to version 4 and preserves an exact v3 backup", as
 		await migrated.initialize();
 		assertEquals((await migrated.listItems())[0]?.text, "v3");
 		assertEquals(await Deno.readTextFile(`${path}.v3.bak`), versionThreeInput);
-		assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 4);
+		assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 5);
 
 		const reloaded = new JsonGraphStore(path);
 		await reloaded.initialize();

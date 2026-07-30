@@ -21,8 +21,10 @@ import type {
 	WorkingCopy,
 	WorkStub,
 } from "../domain/models.ts";
+import { isSymmetricLinkType } from "../domain/models.ts";
 import {
 	type GraphStore,
+	type MergeWorksInput,
 	validateRevisionCreation,
 	validateUnplacedWorkCreation,
 } from "./graph_store.ts";
@@ -37,6 +39,7 @@ import { workOccurrenceMigration } from "./migrations/0001_work_occurrence.ts";
 import { revisionSnapshotMigration } from "./migrations/0002_revision_snapshot.ts";
 import { bookmarkResumeMigration } from "./migrations/0003_bookmark_resume.ts";
 import { stubStateMigration } from "./migrations/0004_stub_state.ts";
+import { mergeProvenanceMigration } from "./migrations/0005_merge_provenance.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
@@ -53,6 +56,7 @@ const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
 	revisionSnapshotMigration,
 	bookmarkResumeMigration,
 	stubStateMigration,
+	mergeProvenanceMigration,
 ];
 
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
@@ -117,6 +121,62 @@ export function quickCaptureTransactionQuery(hasStub = false, hasStubContext = f
 			COMMIT TRANSACTION;`;
 }
 
+export function mergeWorksTransactionQuery(includeAlias = true): string {
+	return `BEGIN TRANSACTION;
+			UPDATE branch SET name = string::concat("merged/", record::id(work), "/", name)
+				WHERE work = $source;
+			UPDATE branch SET work = $survivor WHERE work = $source;
+			UPDATE working_copy SET work = $survivor WHERE work = $source;
+			UPDATE revision SET work = $survivor WHERE work = $source;
+			UPDATE recovery_snapshot SET work = $survivor WHERE work = $source;
+			UPDATE occurrence SET work = $survivor WHERE work = $source;
+			UPDATE bookmark SET work = $survivor WHERE work = $source;
+			UPDATE resume_position SET work = $survivor WHERE work = $source;
+			UPDATE semantic_link SET from_work = $survivor WHERE from_work = $source;
+			UPDATE semantic_link SET to_work = $survivor WHERE to_work = $source;
+			UPDATE semantic_link SET status = $retracted WHERE id IN $duplicateLinks;
+			UPDATE system_relation SET from_work = $survivor WHERE from_work = $source;
+			UPDATE system_relation SET to_work = $survivor WHERE to_work = $source;
+			${
+		includeAlias
+			? `UPSERT $alias CONTENT {
+				canonical: $canonical, variants: $variants,
+				created_at: $aliasCreatedAt, updated_at: $aliasUpdatedAt
+			};`
+			: ""
+	}
+			UPDATE $source SET merged_into_work = $survivor, merged_at = $mergedAt;
+			UPDATE $survivor SET updated_at = $mergedAt;
+			COMMIT TRANSACTION;`;
+}
+
+export function duplicateLinkIdsAfterMerge(
+	links: readonly OutlineLink[],
+	sourceWorkId: string,
+	survivorWorkId: string,
+): string[] {
+	const seen = new Set<string>();
+	const duplicates: string[] = [];
+	for (const link of links) {
+		if (link.status === "retracted") continue;
+		const replace = (endpoint: OutlineLink["from"]) =>
+			endpoint.workId === sourceWorkId ? { ...endpoint, workId: survivorWorkId } : endpoint;
+		const from = replace(link.from);
+		const to = replace(link.to);
+		const endpointKey = (endpoint: typeof from) =>
+			endpoint.scope === "revision"
+				? `revision:${endpoint.workId}:${endpoint.revisionId}`
+				: `work:${endpoint.workId}`;
+		let left = endpointKey(from);
+		let right = endpointKey(to);
+		if (isSymmetricLinkType(link.type) && left > right) [left, right] = [right, left];
+		const key = `${link.type}|${left}|${right}`;
+		if (left === right || seen.has(key)) duplicates.push(link.id);
+		else seen.add(key);
+	}
+	return duplicates;
+}
+
 function domainId(
 	value: unknown,
 	field: "id" | "work_id" | "parent_id" | "branch_id" | "revision_id",
@@ -168,6 +228,10 @@ export function workFromRow(row: Row): Work {
 		updatedAt: String(row.updated_at ?? ""),
 		deletedAt: row.deleted_at == null ? undefined : String(row.deleted_at),
 		...(stub ? { stub } : {}),
+		...(row.merged_into_work == null
+			? {}
+			: { mergedIntoWorkId: domainId(optionalRecordDomainId(row.merged_into_work), "work_id") }),
+		...(row.merged_at == null ? {} : { mergedAt: String(row.merged_at) }),
 	};
 }
 
@@ -368,8 +432,11 @@ export class SurrealGraphStore implements GraphStore {
 
 	async listWorks(includeDeleted = false): Promise<Work[]> {
 		const [rows] = await this.#db.query<[Row[]]>(
-			`SELECT record::id(id) AS id, created_at, updated_at, deleted_at, stub
-				FROM work ${includeDeleted ? "" : "WHERE deleted_at IS NONE"};`,
+			`SELECT record::id(id) AS id, created_at, updated_at, deleted_at, stub,
+				merged_into_work, merged_at
+				FROM work ${
+				includeDeleted ? "" : "WHERE deleted_at IS NONE AND merged_into_work IS NONE"
+			};`,
 		);
 		return rows.map(workFromRow);
 	}
@@ -563,6 +630,62 @@ export class SurrealGraphStore implements GraphStore {
 					: {}),
 			},
 		);
+	}
+
+	async mergeWorks(input: MergeWorksInput): Promise<void> {
+		const [works, aliases, links] = await Promise.all([
+			this.listWorks(true),
+			this.listAliases(),
+			this.listLinks(),
+		]);
+		const source = works.find((work) => work.id === input.sourceWorkId);
+		const survivor = works.find((work) => work.id === input.survivorWorkId);
+		if (
+			input.sourceWorkId === input.survivorWorkId || !source || source.deletedAt ||
+			source.mergedIntoWorkId
+		) {
+			throw new Error(`Active source Work not found: ${input.sourceWorkId}`);
+		}
+		if (!survivor || survivor.deletedAt || survivor.mergedIntoWorkId) {
+			throw new Error(`Active survivor Work not found: ${input.survivorWorkId}`);
+		}
+		const parsed = Date.parse(input.mergedAt);
+		if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== input.mergedAt) {
+			throw new Error("Duplicate merge requires a valid ISO instant");
+		}
+		if (input.alias) {
+			if (!input.alias.id || !input.alias.canonical.trim() || input.alias.variants.length === 0) {
+				throw new Error("Duplicate merge alias requires a non-empty old name");
+			}
+			if (
+				aliases.some((alias) =>
+					alias.id === input.alias!.id && alias.canonical !== input.alias!.canonical
+				)
+			) {
+				throw new Error(`Search Alias ID collision: ${input.alias.id}`);
+			}
+		}
+		const duplicateLinks = duplicateLinkIdsAfterMerge(
+			links,
+			input.sourceWorkId,
+			input.survivorWorkId,
+		).map((id) => new RecordId("semantic_link", id));
+		await this.#db.query(mergeWorksTransactionQuery(Boolean(input.alias)), {
+			source: new RecordId("work", input.sourceWorkId),
+			survivor: new RecordId("work", input.survivorWorkId),
+			mergedAt: input.mergedAt,
+			retracted: "retracted",
+			duplicateLinks,
+			...(input.alias
+				? {
+					alias: new RecordId("search_alias", input.alias.id),
+					canonical: input.alias.canonical,
+					variants: input.alias.variants,
+					aliasCreatedAt: input.alias.createdAt,
+					aliasUpdatedAt: input.alias.updatedAt,
+				}
+				: {}),
+		});
 	}
 
 	async resolveWorkStub(workId: string, updatedAt: string): Promise<void> {

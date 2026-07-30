@@ -43,8 +43,6 @@ interface WorkContext {
 /**
  * 重複候補を計算のみで求める読み取り専用サービス。
  * 永続化・書き込みは一切行わない。
- *
- * NOTE: mergedIntoWorkId は #57 で導入予定のため、現時点では統合済み Work の除外処理なし。
  */
 export class DuplicateCandidateService {
 	constructor(private readonly store: GraphStore) {}
@@ -59,9 +57,10 @@ export class DuplicateCandidateService {
 			new TagService(this.store).listScopedTags(),
 		]);
 
-		const contexts = this.buildContexts(works, branches, copies, scopedTags);
+		const activeWorks = works.filter((work) => !work.deletedAt && !work.mergedIntoWorkId);
+		const contexts = this.buildContexts(activeWorks, branches, copies, scopedTags);
 		const titleByWorkId = new Map(
-			works.map((work) => [work.id, this.resolveTitle(work, branches, copies)]),
+			activeWorks.map((work) => [work.id, this.resolveTitle(work, branches, copies)]),
 		);
 		const candidates = this.computeCandidates(contexts, links, aliases, titleByWorkId);
 
