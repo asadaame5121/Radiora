@@ -319,9 +319,7 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 	}
 	for (const occurrence of state.occurrences) {
 		if (
-			!workById.has(occurrence.workId) || !Number.isFinite(occurrence.orderKey) ||
-			(occurrence.parentOccurrenceId !== null &&
-				!occurrenceById.has(occurrence.parentOccurrenceId))
+			!workById.has(occurrence.workId) || !Number.isFinite(occurrence.orderKey)
 		) {
 			throw new Error(`Invalid Occurrence: ${occurrence.id}`);
 		}

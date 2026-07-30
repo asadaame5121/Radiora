@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
+import type { GraphStateSnapshot } from "../storage/graph_store.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
 import { JsonBackupService, type JsonBackupV6 } from "./json_backup.ts";
 
@@ -108,4 +109,48 @@ Deno.test("current JSON backup restores only after complete validation", async (
 		"Invalid Branch",
 	);
 	assertEquals(await targetStore.exportGraphState(), before);
+});
+
+Deno.test("versionless legacy backup migrates in memory without changing its input", async () => {
+	const fixtureUrl = new URL("../../tests/fixtures/backup-v0.json", import.meta.url);
+	const source = await Deno.readTextFile(fixtureUrl);
+	const before = source;
+	const store = new MemoryGraphStore();
+
+	const result = await new JsonBackupService(store).restore(source);
+	assertEquals(result.workCount, 5);
+	const state = await store.exportGraphState();
+	assertEquals(state.works.length, 5);
+	assertEquals(state.occurrences.length, 5);
+	assertEquals(
+		state.workingCopies[0].text,
+		"原稿\n\n日本語・**Markdown**・radiora://item/22222222-2222-4222-8222-222222222222",
+	);
+	assertEquals(source, before);
+	assertEquals(await Deno.readTextFile(fixtureUrl), before);
+});
+
+Deno.test("future backup versions are rejected before any store write", async () => {
+	class TrackingStore extends MemoryGraphStore {
+		restoreCalls = 0;
+		override restoreGraphState(state: GraphStateSnapshot): Promise<void> {
+			this.restoreCalls++;
+			return super.restoreGraphState(state);
+		}
+	}
+	const store = new TrackingStore();
+	await new OccurrenceOperations(store).createItem({ text: "現在のDB", parentId: null });
+	const before = await store.exportGraphState();
+	const current = JSON.parse(
+		await new JsonBackupService(store).export(new Date("2026-07-30T09:00:00.000Z")),
+	) as Record<string, unknown>;
+	current.schemaVersion = 7;
+
+	await assertRejects(
+		() => new JsonBackupService(store).restore(JSON.stringify(current)),
+		Error,
+		"このアプリより新しい",
+	);
+	assertEquals(store.restoreCalls, 0);
+	assertEquals(await store.exportGraphState(), before);
 });
