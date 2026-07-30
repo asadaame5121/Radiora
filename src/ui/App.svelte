@@ -9,6 +9,7 @@
 	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import SparseOutlineView from "./SparseOutlineView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
+	import ManuscriptView from "./ManuscriptView.svelte";
 	import { createRpcAdapter } from "./rpc_adapter";
 	import type {
 		Bookmark,
@@ -95,11 +96,16 @@
 	import type { StubListEntry } from "../services/stub_service";
 	import type { DuplicateCandidate } from "../services/duplicate_candidates";
 	import type { WorkMergePreview } from "../services/work_merge_service";
+	import {
+		manuscriptSectionFromItem,
+		type ManuscriptSection,
+	} from "../services/manuscript_projection";
 
 	const api = createRpcAdapter<RadioraBindings>();
 
 	type ViewMode =
 		| "outline"
+		| "manuscript"
 		| "today"
 		| "unplaced"
 		| "stubs"
@@ -211,6 +217,8 @@
 	let internalReferenceBacklinks = $state<InternalReferenceBacklink[]>([]);
 	let internalReferenceNotice = $state("");
 	let markdownExportNotice = $state("");
+	let manuscriptSections = $state<ManuscriptSection[]>([]);
+	let manuscriptLoading = $state(false);
 	let internalReferenceCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
@@ -268,7 +276,8 @@
 	]);
 	const omniEntryCount = $derived(searchEntries.length + (quickCaptureText.trim() ? 1 : 0));
 	const dedicatedView = $derived(
-		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison",
+		viewMode === "manuscript" || viewMode === "globalLineage" ||
+			viewMode === "workLineage" || viewMode === "comparison",
 	);
 	const workingCopySaveStatus = $derived.by(() => {
 		const failed = workingCopySaveStatuses.find((status) => status.phase === "failed");
@@ -608,6 +617,24 @@
 		autosave.queue(item.workId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
 		void updateInternalReferenceCompletion(id, textarea);
+	}
+
+	function updateManuscriptText(
+		section: ManuscriptSection,
+		_text: string,
+		textarea: HTMLTextAreaElement,
+	): void {
+		if (section.revisionSelector.mode === "pinned") return;
+		updateLocalText(section.occurrenceId, textarea);
+		manuscriptSections = manuscriptSections.map((current) => {
+			if (current.revisionSelector.mode === "pinned") return current;
+			const item = snapshot.items.find((candidate) =>
+				candidate.id === current.occurrenceId
+			);
+			return item
+				? manuscriptSectionFromItem(item, current.depth)
+				: current;
+		});
 	}
 
 	function updateEditorSelection(id: string, textarea: HTMLTextAreaElement): void {
@@ -1491,6 +1518,21 @@
 		viewMode = "trash";
 	}
 
+	async function openManuscript(rootOccurrenceId = selectedItem?.id): Promise<void> {
+		if (!rootOccurrenceId || manuscriptLoading) return;
+		manuscriptLoading = true;
+		error = "";
+		try {
+			await autosave.flush();
+			manuscriptSections = await api.projectManuscript(rootOccurrenceId);
+			viewMode = "manuscript";
+		} catch (cause) {
+			error = errorMessage(cause);
+		} finally {
+			manuscriptLoading = false;
+		}
+	}
+
 	async function restoreTrash(workId: string): Promise<void> {
 		await api.restoreWork(workId);
 		trashEntries = await api.listTrash();
@@ -1803,6 +1845,12 @@
 			<p>作業</p>
 			<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
 				onclick={() => (viewMode = "outline")}>アウトライン</button>
+			<button
+				class:active={viewMode === "manuscript"}
+				aria-pressed={viewMode === "manuscript"}
+				onclick={() => openManuscript()}
+				disabled={!selectedItem || manuscriptLoading}
+			>{vocabulary.manuscript}</button>
 			<button class:active={viewMode === "today"} aria-pressed={viewMode === "today"}
 				onclick={openToday}>{vocabulary.today}</button>
 			<button class:active={viewMode === "unplaced"} aria-pressed={viewMode === "unplaced"}
@@ -1835,7 +1883,7 @@
 	<header class="top-bar">
 		<div class="current-location">
 			<small>現在地</small>
-			<strong>{viewMode === "outline" ? "アウトライン" : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "stubs" ? vocabulary.stubList : viewMode === "duplicates" ? vocabulary.duplicateCandidates : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</strong>
+			<strong>{viewMode === "outline" ? "アウトライン" : viewMode === "manuscript" ? vocabulary.manuscript : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "stubs" ? vocabulary.stubList : viewMode === "duplicates" ? vocabulary.duplicateCandidates : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</strong>
 		</div>
 		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
 			<input
@@ -2057,6 +2105,14 @@
 					</div>
 				{/if}
 			</section>
+		{:else if viewMode === "manuscript"}
+			<ManuscriptView
+				sections={manuscriptSections}
+				{vocabulary}
+				onSelect={selectOccurrence}
+				onChange={updateManuscriptText}
+				onInternalReference={openEditorInternalReference}
+			/>
 		{:else if viewMode === "today"}
 			<section class="outline-panel date-projection" aria-label={vocabulary.today}>
 				<div class="section-title"><span>{vocabulary.today}</span></div>

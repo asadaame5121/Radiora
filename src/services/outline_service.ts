@@ -67,6 +67,7 @@ import { type WorkMergePreview, WorkMergeService } from "./work_merge_service.ts
 import { SemanticLinkOperations } from "./semantic_link_operations.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
 import { DiscoveryOperations } from "./discovery_operations.ts";
+import { ManuscriptProjectionService, type ManuscriptSection } from "./manuscript_projection.ts";
 
 /** Compatibility façade for the desktop binding contract. */
 export class OutlineService {
@@ -99,6 +100,10 @@ export class OutlineService {
 	}
 	projectDates(range: DateRange): Promise<DateProjection> {
 		return new DateProjectionService(this.store).project(range);
+	}
+
+	projectManuscript(rootOccurrenceId: string): Promise<ManuscriptSection[]> {
+		return new ManuscriptProjectionService(this.store).project(rootOccurrenceId);
 	}
 	quickCapture(text: string): Promise<UnplacedWork> {
 		return new QuickCaptureService(this.store).capture(text);

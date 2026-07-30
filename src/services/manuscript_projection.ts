@@ -46,7 +46,7 @@ export class ManuscriptProjectionService {
 		const visit = (item: OutlineItem, depth: number): void => {
 			if (visited.has(item.id)) return;
 			visited.add(item.id);
-			sections.push(sectionFromItem(item, depth));
+			sections.push(manuscriptSectionFromItem(item, depth));
 			if (item.referenceStub) return;
 			for (const child of childrenByParent.get(item.id) ?? []) visit(child, depth + 1);
 		};
@@ -55,7 +55,10 @@ export class ManuscriptProjectionService {
 	}
 }
 
-function sectionFromItem(item: OutlineItem, depth: number): ManuscriptSection {
+export function manuscriptSectionFromItem(
+	item: OutlineItem,
+	depth: number,
+): ManuscriptSection {
 	const normalizedText = item.text.replaceAll("\r\n", "\n");
 	const lines = normalizedText.split("\n");
 	const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);

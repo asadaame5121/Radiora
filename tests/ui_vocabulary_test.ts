@@ -70,6 +70,11 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"emergenceDismiss",
 		"emergenceResolutionReason",
 		"noEmergenceSuggestion",
+		"manuscript",
+		"manuscriptOpen",
+		"manuscriptTotalCount",
+		"manuscriptBranchCount",
+		"manuscriptReadOnly",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -142,5 +147,10 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		emergenceDismiss: "却下",
 		emergenceResolutionReason: "判断理由（却下時は必須）",
 		noEmergenceSuggestion: "新しい関係候補はありません",
+		manuscript: "原稿",
+		manuscriptOpen: "原稿として開く",
+		manuscriptTotalCount: "全体文字数",
+		manuscriptBranchCount: "枝の文字数",
+		manuscriptReadOnly: "固定版のため読み取り専用",
 	});
 });
