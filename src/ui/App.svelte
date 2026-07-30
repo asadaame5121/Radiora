@@ -9,6 +9,7 @@
 	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import SparseOutlineView from "./SparseOutlineView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
+	import { createRpcAdapter } from "./rpc_adapter";
 	import type {
 		Bookmark,
 		CreateLinkInput,
@@ -95,18 +96,7 @@
 	import type { DuplicateCandidate } from "../services/duplicate_candidates";
 	import type { WorkMergePreview } from "../services/work_merge_service";
 
-	const api = new Proxy({}, {
-		get: (_target, property) => async (...args: unknown[]) => {
-			const response = await fetch(`/api/rpc/${String(property)}`, {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ args }),
-			});
-			const payload = await response.json();
-			if (!response.ok) throw new Error(payload.message ?? "API request failed.");
-			return payload.result;
-		},
-	}) as RadioraBindings;
+	const api = createRpcAdapter<RadioraBindings>();
 
 	type ViewMode =
 		| "outline"
