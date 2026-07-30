@@ -69,6 +69,7 @@ import { OccurrenceOperations } from "./occurrence_operations.ts";
 import { DiscoveryOperations } from "./discovery_operations.ts";
 import { ManuscriptProjectionService, type ManuscriptSection } from "./manuscript_projection.ts";
 import { type OpmlImportResult, OpmlService } from "./opml_service.ts";
+import { JsonBackupService } from "./json_backup.ts";
 
 /** Compatibility façade for the desktop binding contract. */
 export class OutlineService {
@@ -113,6 +114,10 @@ export class OutlineService {
 
 	importOpml(source: string): Promise<OpmlImportResult> {
 		return new OpmlService(this.store).import(source);
+	}
+
+	exportJsonBackup(): Promise<string> {
+		return new JsonBackupService(this.store).export();
 	}
 	quickCapture(text: string): Promise<UnplacedWork> {
 		return new QuickCaptureService(this.store).capture(text);

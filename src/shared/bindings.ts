@@ -65,6 +65,7 @@ export interface RadioraBindings {
 	projectManuscript(rootOccurrenceId: string): Promise<ManuscriptSection[]>;
 	exportOpml(): Promise<string>;
 	importOpml(source: string): Promise<OpmlImportResult>;
+	exportJsonBackup(): Promise<string>;
 	listBookmarks(): Promise<Bookmark[]>;
 	createBookmark(occurrenceId: string): Promise<Bookmark>;
 	deleteBookmark(id: string): Promise<void>;
