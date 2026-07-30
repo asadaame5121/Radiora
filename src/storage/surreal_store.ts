@@ -16,12 +16,9 @@ import type {
 	Revision,
 	SavedRuleQuery,
 	SearchAlias,
-	SnapshotProtection,
-	StubCreationKind,
 	SystemRelation,
 	Work,
 	WorkingCopy,
-	WorkStub,
 } from "../domain/models.ts";
 import { isSymmetricLinkType } from "../domain/models.ts";
 import {
@@ -44,15 +41,33 @@ import { stubStateMigration } from "./migrations/0004_stub_state.ts";
 import { mergeProvenanceMigration } from "./migrations/0005_merge_provenance.ts";
 import { emergenceSuggestionMigration } from "./migrations/0006_emergence_suggestion.ts";
 import {
+	emergenceAcceptanceTransactionQuery,
+	emergenceSuggestionUpsertQuery,
+	evolvedFromEndpoints,
+	mergeWorksTransactionQuery,
+	navigationPurgeStatements,
+	quickCaptureTransactionQuery,
+	recoveryPromotionTransactionQuery,
+	recoveryRestoreTransactionQuery,
+	resumePositionUpsertQuery,
+} from "./surreal_queries.ts";
+import {
+	domainId,
+	itemFromRow,
+	occurrenceFromRow,
+	optionalRecordDomainId,
+	revisionFromRow,
+	snapshotProtectionFromRow,
+	type SurrealRow as Row,
+	workFromRow,
+} from "./surreal_row_mapper.ts";
+import {
 	countOccurrences,
 	normalizeSearchText,
 	searchTerms,
 	titleOf,
 } from "../services/search_text.ts";
 
-type Row = Record<string, unknown>;
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const APP_VERSION = "0.1.0";
 const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
 	workOccurrenceMigration,
@@ -64,139 +79,6 @@ const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
 ];
 
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
-
-export function evolvedFromEndpoints(
-	parentId: string,
-	childId: string,
-): { inId: string; outId: string } {
-	return { inId: parentId, outId: childId };
-}
-
-export function recoveryRestoreTransactionQuery(
-	hasSourceRevision: boolean,
-	hasName: boolean,
-): string {
-	return `BEGIN TRANSACTION;
-			CREATE $beforeRestore CONTENT {
-				work: $work, branch: $branch, text: $beforeText, content_hash: $contentHash,
-				created_at: $createdAt,
-				source_revision: ${hasSourceRevision ? "$sourceRevision" : "NONE"},
-				name: ${hasName ? "$name" : "NONE"},
-				protection_reason: NONE, protected_at: NONE, protection_expires_at: NONE
-			};
-			UPDATE working_copy SET text = $targetText, updated_at = $updatedAt
-				WHERE branch = $branch;
-			UPDATE $work SET updated_at = $updatedAt;
-			COMMIT TRANSACTION;`;
-}
-
-export function recoveryPromotionTransactionQuery(hasMessage: boolean): string {
-	return `BEGIN TRANSACTION;
-			CREATE $revision CONTENT {
-				work: $work, text: $text, parent_revisions: $parents, kind: $kind,
-				created_at: $createdAt, message: ${hasMessage ? "$message" : "NONE"}
-			};
-			UPDATE $branch SET head_revision = $revision;
-			UPDATE $snapshot SET protection_reason = "revision-source",
-				protected_at = $protectedAt, protection_expires_at = NONE;
-			COMMIT TRANSACTION;`;
-}
-
-export function quickCaptureTransactionQuery(hasStub = false, hasStubContext = false): string {
-	return `BEGIN TRANSACTION;
-			CREATE $work CONTENT {
-				created_at: $createdAt, updated_at: $updatedAt, deleted_at: NONE${
-		hasStub
-			? `,
-				stub: {
-					created_at: $stubCreatedAt, created_via: $stubCreatedVia,
-					context: ${hasStubContext ? "$stubContext" : "NONE"}
-				}`
-			: ""
-	}
-			};
-			CREATE $branch CONTENT {
-				work: $work, name: "main", head_revision: NONE,
-				created_at: $createdAt, promoted_at: NONE, archived_at: NONE
-			};
-			CREATE $copy CONTENT {
-				work: $work, branch: $branch, text: $text, updated_at: $updatedAt
-			};
-			COMMIT TRANSACTION;`;
-}
-
-export function mergeWorksTransactionQuery(includeAlias = true): string {
-	return `BEGIN TRANSACTION;
-			UPDATE branch SET name = string::concat("merged/", record::id(work), "/", name)
-				WHERE work = $source;
-			UPDATE branch SET work = $survivor WHERE work = $source;
-			UPDATE working_copy SET work = $survivor WHERE work = $source;
-			UPDATE revision SET work = $survivor WHERE work = $source;
-			UPDATE recovery_snapshot SET work = $survivor WHERE work = $source;
-			UPDATE occurrence SET work = $survivor WHERE work = $source;
-			UPDATE bookmark SET work = $survivor WHERE work = $source;
-			UPDATE resume_position SET work = $survivor WHERE work = $source;
-			UPDATE semantic_link SET from_work = $survivor WHERE from_work = $source;
-			UPDATE semantic_link SET to_work = $survivor WHERE to_work = $source;
-			UPDATE semantic_link SET status = $retracted WHERE id IN $duplicateLinks;
-			UPDATE system_relation SET from_work = $survivor WHERE from_work = $source;
-			UPDATE system_relation SET to_work = $survivor WHERE to_work = $source;
-			${
-		includeAlias
-			? `UPSERT $alias CONTENT {
-				canonical: $canonical, variants: $variants,
-				created_at: $aliasCreatedAt, updated_at: $aliasUpdatedAt
-			};`
-			: ""
-	}
-			UPDATE $source SET merged_into_work = $survivor, merged_at = $mergedAt;
-			UPDATE $survivor SET updated_at = $mergedAt;
-			COMMIT TRANSACTION;`;
-}
-
-export function emergenceAcceptanceTransactionQuery(
-	hasReason = true,
-	symmetric = false,
-	hasResolutionReason = false,
-): string {
-	const reverseSuggestion = symmetric
-		? ` OR (context_work = $toWork AND target_work = $fromWork)`
-		: "";
-	const reverseLink = symmetric ? ` OR (from_work = $toWork AND to_work = $fromWork)` : "";
-	return `BEGIN TRANSACTION;
-			IF (SELECT VALUE count() FROM $suggestion
-				WHERE status IN ["pending", "held"]
-				AND proposed_link_type = $type
-				AND ((context_work = $fromWork AND target_work = $toWork)${reverseSuggestion})) = 1 {
-				IF (SELECT VALUE count() FROM semantic_link
-					WHERE status != "retracted" AND origin = "suggestion"
-						AND from_scope = "work" AND to_scope = "work" AND type = $type
-						AND ((from_work = $fromWork AND to_work = $toWork)${reverseLink})) = 0 {
-					CREATE $link CONTENT {
-						from_scope: "work", from_work: $fromWork, from_revision: NONE,
-						to_scope: "work", to_work: $toWork, to_revision: NONE,
-						type: $type, status: "asserted", origin: "suggestion",
-						reason: ${hasReason ? "$reason" : "NONE"}, created_at: $createdAt
-					};
-				};
-				UPDATE $suggestion SET status = "accepted", updated_at = $updatedAt,
-					resolved_at = $updatedAt,
-					resolution_reason: ${hasResolutionReason ? "$resolutionReason" : "NONE"};
-			};
-			COMMIT TRANSACTION;`;
-}
-
-export function emergenceSuggestionUpsertQuery(hasProposedLinkType: boolean): string {
-	return `UPSERT $record MERGE {
-				kind: $kind, context_work: $contextWork, target_work: $targetWork,
-				context_occurrence_id: $contextItemId, target_occurrence_id: $targetItemId,
-				proposed_link_type: ${hasProposedLinkType ? "$proposedLinkType" : "NONE"},
-				title: $title, explanation: $explanation, evidence: $evidence, score: $score,
-				updated_at: $updatedAt
-			};
-			UPDATE $record SET status = $pending, created_at = $createdAt
-				WHERE status IS NONE;`;
-}
 
 export function duplicateLinkIdsAfterMerge(
 	links: readonly OutlineLink[],
@@ -223,132 +105,6 @@ export function duplicateLinkIdsAfterMerge(
 		else seen.add(key);
 	}
 	return duplicates;
-}
-
-function domainId(
-	value: unknown,
-	field: "id" | "work_id" | "parent_id" | "branch_id" | "revision_id",
-): string {
-	const id = String(value ?? "");
-	if (!UUID_PATTERN.test(id)) {
-		throw new TypeError(`Expected ${field} to be a UUID, received: ${id}`);
-	}
-	return id;
-}
-
-function optionalRecordDomainId(value: unknown): string | null {
-	if (value == null) return null;
-	if (value instanceof RecordId) return String(value.id);
-	if (typeof value === "object" && "id" in value) {
-		return String((value as { id: unknown }).id);
-	}
-	const raw = String(value);
-	const separator = raw.indexOf(":");
-	return separator < 0 ? raw : raw.slice(separator + 1).replace(/^`|`$/g, "");
-}
-
-export function snapshotProtectionFromRow(row: Row): SnapshotProtection | undefined {
-	if (row.protection_reason == null) return undefined;
-	return {
-		reason: String(row.protection_reason) as SnapshotProtection["reason"],
-		protectedAt: String(row.protected_at ?? ""),
-		...(row.protection_expires_at == null ? {} : { expiresAt: String(row.protection_expires_at) }),
-	};
-}
-
-export function workStubFromRow(row: Row): WorkStub | undefined {
-	const stub = row.stub;
-	if (stub == null || typeof stub !== "object" || Array.isArray(stub)) return undefined;
-	const record = stub as Row;
-	if (record.created_at == null || record.created_via == null) return undefined;
-	return {
-		createdAt: String(record.created_at),
-		createdVia: String(record.created_via) as StubCreationKind,
-		...(record.context == null ? {} : { context: String(record.context) }),
-	};
-}
-
-export function workFromRow(row: Row): Work {
-	const stub = workStubFromRow(row);
-	return {
-		id: domainId(row.id, "id"),
-		createdAt: String(row.created_at ?? ""),
-		updatedAt: String(row.updated_at ?? ""),
-		deletedAt: row.deleted_at == null ? undefined : String(row.deleted_at),
-		...(stub ? { stub } : {}),
-		...(row.merged_into_work == null
-			? {}
-			: { mergedIntoWorkId: domainId(optionalRecordDomainId(row.merged_into_work), "work_id") }),
-		...(row.merged_at == null ? {} : { mergedAt: String(row.merged_at) }),
-	};
-}
-
-export function itemFromRow(row: Row): OutlineItem {
-	const selectorMode = row.selector_mode === "pinned" ? "pinned" : "branch";
-	return {
-		id: domainId(row.id, "id"),
-		workId: domainId(row.work_id ?? row.id, "work_id"),
-		text: String(row.text ?? ""),
-		parentId: row.parent_id == null ? null : domainId(row.parent_id, "parent_id"),
-		orderKey: Number(row.order_key ?? 0),
-		collapsed: Boolean(row.collapsed),
-		revisionSelector: selectorMode === "branch"
-			? { mode: "branch", branchId: domainId(row.branch_id ?? row.work_id, "branch_id") }
-			: {
-				mode: "pinned",
-				revisionId: domainId(optionalRecordDomainId(row.revision_id), "revision_id"),
-			},
-		contextualHeading: row.contextual_heading == null ? undefined : String(row.contextual_heading),
-		createdAt: String(row.created_at ?? ""),
-		updatedAt: String(row.updated_at ?? ""),
-	};
-}
-
-export function resumePositionUpsertQuery(): string {
-	return `UPSERT resume_position:current CONTENT {
-				work: $work, occurrence: $occurrence,
-				caret_offset: $caretOffset, updated_at: $updatedAt
-			};`;
-}
-
-export function navigationPurgeStatements(): string {
-	return `DELETE bookmark WHERE work = $work;
-			DELETE resume_position WHERE work = $work;`;
-}
-
-export function occurrenceFromRow(row: Row): Occurrence {
-	const workId = domainId(row.work_id, "work_id");
-	return {
-		id: domainId(row.id, "id"),
-		workId,
-		parentOccurrenceId: row.parent_id == null ? null : domainId(row.parent_id, "parent_id"),
-		orderKey: Number(row.order_key ?? 0),
-		collapsed: Boolean(row.collapsed),
-		revisionSelector: row.selector_mode === "pinned"
-			? {
-				mode: "pinned",
-				revisionId: domainId(optionalRecordDomainId(row.revision_id), "revision_id"),
-			}
-			: {
-				mode: "branch",
-				branchId: domainId(optionalRecordDomainId(row.branch_id), "branch_id"),
-			},
-		contextualHeading: row.contextual_heading == null ? undefined : String(row.contextual_heading),
-	};
-}
-
-export function revisionFromRow(row: Row): Revision {
-	return {
-		id: String(row.id),
-		workId: domainId(row.work_id, "work_id"),
-		text: String(row.text ?? ""),
-		parentRevisionIds: Array.isArray(row.parent_revisions)
-			? row.parent_revisions.map((id) => domainId(optionalRecordDomainId(id), "revision_id"))
-			: [],
-		kind: String(row.kind) as Revision["kind"],
-		createdAt: String(row.created_at ?? ""),
-		message: row.message == null ? undefined : String(row.message),
-	};
 }
 
 export class SurrealGraphStore implements GraphStore {
