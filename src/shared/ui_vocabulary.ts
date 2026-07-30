@@ -41,7 +41,10 @@ export type UiEntityCode =
 	| "editorMode"
 	| "editorNormal"
 	| "editorPlain"
-	| "editorPreview";
+	| "editorPreview"
+	| "sparseOutline"
+	| "queryResult"
+	| "noQueryResult";
 
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
@@ -89,4 +92,7 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	editorNormal: "通常",
 	editorPlain: "Markdown",
 	editorPreview: "プレビュー",
+	sparseOutline: "投影表示",
+	queryResult: "結果",
+	noQueryResult: "一致する項目はありません",
 });

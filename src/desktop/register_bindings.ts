@@ -101,6 +101,8 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		listSavedRuleQueries: () => service().listSavedRuleQueries(),
 		saveRuleQuery: (input) => service().saveRuleQuery(input),
 		deleteRuleQuery: (id) => service().deleteRuleQuery(id),
+		buildQueryProjectionNodes: (queryId, limit) =>
+			service().buildQueryProjectionNodes(queryId, limit),
 	};
 }
 

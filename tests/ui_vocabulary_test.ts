@@ -46,6 +46,9 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"editorNormal",
 		"editorPlain",
 		"editorPreview",
+		"sparseOutline",
+		"queryResult",
+		"noQueryResult",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -93,5 +96,8 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		editorNormal: "通常",
 		editorPlain: "Markdown",
 		editorPreview: "プレビュー",
+		sparseOutline: "投影表示",
+		queryResult: "結果",
+		noQueryResult: "一致する項目はありません",
 	});
 });

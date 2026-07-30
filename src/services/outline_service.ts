@@ -27,6 +27,7 @@ import type {
 	TagAlias,
 	TagSearchRequest,
 	TagSummary,
+	TransientProjectionNode,
 	TrashEntry,
 	UnplacedWork,
 } from "../domain/models.ts";
@@ -39,6 +40,7 @@ import {
 } from "./branch_service.ts";
 import { normalizeSearchText, titleOf } from "./search_text.ts";
 import { runRuleQuery } from "./rule_query.ts";
+import { buildSparseOutline } from "./sparse_outline.ts";
 import {
 	type RecoverySnapshotPreview,
 	RecoverySnapshotService,
@@ -857,6 +859,40 @@ export class OutlineService {
 		return this.store.deleteSavedRuleQuery(id);
 	}
 
+	async buildQueryProjectionNodes(
+		queryId: string,
+		limit = 500,
+	): Promise<{ nodes: TransientProjectionNode[]; result: RuleQueryResult }> {
+		const query = (await this.store.listSavedRuleQueries()).find((q) => q.id === queryId);
+		if (!query) throw new Error("Saved Rule Query not found");
+		const [result, items, links] = await Promise.all([
+			this.runRuleQuery(query.source, limit),
+			this.store.listItems(),
+			this.listActiveLinks(),
+		]);
+		const itemsById = new Map(items.map((i) => [i.id, i]));
+		const seenIds = new Set<string>();
+		const pseudoResults: SearchResult[] = [];
+		for (const row of result.rows) {
+			for (const cell of row) {
+				if (seenIds.has(cell)) continue;
+				const item = itemsById.get(cell);
+				if (!item) continue;
+				seenIds.add(cell);
+				pseudoResults.push({
+					item,
+					ancestorIds: ancestorsOf(item, itemsById),
+					score: 1,
+					reasons: [{ kind: "title", label: "Query一致", score: 1 }],
+				});
+			}
+		}
+		return {
+			nodes: buildSparseOutline(pseudoResults, items, links, "query"),
+			result,
+		};
+	}
+
 	private expandQuery(
 		query: string,
 		aliases: SearchAlias[],
@@ -1055,4 +1091,19 @@ export class OutlineService {
 function isReservedTagAlias(alias: SearchAlias): boolean {
 	return alias.canonical.startsWith("#") &&
 		alias.variants.every((variant) => variant.startsWith("#"));
+}
+
+function ancestorsOf(
+	item: OutlineItem,
+	byId: Map<string, OutlineItem>,
+): string[] {
+	const result: string[] = [];
+	const visited = new Set([item.id]);
+	let parentId = item.parentId;
+	while (parentId && !visited.has(parentId)) {
+		visited.add(parentId);
+		result.unshift(parentId);
+		parentId = byId.get(parentId)?.parentId ?? null;
+	}
+	return result;
 }
