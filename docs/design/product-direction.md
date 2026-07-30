@@ -843,14 +843,20 @@ Phase 4では上記を現行PoCへ接続した。検索・Today・保存Queryは
 
 ### Phase 5: 長文と可搬性
 
-Phase 5以降は次段階の実装範囲である。
+Phase 5では次を現行PoCへ接続した。
 
-- 原稿連続表示
-- 文字数と構成確認
-- Markdown export
-- OPML import / export
-- JSON完全バックアップとrestore検証
-- backup schema versionとversion `0`からのmigration検証
+- 任意のOccurrence配下を順序どおりに投影する原稿連続表示と、枝・全体の文字数表示
+- Branch追従本文の編集と、固定Revision本文の読み取り専用表示
+- 内部参照を保持するRadiora向け、IDを除くportable向け、解決済み参照をWikiリンク化する
+  Obsidian向けのMarkdown export
+- 階層と本文を交換するOPML import / export
+- 全グラフ状態を扱うJSON完全バックアップと、空DBを含むrestore検証
+- backup schema version `0`から現行version `6`までの段階的migration、将来versionの拒否、
+  restore失敗時の既存状態保持
+- 日本語、Markdown、`radiora://`内部参照を含むJSON、Markdown、OPMLの往復検証
+
+原稿ビューで組み立てた範囲だけを一つのMarkdown原稿として出力する導線は、今後の拡張として残る。
+現行のMarkdown exportはOutline全体を対象とする。
 
 ### Phase 6: ドッグフーディング
 
