@@ -61,6 +61,7 @@
 	} from "../services/browsing_navigation_state";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
 	import { navigationUiState } from "./navigation_state";
+	import { buildVisibleRows, type VisibleRow } from "./outline_view_model";
 	import {
 		COMMAND_DEFINITIONS,
 		commandAvailability,
@@ -106,7 +107,6 @@
 		},
 	}) as RadioraBindings;
 
-	type VisibleRow = { item: OutlineItem; depth: number; hasChildren: boolean; stash: boolean };
 	type ViewMode =
 		| "outline"
 		| "today"
@@ -265,7 +265,12 @@
 			] as const),
 		]).values(),
 	]);
-	const visibleRows = $derived.by(() => buildVisibleRows(snapshot, browsingProjection));
+	const visibleRows = $derived.by(() => buildVisibleRows(
+		snapshot,
+		browsingProjection,
+		transientExpandedIds,
+		!browsingLocation.hoistOccurrenceId,
+	));
 	const searchEntries = $derived([
 		...suggestions.map((suggestion) => ({ kind: "suggestion" as const, value: suggestion })),
 		...searchResults.map((result) => ({ kind: "result" as const, value: result })),
@@ -451,40 +456,6 @@
 		} finally {
 			loading = false;
 		}
-	}
-
-	function buildVisibleRows(
-		data: OutlineSnapshot,
-		projection: ReturnType<typeof projectBrowsingOutline>,
-	): VisibleRow[] {
-		const stash = new Set(data.stashItemIds);
-		const normalItems = projection.items.filter((item) => !stash.has(item.id));
-		const normalIds = new Set(normalItems.map((item) => item.id));
-		const children = new Map<string | null, OutlineItem[]>();
-		for (const item of normalItems) {
-			const parent = item.parentId && normalIds.has(item.parentId) ? item.parentId : null;
-			const bucket = children.get(parent) ?? [];
-			bucket.push(item);
-			children.set(parent, bucket);
-		}
-		for (const bucket of children.values()) bucket.sort((a, b) => a.orderKey - b.orderKey);
-		const rows: VisibleRow[] = [];
-		const visit = (item: OutlineItem, depth: number) => {
-			const descendants = item.referenceStub ? [] : children.get(item.id) ?? [];
-			rows.push({ item, depth, hasChildren: descendants.length > 0, stash: false });
-			if (!item.collapsed || transientExpandedIds.includes(item.id)) {
-				descendants.forEach((child) => visit(child, depth + 1));
-			}
-		};
-		projection.rootOccurrenceIds
-			.map((id) => normalItems.find((item) => item.id === id))
-			.filter((item): item is OutlineItem => Boolean(item))
-			.forEach((root) => visit(root, 0));
-		if (!browsingLocation.hoistOccurrenceId) {
-			data.items.filter((item) => stash.has(item.id)).sort((a, b) => a.orderKey - b.orderKey)
-				.forEach((item) => rows.push({ item, depth: 0, hasChildren: false, stash: true }));
-		}
-		return rows;
 	}
 
 	function selectOccurrence(id: string | null): void {
