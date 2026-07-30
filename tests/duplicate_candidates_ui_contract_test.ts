@@ -1,0 +1,101 @@
+import { assert, assertFalse } from "jsr:@std/assert@1";
+
+Deno.test("Duplicate candidates view is reachable and acts only through bindings", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const bindings = await Deno.readTextFile(
+		new URL("../src/shared/bindings.ts", import.meta.url),
+	);
+
+	assert(bindings.includes("listDuplicateCandidates("));
+	assert(app.includes("api.listDuplicateCandidates("));
+	assert(app.includes('"duplicates"'));
+	assert(app.includes("openDuplicates"));
+	assert(app.includes("vocabulary.duplicateCandidates"));
+	assert(app.includes("vocabulary.duplicateReason"));
+	assertFalse(/直接|store\./.test(app));
+});
+
+Deno.test("Duplicate candidates view is read-only and contains no action buttons", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+
+	const duplicatesSection = app.match(
+		/\{:else if viewMode === "duplicates"\}[\s\S]*?(?=\{:else if viewMode === "trash"\})/,
+	)?.[0] ?? "";
+
+	assert(duplicatesSection.length > 0, "duplicates section not found");
+
+	const writeApis = [
+		"createLink",
+		"createStub",
+		"quickCapture",
+		"placeUnplacedWork",
+		"createItem",
+		"createOccurrence",
+		"updateUnplacedWorkText",
+		"resolveStub",
+		"trashWork",
+		"restoreWork",
+		"purgeWork",
+		"deleteLink",
+		"moveItem",
+		"updateItemText",
+		"saveSearchAlias",
+		"deleteSearchAlias",
+		"renameTag",
+		"mergeTags",
+	];
+
+	for (const api of writeApis) {
+		assertFalse(
+			duplicatesSection.includes(`api.${api}(`),
+			`duplicates section must not call write API: ${api}`,
+		);
+	}
+
+	assertFalse(
+		/実身|化身|項目|リンク/.test(duplicatesSection),
+		"duplicates section must not contain literal Japanese terms",
+	);
+
+	assertFalse(
+		duplicatesSection.includes("<button"),
+		"duplicates section must not contain action buttons",
+	);
+});
+
+Deno.test("loadDuplicates function only calls read-only API", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+
+	const loadDuplicates = app.match(/async function loadDuplicates\(\)[\s\S]*?\n\t\}/)?.[0] ?? "";
+
+	assert(loadDuplicates.length > 0, "loadDuplicates function not found");
+	assert(loadDuplicates.includes("api.listDuplicateCandidates("));
+
+	const writeApis = [
+		"createLink",
+		"createStub",
+		"quickCapture",
+		"placeUnplacedWork",
+		"createItem",
+		"createOccurrence",
+		"updateUnplacedWorkText",
+		"resolveStub",
+		"trashWork",
+		"restoreWork",
+		"purgeWork",
+		"deleteLink",
+		"moveItem",
+		"updateItemText",
+		"saveSearchAlias",
+		"deleteSearchAlias",
+		"renameTag",
+		"mergeTags",
+	];
+
+	for (const api of writeApis) {
+		assertFalse(
+			loadDuplicates.includes(`api.${api}(`),
+			`loadDuplicates must not call write API: ${api}`,
+		);
+	}
+});

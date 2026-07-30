@@ -52,6 +52,7 @@ import type {
 	RewriteConfirmation,
 } from "../services/revision_service.ts";
 import type { CreatedStub, StubListEntry } from "../services/stub_service.ts";
+import type { DuplicateCandidate } from "../services/duplicate_candidates.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
@@ -124,6 +125,7 @@ export interface RadioraBindings {
 	listStubs(): Promise<StubListEntry[]>;
 	createStub(createdVia: StubCreationKind, context?: string): Promise<CreatedStub>;
 	resolveStub(workId: string): Promise<void>;
+	listDuplicateCandidates(limit?: number): Promise<DuplicateCandidate[]>;
 	resolveLinkComparison(linkId: string): Promise<LinkComparisonProjection>;
 	listWorkComparisonDocuments(workId: string): Promise<WorkComparisonDocuments>;
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void>;

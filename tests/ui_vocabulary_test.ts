@@ -52,6 +52,8 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		"stub",
 		"stubList",
 		"stubContext",
+		"duplicateCandidates",
+		"duplicateReason",
 	];
 	assertEquals(Object.keys(DEFAULT_UI_VOCABULARY).sort(), [...codes].sort());
 	assertFalse(Object.values(DEFAULT_UI_VOCABULARY).some((label) => /実身|化身/.test(label)));
@@ -105,5 +107,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		stub: "Stub",
 		stubList: "Stub一覧",
 		stubContext: "作成文脈",
+		duplicateCandidates: "重複候補",
+		duplicateReason: "根拠",
 	});
 });
