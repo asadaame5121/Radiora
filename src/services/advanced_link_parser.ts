@@ -68,7 +68,11 @@ export function parseAdvancedLinkInput(input: string): AdvancedLinkInput {
 		);
 	}
 
-	const result: AdvancedLinkInput = { source: source.value, type: normalizedType, target: target.value };
+	const result: AdvancedLinkInput = {
+		source: source.value,
+		type: normalizedType,
+		target: target.value,
+	};
 	if (reason.reason !== undefined) result.reason = reason.reason;
 	return result;
 }

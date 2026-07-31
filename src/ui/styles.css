@@ -1576,3 +1576,41 @@ button {
 	opacity: .4;
 	cursor: default;
 }
+
+.filter-bar {
+	display: flex;
+	gap: 6px;
+	padding: 8px 10px;
+	margin: 8px 0;
+	background: var(--surface-raised);
+	border-radius: 6px;
+	align-items: center;
+}
+.filter-input {
+	flex: 1;
+	min-width: 80px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	color: var(--text);
+	font-size: 11px;
+	padding: 4px 8px;
+}
+.filter-input:focus {
+	border-color: var(--cyan);
+	outline: none;
+}
+.filter-bar button {
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	background: var(--surface);
+	color: var(--muted);
+	font-size: 11px;
+	padding: 4px 10px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.filter-bar button:disabled {
+	opacity: .3;
+	cursor: default;
+}
