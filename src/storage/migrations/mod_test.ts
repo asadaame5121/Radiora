@@ -304,7 +304,35 @@ Deno.test("version 5 storage expands to persistent emergence suggestions schema 
 	assertStringIncludes(statements[0], "context_work");
 	assertStringIncludes(statements[0], "status");
 	assertStringIncludes(statements[1], "INFO FOR TABLE emergence_suggestion");
-	assertStringIncludes(statements[1], "score < 0 OR score > 1");
-	assertStringIncludes(statements[1], 'status = "dismissed"');
-	assertStringIncludes(statements[1], "THROW");
+	assertStringIncludes(statements[1], "SELECT VALUE count() FROM emergence_suggestion");
+});
+
+Deno.test("version 5 storage cleanses invalid emergence suggestions during migration to version 6", async () => {
+	const state = new MemoryMigrationState();
+	state.metadata = {
+		id: "radiora",
+		version: 5,
+		updatedAt: "2026-07-30T00:00:00.000Z",
+		lastMigrationId: "0005_merge_provenance",
+		appVersion: "0.1.0",
+	};
+	const statements: string[] = [];
+	assertEquals(
+		await runStorageMigrations({
+			state,
+			context: {
+				execute: (statement) => {
+					statements.push(statement);
+					return Promise.resolve(undefined);
+				},
+			},
+			migrations: [emergenceSuggestionMigration],
+			appVersion: "0.1.0",
+			targetVersion: 6,
+		}),
+		6,
+	);
+	assertStringIncludes(statements[0], "UPDATE emergence_suggestion SET status =");
+	assertStringIncludes(statements[0], "UPDATE emergence_suggestion SET score =");
+	assertStringIncludes(statements[0], "UPDATE emergence_suggestion SET resolution_reason =");
 });

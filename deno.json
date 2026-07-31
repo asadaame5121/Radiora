@@ -7,7 +7,10 @@
 	"desktop": {
 		"app": {
 			"name": "Radiora v2 PoC",
-			"identifier": "dev.radiora.v2"
+			"identifier": "dev.radiora.v2",
+			"icons": {
+				"windows": "src/Radiora_icon.ico"
+			}
 		},
 		"backend": "cef",
 		"output": {
