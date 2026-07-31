@@ -2539,13 +2539,15 @@
 						<button onclick={() => remove(selectedItem.id)}>この{vocabulary.occurrence}を外す</button>
 						<button onclick={trashSelectedWork}>{vocabulary.work}をゴミ箱へ</button>
 					</div>
-					{#if bodyFor(selectedItem)}
-						<p class="thought-body">{bodyFor(selectedItem)}</p>
-					{/if}
+					<div class="thought-meta">
+						<div><span class="meta-label">作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
+						<div><span class="meta-label">更新日</span><time datetime={selectedItem.updatedAt}>{formatCreatedAt(selectedItem.updatedAt)}</time></div>
+						{#if selectedItem.parentId}
+							<div><span class="meta-label">親</span><span>{titleForId(selectedItem.parentId)}</span></div>
+						{/if}
+					</div>
 					{#if viewMode === "outline"}
 						<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
-					{:else}
-						<div class="thought-meta"><span>作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
 					{/if}
 				{:else if asideMode === "relation"}
 					<AdvancedLinkEditor

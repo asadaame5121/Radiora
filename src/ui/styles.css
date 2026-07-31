@@ -787,13 +787,21 @@ button {
 }
 .thought-meta {
 	display: flex;
-	justify-content: space-between;
+	flex-direction: column;
+	gap: 4px;
 	margin: 18px 0 0;
 	padding: 11px 0;
 	border-top: 1px solid var(--border);
 	border-bottom: 1px solid var(--border);
 	color: var(--muted);
 	font-size: 11px;
+}
+.thought-meta > div {
+	display: flex;
+	justify-content: space-between;
+}
+.thought-meta .meta-label {
+	color: var(--muted);
 }
 .thought-meta time {
 	color: #b9cbd2;
