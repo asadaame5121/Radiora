@@ -128,7 +128,8 @@
 			workId: string;
 			sourceBranchId: string;
 		}
-		| { action: "merge-duplicate"; preview: WorkMergePreview };
+		| { action: "merge-duplicate"; preview: WorkMergePreview }
+		| { action: "cancel-longform"; pendingAction: () => Promise<void> };
 	type InternalReferenceCompletionState = {
 		itemId: string;
 		range: { start: number; end: number };
@@ -145,6 +146,12 @@
 	let quickCaptureSubmitting = $state(false);
 	let unplacedWorks = $state<UnplacedWork[]>([]);
 	let stubEntries = $state<StubListEntry[]>([]);
+	let longForm = $state({
+		active: false,
+		text: "",
+		dirty: false,
+		preview: false,
+	});
 	let duplicateCandidates = $state<DuplicateCandidate[]>([]);
 	let excludedDuplicateCandidateKeys = $state<string[]>([]);
 	let unplacedLinkTargets = $state<Record<string, string>>({});
@@ -1180,6 +1187,45 @@
 		}
 	}
 
+	function startLongFormEditing(): void {
+		if (!selectedItem) return;
+		longForm = { active: true, text: selectedItem.text, dirty: false, preview: false };
+	}
+
+	async function saveLongFormEditing(): Promise<void> {
+		if (!selectedItem) return;
+		try {
+			await api.updateItemText(selectedItem.id, longForm.text);
+			longForm = { active: false, text: "", dirty: false, preview: false };
+			await load(selectedItem.id);
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function cancelLongFormEditing(): Promise<void> {
+		if (!longForm.dirty) {
+			longForm = { active: false, text: "", dirty: false, preview: false };
+			return;
+		}
+		pendingConfirmation = {
+			action: "cancel-longform",
+			pendingAction: async () => {
+				longForm = { active: false, text: "", dirty: false, preview: false };
+				pendingConfirmation = null;
+			},
+		};
+	}
+
+	function handleLongFormInput(value: string): void {
+		longForm.text = value;
+		longForm.dirty = true;
+	}
+
+	function renderMarkdownPreview(text: string): string {
+		return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+	}
+
 	async function indent(item: OutlineItem): Promise<void> {
 		const siblings = siblingsOf(item);
 		const index = siblings.findIndex((candidate) => candidate.id === item.id);
@@ -1569,8 +1615,9 @@
 					break;
 				case "runQuery": await performExecuteRule(); break;
 				case "saveQuery": await performSaveRule(); break;
-				case "saveRevision": if (snapshotId) await performPromoteRecoverySnapshot(snapshotId); break;
+			case "saveRevision": if (snapshotId) await performPromoteRecoverySnapshot(snapshotId); break;
 				case "createBranch": await requestRewriteAsNewBranch(); break;
+				case "startLongFormEditing": startLongFormEditing(); break;
 			}
 		});
 		if (!result.executed && result.reason) error = result.reason;
@@ -1821,9 +1868,14 @@
 					]);
 					viewMode = "workLineage";
 				}
-			} else {
+			} else if (confirmation.action === "merge-duplicate") {
 				await api.mergeWorks(confirmation.preview);
 				await Promise.all([load(), loadDuplicates()]);
+			} else if (confirmation.action === "cancel-longform") {
+				await confirmation.pendingAction();
+				pendingConfirmation = null;
+				confirmationDialog.close();
+				return;
 			}
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -2166,8 +2218,46 @@
 							{#if selectedItem}<span aria-current="page">{titleFor(selectedItem)}</span>{/if}
 						</div>
 					{/if}
-				</nav>
-				<div class="section-title">
+			</nav>
+				{#if longForm.active}
+					{#if selectedItem}
+						<div class="section-title"><span>Outline · 長文編集</span></div>
+						<div class="long-form-editor">
+							<div class="long-form-breadcrumb">
+								{#each selectedBreadcrumb as ancestor (ancestor.id)}
+									<span>{titleFor(ancestor)} › </span>
+								{/each}
+								<span class="long-form-title">{titleFor(selectedItem)}</span>
+							</div>
+							<div class="long-form-toolbar">
+								<button
+									class:active={!longForm.preview}
+									onclick={() => (longForm.preview = false)}
+								>編集</button>
+								<button
+									class:active={longForm.preview}
+									onclick={() => (longForm.preview = true)}
+								>プレビュー</button>
+							</div>
+							{#if longForm.preview}
+								<div class="long-form-preview">{@html renderMarkdownPreview(longForm.text)}</div>
+							{:else}
+								<textarea
+									class="long-form-textarea"
+									value={longForm.text}
+									oninput={(event) => handleLongFormInput(event.currentTarget.value)}
+								></textarea>
+							{/if}
+							<div class="long-form-actions">
+								<button
+									onclick={saveLongFormEditing}
+									disabled={!longForm.dirty}
+								>保存</button>
+								<button onclick={cancelLongFormEditing}>キャンセル</button>
+							</div>
+						</div>
+					{/if}
+				{:else}
 					<span>Outline</span>
 					<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
 					<button onclick={createRoot}>＋ Root</button>
@@ -2209,7 +2299,9 @@
 													<strong>{candidate.displayName}</strong>
 													<span>{candidate.scopeLabel} · {candidate.shortId}</span>
 												</button>
-											{:else}
+			{:else if pendingConfirmation.action === "cancel-longform"}
+					保存されていない編集内容は失われます。
+				{:else}
 												<p>一致する候補はありません。</p>
 											{/each}
 										</div>
@@ -2246,6 +2338,7 @@
 						{/each}
 					</div>
 				{/if}
+			{/if}
 			</section>
 		{:else if viewMode === "manuscript"}
 			<ManuscriptView
@@ -2534,7 +2627,8 @@
 							{/each}
 						</div>
 					</section>
-					<div class="discovery-actions">
+				<div class="discovery-actions">
+						<button onclick={startLongFormEditing} disabled={!commands.startLongFormEditing.enabled} title={commands.startLongFormEditing.reason}>長文編集</button>
 						<button onclick={duplicateSelectedOccurrence}>同じ{vocabulary.work}をもう一箇所へ配置</button>
 						<button onclick={() => remove(selectedItem.id)}>この{vocabulary.occurrence}を外す</button>
 						<button onclick={trashSelectedWork}>{vocabulary.work}をゴミ箱へ</button>
@@ -2739,8 +2833,10 @@
 					? `${vocabulary.work}をゴミ箱へ移しますか？`
 					: pendingConfirmation.action === "rewrite"
 					? `新しい${vocabulary.branch}として書き直しますか？`
-					: pendingConfirmation.action === "merge-duplicate"
+				: pendingConfirmation.action === "merge-duplicate"
 					? vocabulary.duplicateMergeConfirm
+					: pendingConfirmation.action === "cancel-longform"
+					? "長文編集をキャンセルしますか？"
 					: "完全消去しますか？"}
 			</h2>
 			<p id="confirmation-description">
@@ -2791,6 +2887,8 @@
 						? `新しい${vocabulary.branch}を作る`
 						: pendingConfirmation.action === "merge-duplicate"
 						? vocabulary.duplicateMerge
+						: pendingConfirmation.action === "cancel-longform"
+						? "編集を破棄"
 						: "完全消去"}
 				</button>
 			</div>
