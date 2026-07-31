@@ -925,6 +925,11 @@ button {
 	cursor: pointer;
 	color: var(--muted);
 }
+.link-reason {
+	font-style: italic;
+	color: var(--muted);
+	font-size: 10px;
+}
 .discoveries {
 	display: grid;
 	gap: 10px;

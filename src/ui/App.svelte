@@ -2654,6 +2654,7 @@
 							<div>
 								<span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span>
 								<span>{link.fromId === selectedItem.workId ? "→" : "←"} {otherName(link)}</span>
+								{#if link.reason}<small class="link-reason">「{link.reason}」</small>{/if}
 								{#if isComparableLinkType(link.type)}
 									<button onclick={() => openLinkComparison(link.id)}>{vocabulary.comparisonPane}</button>
 								{/if}
