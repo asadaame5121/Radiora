@@ -74,6 +74,7 @@ Deno.test("command metadata covers the shared primary actions", () => {
 		[
 			"quickCapture",
 			"hoist",
+			"startLongFormEditing",
 			"clearHoist",
 			"exportMarkdown",
 			"addBookmark",

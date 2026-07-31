@@ -24,7 +24,8 @@ export type CommandId =
 	| "createBranch"
 	| "createLink"
 	| "runQuery"
-	| "saveQuery";
+	| "saveQuery"
+	| "startLongFormEditing";
 
 export interface CommandAvailability {
 	enabled: boolean;
@@ -66,6 +67,12 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 		id: "hoist",
 		label: (vocabulary) => vocabulary.hoist,
 		shortcut: "Ctrl+Shift+H",
+		availability: selection,
+	},
+	{
+		id: "startLongFormEditing",
+		label: () => "長文編集モード",
+		shortcut: "Ctrl+Shift+E",
 		availability: selection,
 	},
 	{
