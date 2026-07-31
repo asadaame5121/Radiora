@@ -34,6 +34,7 @@ export interface AdvancedLinkResolution {
 	type: { status: "resolved"; value: LinkType };
 	target: AdvancedLinkEndpointResolution;
 	preview?: string;
+	reason?: string;
 }
 
 export interface AdvancedLinkSelections {
@@ -75,6 +76,7 @@ export class AdvancedLinkResolverService {
 			source,
 			type: { status: "resolved", value: parsed.type },
 			target,
+			reason: parsed.reason,
 			...(source.status === "resolved" && target.status === "resolved"
 				? {
 					preview: previewDirection(

@@ -112,6 +112,7 @@
 				fromId: resolution.source.selectedWorkId,
 				toId: resolution.target.selectedWorkId,
 				type: resolution.type.value,
+				reason: resolution.reason?.trim() || undefined,
 			});
 			input = "";
 			resolution = null;
@@ -228,6 +229,11 @@
 	{#if resolution?.preview}
 		<p class="advanced-link-preview">
 			<strong>{vocabulary.directionPreview}</strong>{resolution.preview}
+		</p>
+	{/if}
+	{#if resolution?.reason}
+		<p class="advanced-link-preview">
+			<strong>説明文</strong>「{resolution.reason}」
 		</p>
 	{/if}
 	{#if submitError}<p class="query-error">{submitError}</p>{/if}

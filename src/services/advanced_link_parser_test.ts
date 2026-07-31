@@ -29,6 +29,35 @@ Deno.test("Advanced Link parser accepts delimiters and supported escapes in quot
 	});
 });
 
+Deno.test("Advanced Link parser extracts optional reason from type field", () => {
+	assertEquals(parseAdvancedLinkInput('source :: RELATED("説明文") :: target'), {
+		source: "source",
+		type: "RELATED",
+		target: "target",
+		reason: "説明文",
+	});
+});
+
+Deno.test("Advanced Link parser preserves reason with escaped quotes", () => {
+	assertEquals(
+		parseAdvancedLinkInput('source :: RELATED("夫婦\\"だった") :: target'),
+		{
+			source: "source",
+			type: "RELATED",
+			target: "target",
+			reason: '夫婦"だった',
+		},
+	);
+});
+
+Deno.test("Advanced Link parser accepts type without reason for backward compatibility", () => {
+	assertEquals(parseAdvancedLinkInput("source :: RELATED :: target"), {
+		source: "source",
+		type: "RELATED",
+		target: "target",
+	});
+});
+
 for (
 	const [name, input, code, field] of [
 		["missing first delimiter", "source", "MISSING_DELIMITER", "source"],

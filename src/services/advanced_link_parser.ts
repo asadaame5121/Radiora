@@ -30,6 +30,7 @@ export interface AdvancedLinkInput {
 	source: string;
 	type: LinkType;
 	target: string;
+	reason?: string;
 }
 
 /**
@@ -37,13 +38,14 @@ export interface AdvancedLinkInput {
  *
  * Only quoted fields may contain `::`. Inside quotes, `\"` and `\\` are the
  * only escapes, so input can be round-tripped without silently changing names.
+ *
+ * An optional reason may follow the link type: `TYPE("説明文")`.
  */
 export function parseAdvancedLinkInput(input: string): AdvancedLinkInput {
 	const source = readField(input, 0, "source");
 	if (!source.hasDelimiter) throw missingDelimiter("source", source.end);
 
-	const type = readField(input, source.end + 2, "type");
-	if (!type.hasDelimiter) throw missingDelimiter("type", type.end);
+	const type = readTypeField(input, source.end + 2);
 
 	const target = readField(input, type.end + 2, "target");
 	if (target.hasDelimiter) {
@@ -55,27 +57,101 @@ export function parseAdvancedLinkInput(input: string): AdvancedLinkInput {
 		);
 	}
 
-	const normalizedType = LINK_TYPES.find((candidate) => candidate === type.value.toUpperCase());
+	const reason = extractReason(type.value, type.start);
+	const normalizedType = LINK_TYPES.find((candidate) => candidate === reason.type.toUpperCase());
 	if (!normalizedType) {
 		throw new AdvancedLinkParseError(
 			"UNKNOWN_LINK_TYPE",
-			`Unknown link type: ${type.value}`,
+			`Unknown link type: ${reason.type}`,
 			"type",
 			type.start,
 		);
 	}
 
-	return { source: source.value, type: normalizedType, target: target.value };
+	const result: AdvancedLinkInput = { source: source.value, type: normalizedType, target: target.value };
+	if (reason.reason !== undefined) result.reason = reason.reason;
+	return result;
 }
 
 /** Short alias for callers that do not need the UI-specific name. */
 export const parseAdvancedLink = parseAdvancedLinkInput;
+
+function extractReason(typeValue: string, typeStart: number): { type: string; reason?: string } {
+	const paren = typeValue.indexOf("(");
+	if (paren < 0) return { type: typeValue };
+	const type = typeValue.slice(0, paren).trim();
+	const rest = typeValue.slice(paren);
+	const match = rest.match(/^\(\s*"((?:[^"\\]|\\["\\])*)"\s*\)$/);
+	if (!match) {
+		throw new AdvancedLinkParseError(
+			"INVALID_ESCAPE",
+			`Type reason must be a quoted string: TYPE("説明") got ${typeValue}`,
+			"type",
+			typeStart + paren,
+		);
+	}
+	const reason = match[1].replace(/\\(.)/g, "$1");
+	return { type, reason };
+}
 
 interface ParsedField {
 	value: string;
 	start: number;
 	end: number;
 	hasDelimiter: boolean;
+}
+
+function readTypeField(input: string, start: number): ParsedField {
+	let cursor = skipOuterWhitespace(input, start);
+	const valueStart = cursor;
+	if (input[cursor] === '"') {
+		const quoted = readQuotedField(input, cursor, "type");
+		const afterQuote = quoted.end;
+		if (afterQuote < input.length && input[afterQuote] === "(") {
+			const parenStart = afterQuote;
+			let depth = 1;
+			let j = parenStart + 1;
+			for (; j < input.length && depth > 0; j++) {
+				if (input[j] === "(") depth++;
+				else if (input[j] === ")") depth--;
+			}
+			const reasonParen = input.slice(parenStart, j);
+			const combinedValue = quoted.value + reasonParen;
+			const delimPos = input.indexOf("::", j);
+			return {
+				value: combinedValue,
+				start: valueStart,
+				end: delimPos < 0 ? input.length : delimPos,
+				hasDelimiter: delimPos >= 0,
+			};
+		}
+		return quoted;
+	}
+
+	let inParen = false;
+	let delimEnd = -1;
+	for (let i = cursor; i < input.length; i++) {
+		if (input[i] === "(") {
+			inParen = true;
+		} else if (input[i] === ")") {
+			inParen = false;
+		} else if (!inParen && input.startsWith("::", i)) {
+			delimEnd = i;
+			break;
+		}
+	}
+	const rawEnd = delimEnd < 0 ? input.length : delimEnd;
+	const value = trimOuterWhitespace(input.slice(valueStart, rawEnd));
+	if (!value) throw emptyField("type", valueStart);
+	if (delimEnd < 0) {
+		throw new AdvancedLinkParseError(
+			"MISSING_DELIMITER",
+			"Advanced Link input must contain exactly two top-level :: delimiters",
+			"type",
+			input.length,
+		);
+	}
+	return { value, start: valueStart, end: rawEnd, hasDelimiter: true };
 }
 
 function readField(input: string, start: number, field: AdvancedLinkField): ParsedField {
