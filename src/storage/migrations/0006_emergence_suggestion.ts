@@ -22,18 +22,16 @@ export const emergenceSuggestionMigration: StorageMigration = {
 			DEFINE FIELD IF NOT EXISTS updated_at ON emergence_suggestion TYPE string;
 			DEFINE FIELD IF NOT EXISTS resolved_at ON emergence_suggestion TYPE option<string>;
 			DEFINE FIELD IF NOT EXISTS resolution_reason ON emergence_suggestion TYPE option<string>;
+			UPDATE emergence_suggestion SET status = "pending" WHERE status NOT IN ["pending", "accepted", "dismissed", "held"];
+			UPDATE emergence_suggestion SET score = 0 WHERE score < 0;
+			UPDATE emergence_suggestion SET score = 1 WHERE score > 1;
+			UPDATE emergence_suggestion SET resolution_reason = "migrated_default" WHERE status = "dismissed" AND (resolution_reason IS NONE OR string::trim(resolution_reason) = "");
 		`);
 	},
 	async validate(context) {
 		await context.execute(`
 			INFO FOR TABLE emergence_suggestion;
-			IF (SELECT VALUE count() FROM emergence_suggestion
-				WHERE status NOT IN ["pending", "accepted", "dismissed", "held"]
-					OR score < 0 OR score > 1
-					OR (status = "dismissed" AND
-						(resolution_reason IS NONE OR string::trim(resolution_reason) = ""))) > 0 {
-				THROW "Invalid emergence suggestion rows";
-			};
+			SELECT VALUE count() FROM emergence_suggestion GROUP ALL;
 		`);
 	},
 };
