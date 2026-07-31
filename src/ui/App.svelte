@@ -146,6 +146,7 @@
 	let quickCaptureSubmitting = $state(false);
 	let unplacedWorks = $state<UnplacedWork[]>([]);
 	let stubEntries = $state<StubListEntry[]>([]);
+	let outlineFilter = $state({ freeText: "", tagsAll: "", tagsNone: "" });
 	let longForm = $state({
 		active: false,
 		text: "",
@@ -304,6 +305,25 @@
 		if (unsaved) return unsaved;
 		return workingCopySaveStatuses[0];
 	});
+	const filteredTodayCreated = $derived.by(() => filterDateEntries(dateProjection?.created ?? []));
+	const filteredTodayUpdated = $derived.by(() => filterDateEntries(dateProjection?.updated ?? []));
+	const filteredUnplacedWorks = $derived(
+		unplacedWorks.filter((work) =>
+			matchesFilter(work.text) &&
+			entryMatchesTags(work.text, parseFilterTags(outlineFilter.tagsAll), parseFilterTags(outlineFilter.tagsNone))
+		),
+	);
+
+	function filterDateEntries<T extends { representative: { text: string } | null }>(entries: T[]): T[] {
+		const tagsAll = parseFilterTags(outlineFilter.tagsAll);
+		const tagsNone = parseFilterTags(outlineFilter.tagsNone);
+		return entries.filter((entry) => {
+			const text = entry.representative ? entry.representative.text : "";
+			if (!matchesFilter(text)) return false;
+			if (!entryMatchesTags(text, tagsAll, tagsNone)) return false;
+			return true;
+		});
+	}
 	const commandContext = $derived<CommandContext>({
 		startupReady: startup.phase === "ready",
 		selectedOccurrenceId: selectedId,
@@ -333,6 +353,12 @@
 		const id = selectedId;
 		if (id && startup.phase === "ready") void loadEmergence(id);
 		else emergenceSuggestions = [];
+	});
+
+	$effect(() => {
+		if (viewMode !== "today" && viewMode !== "unplaced") {
+			outlineFilter = { freeText: "", tagsAll: "", tagsNone: "" };
+		}
 	});
 
 	$effect(() => {
@@ -1224,6 +1250,27 @@
 
 	function renderMarkdownPreview(text: string): string {
 		return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+	}
+
+	function matchesFilter(text: string): boolean {
+		const ft = outlineFilter.freeText.trim().toLowerCase();
+		if (ft && !text.toLowerCase().includes(ft)) return false;
+		return true;
+	}
+
+	function clearOutlineFilter(): void {
+		outlineFilter = { freeText: "", tagsAll: "", tagsNone: "" };
+	}
+
+	function parseFilterTags(raw: string): string[] {
+		return raw.split(/[\s,]+/).map((t) => t.replace(/^#/, "").trim()).filter(Boolean);
+	}
+
+	function entryMatchesTags(entryText: string, tagsAll: string[], tagsNone: string[]): boolean {
+		const lower = entryText.toLowerCase();
+		if (tagsAll.length && !tagsAll.every((t) => lower.includes(`#${t}`))) return false;
+		if (tagsNone.length && tagsNone.some((t) => lower.includes(`#${t}`))) return false;
+		return true;
 	}
 
 	async function indent(item: OutlineItem): Promise<void> {
@@ -2257,7 +2304,8 @@
 							</div>
 						</div>
 					{/if}
-				{:else}
+			{:else}
+				<div class="section-title">
 					<span>Outline</span>
 					<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
 					<button onclick={createRoot}>＋ Root</button>
@@ -2299,9 +2347,7 @@
 													<strong>{candidate.displayName}</strong>
 													<span>{candidate.scopeLabel} · {candidate.shortId}</span>
 												</button>
-			{:else if pendingConfirmation.action === "cancel-longform"}
-					保存されていない編集内容は失われます。
-				{:else}
+											{:else}
 												<p>一致する候補はありません。</p>
 											{/each}
 										</div>
@@ -2359,12 +2405,33 @@
 					<label>終了（含まない） <input type="date" bind:value={dateEnd} /></label>
 					<button onclick={loadDateProjection}>表示</button>
 				</div>
+				<div class="filter-bar">
+					<input
+						class="filter-input"
+						aria-label="テキストで絞り込み"
+						placeholder="テキストで絞り込み…"
+						bind:value={outlineFilter.freeText}
+					/>
+					<input
+						class="filter-input"
+						aria-label="タグ AND"
+						placeholder="#タグ AND"
+						bind:value={outlineFilter.tagsAll}
+					/>
+					<input
+						class="filter-input"
+						aria-label="タグ NOT"
+						placeholder="#除外 NOT"
+						bind:value={outlineFilter.tagsNone}
+					/>
+					<button onclick={clearOutlineFilter} disabled={!outlineFilter.freeText && !outlineFilter.tagsAll && !outlineFilter.tagsNone}>解除</button>
+				</div>
 				{#if dateProjectionLoading}
 					<p class="empty">読み込み中…</p>
 				{:else if dateProjection}
 					<section aria-label="この期間に作成">
-						<h2>この期間に作成 <small>{dateProjection.created.length}件</small></h2>
-						{#each dateProjection.created as entry (entry.work.id)}
+						<h2>この期間に作成 <small>{filteredTodayCreated.length}件{#if filteredTodayCreated.length !== dateProjection.created.length} / {dateProjection.created.length}件{/if}</small></h2>
+						{#each filteredTodayCreated as entry (entry.work.id)}
 							<button class="date-entry" onclick={() => openDateEntry(entry)} disabled={!entry.representative}>
 								<strong>{entry.representative ? titleFor(entry.representative) : `(未配置の${vocabulary.work})`}</strong>
 								<small>{formatCreatedAt(entry.work.createdAt)} · {entry.placements.length}件の{vocabulary.occurrence}</small>
@@ -2375,8 +2442,8 @@
 						{:else}<p class="empty">この期間に作成した{vocabulary.work}はありません。</p>{/each}
 					</section>
 					<section aria-label="この期間に更新">
-						<h2>この期間に更新 <small>{dateProjection.updated.length}件</small></h2>
-						{#each dateProjection.updated as entry (entry.work.id)}
+						<h2>この期間に更新 <small>{filteredTodayUpdated.length}件{#if filteredTodayUpdated.length !== dateProjection.updated.length} / {dateProjection.updated.length}件{/if}</small></h2>
+						{#each filteredTodayUpdated as entry (entry.work.id)}
 							<button class="date-entry" onclick={() => openDateEntry(entry)} disabled={!entry.representative}>
 								<strong>{entry.representative ? titleFor(entry.representative) : `(未配置の${vocabulary.work})`}</strong>
 								<small>{formatCreatedAt(entry.work.updatedAt)} · {entry.placements.length}件の{vocabulary.occurrence}</small>
@@ -2391,13 +2458,34 @@
 		{:else if viewMode === "unplaced"}
 			<section class="outline-panel unplaced-inbox" aria-label={vocabulary.unplacedInbox}>
 				<div class="section-title">
-					<span>{vocabulary.unplacedInbox}</span><small>{unplacedWorks.length}件</small>
+					<span>{vocabulary.unplacedInbox}</span><small>{filteredUnplacedWorks.length}件{#if filteredUnplacedWorks.length !== unplacedWorks.length} / {unplacedWorks.length}件{/if}</small>
 				</div>
 				<p class="hint">
-					配置先を決めずに保存した{vocabulary.work}です。本文へ #タグ を入力するとタグ付けできます。
+				配置先を決めずに保存した{vocabulary.work}です。本文へ #タグ を入力するとタグ付けできます。
 				</p>
+				<div class="filter-bar">
+					<input
+						class="filter-input"
+						aria-label="テキストで絞り込み"
+						placeholder="テキストで絞り込み…"
+						bind:value={outlineFilter.freeText}
+					/>
+					<input
+						class="filter-input"
+						aria-label="タグ AND"
+						placeholder="#タグ AND"
+						bind:value={outlineFilter.tagsAll}
+					/>
+					<input
+						class="filter-input"
+						aria-label="タグ NOT"
+						placeholder="#除外 NOT"
+						bind:value={outlineFilter.tagsNone}
+					/>
+					<button onclick={clearOutlineFilter} disabled={!outlineFilter.freeText && !outlineFilter.tagsAll && !outlineFilter.tagsNone}>解除</button>
+				</div>
 				<div class="unplaced-list">
-					{#each unplacedWorks as work (work.workId)}
+					{#each filteredUnplacedWorks as work (work.workId)}
 						<article class="unplaced-entry">
 							<textarea
 								rows="3"
@@ -2846,12 +2934,14 @@
 				{:else if pendingConfirmation.action === "rewrite"}
 					現在の{vocabulary.workingCopy}を分岐点として保存し、元の{vocabulary.branch}を残したまま
 					独立した{vocabulary.workingCopy}を作ります。
-				{:else if pendingConfirmation.action === "merge-duplicate"}
+			{:else if pendingConfirmation.action === "merge-duplicate"}
 					{pendingConfirmation.preview.sourceTitle || `(空の${vocabulary.work})`}
 					→ {pendingConfirmation.preview.survivorTitle || `(空の${vocabulary.work})`}
 					<br />
 					{vocabulary.occurrence}: {pendingConfirmation.preview.occurrenceIds.length} /
 					{vocabulary.semanticLink}: {pendingConfirmation.preview.links.length}
+				{:else if pendingConfirmation.action === "cancel-longform"}
+					保存されていない編集内容は失われます。
 				{:else}
 					{vocabulary.occurrence}{pendingConfirmation.occurrenceCount}件、{vocabulary.semanticLink}{pendingConfirmation.linkCount}件と本文を復元できなくなります。
 				{/if}
