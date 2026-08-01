@@ -5,10 +5,13 @@ Deno.test("Today UI keeps created and updated projections separate without creat
 	const service = await Deno.readTextFile(
 		new URL("../src/services/date_projection.ts", import.meta.url),
 	);
+	const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
 	assert(app.includes('viewMode === "today"'));
 	assert(app.includes("この期間に作成"));
 	assert(app.includes("この期間に更新"));
 	assert(app.includes("api.projectDates"));
+	assert(styles.includes(".date-entry"));
+	assert(styles.includes("background: var(--surface-raised) !important"));
 	const openDateEntry = app.slice(
 		app.indexOf("async function openDateEntry"),
 		app.indexOf("async function loadRevisions"),

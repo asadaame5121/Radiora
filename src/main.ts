@@ -12,6 +12,17 @@ import {
 } from "./storage/migration_backup.ts";
 import { CURRENT_STORAGE_SCHEMA_VERSION } from "./storage/migrations/mod.ts";
 
+const hmrUiOrigin = developmentUiOrigin(Deno.env.get("RADIORA_HMR_UI_ORIGIN"));
+const hmrBridgeFile = Deno.env.get("RADIORA_HMR_BRIDGE_FILE");
+if (hmrBridgeFile) {
+	const serveAddress = Deno.env.get("DENO_SERVE_ADDRESS");
+	if (!serveAddress) throw new Error("DENO_SERVE_ADDRESS is required for desktop HMR.");
+	await Deno.writeTextFile(
+		hmrBridgeFile,
+		JSON.stringify({ backendOrigin: backendOriginFromServeAddress(serveAddress) }),
+	);
+}
+
 const appData = Deno.env.get("LOCALAPPDATA") ?? Deno.env.get("APPDATA") ?? Deno.cwd();
 const dataDir = `${appData}\\RadioraV2`;
 const logDir = `${dataDir}\\logs`;
@@ -179,6 +190,23 @@ function extension(path: string): string {
 	return index < 0 ? "" : path.slice(index);
 }
 
+function developmentUiOrigin(value: string | undefined): string | null {
+	if (!value) return null;
+	const url = new URL(value);
+	if (url.protocol !== "http:" || url.hostname !== "127.0.0.1") {
+		throw new Error("RADIORA_HMR_UI_ORIGIN must be a local HTTP origin.");
+	}
+	return url.origin;
+}
+
+function backendOriginFromServeAddress(address: string): string {
+	const prefix = "tcp:127.0.0.1:";
+	if (!address.startsWith(prefix)) throw new Error("DENO_SERVE_ADDRESS must use loopback TCP.");
+	const port = address.slice(prefix.length);
+	if (!/^[1-9]\d{0,4}$/.test(port)) throw new Error("DENO_SERVE_ADDRESS has an invalid port.");
+	return `http://127.0.0.1:${port}`;
+}
+
 function missingAssetResponse(path: string): Response {
 	const body =
 		`<!doctype html><html lang="ja"><meta charset="utf-8"><title>Radiora 起動エラー</title>
@@ -244,6 +272,9 @@ const server = Deno.serve(async (request) => {
 				status: 500,
 			});
 		}
+	}
+	if (hmrUiOrigin && (request.method === "GET" || request.method === "HEAD")) {
+		return Response.redirect(new URL(`${url.pathname}${url.search}`, hmrUiOrigin).href, 307);
 	}
 	const relative = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
 	const safePath = relative.includes("..") ? "index.html" : relative;

@@ -39,6 +39,14 @@ Deno.test("command palette projects command service state and guards disabled ex
 	assert(app.includes("hasSelectedRecoverySnapshot: true"));
 });
 
+Deno.test("command palette is shortcut-only and closes from its backdrop", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	assert(app.includes("handleCommandPaletteBackdropClick"));
+	assert(app.includes("event.target !== event.currentTarget"));
+	assert(app.includes("onclick={handleCommandPaletteBackdropClick}"));
+	assert(!app.includes("onclick={() => openCommandPalette()}>{vocabulary.commandPalette}"));
+});
+
 Deno.test("branch rewrite and link commands remain keyboard-first and confirmation gated", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const bindings = await Deno.readTextFile(

@@ -26,7 +26,6 @@
 		SearchResult,
 		ScopedTagSet,
 		TagAlias,
-		TagSummary,
 		Revision,
 		RecoverySnapshot,
 		Suggestion,
@@ -34,7 +33,7 @@
 		TransientProjectionNode,
 		UnplacedWork,
 	} from "../domain/models";
-	import { LINK_TYPES } from "../domain/models";
+	import { isSymmetricLinkType, LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
 	import type {
 		GlobalLineageProjection,
@@ -83,7 +82,14 @@
 	nextCommandPaletteIndex,
 	type CommandPaletteItem,
 	} from "./command_palette.ts";
-	import { findInternalReferenceTrigger } from "../services/internal_reference";
+	import {
+		canonicalInternalReferenceMarkdown,
+		findInternalReferenceTrigger,
+	} from "../services/internal_reference";
+	import {
+		findInlineLinkTrigger,
+		replaceInlineLinkTrigger,
+	} from "../services/inline_link";
 	import { parseMarkdownCandidates } from "../services/markdown_parser";
 	import type {
 		InternalReferenceBacklink,
@@ -96,6 +102,7 @@
 		type LinkComparisonProjection,
 		type WorkComparisonDocuments,
 	} from "../services/comparison_service";
+	import { previewDirection } from "../services/advanced_link_resolver";
 	import type { StubListEntry } from "../services/stub_service";
 	import type { DuplicateCandidate } from "../services/duplicate_candidates";
 	import type { WorkMergePreview } from "../services/work_merge_service";
@@ -121,11 +128,12 @@
 		| "unplaced"
 		| "stubs"
 		| "duplicates"
+		| "tags"
 		| "globalLineage"
 		| "workLineage"
 		| "comparison"
 		| "trash";
-	type AsideMode = "overview" | "relation" | "history" | "tags" | "query";
+	type AsideMode = "overview" | "relation" | "history" | "query";
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
 		| { action: "purge"; workId: string; occurrenceCount: number; linkCount: number }
@@ -142,6 +150,23 @@
 		range: { start: number; end: number };
 		candidates: InternalReferenceCompletion[];
 		activeIndex: number;
+	};
+	type InlineLinkCompletionPhase = "candidate" | "type" | "direction";
+	type InlineLinkDirection = "forward" | "reverse";
+	type InlineLinkCompletionState = {
+		itemId: string;
+		query: string;
+		range: { start: number; end: number };
+		candidates: InternalReferenceCompletion[];
+		activeIndex: number;
+		phase: InlineLinkCompletionPhase;
+		selectedCandidate?: InternalReferenceCompletion;
+		selectedType?: LinkType;
+		direction: InlineLinkDirection;
+	};
+	type TagCloudEntry = {
+		name: string;
+		workIds: readonly string[];
 	};
 
 	const vocabulary = useUiVocabulary();
@@ -185,12 +210,9 @@
 	let aliases = $state<SearchAlias[]>([]);
 	let aliasCanonical = $state("");
 	let aliasVariants = $state("");
-	let tags = $state<TagSummary[]>([]);
+	let tagScopes = $state<ScopedTagSet[]>([]);
 	let tagAliases = $state<TagAlias[]>([]);
-	let tagAll = $state("");
-	let tagNone = $state("");
-	let tagHistoryRevisionIds = $state("");
-	let tagMatches = $state<ScopedTagSet[]>([]);
+	let selectedTag = $state<string | null>(null);
 	let tagRenameFrom = $state("");
 	let tagRenameTo = $state("");
 	let tagMergeSources = $state("");
@@ -233,6 +255,7 @@
 	let inspectorElement = $state<HTMLElement | null>(null);
 	let workingCopySaveStatuses = $state<WorkingCopySaveStatus[]>([]);
 	let internalReferenceCompletion = $state<InternalReferenceCompletionState | null>(null);
+	let inlineLinkCompletion = $state<InlineLinkCompletionState | null>(null);
 	let internalReferenceBacklinks = $state<InternalReferenceBacklink[]>([]);
 	let internalReferenceNotice = $state("");
 	let inlineSemanticLinkNotice = $state("");
@@ -245,6 +268,7 @@
 	let inspectorWidth = $state(320);
 	let inspectorCollapsed = $state(false);
 	let internalReferenceCompletionRequest = 0;
+	let inlineLinkCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
 		onStatusChange: (statuses) => workingCopySaveStatuses = statuses,
@@ -258,6 +282,25 @@
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
+	const tagCloud = $derived.by(() => {
+		const workIdsByTag = new Map<string, Set<string>>();
+		for (const scope of tagScopes) {
+			for (const tag of scope.tags) {
+				const workIds = workIdsByTag.get(tag) ?? new Set<string>();
+				workIds.add(scope.scope.workId);
+				workIdsByTag.set(tag, workIds);
+			}
+		}
+		return [...workIdsByTag].map(([name, workIds]) => ({
+			name,
+			workIds: [...workIds].sort(),
+		}) satisfies TagCloudEntry).sort((left, right) =>
+			right.workIds.length - left.workIds.length || left.name.localeCompare(right.name)
+		);
+	});
+	const selectedTagNodeIds = $derived(
+		selectedTag ? tagCloud.find((tag) => tag.name === selectedTag)?.workIds ?? [] : [],
+	);
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
 	const browsingLocation = $derived(currentBrowsingLocation(browsing));
 	const browsingPane = $derived(activeBrowsingPane(browsing));
@@ -302,7 +345,29 @@
 	]);
 	const omniEntryCount = $derived(searchEntries.length + (quickCaptureText.trim() ? 1 : 0));
 	const dedicatedView = $derived(
-		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison",
+		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison" ||
+			viewMode === "tags",
+	);
+	const viewModeLabel = $derived(
+		viewMode === "outline"
+			? "アウトライン"
+			: viewMode === "today"
+			? vocabulary.today
+			: viewMode === "unplaced"
+			? vocabulary.unplacedInbox
+			: viewMode === "stubs"
+			? vocabulary.stubList
+			: viewMode === "duplicates"
+			? vocabulary.duplicateCandidates
+			: viewMode === "tags"
+			? vocabulary.tag
+			: viewMode === "globalLineage"
+			? vocabulary.globalLineage
+			: viewMode === "workLineage"
+			? vocabulary.workLineage
+			: viewMode === "comparison"
+			? `${vocabulary.revision}${vocabulary.comparisonPane}`
+			: "ゴミ箱",
 	);
 	const inspectorColumn = $derived(inspectorCollapsed ? "0px" : `${inspectorWidth}px`);
 	const workingCopySaveStatus = $derived.by(() => {
@@ -425,6 +490,15 @@
 				return;
 			}
 			if (isEditableTarget(event.target)) return;
+			if (
+				event.key === " " &&
+				!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey &&
+				!(event.target instanceof HTMLElement && event.target.closest("button, a, [role='button']"))
+			) {
+				event.preventDefault();
+				viewMode = viewMode === "globalLineage" ? "outline" : "globalLineage";
+				return;
+			}
 			const shortcut = shortcutForKeyboardEvent(event);
 			const binding = shortcuts.bindings.find((candidate) => candidate.shortcut === shortcut);
 			if (!binding) return;
@@ -443,8 +517,7 @@
 					if (startup.phase === "ready") {
 						await load();
 						aliases = await api.listSearchAliases();
-						tags = await api.listTags();
-						tagAliases = await api.listTagAliases();
+						await loadTagBrowser();
 						savedRuleQueries = await api.listSavedRuleQueries();
 						return;
 					}
@@ -492,6 +565,8 @@
 			snapshot = next;
 			internalReferenceCompletionRequest++;
 			internalReferenceCompletion = null;
+			inlineLinkCompletionRequest++;
+			inlineLinkCompletion = null;
 			browsing = reconcileBrowsingState(browsing, snapshot);
 			selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
 			globalLineage = nextGlobalLineage;
@@ -554,11 +629,21 @@
 		window.addEventListener("pointerup", stop, { once: true });
 	}
 
-	async function openInspectorTool(mode: Extract<AsideMode, "tags" | "query">): Promise<void> {
+	async function openInspectorTool(mode: Extract<AsideMode, "query">): Promise<void> {
 		asideMode = mode;
 		if (dedicatedView) viewMode = "outline";
 		await tick();
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
+	}
+
+	function requestFocus(id: string, caretOffset?: number): void {
+		setTimeout(() => {
+			const element = document.querySelector<HTMLTextAreaElement>(`[data-item-id="${id}"]`);
+			element?.focus();
+			const caret = Math.min(caretOffset ?? element?.value.length ?? 0, element?.value.length ?? 0);
+			element?.setSelectionRange(caret, caret);
+			element?.scrollIntoView({ block: "center" });
+		}, 0);
 	}
 
 	function addBrowsingPane(): void {
@@ -595,6 +680,64 @@
 		compositionGuard = false,
 	): Promise<void> {
 		if (compositionGuard || event.isComposing || event.keyCode === 229) return;
+		if (inlineLinkCompletion?.itemId === row.item.id) {
+			const completion = inlineLinkCompletion;
+			if (completion.phase === "candidate") {
+				if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+					event.preventDefault();
+					const count = completion.candidates.length;
+					if (count) {
+						completion.activeIndex =
+							(completion.activeIndex + (event.key === "ArrowDown" ? 1 : -1) + count) % count;
+					}
+					return;
+				}
+				if ((event.key === "Enter" || event.key === "Tab") && completion.candidates.length) {
+					event.preventDefault();
+					selectInlineLinkCandidate(
+						row.item.id,
+						completion.candidates[completion.activeIndex],
+					);
+					return;
+				}
+			} else if (completion.phase === "type") {
+				if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+					event.preventDefault();
+					const current = completion.selectedType
+						? LINK_TYPES.indexOf(completion.selectedType)
+						: 0;
+					const next = (current + (event.key === "ArrowDown" ? 1 : -1) + LINK_TYPES.length) %
+						LINK_TYPES.length;
+					completion.selectedType = LINK_TYPES[next];
+					return;
+				}
+				if (event.key === "Enter" || event.key === "Tab") {
+					event.preventDefault();
+					chooseInlineLinkType(row.item.id);
+					return;
+				}
+			} else if (completion.phase === "direction") {
+				if (event.key === "ArrowLeft" || event.key === "ArrowRight" ||
+					event.key === "ArrowUp" || event.key === "ArrowDown") {
+					event.preventDefault();
+					completion.direction = event.key === "ArrowLeft" || event.key === "ArrowUp"
+						? "reverse"
+						: "forward";
+					return;
+				}
+				if (event.key === "Enter" || event.key === "Tab") {
+					event.preventDefault();
+					void commitInlineLink(row.item.id);
+					return;
+				}
+			}
+			if (event.key === "Escape") {
+				event.preventDefault();
+				inlineLinkCompletionRequest++;
+				inlineLinkCompletion = null;
+				return;
+			}
+		}
 		if (internalReferenceCompletion?.itemId === row.item.id) {
 			if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 				event.preventDefault();
@@ -679,10 +822,12 @@
 		autosave.queue(item.workId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
 		void updateInternalReferenceCompletion(id, textarea);
+		void updateInlineLinkCompletion(id, textarea);
 	}
 
 	function updateEditorSelection(id: string, textarea: HTMLTextAreaElement): void {
 		if (selectedId === id) resumeAutosave.queue(id, textarea.selectionStart);
+		void updateInlineLinkCompletion(id, textarea);
 	}
 
 	async function updateInternalReferenceCompletion(
@@ -708,6 +853,126 @@
 				candidates,
 				activeIndex: 0,
 			};
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	async function updateInlineLinkCompletion(
+		itemId: string,
+		textarea: HTMLTextAreaElement,
+	): Promise<void> {
+		const trigger = findInlineLinkTrigger(
+			textarea.value,
+			textarea.selectionStart,
+			textarea.selectionEnd,
+		);
+		if (!trigger) {
+			inlineLinkCompletionRequest++;
+			inlineLinkCompletion = null;
+			return;
+		}
+		const request = ++inlineLinkCompletionRequest;
+		try {
+			const candidates = (await api.listInternalReferenceCompletions(trigger.query, 16))
+				.filter((candidate) => candidate.scope === "work")
+				.filter((candidate) => snapshot.items.find((item) => item.id === itemId)?.workId !== candidate.workId);
+			if (request !== inlineLinkCompletionRequest) return;
+			inlineLinkCompletion = {
+				itemId,
+				query: trigger.query,
+				range: trigger.range,
+				candidates,
+				activeIndex: 0,
+				phase: "candidate",
+				direction: "forward",
+			};
+		} catch (cause) {
+			if (request === inlineLinkCompletionRequest) error = errorMessage(cause);
+		}
+	}
+
+	function selectInlineLinkCandidate(
+		itemId: string,
+		candidate: InternalReferenceCompletion,
+	): void {
+		const state = inlineLinkCompletion;
+		if (!state || state.itemId !== itemId || candidate.scope !== "work") return;
+		inlineLinkCompletion = {
+			...state,
+			phase: "type",
+			selectedCandidate: candidate,
+			selectedType: "RELATED",
+			direction: "forward",
+		};
+	}
+
+	function chooseInlineLinkType(itemId: string): void {
+		const state = inlineLinkCompletion;
+		if (!state || state.itemId !== itemId || !state.selectedCandidate || !state.selectedType) return;
+		if (isSymmetricLinkType(state.selectedType)) {
+			void commitInlineLink(itemId);
+			return;
+		}
+		inlineLinkCompletion = { ...state, phase: "direction" };
+	}
+
+	function selectInlineLinkType(itemId: string, type: LinkType): void {
+		const state = inlineLinkCompletion;
+		if (!state || state.itemId !== itemId || state.phase !== "type") return;
+		state.selectedType = type;
+		chooseInlineLinkType(itemId);
+	}
+
+	function setInlineLinkDirection(itemId: string, direction: InlineLinkDirection): void {
+		const state = inlineLinkCompletion;
+		if (!state || state.itemId !== itemId || state.phase !== "direction") return;
+		state.direction = direction;
+	}
+
+	async function commitInlineLink(itemId: string): Promise<void> {
+		const state = inlineLinkCompletion;
+		const item = snapshot.items.find((entry) => entry.id === itemId);
+		const candidate = state?.selectedCandidate;
+		const type = state?.selectedType;
+		if (!state || state.itemId !== itemId || !item || !candidate || !type || candidate.scope !== "work") return;
+		if (item.workId === candidate.workId) {
+			error = `同じNode自身には${vocabulary.semanticLink}できません。`;
+			return;
+		}
+		const textarea = document.querySelector<HTMLTextAreaElement>(
+			`textarea[data-item-id="${CSS.escape(itemId)}"]`,
+		);
+		const currentTrigger = textarea
+			? findInlineLinkTrigger(textarea.value, state.range.end, state.range.end)
+			: null;
+		if (
+			!textarea || !currentTrigger || currentTrigger.range.start !== state.range.start ||
+			currentTrigger.range.end !== state.range.end || currentTrigger.query !== state.query
+		) {
+			error = `入力が変更されたため、@${vocabulary.semanticLink}を確定できませんでした。`;
+			inlineLinkCompletionRequest++;
+			inlineLinkCompletion = null;
+			return;
+		}
+
+		const fromId = state.direction === "forward" ? item.workId : candidate.workId;
+		const toId = state.direction === "forward" ? candidate.workId : item.workId;
+		try {
+			await api.createLink({ fromId, toId, type, origin: "human", status: "asserted" });
+			const markdown = canonicalInternalReferenceMarkdown(`@${candidate.displayName}`, "work", candidate.id);
+			const replacement = replaceInlineLinkTrigger(textarea.value, state.range, markdown);
+			inlineLinkCompletionRequest++;
+			inlineLinkCompletion = null;
+			textarea.focus();
+			textarea.setRangeText(markdown, state.range.start, state.range.end, "end");
+			textarea.dispatchEvent(new InputEvent("input", {
+				bubbles: true,
+				inputType: "insertReplacementText",
+				data: markdown,
+			}));
+			await load(item.id);
+			requestFocus(item.id, replacement.caretOffset);
 		} catch (cause) {
 			error = errorMessage(cause);
 		}
@@ -1511,16 +1776,6 @@
 		await load();
 	}
 
-	function requestFocus(id: string, caretOffset?: number): void {
-		setTimeout(() => {
-			const element = document.querySelector<HTMLTextAreaElement>(`[data-item-id="${id}"]`);
-			element?.focus();
-			const caret = Math.min(caretOffset ?? element?.value.length ?? 0, element?.value.length ?? 0);
-			element?.setSelectionRange(caret, caret);
-			element?.scrollIntoView({ block: "center" });
-		}, 0);
-	}
-
 	function otherName(link: OutlineLink): string {
 		const id = link.fromId === selectedItem?.workId ? link.toId : link.fromId;
 		const item = itemByWorkId.get(id);
@@ -1531,17 +1786,51 @@
 		return value.split(/[,、\s]+/).map((tag) => tag.trim()).filter(Boolean);
 	}
 
-	async function searchByTags(): Promise<void> {
+	async function loadTagBrowser(): Promise<void> {
 		tagError = "";
 		try {
-			tagMatches = await api.searchTags({
-				all: splitTagInput(tagAll),
-				none: splitTagInput(tagNone),
-				historyRevisionIds: splitTagInput(tagHistoryRevisionIds),
-			});
+			const [scopes, aliases, unplaced] = await Promise.all([
+				api.listScopedTags(),
+				api.listTagAliases(),
+				api.listUnplacedWorks(),
+			]);
+			tagScopes = scopes;
+			tagAliases = aliases;
+			unplacedWorks = unplaced;
+			if (selectedTag && !scopes.some((scope) => scope.tags.includes(selectedTag!))) {
+				selectedTag = null;
+			}
 		} catch (cause) {
 			tagError = errorMessage(cause);
 		}
+	}
+
+	async function openTags(): Promise<void> {
+		await loadTagBrowser();
+		viewMode = "tags";
+	}
+
+	function selectTag(tag: string): void {
+		selectedTag = tag;
+	}
+
+	function tagCloudFontSize(count: number): string {
+		return `${Math.min(22, 12 + Math.max(0, count - 1) * 2)}px`;
+	}
+
+	function openTagNode(workId: string): void {
+		const item = itemByWorkId.get(workId);
+		if (item) {
+			viewMode = "outline";
+			selectOccurrence(item.id);
+			requestFocus(item.id);
+			return;
+		}
+		if (unplacedWorks.some((work) => work.workId === workId)) {
+			void openUnplaced();
+			return;
+		}
+		error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
 	}
 
 	async function renameTag(): Promise<void> {
@@ -1550,9 +1839,7 @@
 			await api.renameTag(tagRenameFrom, tagRenameTo);
 			tagRenameFrom = "";
 			tagRenameTo = "";
-			tags = await api.listTags();
-			tagAliases = await api.listTagAliases();
-			if (tagAll) await searchByTags();
+			await loadTagBrowser();
 		} catch (cause) {
 			tagError = errorMessage(cause);
 		}
@@ -1564,9 +1851,7 @@
 			await api.mergeTags(splitTagInput(tagMergeSources), tagMergeTarget);
 			tagMergeSources = "";
 			tagMergeTarget = "";
-			tags = await api.listTags();
-			tagAliases = await api.listTagAliases();
-			if (tagAll) await searchByTags();
+			await loadTagBrowser();
 		} catch (cause) {
 			tagError = errorMessage(cause);
 		}
@@ -1656,6 +1941,11 @@
 		await tick();
 		commandPaletteRestoreFocus?.focus();
 		commandPaletteRestoreFocus = null;
+	}
+
+	function handleCommandPaletteBackdropClick(event: MouseEvent): void {
+		if (event.target !== event.currentTarget) return;
+		void closeCommandPalette();
 	}
 
 	function handleCommandPaletteKeydown(event: KeyboardEvent): void {
@@ -1946,6 +2236,16 @@
 		return item ? titleFor(item) : id;
 	}
 
+	function titleForWorkId(id: string): string {
+		const item = itemByWorkId.get(id);
+		if (item) return titleFor(item);
+		const unplaced = unplacedWorks.find((work) => work.workId === id);
+		return unplaced
+			? unplaced.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ??
+				`(空の${vocabulary.work})`
+			: id;
+	}
+
 	function bodyFor(item: OutlineItem): string {
 		const lines = item.text.split(/\r?\n/);
 		const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
@@ -1991,6 +2291,7 @@
 		class="command-palette"
 		aria-modal="true"
 		aria-label={vocabulary.commandPalette}
+		onclick={handleCommandPaletteBackdropClick}
 	>
 		<div class="command-palette__content">
 			<input
@@ -2036,8 +2337,6 @@
 		<div class="brand"><strong>Radiora</strong><span>v2</span></div>
 		<section>
 			<p>作業</p>
-			<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
-				onclick={() => (viewMode = "outline")}>アウトライン</button>
 			<button class:active={viewMode === "today"} aria-pressed={viewMode === "today"}
 				onclick={openToday}>{vocabulary.today}</button>
 			<button class:active={viewMode === "unplaced"} aria-pressed={viewMode === "unplaced"}
@@ -2047,8 +2346,6 @@
 		</section>
 		<section>
 			<p>探索</p>
-			<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
-				onclick={() => (viewMode = "globalLineage")}>{vocabulary.globalLineage}</button>
 			<button class:active={viewMode === "duplicates"} aria-pressed={viewMode === "duplicates"}
 				onclick={openDuplicates}>{vocabulary.duplicateCandidates}</button>
 		</section>
@@ -2059,23 +2356,23 @@
 		</section>
 		<section class="nav-tools">
 			<p>ツール</p>
-			<button class:active={asideMode === "tags"} onclick={() => openInspectorTool("tags")}
-				disabled={!selectedItem}>{vocabulary.tag}管理</button>
+			<button class:active={viewMode === "tags"} onclick={openTags}>{vocabulary.tag}管理</button>
 			<button class:active={asideMode === "query"} onclick={() => openInspectorTool("query")}
 				disabled={!selectedItem}>Query・検索別名</button>
-			<button onclick={() => openCommandPalette()}>{vocabulary.commandPalette}<kbd>Ctrl K</kbd></button>
 		</section>
 	</nav>
 
 	<header class="top-bar">
 		<div class="current-location">
-			<div class="view-switcher" role="group" aria-label="主要ビュー">
+			<div class="view-switcher" role="group" aria-label="アウトラインとツリー">
 				<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
 					onclick={() => (viewMode = "outline")}>アウトライン</button>
 				<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
-					onclick={() => (viewMode = "globalLineage")}>{vocabulary.globalLineage}</button>
+					onclick={() => (viewMode = "globalLineage")}>ツリー</button>
 			</div>
-			<small>{viewMode === "outline" ? "アウトライン" : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "stubs" ? vocabulary.stubList : viewMode === "duplicates" ? vocabulary.duplicateCandidates : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</small>
+			{#if viewMode !== "outline" && viewMode !== "globalLineage"}
+				<small class="current-location__status">表示中: {viewModeLabel}</small>
+			{/if}
 		</div>
 		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
 			<input
@@ -2242,39 +2539,33 @@
 	>
 		{#if viewMode === "outline"}
 			<section class="outline-panel">
-				<nav class="browsing-navigation" aria-label={vocabulary.browsingHistory}>
-					<div class="history-controls">
+				<!-- browsing.panes remains an internal extension point; vocabulary.pane is intentionally not rendered. -->
+				<nav class="browsing-navigation" aria-label="閲覧履歴">
+					<div class="history-controls" aria-label="閲覧履歴">
 						<button
+							class="history-button"
 							aria-label={`${vocabulary.browsingHistory}を戻る`}
+							title="前の閲覧位置へ戻る"
 							disabled={!canMoveBrowsingHistory(browsing, -1)}
 							onclick={() => goBrowsingHistory(-1)}
-						>←</button>
+						>‹ 前の表示</button>
 						<button
+							class="history-button"
 							aria-label={`${vocabulary.browsingHistory}を進む`}
+							title="次の閲覧位置へ進む"
 							disabled={!canMoveBrowsingHistory(browsing, 1)}
 							onclick={() => goBrowsingHistory(1)}
-						>→</button>
+						>次の表示 ›</button>
 						{#if browsingLocation.hoistOccurrenceId}
 							<button onclick={requestClearHoist} disabled={!commands.clearHoist.enabled} title={commands.clearHoist.reason}>{vocabulary.hoist}を解除</button>
 						{/if}
 					</div>
-					<div class="pane-controls" aria-label={vocabulary.pane}>
-						{#each browsing.panes as pane, index (pane.id)}
-							<button
-								class:active={pane.id === browsingPane.id}
-								aria-pressed={pane.id === browsingPane.id}
-								onclick={() => switchBrowsingPane(pane.id)}
-							>{vocabulary.pane} {index + 1}</button>
-						{/each}
-						<button aria-label={`新しい${vocabulary.pane}`} onclick={addBrowsingPane}>＋</button>
-					</div>
-					{#if selectedBreadcrumb.length || selectedItem}
+					{#if selectedBreadcrumb.length}
 						<div class="breadcrumb" aria-label={vocabulary.breadcrumb}>
 							{#each selectedBreadcrumb as ancestor (ancestor.id)}
 								<button onclick={() => openBreadcrumb(ancestor.id)}>{titleFor(ancestor)}</button>
 								<span aria-hidden="true">›</span>
 							{/each}
-							{#if selectedItem}<span aria-current="page">{titleFor(selectedItem)}</span>{/if}
 						</div>
 					{/if}
 			</nav>
@@ -2322,15 +2613,14 @@
 						<p class="outline-context__breadcrumb">
 							{selectedBreadcrumb.map(titleFor).join(" › ") || "ルート"}
 						</p>
-						<h1>{selectedItem ? titleFor(selectedItem) : "アウトライン"}</h1>
+						<h1>アウトライン</h1>
 						{#if selectedItem}
 							<p class="outline-context__meta">
-								更新 {formatCreatedAt(selectedItem.updatedAt)} · {selectedPlacements.length}件の配置
+								{selectedPlacements.length}件の配置 · 行をそのまま編集できます
 							</p>
 						{/if}
 					</div>
 					<div class="section-title outline-actions">
-						<span>アウトライン</span>
 						<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
 						<button onclick={createRoot}>＋ ルートに追加</button>
 					</div>
@@ -2363,6 +2653,66 @@
 											handleKeydown(event, row, textarea, compositionGuard)}
 										onInternalReference={openEditorInternalReference}
 									/>
+					{#if inlineLinkCompletion?.itemId === row.item.id}
+						<div class="inline-link-completions" role="listbox" aria-label={`@${vocabulary.semanticLink}候補`}>
+							{#if inlineLinkCompletion.phase === "candidate"}
+								<p class="inline-link-completions__hint">@{vocabulary.semanticLink}先を検索</p>
+								{#each inlineLinkCompletion.candidates as candidate, index (candidate.scope + candidate.id)}
+									<button
+										class:active={index === inlineLinkCompletion.activeIndex}
+										role="option"
+										aria-selected={index === inlineLinkCompletion.activeIndex}
+										onmousedown={(event) => event.preventDefault()}
+										onclick={() => selectInlineLinkCandidate(row.item.id, candidate)}
+									>
+										<strong>{candidate.displayName}</strong>
+										<span>{candidate.scopeLabel} · {candidate.shortId}</span>
+									</button>
+								{:else}
+									<p>一致する候補はありません。</p>
+								{/each}
+							{:else}
+								{#if inlineLinkCompletion.selectedCandidate}
+									<div class="inline-link-completions__target">
+										<strong>@{inlineLinkCompletion.selectedCandidate.displayName}</strong>
+										<span>{vocabulary.linkType}を選択</span>
+									</div>
+									{#if inlineLinkCompletion.phase === "type"}
+										<div class="inline-link-types" aria-label={vocabulary.linkType}>
+											{#each LINK_TYPES as type}
+												<button
+													class:active={inlineLinkCompletion.selectedType === type}
+													onmousedown={(event) => event.preventDefault()}
+													onclick={() => {
+																	selectInlineLinkType(row.item.id, type);
+													}}
+												>{type}</button>
+											{/each}
+										</div>
+									{:else}
+										<div class="inline-link-direction" aria-label={`${vocabulary.semanticLink}方向`}>
+											<button
+												class:active={inlineLinkCompletion.direction === "forward"}
+												onmousedown={(event) => event.preventDefault()}
+												onclick={() => setInlineLinkDirection(row.item.id, "forward")}
+											>{titleFor(row.item)} → {inlineLinkCompletion.selectedCandidate.displayName}</button>
+											<button
+												class:active={inlineLinkCompletion.direction === "reverse"}
+												onmousedown={(event) => event.preventDefault()}
+												onclick={() => setInlineLinkDirection(row.item.id, "reverse")}
+											>{inlineLinkCompletion.selectedCandidate.displayName} → {titleFor(row.item)}</button>
+										</div>
+										<p class="inline-link-preview" role="status">
+											{inlineLinkCompletion.direction === "forward"
+												? previewDirection(titleFor(row.item), inlineLinkCompletion.selectedType ?? "RELATED", inlineLinkCompletion.selectedCandidate.displayName)
+												: previewDirection(inlineLinkCompletion.selectedCandidate.displayName, inlineLinkCompletion.selectedType ?? "RELATED", titleFor(row.item))}
+										</p>
+										<button type="button" onclick={() => void commitInlineLink(row.item.id)}>この方向で{vocabulary.semanticLink}</button>
+									{/if}
+								{/if}
+							{/if}
+						</div>
+					{/if}
 									{#if internalReferenceCompletion?.itemId === row.item.id}
 										<div class="internal-reference-completions" role="listbox"
 											aria-label={`${vocabulary.internalReference}候補`}>
@@ -2635,6 +2985,71 @@
 				onCreateLink={createDuplicateCandidateLink}
 				onDismiss={excludeDuplicateCandidate}
 			/>
+		{:else if viewMode === "tags"}
+			<section class="outline-panel tag-browser" aria-label={vocabulary.tag}>
+				<div class="tag-browser__heading">
+					<div>
+						<p class="eyebrow">知識の入口</p>
+						<h1>{vocabulary.tag}</h1>
+						<p>タグを選ぶと、付いている{vocabulary.work}を表示します。</p>
+					</div>
+				</div>
+				{#if tagError}<p class="query-error">{tagError}</p>{/if}
+				<section class="tag-browser__cloud" aria-label={`${vocabulary.tag}クラウド`}>
+					{#each tagCloud as tag (tag.name)}
+						<button
+							class:active={selectedTag === tag.name}
+							aria-pressed={selectedTag === tag.name}
+							style={`font-size:${tagCloudFontSize(tag.workIds.length)}`}
+							onclick={() => selectTag(tag.name)}
+						>
+							<span>#{tag.name}</span>
+							<small>{tag.workIds.length}{vocabulary.work}</small>
+						</button>
+					{:else}
+						<p class="empty">{vocabulary.tag}はまだありません。</p>
+					{/each}
+				</section>
+				{#if selectedTag}
+					<section class="tag-browser__results" aria-live="polite">
+						<div class="section-title">
+							<span>#{selectedTag}</span>
+							<small>{selectedTagNodeIds.length}{vocabulary.work}</small>
+						</div>
+						<div>
+							{#each selectedTagNodeIds as workId (workId)}
+								<button onclick={() => openTagNode(workId)}>
+									<strong>{titleForWorkId(workId)}</strong>
+									<span>{itemByWorkId.has(workId) ? "アウトラインで開く" : vocabulary.unplacedInbox}</span>
+								</button>
+							{/each}
+						</div>
+					</section>
+				{:else}
+					<p class="tag-browser__prompt">{vocabulary.tag}を選ぶと{vocabulary.work}一覧を表示します。</p>
+				{/if}
+				<details class="tag-browser__maintenance">
+					<summary>{vocabulary.tag}を整理</summary>
+					<datalist id="tag-candidates">
+						{#each tagCloud as tag}<option value={`#${tag.name}`}>{tag.workIds.length}{vocabulary.work}</option>{/each}
+					</datalist>
+					<div class="tag-browser__maintenance-grid">
+						<label>名前変更
+							<input bind:value={tagRenameFrom} list="tag-candidates" placeholder="変更前" />
+							<input bind:value={tagRenameTo} placeholder="変更後" />
+							<button onclick={renameTag}>名前変更</button>
+						</label>
+						<label>統合
+							<input bind:value={tagMergeSources} list="tag-candidates" placeholder="統合元をカンマ区切り" />
+							<input bind:value={tagMergeTarget} placeholder="統合先" />
+							<button onclick={mergeTags}>統合</button>
+						</label>
+					</div>
+					{#if tagAliases.length}
+						<p class="tag-browser__aliases">{tagAliases.map((alias) => `#${alias.variants.join(", #")} → #${alias.canonicalName}`).join(" · ")}</p>
+					{/if}
+				</details>
+			</section>
 		{:else if viewMode === "trash"}
 			<section class="outline-panel">
 				<div class="section-title"><span>ゴミ箱</span><small>{trashEntries.length}件</small></div>
@@ -2806,6 +3221,23 @@
 							</div>
 						{:else}<p class="empty">任意の{vocabulary.semanticLink}はありません</p>{/each}
 					</div>
+					<section class="internal-reference-backlinks">
+						<h3>{vocabulary.backlink}<small>{internalReferenceBacklinks.length}件</small></h3>
+						{#each internalReferenceBacklinks as backlink (JSON.stringify(backlink.source))}
+							<button onclick={() => openInternalReferenceBacklink(backlink)}>
+								<strong>{backlink.displayName}</strong>
+								<span>
+									{backlink.source.scope === "work" ? vocabulary.workingCopy : `固定${vocabulary.revision}`}
+									· {backlink.count}箇所
+								</span>
+							</button>
+						{:else}
+							<p class="empty">{vocabulary.backlink}はありません</p>
+						{/each}
+					</section>
+					{#if internalReferenceNotice}
+						<p class="internal-reference-notice" role="status">{internalReferenceNotice}</p>
+					{/if}
 					<div class="discoveries">
 						{#if emergenceLoading}<p class="empty">{vocabulary.emergenceLoading}</p>{/if}
 						{#each emergenceSuggestions as suggestion}
@@ -2855,60 +3287,6 @@
 							<small>Recoveryは{vocabulary.branch}を選択すると利用できます。</small>
 						{/if}
 					</div>
-				{:else if asideMode === "tags"}
-					<div class="query-panel">
-						<datalist id="tag-candidates">
-							{#each tags as tag}<option value={`#${tag.name}`}>{tag.count}件</option>{/each}
-						</datalist>
-						<h3>{vocabulary.tag}検索</h3>
-						<label>すべて含む（AND）
-							<input bind:value={tagAll} list="tag-candidates" placeholder="#tag1, #tag2" />
-						</label>
-						<label>除外
-							<input bind:value={tagNone} list="tag-candidates" placeholder="#除外tag" />
-						</label>
-						<label>履歴も検索する{vocabulary.revision} ID（任意）
-							<input bind:value={tagHistoryRevisionIds} placeholder="IDをカンマ区切り" />
-						</label>
-						<button onclick={searchByTags}>検索</button>
-						{#if tagError}<p class="query-error">{tagError}</p>{/if}
-						<div class="alias-list">
-							{#each tagMatches as match}
-								<div>
-									<span>{titleForId(match.scope.workId)} · {match.scope.kind === "revision" ? `${vocabulary.revision} ${match.scope.revisionId}` : `${vocabulary.branch} ${match.scope.branchId}`} · {match.tags.map((tag) => `#${tag}`).join(" ")}</span>
-								</div>
-							{/each}
-						</div>
-						<h3>{vocabulary.tag}一覧</h3>
-						<div class="alias-list">{#each tags as tag}<div><span>#{tag.name}</span><small>{tag.count}件</small></div>{/each}</div>
-						<h3>名前変更</h3>
-						<input bind:value={tagRenameFrom} list="tag-candidates" placeholder="変更前" />
-						<input bind:value={tagRenameTo} placeholder="変更後" />
-						<button onclick={renameTag}>名前変更</button>
-						<h3>統合</h3>
-						<input bind:value={tagMergeSources} list="tag-candidates" placeholder="統合元をカンマ区切り" />
-						<input bind:value={tagMergeTarget} placeholder="統合先" />
-						<button onclick={mergeTags}>統合</button>
-						<div class="alias-list">{#each tagAliases as alias}<div><span>#{alias.variants.join(", #")} → #{alias.canonicalName}</span></div>{/each}</div>
-						<p class="hint">名前変更・統合は表示と検索の正準名だけを変更し、{vocabulary.workingCopy}と過去の{vocabulary.revision}本文は書き換えません。</p>
-					</div>
-					<section class="internal-reference-backlinks">
-						<h3>{vocabulary.backlink}<small>{internalReferenceBacklinks.length}件</small></h3>
-						{#each internalReferenceBacklinks as backlink (JSON.stringify(backlink.source))}
-							<button onclick={() => openInternalReferenceBacklink(backlink)}>
-								<strong>{backlink.displayName}</strong>
-								<span>
-									{backlink.source.scope === "work" ? vocabulary.workingCopy : `固定${vocabulary.revision}`}
-									· {backlink.count}箇所
-								</span>
-							</button>
-						{:else}
-							<p class="empty">{vocabulary.backlink}はありません</p>
-						{/each}
-					</section>
-					{#if internalReferenceNotice}
-						<p class="internal-reference-notice" role="status">{internalReferenceNotice}</p>
-					{/if}
 				{:else}
 					<div class="query-panel">
 						<label for="rule-source">読み取り専用Datalog</label>
