@@ -9,7 +9,6 @@
 	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import SparseOutlineView from "./SparseOutlineView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
-	import ManuscriptView from "./ManuscriptView.svelte";
 	import { createRpcAdapter } from "./rpc_adapter";
 	import type {
 		Bookmark,
@@ -101,15 +100,23 @@
 	import type { DuplicateCandidate } from "../services/duplicate_candidates";
 	import type { WorkMergePreview } from "../services/work_merge_service";
 	import {
-		manuscriptSectionFromItem,
-		type ManuscriptSection,
-	} from "../services/manuscript_projection";
+		EMPTY_OUTLINE_FILTER,
+		matchesOutlineFilter,
+		type OutlineFilter,
+	} from "../services/outline_filter";
+	import {
+		parseInlineSemanticLinks,
+		type InlineSemanticLinkCandidate,
+	} from "../services/inline_semantic_link";
+	import {
+		projectSemanticLinkAnnotations,
+		type SemanticLinkAnnotation,
+	} from "../services/semantic_link_annotations";
 
 	const api = createRpcAdapter<RadioraBindings>();
 
 	type ViewMode =
 		| "outline"
-		| "manuscript"
 		| "today"
 		| "unplaced"
 		| "stubs"
@@ -146,7 +153,7 @@
 	let quickCaptureSubmitting = $state(false);
 	let unplacedWorks = $state<UnplacedWork[]>([]);
 	let stubEntries = $state<StubListEntry[]>([]);
-	let outlineFilter = $state({ freeText: "", tagsAll: "", tagsNone: "" });
+	let outlineFilter = $state<OutlineFilter>({ ...EMPTY_OUTLINE_FILTER });
 	let longForm = $state({
 		active: false,
 		text: "",
@@ -228,14 +235,15 @@
 	let internalReferenceCompletion = $state<InternalReferenceCompletionState | null>(null);
 	let internalReferenceBacklinks = $state<InternalReferenceBacklink[]>([]);
 	let internalReferenceNotice = $state("");
+	let inlineSemanticLinkNotice = $state("");
 	let markdownExportNotice = $state("");
 	let markdownExportReferenceMode = $state<MarkdownExportReferenceMode>("radiora");
 	let opmlNotice = $state("");
 	let jsonBackupNotice = $state("");
 	let opmlFileInput: HTMLInputElement;
 	let jsonBackupFileInput: HTMLInputElement;
-	let manuscriptSections = $state<ManuscriptSection[]>([]);
-	let manuscriptLoading = $state(false);
+	let inspectorWidth = $state(320);
+	let inspectorCollapsed = $state(false);
 	let internalReferenceCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
@@ -272,6 +280,7 @@
 			link.fromId === selectedItem.workId || link.toId === selectedItem.workId
 		)
 		: []);
+	const semanticLinkAnnotations = $derived(projectSemanticLinkAnnotations(snapshot.items, snapshot.links));
 	const linkableWorks = $derived([
 		...new Map([
 			...snapshot.items.map((item) => [item.workId, { workId: item.workId, text: item.text }] as const),
@@ -293,9 +302,9 @@
 	]);
 	const omniEntryCount = $derived(searchEntries.length + (quickCaptureText.trim() ? 1 : 0));
 	const dedicatedView = $derived(
-		viewMode === "manuscript" || viewMode === "globalLineage" ||
-			viewMode === "workLineage" || viewMode === "comparison",
+		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison",
 	);
+	const inspectorColumn = $derived(inspectorCollapsed ? "0px" : `${inspectorWidth}px`);
 	const workingCopySaveStatus = $derived.by(() => {
 		const failed = workingCopySaveStatuses.find((status) => status.phase === "failed");
 		if (failed) return failed;
@@ -309,19 +318,14 @@
 	const filteredTodayUpdated = $derived.by(() => filterDateEntries(dateProjection?.updated ?? []));
 	const filteredUnplacedWorks = $derived(
 		unplacedWorks.filter((work) =>
-			matchesFilter(work.text) &&
-			entryMatchesTags(work.text, parseFilterTags(outlineFilter.tagsAll), parseFilterTags(outlineFilter.tagsNone))
+			matchesOutlineFilter(work.text, outlineFilter)
 		),
 	);
 
 	function filterDateEntries<T extends { representative: { text: string } | null }>(entries: T[]): T[] {
-		const tagsAll = parseFilterTags(outlineFilter.tagsAll);
-		const tagsNone = parseFilterTags(outlineFilter.tagsNone);
 		return entries.filter((entry) => {
 			const text = entry.representative ? entry.representative.text : "";
-			if (!matchesFilter(text)) return false;
-			if (!entryMatchesTags(text, tagsAll, tagsNone)) return false;
-			return true;
+			return matchesOutlineFilter(text, outlineFilter);
 		});
 	}
 	const commandContext = $derived<CommandContext>({
@@ -357,7 +361,7 @@
 
 	$effect(() => {
 		if (viewMode !== "today" && viewMode !== "unplaced") {
-			outlineFilter = { freeText: "", tagsAll: "", tagsNone: "" };
+			outlineFilter = { ...EMPTY_OUTLINE_FILTER };
 		}
 	});
 
@@ -529,9 +533,25 @@
 	}
 
 	async function revealInspector(): Promise<void> {
+		inspectorCollapsed = false;
 		asideMode = "overview";
 		await tick();
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
+	}
+
+	function startInspectorResize(event: PointerEvent): void {
+		if (event.button !== 0 || inspectorCollapsed) return;
+		event.preventDefault();
+		const move = (next: PointerEvent) => {
+			const width = window.innerWidth - next.clientX;
+			inspectorWidth = Math.max(240, Math.min(560, width));
+		};
+		const stop = () => {
+			window.removeEventListener("pointermove", move);
+			window.removeEventListener("pointerup", stop);
+		};
+		window.addEventListener("pointermove", move);
+		window.addEventListener("pointerup", stop, { once: true });
 	}
 
 	async function openInspectorTool(mode: Extract<AsideMode, "tags" | "query">): Promise<void> {
@@ -659,24 +679,6 @@
 		autosave.queue(item.workId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
 		void updateInternalReferenceCompletion(id, textarea);
-	}
-
-	function updateManuscriptText(
-		section: ManuscriptSection,
-		_text: string,
-		textarea: HTMLTextAreaElement,
-	): void {
-		if (section.revisionSelector.mode === "pinned") return;
-		updateLocalText(section.occurrenceId, textarea);
-		manuscriptSections = manuscriptSections.map((current) => {
-			if (current.revisionSelector.mode === "pinned") return current;
-			const item = snapshot.items.find((candidate) =>
-				candidate.id === current.occurrenceId
-			);
-			return item
-				? manuscriptSectionFromItem(item, current.depth)
-				: current;
-		});
 	}
 
 	function updateEditorSelection(id: string, textarea: HTMLTextAreaElement): void {
@@ -1252,25 +1254,8 @@
 		return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 	}
 
-	function matchesFilter(text: string): boolean {
-		const ft = outlineFilter.freeText.trim().toLowerCase();
-		if (ft && !text.toLowerCase().includes(ft)) return false;
-		return true;
-	}
-
 	function clearOutlineFilter(): void {
-		outlineFilter = { freeText: "", tagsAll: "", tagsNone: "" };
-	}
-
-	function parseFilterTags(raw: string): string[] {
-		return raw.split(/[\s,]+/).map((t) => t.replace(/^#/, "").trim()).filter(Boolean);
-	}
-
-	function entryMatchesTags(entryText: string, tagsAll: string[], tagsNone: string[]): boolean {
-		const lower = entryText.toLowerCase();
-		if (tagsAll.length && !tagsAll.every((t) => lower.includes(`#${t}`))) return false;
-		if (tagsNone.length && tagsNone.some((t) => lower.includes(`#${t}`))) return false;
-		return true;
+		outlineFilter = { ...EMPTY_OUTLINE_FILTER };
 	}
 
 	async function indent(item: OutlineItem): Promise<void> {
@@ -1620,21 +1605,6 @@
 		viewMode = "trash";
 	}
 
-	async function openManuscript(rootOccurrenceId = selectedItem?.id): Promise<void> {
-		if (!rootOccurrenceId || manuscriptLoading) return;
-		manuscriptLoading = true;
-		error = "";
-		try {
-			await autosave.flush();
-			manuscriptSections = await api.projectManuscript(rootOccurrenceId);
-			viewMode = "manuscript";
-		} catch (cause) {
-			error = errorMessage(cause);
-		} finally {
-			manuscriptLoading = false;
-		}
-	}
-
 	async function restoreTrash(workId: string): Promise<void> {
 		await api.restoreWork(workId);
 		trashEntries = await api.listTrash();
@@ -1723,6 +1693,37 @@
 			".advanced-link-editor textarea",
 		);
 		input?.focus();
+	}
+
+	function inlineSemanticLinksFor(text: string) {
+		return parseInlineSemanticLinks(text);
+	}
+
+	function semanticLinkAnnotationsFor(occurrenceId: string): SemanticLinkAnnotation[] {
+		return semanticLinkAnnotations.filter((annotation) => annotation.occurrenceId === occurrenceId);
+	}
+
+	function annotationDirection(annotation: SemanticLinkAnnotation): string {
+		return annotation.direction === "symmetric"
+			? "↔"
+			: annotation.direction === "outgoing" ? "→" : "←";
+	}
+
+	async function inspectInlineSemanticLink(candidate: InlineSemanticLinkCandidate): Promise<void> {
+		const quote = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+		const reason = candidate.reason === undefined
+			? ""
+			: `(\"${candidate.reason.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}\")`;
+		const advancedInput = `${quote(candidate.source)} :: ${candidate.type}${reason} :: ${quote(candidate.target)}`;
+		try {
+			const resolution = await api.resolveAdvancedLink(advancedInput);
+			asideMode = "relation";
+			inlineSemanticLinkNotice = resolution.source.status === "resolved" && resolution.target.status === "resolved"
+				? `候補を解決しました: ${candidate.type} · ${candidate.source} → ${candidate.target}`
+				: `未確定の候補です: ${resolution.source.reason ?? resolution.target.reason ?? "対象を選択してください。"}`;
+		} catch (cause) {
+			inlineSemanticLinkNotice = `構文を確認できませんでした: ${errorMessage(cause)}`;
+		}
 	}
 
 	async function requestRewriteAsNewBranch(): Promise<void> {
@@ -2037,12 +2038,6 @@
 			<p>作業</p>
 			<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
 				onclick={() => (viewMode = "outline")}>アウトライン</button>
-			<button
-				class:active={viewMode === "manuscript"}
-				aria-pressed={viewMode === "manuscript"}
-				onclick={() => openManuscript()}
-				disabled={!selectedItem || manuscriptLoading}
-			>{vocabulary.manuscript}</button>
 			<button class:active={viewMode === "today"} aria-pressed={viewMode === "today"}
 				onclick={openToday}>{vocabulary.today}</button>
 			<button class:active={viewMode === "unplaced"} aria-pressed={viewMode === "unplaced"}
@@ -2074,8 +2069,13 @@
 
 	<header class="top-bar">
 		<div class="current-location">
-			<small>現在地</small>
-			<strong>{viewMode === "outline" ? "アウトライン" : viewMode === "manuscript" ? vocabulary.manuscript : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "stubs" ? vocabulary.stubList : viewMode === "duplicates" ? vocabulary.duplicateCandidates : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</strong>
+			<div class="view-switcher" role="group" aria-label="主要ビュー">
+				<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
+					onclick={() => (viewMode = "outline")}>アウトライン</button>
+				<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
+					onclick={() => (viewMode = "globalLineage")}>{vocabulary.globalLineage}</button>
+			</div>
+			<small>{viewMode === "outline" ? "アウトライン" : viewMode === "today" ? vocabulary.today : viewMode === "unplaced" ? vocabulary.unplacedInbox : viewMode === "stubs" ? vocabulary.stubList : viewMode === "duplicates" ? vocabulary.duplicateCandidates : viewMode === "globalLineage" ? vocabulary.globalLineage : viewMode === "workLineage" ? vocabulary.workLineage : viewMode === "comparison" ? `${vocabulary.revision}${vocabulary.comparisonPane}` : "ゴミ箱"}</small>
 		</div>
 		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
 			<input
@@ -2119,7 +2119,12 @@
 			{/if}
 		</form>
 		<div class="top-actions">
-			<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
+			<div class="toolbar-group toolbar-nav" aria-label="ナビゲーション">
+				<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
+			</div>
+			<details class="toolbar-menu">
+				<summary>書き出し／データ</summary>
+				<div class="toolbar-menu__content">
 			<input
 				class="sr-only"
 				type="file"
@@ -2177,6 +2182,8 @@
 			{#if markdownExportNotice}
 				<small class="markdown-export-notice" role="status">{markdownExportNotice}</small>
 			{/if}
+				</div>
+			</details>
 			{#if selectedItem}
 				<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆</button>
 			{/if}
@@ -2227,7 +2234,12 @@
 			</section>
 		</main>
 	{:else}
-	<main class="app-main" class:full-workspace={dedicatedView}>
+	<main
+		class="app-main"
+		class:full-workspace={dedicatedView}
+		class:inspector-collapsed={inspectorCollapsed}
+		style={`--inspector-width:${inspectorColumn}`}
+	>
 		{#if viewMode === "outline"}
 			<section class="outline-panel">
 				<nav class="browsing-navigation" aria-label={vocabulary.browsingHistory}>
@@ -2305,10 +2317,23 @@
 						</div>
 					{/if}
 			{:else}
-				<div class="section-title">
-					<span>Outline</span>
-					<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
-					<button onclick={createRoot}>＋ Root</button>
+				<div class="outline-context">
+					<div>
+						<p class="outline-context__breadcrumb">
+							{selectedBreadcrumb.map(titleFor).join(" › ") || "ルート"}
+						</p>
+						<h1>{selectedItem ? titleFor(selectedItem) : "アウトライン"}</h1>
+						{#if selectedItem}
+							<p class="outline-context__meta">
+								更新 {formatCreatedAt(selectedItem.updatedAt)} · {selectedPlacements.length}件の配置
+							</p>
+						{/if}
+					</div>
+					<div class="section-title outline-actions">
+						<span>アウトライン</span>
+						<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
+						<button onclick={createRoot}>＋ ルートに追加</button>
+					</div>
 				</div>
 				{#if loading}
 					<p class="empty">Loading…</p>
@@ -2317,9 +2342,11 @@
 				{:else}
 					<div class="rows">
 						{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
-							<div class:selected={selectedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
+							{@const inlineLinks = inlineSemanticLinksFor(row.item.text)}
+							{@const annotations = semanticLinkAnnotationsFor(row.item.id)}
+							<div class:selected={selectedId === row.item.id} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
 								aria-selected={selectedId === row.item.id} tabindex="-1"
-								draggable="true" ondragstart={() => draggedId = row.item.id}
+								draggable="true" ondragstart={() => draggedId = row.item.id} ondragend={() => draggedId = null}
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
 								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
 								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
@@ -2354,7 +2381,7 @@
 									{/if}
 									{#if referencesIn(row.item.text).length}
 										<div class="internal-reference-chips" aria-label={vocabulary.internalReference}>
-											{#each referencesIn(row.item.text) as reference (reference.range.start)}
+										{#each referencesIn(row.item.text) as reference (reference.range.start)}
 												<button onclick={() => openInternalReference(
 													row.item.text,
 													reference.scope,
@@ -2364,6 +2391,31 @@
 													{reference.scope === "work" ? vocabulary.work : vocabulary.revision}
 													· {reference.id.slice(0, 8)}
 												</button>
+											{/each}
+										</div>
+									{/if}
+									{#if inlineLinks.candidates.length || inlineLinks.diagnostics.length}
+										<div class="inline-semantic-links" aria-label="本文中の関係候補">
+											{#each inlineLinks.candidates as candidate (candidate.start)}
+												<button type="button" onclick={() => void inspectInlineSemanticLink(candidate)}>
+													<span>{candidate.source} · {candidate.type} · {candidate.target}</span>
+													{#if candidate.reason}<small>「{candidate.reason}」</small>{/if}
+												</button>
+											{/each}
+											{#each inlineLinks.diagnostics as diagnostic (diagnostic.start)}
+												<p class="inline-semantic-link-error" role="status">{diagnostic.message}</p>
+											{/each}
+										</div>
+									{/if}
+									{#if annotations.length}
+										<div class="semantic-link-annotations" aria-label="関係注釈">
+											{#each annotations as annotation (annotation.linkId)}
+												<p>
+													<span aria-hidden="true">┄ {annotationDirection(annotation)}</span>
+													<strong>{annotation.type}</strong>
+													<span>{annotation.otherDisplayName}</span>
+													<small>「{annotation.reason}」</small>
+												</p>
 											{/each}
 										</div>
 									{/if}
@@ -2386,14 +2438,6 @@
 				{/if}
 			{/if}
 			</section>
-		{:else if viewMode === "manuscript"}
-			<ManuscriptView
-				sections={manuscriptSections}
-				{vocabulary}
-				onSelect={selectOccurrence}
-				onChange={updateManuscriptText}
-				onInternalReference={openEditorInternalReference}
-			/>
 		{:else if viewMode === "today"}
 			<section class="outline-panel date-projection" aria-label={vocabulary.today}>
 				<div class="section-title"><span>{vocabulary.today}</span></div>
@@ -2405,6 +2449,7 @@
 					<label>終了（含まない） <input type="date" bind:value={dateEnd} /></label>
 					<button onclick={loadDateProjection}>表示</button>
 				</div>
+				<p class="filter-hint">自由語は部分一致 · タグはすべて含む（AND） · NOTタグは除外 · この表示だけに適用</p>
 				<div class="filter-bar">
 					<input
 						class="filter-input"
@@ -2463,6 +2508,7 @@
 				<p class="hint">
 				配置先を決めずに保存した{vocabulary.work}です。本文へ #タグ を入力するとタグ付けできます。
 				</p>
+				<p class="filter-hint">自由語は部分一致 · タグはすべて含む（AND） · NOTタグは除外 · この表示だけに適用</p>
 				<div class="filter-bar">
 					<input
 						class="filter-input"
@@ -2684,14 +2730,21 @@
 
 		{#if !dedicatedView}
 			<aside bind:this={inspectorElement} class="inspector">
+			<button
+				class="inspector-resize-handle"
+				type="button"
+				aria-label="右ペインの幅を変更"
+				onpointerdown={startInspectorResize}
+				title="ドラッグして幅を変更"
+			></button>
 			{#if selectedItem}
 				<nav class="aside-tabs" aria-label="詳細表示">
 					<button class:active={asideMode === "overview"} onclick={() => (asideMode = "overview")}>概要</button>
 					<button class:active={asideMode === "relation"} onclick={() => (asideMode = "relation")}>関係</button>
 					<button class:active={asideMode === "history"} onclick={() => (asideMode = "history")}>履歴</button>
 				</nav>
-				<p class="eyebrow">SELECTED THOUGHT</p>
-				<div class="inspector-heading"><h2>{titleFor(selectedItem)}</h2><button class="clear-selection" onclick={() => selectOccurrence(null)}>選択解除</button></div>
+				<p class="eyebrow">選択中</p>
+				<div class="inspector-heading"><h2>{titleFor(selectedItem)}</h2><div class="inspector-heading-actions"><button class="clear-selection" onclick={() => selectOccurrence(null)}>選択解除</button><button class="clear-selection" onclick={() => (inspectorCollapsed = true)}>閉じる</button></div></div>
 				{#if asideMode === "overview"}
 					<label>
 						{vocabulary.occurrence}固有の見出し
@@ -2737,6 +2790,9 @@
 						selectedDisplayName={titleFor(selectedItem)}
 						onConfirm={(input) => executeCommand("createLink", undefined, input)}
 					/>
+					{#if inlineSemanticLinkNotice}
+						<p class="inline-semantic-link-notice" role="status">{inlineSemanticLinkNotice}</p>
+					{/if}
 					<div class="links">
 						{#each selectedLinks as link}
 							<div>
@@ -2746,7 +2802,7 @@
 								{#if isComparableLinkType(link.type)}
 									<button onclick={() => openLinkComparison(link.id)}>{vocabulary.comparisonPane}</button>
 								{/if}
-								<button onclick={() => removeLink(link)}>×</button>
+								<button aria-label={`${link.type}を削除`} title={`${link.type}を削除`} onclick={() => removeLink(link)}>×</button>
 							</div>
 						{:else}<p class="empty">任意の{vocabulary.semanticLink}はありません</p>{/each}
 					</div>
