@@ -5,7 +5,7 @@
 	import ComparisonPane from "./ComparisonPane.svelte";
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
-	import AdvancedLinkEditor from "./AdvancedLinkEditor.svelte";
+	import LinkEditor from "./LinkEditor.svelte";
 	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import SparseOutlineView from "./SparseOutlineView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
@@ -95,7 +95,6 @@
 	} from "../services/internal_reference_service";
 	import {
 		comparisonDocumentKey,
-		isComparableLinkType,
 		type LinkComparisonProjection,
 		type WorkComparisonDocuments,
 	} from "../services/comparison_service";
@@ -1809,12 +1808,21 @@
 		await load();
 	}
 
-	function otherName(link: OutlineLink): string {
-		const id = link.fromId === selectedItem?.workId ? link.toId : link.fromId;
-		const item = itemByWorkId.get(id);
-		return item ? titleFor(item) : `(空の${vocabulary.work})`;
+	async function reverseLink(link: OutlineLink): Promise<void> {
+		if (isSymmetricLinkType(link.type)) return;
+		await api.deleteLink(link.fromId, link.toId, link.type);
+		await api.createLink({
+			fromId: link.toId,
+			toId: link.fromId,
+			fromEndpoint: link.to,
+			toEndpoint: link.from,
+			type: link.type,
+			status: link.status,
+			origin: link.origin,
+			reason: link.reason,
+		});
+		await load();
 	}
-
 	function splitTagInput(value: string): string[] {
 		return value.split(/[,、\s]+/).map((tag) => tag.trim()).filter(Boolean);
 	}
@@ -1946,7 +1954,7 @@
 				case "addBookmark": await performAddBookmark(); break;
 				case "createLink":
 					if (linkInput) await performAddLink(linkInput);
-					else await openAdvancedLinkEditor();
+					else await openLinkEditor();
 					break;
 				case "runQuery": await performExecuteRule(); break;
 				case "saveQuery": await performSaveRule(); break;
@@ -2008,12 +2016,12 @@
 		await executeCommand(command.id);
 	}
 
-	async function openAdvancedLinkEditor(): Promise<void> {
+	async function openLinkEditor(): Promise<void> {
 		if (!selectedItem) return;
 		asideMode = "relation";
 		await tick();
-		const input = document.querySelector<HTMLTextAreaElement>(
-			".advanced-link-editor textarea",
+		const input = document.querySelector<HTMLInputElement>(
+			".link-editor input[type=search]",
 		);
 		input?.focus();
 	}
@@ -2666,7 +2674,8 @@
 						{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
 							{@const inlineLinks = inlineSemanticLinksFor(row.item.text)}
 							{@const annotations = semanticLinkAnnotationsFor(row.item.id)}
-							<div class:selected={selectedId === row.item.id} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
+							{@const rowBody = bodyFor(row.item)}
+							<div class:selected={selectedId === row.item.id} class:has-body={Boolean(rowBody)} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
 								aria-selected={selectedId === row.item.id} tabindex="-1"
 								draggable="true" ondragstart={() => draggedId = row.item.id} ondragend={() => draggedId = null}
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
@@ -3240,27 +3249,19 @@
 						<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
 					{/if}
 				{:else if asideMode === "relation"}
-					<AdvancedLinkEditor
+					<LinkEditor
 						selectedWorkId={selectedItem.workId}
 						selectedDisplayName={titleFor(selectedItem)}
+						links={selectedLinks}
+						titleForWork={titleForWorkId}
 						onConfirm={(input) => executeCommand("createLink", undefined, input)}
+						onDelete={removeLink}
+						onReverse={reverseLink}
+						onCompare={(link) => openLinkComparison(link.id)}
 					/>
 					{#if inlineSemanticLinkNotice}
 						<p class="inline-semantic-link-notice" role="status">{inlineSemanticLinkNotice}</p>
 					{/if}
-					<div class="links">
-						{#each selectedLinks as link}
-							<div>
-								<span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span>
-								<span>{link.fromId === selectedItem.workId ? "→" : "←"} {otherName(link)}</span>
-								{#if link.reason}<small class="link-reason">「{link.reason}」</small>{/if}
-								{#if isComparableLinkType(link.type)}
-									<button onclick={() => openLinkComparison(link.id)}>{vocabulary.comparisonPane}</button>
-								{/if}
-								<button aria-label={`${link.type}を削除`} title={`${link.type}を削除`} onclick={() => removeLink(link)}>×</button>
-							</div>
-						{:else}<p class="empty">任意の{vocabulary.semanticLink}はありません</p>{/each}
-					</div>
 					<section class="internal-reference-backlinks">
 						<h3>{vocabulary.backlink}<small>{internalReferenceBacklinks.length}件</small></h3>
 						{#each internalReferenceBacklinks as backlink (JSON.stringify(backlink.source))}
