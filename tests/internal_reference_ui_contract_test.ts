@@ -25,7 +25,7 @@ Deno.test("internal reference UI does not create semantic or system graph relati
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const referenceFunctions = app.slice(
 		app.indexOf("async function updateInternalReferenceCompletion"),
-		app.indexOf("async function performQuickCapture"),
+		app.indexOf("async function updateInlineLinkCompletion"),
 	);
 
 	if (/api\.(createLink|createItem|createOccurrence|quickCapture)/.test(referenceFunctions)) {

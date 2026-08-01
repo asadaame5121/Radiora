@@ -11,7 +11,7 @@ Deno.test("inspector modes are mutually exclusive and selection can be cleared",
 	assertMatch(inspector, /\{#if asideMode === "overview"\}/);
 	assertMatch(inspector, /\{:else if asideMode === "relation"\}/);
 	assertMatch(inspector, /\{:else if asideMode === "history"\}/);
-	assertMatch(inspector, /\{:else if asideMode === "tags"\}/);
+	assertNotMatch(inspector, /asideMode === "tags"/);
 	assertMatch(
 		inspector,
 		/<button class="clear-selection" onclick=\{\(\) => selectOccurrence\(null\)\}>選択解除<\/button>/,

@@ -39,6 +39,6 @@
 		"desktop:run:surreal": "deno task desktop:run",
 		"desktop:run:json": "deno run -A scripts/desktop_run.ts --json",
 		"desktop:run:surreal-diagnostic": "deno run -A scripts/desktop_run.ts --surreal-diagnostic",
-		"desktop:hmr": "deno desktop -A --hmr src/main.ts"
+		"desktop:hmr": "deno run -A scripts/desktop_hmr.ts"
 	}
 }

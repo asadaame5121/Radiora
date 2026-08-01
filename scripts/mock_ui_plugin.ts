@@ -1,5 +1,11 @@
 import type { Plugin } from "vite";
-import type { OutlineItem, OutlineLink, OutlineSnapshot, Revision } from "../src/domain/models.ts";
+import type {
+	OutlineItem,
+	OutlineLink,
+	OutlineSnapshot,
+	Revision,
+	ScopedTagSet,
+} from "../src/domain/models.ts";
 
 const TITLES = [
 	"観察と問いのはじまり",
@@ -101,6 +107,27 @@ function mockRevisions(workId: string): Revision[] {
 	];
 }
 
+function mockTagScopes(snapshot: OutlineSnapshot): ScopedTagSet[] {
+	const tagSets = [
+		["観察", "問い"],
+		["記憶", "知識"],
+		["時間", "哲学"],
+		["対話", "関係"],
+		["創造", "記憶"],
+		["編集", "思考"],
+	];
+	return snapshot.items.map((item, index) => ({
+		scope: {
+			kind: "working-copy",
+			workId: item.workId,
+			branchId: item.revisionSelector.mode === "branch"
+				? item.revisionSelector.branchId
+				: undefined,
+		},
+		tags: tagSets[index % tagSets.length],
+	}));
+}
+
 export function mockUiPlugin(): Plugin {
 	const snapshot = mockSnapshot();
 	const rewriteBranches = new Map<
@@ -113,6 +140,7 @@ export function mockUiPlugin(): Plugin {
 			createdAt: string;
 		}>
 	>();
+	const tagScopes = mockTagScopes(snapshot);
 	return {
 		name: "radiora-mock-ui-api",
 		configureServer(server) {
@@ -287,6 +315,12 @@ export function mockUiPlugin(): Plugin {
 					}
 					case "listSearchAliases":
 					case "listSavedRuleQueries":
+						result = [];
+						break;
+					case "listScopedTags":
+						result = tagScopes;
+						break;
+					case "listTagAliases":
 						result = [];
 						break;
 					case "listEmergenceSuggestions": {
