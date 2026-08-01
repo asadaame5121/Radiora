@@ -103,17 +103,30 @@ Deno.test("date projection includes an unplaced Work without creating an Occurre
 	assertEquals((await store.listOccurrences()).length, 0);
 });
 
+Deno.test("date projection omits a blank non-Stub unplaced Work", async () => {
+	const store = new MemoryGraphStore();
+	await addWork(store, "blank", START, START, null, "");
+	await store.deleteOccurrence("blank-occurrence");
+
+	const projection = await new DateProjectionService(store).project({
+		startInclusive: START,
+		endExclusive: END,
+	});
+	assertEquals(projection.created, []);
+});
+
 async function addWork(
 	store: MemoryGraphStore,
 	id: string,
 	createdAt: string,
 	updatedAt: string,
 	parentOccurrenceId: string | null = null,
+	text = id,
 ): Promise<void> {
 	await store.createWorkBundle(
 		{ id, createdAt, updatedAt },
 		{ id: `${id}-branch`, workId: id, name: "main", headRevisionId: null, createdAt },
-		{ branchId: `${id}-branch`, workId: id, text: id, updatedAt },
+		{ branchId: `${id}-branch`, workId: id, text, updatedAt },
 		{
 			id: `${id}-occurrence`,
 			workId: id,

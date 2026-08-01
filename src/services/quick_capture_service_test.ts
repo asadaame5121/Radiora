@@ -2,6 +2,7 @@ import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { QuickCaptureService } from "./quick_capture_service.ts";
 import { OutlineService } from "./outline_service.ts";
+import { StubService } from "./stub_service.ts";
 
 const NOW = "2026-07-29T03:04:05.000Z";
 const WORK_ID = "00000000-0000-4000-8000-000000000001";
@@ -115,6 +116,59 @@ Deno.test("unplaced Work can be edited, tagged, placed, and returns after last r
 
 	await outline.deleteItem(occurrence.id);
 	assertEquals((await outline.listUnplacedWorks()).map((entry) => entry.workId), [WORK_ID]);
+});
+
+Deno.test("blank non-Stub unplaced Works are recoverably trashed and Stubs stay in Stub list", async () => {
+	const store = new MemoryGraphStore();
+	const outline = new OutlineService(store);
+	const empty = await outline.createItem({ text: "", parentId: null });
+	await outline.deleteItem(empty.id);
+
+	assertEquals(await outline.listUnplacedWorks(), []);
+	assertEquals(
+		(await store.listWorks(true)).find((work) => work.id === empty.workId)?.deletedAt !== undefined,
+		true,
+	);
+	await store.createWorkBundle(
+		{ id: "legacy-empty", createdAt: NOW, updatedAt: NOW },
+		{
+			id: "legacy-empty-branch",
+			workId: "legacy-empty",
+			name: "main",
+			headRevisionId: null,
+			createdAt: NOW,
+		},
+		{ branchId: "legacy-empty-branch", workId: "legacy-empty", text: "", updatedAt: NOW },
+		{
+			id: "legacy-empty-occurrence",
+			workId: "legacy-empty",
+			parentOccurrenceId: null,
+			orderKey: 1,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "legacy-empty-branch" },
+		},
+	);
+	await store.deleteOccurrence("legacy-empty-occurrence");
+	assertEquals(await outline.listUnplacedWorks(), []);
+	assertEquals(
+		(await store.listWorks(true)).find((work) => work.id === "legacy-empty")?.deletedAt !==
+			undefined,
+		true,
+	);
+
+	let id = 0;
+	const stub = await new StubService(
+		store,
+		() => NOW,
+		() => `stub-${++id}`,
+	).createStub("stub-list");
+	assertEquals(await outline.listUnplacedWorks(), []);
+	await outline.updateUnplacedWorkText(stub.workId, "Stub本文");
+	assertEquals(
+		(await outline.listStubs()).find((entry) => entry.workId === stub.workId)?.text,
+		"Stub本文",
+	);
+	assertEquals((await outline.listStubs()).map((entry) => entry.workId), [stub.workId]);
 });
 
 Deno.test("unplaced Works participate in Today and deleted Works are excluded", async () => {

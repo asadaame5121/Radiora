@@ -184,6 +184,9 @@ export class SurrealGraphStore implements GraphStore {
 				DEFINE FIELD IF NOT EXISTS title ON emergence_suggestion TYPE string;
 				DEFINE FIELD IF NOT EXISTS explanation ON emergence_suggestion TYPE string;
 				DEFINE FIELD IF NOT EXISTS evidence ON emergence_suggestion TYPE array<object>;
+				DEFINE FIELD IF NOT EXISTS evidence.*.fromId ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS evidence.*.toId ON emergence_suggestion TYPE string;
+				DEFINE FIELD IF NOT EXISTS evidence.*.relation ON emergence_suggestion TYPE string;
 				DEFINE FIELD IF NOT EXISTS score ON emergence_suggestion TYPE number;
 				DEFINE FIELD IF NOT EXISTS status ON emergence_suggestion TYPE string;
 				DEFINE FIELD IF NOT EXISTS created_at ON emergence_suggestion TYPE string;

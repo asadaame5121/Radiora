@@ -1,6 +1,7 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
+import { StubService } from "./stub_service.ts";
 
 Deno.test("occurrence operations creates ordered siblings and preserves child order when deleting a parent", async () => {
 	const operations = new OccurrenceOperations(new MemoryGraphStore());
@@ -55,6 +56,39 @@ Deno.test("occurrence operations places an unplaced Work using its active main B
 
 	assertEquals(placement.workId, source.workId);
 	assertEquals(placement.text, "source");
+});
+
+Deno.test("occurrence operations trashes a blank Work when its last placement is removed", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new OccurrenceOperations(store);
+	const item = await operations.createItem({ text: "", parentId: null });
+
+	await operations.deleteItem(item.id);
+
+	assertEquals(await store.listWorks(), []);
+	assertEquals(
+		(await store.listWorks(true)).find((work) => work.id === item.workId)?.deletedAt !== undefined,
+		true,
+	);
+});
+
+Deno.test("occurrence operations keeps an explicit blank Stub after its last placement is removed", async () => {
+	const store = new MemoryGraphStore();
+	let id = 0;
+	const stub = await new StubService(
+		store,
+		() => "2026-07-30T00:00:00.000Z",
+		() => `stub-${++id}`,
+	).createStub("stub-list");
+	const operations = new OccurrenceOperations(store);
+	const placement = await operations.createOccurrence({ workId: stub.workId, parentId: null });
+
+	await operations.deleteItem(placement.id);
+
+	assertEquals(
+		(await store.listWorks()).find((work) => work.id === stub.workId)?.stub?.createdVia,
+		"stub-list",
+	);
 });
 
 Deno.test("occurrence operations edits the selected Branch and rejects pinned Revisions", async () => {
