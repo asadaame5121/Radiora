@@ -15,6 +15,10 @@ Deno.test("inline link trigger starts at @ and preserves the caret range", () =>
 			caretOffset: 35,
 		},
 	);
+	assertEquals(replaceInlineLinkTrigger(source, trigger!.range, ""), {
+		text: "本文から ",
+		caretOffset: 5,
+	});
 });
 
 Deno.test("inline link trigger accepts an empty query and rejects embedded word mentions", () => {

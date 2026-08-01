@@ -83,7 +83,6 @@
 	type CommandPaletteItem,
 	} from "./command_palette.ts";
 	import {
-		canonicalInternalReferenceMarkdown,
 		findInternalReferenceTrigger,
 	} from "../services/internal_reference";
 	import {
@@ -960,16 +959,17 @@
 		const toId = state.direction === "forward" ? candidate.workId : item.workId;
 		try {
 			await api.createLink({ fromId, toId, type, origin: "human", status: "asserted" });
-			const markdown = canonicalInternalReferenceMarkdown(`@${candidate.displayName}`, "work", candidate.id);
-			const replacement = replaceInlineLinkTrigger(textarea.value, state.range, markdown);
+			// @ search is an input gesture for creating a Semantic Relation.
+			// It must not implicitly create a Markdown Internal Reference in the body.
+			const replacement = replaceInlineLinkTrigger(textarea.value, state.range, "");
 			inlineLinkCompletionRequest++;
 			inlineLinkCompletion = null;
 			textarea.focus();
-			textarea.setRangeText(markdown, state.range.start, state.range.end, "end");
+			textarea.setRangeText("", state.range.start, state.range.end, "end");
 			textarea.dispatchEvent(new InputEvent("input", {
 				bubbles: true,
 				inputType: "insertReplacementText",
-				data: markdown,
+				data: "",
 			}));
 			await load(item.id);
 			requestFocus(item.id, replacement.caretOffset);
