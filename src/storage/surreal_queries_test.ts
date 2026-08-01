@@ -54,9 +54,19 @@ Deno.test("Surreal query builders preserve suggestion-link symmetry guard and va
 	const symmetric = emergenceAcceptanceTransactionQuery(false, true, true);
 	assert(symmetric.includes("context_work = $toWork AND target_work = $fromWork"));
 	assert(symmetric.includes("from_work = $toWork AND to_work = $fromWork"));
+	assert(symmetric.includes("))[0] = 1"));
+	assert(symmetric.includes("GROUP ALL)[0] = 0"));
 	assert(symmetric.includes("reason: NONE"));
-	assert(symmetric.includes("resolution_reason: $resolutionReason"));
+	assert(symmetric.includes("resolution_reason = $resolutionReason"));
 	assert(symmetric.includes('status != "retracted" AND origin = "suggestion"'));
+	const suggestionUpsert = emergenceSuggestionUpsertQuery(false);
+	assert(suggestionUpsert.includes(
+		"IF (SELECT VALUE count() FROM emergence_suggestion WHERE id = $record GROUP ALL)[0] = 0",
+	));
+	assert(suggestionUpsert.includes("CREATE $record CONTENT"));
+	assert(suggestionUpsert.includes("status: $pending"));
+	assert(suggestionUpsert.includes("created_at: $createdAt"));
+	assert(suggestionUpsert.includes("UPDATE $record MERGE"));
 	assert(emergenceSuggestionUpsertQuery(false).includes("proposed_link_type: NONE"));
 	assert(emergenceSuggestionUpsertQuery(true).includes("proposed_link_type: $proposedLinkType"));
 	assert(resumePositionUpsertQuery().includes("resume_position:current"));

@@ -764,6 +764,10 @@
 			}
 		}
 		if (event.key === "Enter" && !event.shiftKey) {
+			if (!row.item.text.trim()) {
+				event.preventDefault();
+				return;
+			}
 			event.preventDefault();
 			try {
 				await autosave.flush(row.item.workId);
@@ -789,7 +793,7 @@
 			else await indent(row.item);
 			return;
 		}
-		if (event.key === "Backspace" && row.item.text === "") {
+		if (event.key === "Backspace" && !row.item.text.trim()) {
 			const siblings = siblingsOf(row.item).filter((item) => item.orderKey < row.item.orderKey);
 			const previous = siblings.at(-1);
 			if (previous) {
@@ -2856,7 +2860,8 @@
 					<span>{vocabulary.unplacedInbox}</span><small>{filteredUnplacedWorks.length}件{#if filteredUnplacedWorks.length !== unplacedWorks.length} / {unplacedWorks.length}件{/if}</small>
 				</div>
 				<p class="hint">
-				配置先を決めずに保存した{vocabulary.work}です。本文へ #タグ を入力するとタグ付けできます。
+				配置先を決めずに保存した、本文のある{vocabulary.work}です。本文へ #タグ を入力するとタグ付けできます。
+				本文未記入の{vocabulary.stub}は{vocabulary.stubList}で管理します。
 				</p>
 				<p class="filter-hint">自由語は部分一致 · タグはすべて含む（AND） · NOTタグは除外 · この表示だけに適用</p>
 				<div class="filter-bar">

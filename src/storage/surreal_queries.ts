@@ -128,11 +128,12 @@ export function emergenceAcceptanceTransactionQuery(
 			IF (SELECT VALUE count() FROM $suggestion
 				WHERE status IN ["pending", "held"]
 				AND proposed_link_type = $type
-				AND ((context_work = $fromWork AND target_work = $toWork)${reverseSuggestion})) = 1 {
+				AND ((context_work = $fromWork AND target_work = $toWork)${reverseSuggestion}))[0] = 1 {
 				IF (SELECT VALUE count() FROM semantic_link
 					WHERE status != "retracted" AND origin = "suggestion"
 						AND from_scope = "work" AND to_scope = "work" AND type = $type
-						AND ((from_work = $fromWork AND to_work = $toWork)${reverseLink})) = 0 {
+						AND ((from_work = $fromWork AND to_work = $toWork)${reverseLink})
+					GROUP ALL)[0] = 0 {
 					CREATE $link CONTENT {
 						from_scope: "work", from_work: $fromWork, from_revision: NONE,
 						to_scope: "work", to_work: $toWork, to_revision: NONE,
@@ -142,21 +143,29 @@ export function emergenceAcceptanceTransactionQuery(
 				};
 				UPDATE $suggestion SET status = "accepted", updated_at = $updatedAt,
 					resolved_at = $updatedAt,
-					resolution_reason: ${hasResolutionReason ? "$resolutionReason" : "NONE"};
+					resolution_reason = ${hasResolutionReason ? "$resolutionReason" : "NONE"};
 			};
 			COMMIT TRANSACTION;`;
 }
 
 export function emergenceSuggestionUpsertQuery(hasProposedLinkType: boolean): string {
-	return `UPSERT $record MERGE {
+	return `IF (SELECT VALUE count() FROM emergence_suggestion WHERE id = $record GROUP ALL)[0] = 0 {
+			CREATE $record CONTENT {
+				kind: $kind, context_work: $contextWork, target_work: $targetWork,
+				context_occurrence_id: $contextItemId, target_occurrence_id: $targetItemId,
+				proposed_link_type: ${hasProposedLinkType ? "$proposedLinkType" : "NONE"},
+				title: $title, explanation: $explanation, evidence: $evidence, score: $score,
+				status: $pending, created_at: $createdAt, updated_at: $updatedAt
+			};
+		} ELSE {
+			UPDATE $record MERGE {
 				kind: $kind, context_work: $contextWork, target_work: $targetWork,
 				context_occurrence_id: $contextItemId, target_occurrence_id: $targetItemId,
 				proposed_link_type: ${hasProposedLinkType ? "$proposedLinkType" : "NONE"},
 				title: $title, explanation: $explanation, evidence: $evidence, score: $score,
 				updated_at: $updatedAt
 			};
-			UPDATE $record SET status = $pending, created_at = $createdAt
-				WHERE status IS NONE;`;
+		};`;
 }
 
 export function resumePositionUpsertQuery(): string {

@@ -29,7 +29,7 @@ export class QuickCaptureService {
 		return this.project(work, branch, copy);
 	}
 
-	async list(): Promise<UnplacedWork[]> {
+	async list(includeStubs = false): Promise<UnplacedWork[]> {
 		const [works, occurrences, branches, copies] = await Promise.all([
 			this.store.listWorks(),
 			this.store.listOccurrences(),
@@ -37,22 +37,37 @@ export class QuickCaptureService {
 			this.store.listWorkingCopies(),
 		]);
 		const placed = new Set(occurrences.map((occurrence) => occurrence.workId));
-		return works
-			.filter((work) => !placed.has(work.id))
-			.map((work) => {
-				const mains = branches.filter((branch) =>
-					branch.workId === work.id && branch.name === "main" && !branch.archivedAt
-				);
-				if (mains.length !== 1) {
-					throw new Error(`Expected one active main Branch for Work: ${work.id}`);
+		const staleBlankWorkIds: string[] = [];
+		const entries: UnplacedWork[] = [];
+		for (const work of works) {
+			if (placed.has(work.id)) continue;
+			const mains = branches.filter((branch) =>
+				branch.workId === work.id && branch.name === "main" && !branch.archivedAt
+			);
+			if (mains.length !== 1) {
+				throw new Error(`Expected one active main Branch for Work: ${work.id}`);
+			}
+			const main = mains[0];
+			const copy = copies.find((candidate) => candidate.branchId === main.id);
+			if (!copy || copy.workId !== work.id) {
+				throw new Error(`Working Copy not found for Branch: ${main.id}`);
+			}
+			if (work.stub && !includeStubs) continue;
+			if (!copy.text.trim()) {
+				if (work.stub) {
+					entries.push(this.project(work, main, copy));
+					continue;
 				}
-				const main = mains[0];
-				const copy = copies.find((candidate) => candidate.branchId === main.id);
-				if (!copy || copy.workId !== work.id) {
-					throw new Error(`Working Copy not found for Branch: ${main.id}`);
-				}
-				return this.project(work, main, copy);
-			})
+				staleBlankWorkIds.push(work.id);
+				continue;
+			}
+			entries.push(this.project(work, main, copy));
+		}
+		if (staleBlankWorkIds.length) {
+			const trashedAt = this.now();
+			await Promise.all(staleBlankWorkIds.map((workId) => this.store.trashWork(workId, trashedAt)));
+		}
+		return entries
 			.sort((left, right) =>
 				right.createdAt.localeCompare(left.createdAt) || left.workId.localeCompare(right.workId)
 			);
@@ -61,7 +76,7 @@ export class QuickCaptureService {
 	async updateText(workId: string, text: string): Promise<void> {
 		if (!workId) throw new Error("Work ID is required");
 		if (!text.trim()) throw new Error("Quick Capture text must not be blank");
-		const unplaced = (await this.list()).find((candidate) => candidate.workId === workId);
+		const unplaced = (await this.list(true)).find((candidate) => candidate.workId === workId);
 		if (!unplaced) throw new Error(`Unplaced Work not found: ${workId}`);
 		await this.store.updateBranchWorkingCopy(unplaced.branchId, text, this.now());
 	}

@@ -205,6 +205,7 @@ export class OccurrenceOperations {
 		}
 		await this.store.deleteOccurrence(id);
 		await this.reconcileKnots();
+		await this.trashBlankUnplacedWork(item.workId);
 	}
 
 	async trashWork(id: string): Promise<void> {
@@ -270,6 +271,31 @@ export class OccurrenceOperations {
 		const item = (await this.store.listItems()).find((candidate) => candidate.id === id);
 		if (!item) throw new Error(`Outline item not found: ${id}`);
 		return item;
+	}
+
+	/**
+	 * A blank non-Stub Work is only useful while it has an outline placement.
+	 * Removing its last placement is the common path for an accidental empty row,
+	 * so retain it only as a recoverable trash entry rather than an empty inbox item.
+	 */
+	private async trashBlankUnplacedWork(workId: string): Promise<void> {
+		const [work, occurrences, branches, copies] = await Promise.all([
+			this.store.listWorks(true).then((works) =>
+				works.find((candidate) => candidate.id === workId)
+			),
+			this.store.listOccurrences(),
+			this.store.listBranches(workId),
+			this.store.listWorkingCopies(workId),
+		]);
+		if (
+			!work || work.deletedAt || work.stub ||
+			occurrences.some((occurrence) => occurrence.workId === workId)
+		) {
+			return;
+		}
+		const main = branches.find((branch) => branch.name === "main" && !branch.archivedAt);
+		const copy = main && copies.find((candidate) => candidate.branchId === main.id);
+		if (copy && !copy.text.trim()) await this.store.trashWork(workId, new Date().toISOString());
 	}
 
 	private orderAfter(

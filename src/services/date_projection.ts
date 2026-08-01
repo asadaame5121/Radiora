@@ -35,7 +35,11 @@ export class DateProjectionService {
 
 	async project(range: DateRange): Promise<DateProjection> {
 		const { start, end } = validateDateRange(range);
-		const [works, items] = await Promise.all([this.store.listWorks(), this.store.listItems()]);
+		const [works, items, workingCopies] = await Promise.all([
+			this.store.listWorks(),
+			this.store.listItems(),
+			this.store.listWorkingCopies(),
+		]);
 		const itemsByWork = new Map<string, OutlineItem[]>();
 		for (const item of items) {
 			const placements = itemsByWork.get(item.workId) ?? [];
@@ -43,10 +47,12 @@ export class DateProjectionService {
 			itemsByWork.set(item.workId, placements);
 		}
 		const itemById = new Map(items.map((item) => [item.id, item]));
+		const workingCopyByWorkId = new Map(workingCopies.map((copy) => [copy.workId, copy.text]));
 		const created: DateProjectionEntry[] = [];
 		const updated: DateProjectionEntry[] = [];
 		for (const work of works) {
 			const placements = itemsByWork.get(work.id);
+			if (!shouldIncludeDateEntry(work, placements ?? [], workingCopyByWorkId)) continue;
 			const entry = toEntry(work, placements ?? [], itemById);
 			if (isInRange(work.createdAt, start, end)) created.push(entry);
 			else if (isInRange(work.updatedAt, start, end)) updated.push(entry);
@@ -76,6 +82,7 @@ export class DateProjectionService {
 		const nodes: TransientProjectionNode[] = [];
 		for (const work of works) {
 			const placements = itemsByWork.get(work.id);
+			if (!shouldIncludeDateEntry(work, placements ?? [], workingCopyByWorkId)) continue;
 			const entry = toEntry(work, placements ?? [], itemById);
 			const inRange = isInRange(work.createdAt, start, end)
 				? "created"
@@ -102,6 +109,15 @@ export class DateProjectionService {
 		}
 		return nodes;
 	}
+}
+
+function shouldIncludeDateEntry(
+	work: Work,
+	placements: readonly OutlineItem[],
+	workingCopyByWorkId: ReadonlyMap<string, string>,
+): boolean {
+	if (placements.length > 0 || work.stub) return true;
+	return Boolean(workingCopyByWorkId.get(work.id)?.trim());
 }
 
 export function validateDateRange(range: DateRange): { start: number; end: number } {

@@ -302,6 +302,9 @@ Deno.test("version 5 storage expands to persistent emergence suggestions schema 
 	assertEquals(state.metadata.lastMigrationId, "0006_emergence_suggestion");
 	assertStringIncludes(statements[0], "DEFINE TABLE IF NOT EXISTS emergence_suggestion");
 	assertStringIncludes(statements[0], "context_work");
+	assertStringIncludes(statements[0], "evidence.*.fromId");
+	assertStringIncludes(statements[0], "evidence.*.toId");
+	assertStringIncludes(statements[0], "evidence.*.relation");
 	assertStringIncludes(statements[0], "status");
 	assertStringIncludes(statements[1], "INFO FOR TABLE emergence_suggestion");
 	assertStringIncludes(statements[1], "SELECT VALUE count() FROM emergence_suggestion");
