@@ -124,7 +124,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 			!selection(context).enabled
 				? selection(context)
 				: !context.canOpenLinkEditor
-				? { enabled: false, reason: "リンクを追加する項目を選択してください。" }
+				? { enabled: false, reason: "意味関係を追加する項目を選択してください。" }
 				: { enabled: true },
 	},
 	{
