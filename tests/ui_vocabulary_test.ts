@@ -94,7 +94,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 	assertEquals(DEFAULT_UI_VOCABULARY, {
 		work: "項目",
 		occurrence: "配置",
-		semanticLink: "リンク",
+		semanticLink: "意味関係",
 		workingCopy: "作業中の本文",
 		revision: "版",
 		branch: "別稿",
@@ -114,7 +114,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		pane: "ペイン",
 		query: "Query",
 		commandPalette: "コマンドパレット",
-		advancedLinkEditor: "高度なリンク編集",
+		advancedLinkEditor: "高度な意味関係編集",
 		linkSource: "起点",
 		linkType: "種別",
 		linkTarget: "終点",
@@ -145,7 +145,7 @@ Deno.test("default UI vocabulary covers every semantic entity code with neutral 
 		duplicateReason: "根拠",
 		duplicateScore: "スコア",
 		duplicateCandidateHint:
-			"項目のタイトル・検索別名・タグ・リンクの一致を根拠に、操作を選べます。候補が自動採用されることはありません。",
+			"項目のタイトル・検索別名・タグ・意味関係の一致を根拠に、操作を選べます。候補が自動採用されることはありません。",
 		duplicateCandidateActions: "重複候補の操作",
 		duplicateMerge: "統合する",
 		duplicateKeepLeft: "左の項目を残す",
