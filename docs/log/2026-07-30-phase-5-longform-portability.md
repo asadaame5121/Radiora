@@ -55,10 +55,17 @@ storage schemaとbackup schemaの正準versionは引き続き`6`である。JSON
 
 ## 既知の制約
 
-- 現行のMarkdown exportはOutline全体を対象とし、原稿ビューで組み立てた範囲だけを
+- 現行のMarkdown exportはOutline全体を対象とし、原稿投影で組み立てた範囲だけを
   一つの原稿として出力する導線はまだない
 - portable MarkdownはRadiora内部IDを保持しない。Obsidian形式も、解決済みで表示名が得られる
   参照だけをWikiリンクへ変換する
 - OPMLは階層と本文の交換形式であり、既存Workとの同一性照合やRevision、意味リンクの復元は行わない
 - JSON backup restoreは将来versionのbackupをdowngradeして復元しない
 - Phase 5 changesは専用bookmarkへpush済みで、`main`への統合は別判断とする
+
+## 後続UI変更に関する注記
+
+この記録の「原稿ビュー」はPhase 5実施時点の専用`ManuscriptView`を指す。後続のUI変更では
+専用ビューを撤去し、長文編集モードを中央ペインへ展開する構成へ移行した。これは当時の
+原稿投影、Branch追従編集、固定Revisionの読み取り専用という実装・検証記録を変更するもの
+ではなく、現行UIでの到達経路に関する更新である。

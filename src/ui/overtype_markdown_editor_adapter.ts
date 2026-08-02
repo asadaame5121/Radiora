@@ -162,6 +162,7 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 			this.#listen(this.textarea, type, notifySelection);
 		}
 		this.#listen(this.textarea, "focus", () => this.#options.onFocus?.(this.textarea));
+		this.#listen(this.textarea, "blur", () => this.#options.onBlur?.(this.textarea));
 		this.#listen(this.#options.host, "click", (event) => {
 			const destination = internalReferenceDestination(event);
 			if (!destination) return;
@@ -228,6 +229,7 @@ export class TextareaMarkdownEditorAdapter implements MarkdownEditorAdapter {
 			this.#listen(type, () => options.onSelectionChange?.(this.textarea));
 		}
 		this.#listen("focus", () => options.onFocus?.(this.textarea));
+		this.#listen("blur", () => options.onBlur?.(this.textarea));
 	}
 
 	getValue(): string {
