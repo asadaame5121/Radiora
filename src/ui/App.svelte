@@ -87,6 +87,7 @@
 		findInlineLinkTrigger,
 		replaceInlineLinkTrigger,
 	} from "../services/inline_link";
+	import { canonicalInternalReferenceMarkdown } from "../services/internal_reference";
 	import { parseMarkdownCandidates } from "../services/markdown_parser";
 	import type {
 		InternalReferenceBacklink,
@@ -159,6 +160,8 @@
 		selectedCandidate?: InternalReferenceCompletion;
 		selectedType?: LinkType;
 		direction: InlineLinkDirection;
+		searching: boolean;
+		creating: boolean;
 	};
 	type TagCloudEntry = {
 		name: string;
@@ -704,19 +707,21 @@
 			if (completion.phase === "candidate") {
 				if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 					event.preventDefault();
-					const count = completion.candidates.length;
+					const count = inlineLinkCandidateCount(completion);
 					if (count) {
 						completion.activeIndex =
 							(completion.activeIndex + (event.key === "ArrowDown" ? 1 : -1) + count) % count;
 					}
 					return;
 				}
-				if ((event.key === "Enter" || event.key === "Tab") && completion.candidates.length) {
+				if (event.key === "Enter" && event.shiftKey && completion.query.trim() && !completion.searching) {
 					event.preventDefault();
-					selectInlineLinkCandidate(
-						row.item.id,
-						completion.candidates[completion.activeIndex],
-					);
+					void createInlineLinkTarget(row.item.id);
+					return;
+				}
+				if ((event.key === "Enter" || event.key === "Tab") && inlineLinkCandidateCount(completion)) {
+					event.preventDefault();
+					selectInlineLinkActiveEntry(row.item.id);
 					return;
 				}
 			} else if (completion.phase === "type") {
@@ -900,22 +905,153 @@
 			return;
 		}
 		const request = ++inlineLinkCompletionRequest;
+		inlineLinkCompletion = {
+			itemId,
+			query: trigger.query,
+			range: trigger.range,
+			candidates: [],
+			activeIndex: 0,
+			phase: "candidate",
+			direction: "forward",
+			searching: true,
+			creating: false,
+		};
 		try {
 			const candidates = (await api.listInternalReferenceCompletions(trigger.query, 16))
 				.filter((candidate) => candidate.scope === "work")
 				.filter((candidate) => snapshot.items.find((item) => item.id === itemId)?.workId !== candidate.workId);
 			if (request !== inlineLinkCompletionRequest) return;
-			inlineLinkCompletion = {
-				itemId,
-				query: trigger.query,
-				range: trigger.range,
-				candidates,
-				activeIndex: 0,
-				phase: "candidate",
-				direction: "forward",
-			};
+			const current = inlineLinkCompletion;
+			if (!current || current.itemId !== itemId || current.phase !== "candidate") return;
+			inlineLinkCompletion = { ...current, candidates, searching: false };
 		} catch (cause) {
 			if (request === inlineLinkCompletionRequest) error = errorMessage(cause);
+		}
+	}
+
+	function inlineLinkCandidateCount(state: InlineLinkCompletionState): number {
+		return state.candidates.length + (state.query.trim() && !state.searching ? 1 : 0);
+	}
+
+	function selectInlineLinkActiveEntry(itemId: string): void {
+		const state = inlineLinkCompletion;
+		if (!state || state.itemId !== itemId || state.phase !== "candidate") return;
+		const candidate = state.candidates[state.activeIndex];
+		if (candidate) {
+			selectInlineLinkCandidate(itemId, candidate);
+			return;
+		}
+		if (state.activeIndex === state.candidates.length && state.query.trim() && !state.searching) {
+			void createInlineLinkTarget(itemId);
+		}
+	}
+
+	function handleInlineLinkOmniKeydown(event: KeyboardEvent, itemId: string): void {
+		if (event.isComposing) return;
+		const state = inlineLinkCompletion;
+		if (!state || state.itemId !== itemId) return;
+		if (event.key === "Escape") {
+			event.preventDefault();
+			inlineLinkCompletionRequest++;
+			inlineLinkCompletion = null;
+			return;
+		}
+		if (state.phase === "candidate" && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+			event.preventDefault();
+			const count = inlineLinkCandidateCount(state);
+			if (count) {
+				state.activeIndex =
+					(state.activeIndex + (event.key === "ArrowDown" ? 1 : -1) + count) % count;
+			}
+			return;
+		}
+		if (state.phase === "candidate" && event.key === "Enter" && event.shiftKey &&
+			state.query.trim() && !state.searching) {
+			event.preventDefault();
+			void createInlineLinkTarget(itemId);
+			return;
+		}
+		if (state.phase === "type" && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+			event.preventDefault();
+			const current = state.selectedType ? LINK_TYPES.indexOf(state.selectedType) : 0;
+			state.selectedType = LINK_TYPES[
+				(current + (event.key === "ArrowDown" ? 1 : -1) + LINK_TYPES.length) % LINK_TYPES.length
+			];
+			return;
+		}
+		if (state.phase === "direction" &&
+			(event.key === "ArrowLeft" || event.key === "ArrowRight" ||
+				event.key === "ArrowUp" || event.key === "ArrowDown")) {
+			event.preventDefault();
+			state.direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? "reverse" : "forward";
+			return;
+		}
+		if (event.key !== "Enter" && event.key !== "Tab") return;
+		event.preventDefault();
+		if (state.phase === "candidate") selectInlineLinkActiveEntry(itemId);
+		else if (state.phase === "type") chooseInlineLinkType(itemId);
+		else void commitInlineLink(itemId);
+	}
+
+	async function updateInlineLinkSearch(itemId: string, query: string): Promise<void> {
+		const state = inlineLinkCompletion;
+		if (!state || state.itemId !== itemId || state.phase !== "candidate") return;
+		const request = ++inlineLinkCompletionRequest;
+		inlineLinkCompletion = { ...state, query, candidates: [], activeIndex: 0, searching: true };
+		try {
+			const candidates = (await api.listInternalReferenceCompletions(query, 16))
+				.filter((candidate) => candidate.scope === "work")
+				.filter((candidate) => snapshot.items.find((item) => item.id === itemId)?.workId !== candidate.workId);
+			if (request !== inlineLinkCompletionRequest) return;
+			const current = inlineLinkCompletion;
+			if (!current || current.itemId !== itemId || current.phase !== "candidate") return;
+			inlineLinkCompletion = { ...current, query, candidates, activeIndex: 0, searching: false };
+		} catch (cause) {
+			if (request === inlineLinkCompletionRequest) {
+				inlineLinkCompletion = { ...inlineLinkCompletion!, searching: false };
+				error = errorMessage(cause);
+			}
+		}
+	}
+
+	function inlineLinkCandidateFromCreated(work: UnplacedWork): InternalReferenceCompletion {
+		const displayName = work.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ??
+			`(空の${vocabulary.work})`;
+		return {
+			scope: "work",
+			id: work.workId,
+			workId: work.workId,
+			displayName,
+			scopeLabel: "未配置",
+			shortId: work.workId.slice(0, 8),
+			canonicalMarkdown: canonicalInternalReferenceMarkdown(displayName, "work", work.workId),
+		};
+	}
+
+	async function createInlineLinkTarget(itemId: string): Promise<void> {
+		const state = inlineLinkCompletion;
+		const query = state?.query.trim() ?? "";
+		if (!state || state.itemId !== itemId || state.phase !== "candidate" || !query || state.creating) return;
+		const request = ++inlineLinkCompletionRequest;
+		inlineLinkCompletion = { ...state, creating: true };
+		try {
+			const created = await api.quickCapture(query);
+			if (request !== inlineLinkCompletionRequest) return;
+			inlineLinkCompletion = {
+				...inlineLinkCompletion!,
+				phase: "type",
+				selectedCandidate: inlineLinkCandidateFromCreated(created),
+				selectedType: "RELATED",
+				direction: "forward",
+				searching: false,
+				creating: false,
+			};
+			await loadUnplacedWorks();
+		} catch (cause) {
+			if (request === inlineLinkCompletionRequest) {
+				inlineLinkCompletion = { ...inlineLinkCompletion!, creating: false };
+				error = errorMessage(cause);
+			}
 		}
 	}
 
@@ -975,7 +1111,7 @@
 			: null;
 		if (
 			!textarea || !currentTrigger || currentTrigger.range.start !== state.range.start ||
-			currentTrigger.range.end !== state.range.end || currentTrigger.query !== state.query
+			currentTrigger.range.end !== state.range.end
 		) {
 			error = `入力が変更されたため、@${vocabulary.semanticLink}を確定できませんでした。`;
 			inlineLinkCompletionRequest++;
@@ -2707,23 +2843,59 @@
 										<p class="row-body-preview">{rowBody.replace(/\s+/gu, " ").trim()}</p>
 									{/if}
 					{#if inlineLinkCompletion?.itemId === row.item.id}
-						<div class="inline-link-completions" role="listbox" aria-label={`@${vocabulary.semanticLink}候補`}>
+						<div class="inline-link-completions inline-link-omniwindow" role="dialog"
+							aria-label={`@${vocabulary.semanticLink}先を検索`}>
+							<div class="inline-link-omniwindow__search">
+								<span aria-hidden="true">@</span>
+								<input
+									value={inlineLinkCompletion.query}
+									placeholder={`${vocabulary.work}を検索…`}
+									aria-label={`@${vocabulary.semanticLink}先を検索`}
+									readonly={inlineLinkCompletion.phase !== "candidate"}
+									disabled={inlineLinkCompletion.creating}
+									oninput={(event) => void updateInlineLinkSearch(row.item.id, event.currentTarget.value)}
+									onkeydown={(event) => handleInlineLinkOmniKeydown(event, row.item.id)}
+									onmousedown={(event) => event.stopPropagation()}
+								/>
+							</div>
+							<div class="inline-link-omniwindow__body">
 							{#if inlineLinkCompletion.phase === "candidate"}
-								<p class="inline-link-completions__hint">@{vocabulary.semanticLink}先を検索</p>
-								{#each inlineLinkCompletion.candidates as candidate, index (candidate.scope + candidate.id)}
-									<button
-										class:active={index === inlineLinkCompletion.activeIndex}
-										role="option"
-										aria-selected={index === inlineLinkCompletion.activeIndex}
-										onmousedown={(event) => event.preventDefault()}
-										onclick={() => selectInlineLinkCandidate(row.item.id, candidate)}
-									>
-										<strong>{candidate.displayName}</strong>
-										<span>{candidate.scopeLabel} · {candidate.shortId}</span>
-									</button>
-								{:else}
-									<p>一致する候補はありません。</p>
-								{/each}
+								<p class="inline-link-completions__hint" aria-live="polite">
+									{inlineLinkCompletion.searching ? "検索中…" : `@${vocabulary.semanticLink}先を検索`}
+								</p>
+								<div role="listbox" aria-label={`${vocabulary.work}候補`}>
+									{#each inlineLinkCompletion.candidates as candidate, index (candidate.scope + candidate.id)}
+										<button
+											class:active={index === inlineLinkCompletion.activeIndex}
+											role="option"
+											aria-selected={index === inlineLinkCompletion.activeIndex}
+											onmousedown={(event) => event.preventDefault()}
+											onclick={() => selectInlineLinkCandidate(row.item.id, candidate)}
+										>
+											<strong>{candidate.displayName}</strong>
+											<span>{candidate.scopeLabel} · {candidate.shortId}</span>
+										</button>
+									{/each}
+									{#if !inlineLinkCompletion.searching && inlineLinkCompletion.query.trim()}
+										<button
+											class="create-candidate"
+											class:active={inlineLinkCompletion.activeIndex === inlineLinkCompletion.candidates.length}
+											role="option"
+											aria-selected={inlineLinkCompletion.activeIndex === inlineLinkCompletion.candidates.length}
+											disabled={inlineLinkCompletion.creating}
+											onmousedown={(event) => event.preventDefault()}
+											onclick={() => void createInlineLinkTarget(row.item.id)}
+										>
+											<strong>「{inlineLinkCompletion.query.trim()}」を新規作成</strong>
+											<span>未配置箱 · Shift+Enter</span>
+										</button>
+									{/if}
+								</div>
+								{#if !inlineLinkCompletion.searching && !inlineLinkCompletion.candidates.length}
+									<p>一致する{vocabulary.work}はありません。</p>
+								{:else if !inlineLinkCompletion.searching && inlineLinkCompletion.query.trim()}
+									<p class="inline-link-completions__hint">候補から選択するか、Shift+Enterで新規作成できます。</p>
+								{/if}
 							{:else}
 								{#if inlineLinkCompletion.selectedCandidate}
 									<div class="inline-link-completions__target">
@@ -2764,6 +2936,7 @@
 									{/if}
 								{/if}
 							{/if}
+						</div>
 						</div>
 					{/if}
 									{#if internalReferenceCompletion?.itemId === row.item.id}
