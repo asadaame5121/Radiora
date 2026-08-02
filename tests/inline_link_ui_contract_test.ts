@@ -13,6 +13,12 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 	assertMatch(app, /phase: "candidate"/);
 	assertMatch(app, /phase: "type"/);
 	assertMatch(app, /phase: "direction"/);
+	assertMatch(app, /inline-link-omniwindow/);
+	assertMatch(app, /updateInlineLinkSearch/);
+	assertMatch(app, /Shift\+Enterで新規作成できます/);
+	assertMatch(app, /event\.key === "Enter" && event\.shiftKey/);
+	assertMatch(app, /activeIndex === inlineLinkCompletion\.candidates\.length/);
+	assertMatch(app, /api\.quickCapture\(query\)/);
 	assertMatch(app, /isSymmetricLinkType\(state\.selectedType\)/);
 	assertMatch(app, /previewDirection\(/);
 	assertMatch(app, /api\.createLink\(\{ fromId, toId, type/);
@@ -33,15 +39,11 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 	assertMatch(styles, /\.inline-link-direction/);
 });
 
-Deno.test("@ semantic relation search excludes revisions and unresolved auto-creation", async () => {
+Deno.test("@ semantic relation search offers OmniWindow creation for unresolved targets", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	assertMatch(app, /\.filter\(\(candidate\) => candidate\.scope === "work"\)/);
-	assert(
-		!/api\.(createItem|createOccurrence|quickCapture|createStub)\(/.test(
-			app.slice(
-				app.indexOf("async function updateInlineLinkCompletion"),
-				app.indexOf("function selectInlineLinkCandidate"),
-			),
-		),
-	);
+	assertMatch(app, /function createInlineLinkTarget/);
+	assertMatch(app, /api\.quickCapture\(query\)/);
+	assertMatch(app, /scopeLabel: "未配置"/);
+	assert(!/api\.(createItem|createOccurrence|createStub)\(query/.test(app));
 });
