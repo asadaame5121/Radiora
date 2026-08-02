@@ -18,6 +18,7 @@ export interface MarkdownEditorAdapterOptions {
 	): void;
 	onSelectionChange?(textarea: HTMLTextAreaElement): void;
 	onFocus?(textarea: HTMLTextAreaElement): void;
+	onBlur?(textarea: HTMLTextAreaElement): void;
 	onInternalReference?(destination: string): void;
 	onFallback?(cause: unknown): void;
 }

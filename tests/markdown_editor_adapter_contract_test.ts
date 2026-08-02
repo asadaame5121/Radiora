@@ -11,6 +11,7 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 		new URL("../src/ui/MarkdownEditor.svelte", import.meta.url),
 	);
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
 
 	if (/from "overtype"/.test(boundary)) {
 		throw new Error("The host MarkdownEditorAdapter boundary must not expose Overtype types");
@@ -22,13 +23,21 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 	assertMatch(adapter, /#generation/);
 	assertMatch(adapter, /#compositionGuard/);
 	assertMatch(adapter, /compositionend/);
+	assertMatch(adapter, /onBlur/);
+	assertMatch(adapter, /this\.\#options\.onBlur\?\.\(this\.textarea\)/);
 	assertMatch(adapter, /this\.#instance\.linkTooltip\?\.destroy\?\.\(\)/);
 	assertMatch(adapter, /for \(const cleanup of this\.#cleanup\.splice\(0\)\) cleanup\(\)/);
 	assertMatch(adapter, /new TextareaMarkdownEditorAdapter\(options\)/);
 	assertMatch(component, /\$effect\(\(\) =>/);
 	assertMatch(component, /current\.setValue\(next\)/);
 	assertMatch(component, /adapter\?\.destroy\(\)/);
+	assertMatch(component, /let mode = \$state<MarkdownEditorMode>\("preview"\)/);
+	assertMatch(component, /changeMode\("plain"\)/);
+	assertMatch(component, /changeMode\("preview"\)/);
+	assertMatch(component, /adapter\?\.focus\(\)/);
 	assertMatch(app, /compositionGuard \|\| event\.isComposing \|\| event\.keyCode === 229/);
+	assertMatch(styles, /\.markdown-editor-host \.overtype-container \{/);
+	assertMatch(styles, /--preview-text-default: var\(--text\)/);
 });
 
 Deno.test("Markdown editor keeps native replacement, autosave, completion, and resolver paths", async () => {
