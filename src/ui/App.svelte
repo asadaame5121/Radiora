@@ -263,6 +263,7 @@
 	let jsonBackupFileInput: HTMLInputElement;
 	let inspectorWidth = $state(320);
 	let inspectorCollapsed = $state(false);
+	let navCollapsed = $state(false);
 	let internalReferenceCompletionRequest = 0;
 	let inlineLinkCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
@@ -2385,8 +2386,16 @@
 	</dialog>
 {/if}
 
-<div class="shell">
-	<nav class="primary-nav" aria-label="主な画面">
+<div class="shell" class:nav-collapsed={navCollapsed}>
+	<nav class="primary-nav" class:nav-collapsed={navCollapsed} aria-label="主な画面">
+		<button
+			class="nav-collapse-toggle"
+			type="button"
+			aria-label={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
+			aria-expanded={!navCollapsed}
+			title={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
+			onclick={() => (navCollapsed = !navCollapsed)}
+		>{navCollapsed ? "»" : "«"}</button>
 		<div class="brand"><strong>Radiora</strong><span>v2</span></div>
 		<section>
 			<p>作業</p>
@@ -2675,7 +2684,7 @@
 							{@const inlineLinks = inlineSemanticLinksFor(row.item.text)}
 							{@const annotations = semanticLinkAnnotationsFor(row.item.id)}
 							{@const rowBody = bodyFor(row.item)}
-							<div class:selected={selectedId === row.item.id} class:has-body={Boolean(rowBody)} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
+							<div class:selected={selectedId === row.item.id} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
 								aria-selected={selectedId === row.item.id} tabindex="-1"
 								draggable="true" ondragstart={() => draggedId = row.item.id} ondragend={() => draggedId = null}
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
@@ -2694,6 +2703,9 @@
 											handleKeydown(event, row, textarea, compositionGuard)}
 										onInternalReference={openEditorInternalReference}
 									/>
+									{#if rowBody && selectedId !== row.item.id}
+										<p class="row-body-preview">{rowBody.replace(/\s+/gu, " ").trim()}</p>
+									{/if}
 					{#if inlineLinkCompletion?.itemId === row.item.id}
 						<div class="inline-link-completions" role="listbox" aria-label={`@${vocabulary.semanticLink}候補`}>
 							{#if inlineLinkCompletion.phase === "candidate"}
@@ -3372,7 +3384,10 @@
 					</div>
 				{/if}
 			{:else}
-				<div class="aside-empty"><span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p></div>
+				<div class="aside-empty">
+					<button class="inspector-close" type="button" onclick={() => (inspectorCollapsed = true)}>閉じる</button>
+					<span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p>
+				</div>
 			{/if}
 		</aside>
 		{/if}
