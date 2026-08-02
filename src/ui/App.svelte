@@ -614,6 +614,19 @@
 		browsing = browseToOutlineOccurrence(browsing, snapshot, id);
 	}
 
+	function releaseEditorFocus(): void {
+		const active = document.activeElement;
+		if (active instanceof HTMLTextAreaElement && active.dataset.itemId !== undefined) {
+			active.blur();
+		}
+	}
+
+	function deselectFromBlank(event: MouseEvent): void {
+		if (event.button !== 0 || draggedId) return;
+		releaseEditorFocus();
+		selectOccurrence(null);
+	}
+
 	function hoistSelected(): void {
 		if (!selectedId) return;
 		transientExpandedIds = [...new Set([...transientExpandedIds, selectedId])];
@@ -2815,7 +2828,11 @@
 				{:else if snapshot.items.length === 0}
 					<button class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
 				{:else}
-					<div class="rows">
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div class="rows"
+						onmousedown={(event) => {
+							if (event.target === event.currentTarget) deselectFromBlank(event);
+						}}>
 						{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
 							{@const inlineLinks = inlineSemanticLinksFor(row.item.text)}
 							{@const annotations = semanticLinkAnnotationsFor(row.item.id)}
@@ -2823,6 +2840,9 @@
 							<div class:selected={selectedId === row.item.id} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
 								aria-selected={selectedId === row.item.id} tabindex="-1"
 								draggable="true" ondragstart={() => draggedId = row.item.id} ondragend={() => draggedId = null}
+								onmousedown={(event) => {
+									if (event.target === event.currentTarget) deselectFromBlank(event);
+								}}
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
 								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
 								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
