@@ -2,6 +2,9 @@ import { assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("FROM FIX VS Revision and Branch use one read-only comparison pane", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const linkEditor = await Deno.readTextFile(
+		new URL("../src/ui/LinkEditor.svelte", import.meta.url),
+	);
 	const pane = await Deno.readTextFile(
 		new URL("../src/ui/ComparisonPane.svelte", import.meta.url),
 	);
@@ -13,7 +16,7 @@ Deno.test("FROM FIX VS Revision and Branch use one read-only comparison pane", a
 	);
 
 	assertMatch(app, /resolveLinkComparison\(linkId\)/);
-	assertMatch(app, /isComparableLinkType\(link\.type\)/);
+	assertMatch(linkEditor, /isComparableLinkType\(link\.type\)/);
 	assertMatch(app, /listWorkComparisonDocuments/);
 	assertMatch(app, /<ComparisonPane/);
 	assertMatch(revision, /<ComparisonPane/);

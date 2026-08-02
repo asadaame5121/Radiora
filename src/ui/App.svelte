@@ -5,7 +5,7 @@
 	import ComparisonPane from "./ComparisonPane.svelte";
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
-	import AdvancedLinkEditor from "./AdvancedLinkEditor.svelte";
+	import LinkEditor from "./LinkEditor.svelte";
 	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import SparseOutlineView from "./SparseOutlineView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
@@ -55,10 +55,8 @@
 		activeBrowsingPane,
 		ancestorBreadcrumb,
 		browseToOutlineOccurrence,
-		canMoveBrowsingHistory,
 		createBrowsingNavigationState,
 		currentBrowsingLocation,
-		moveBrowsingHistory,
 		openBrowsingPane,
 		projectBrowsingOutline,
 		reconcileBrowsingState,
@@ -97,7 +95,6 @@
 	} from "../services/internal_reference_service";
 	import {
 		comparisonDocumentKey,
-		isComparableLinkType,
 		type LinkComparisonProjection,
 		type WorkComparisonDocuments,
 	} from "../services/comparison_service";
@@ -266,6 +263,7 @@
 	let jsonBackupFileInput: HTMLInputElement;
 	let inspectorWidth = $state(320);
 	let inspectorCollapsed = $state(false);
+	let navCollapsed = $state(false);
 	let internalReferenceCompletionRequest = 0;
 	let inlineLinkCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
@@ -308,6 +306,36 @@
 		browsingLocation.hoistOccurrenceId,
 	));
 	const selectedBreadcrumb = $derived(ancestorBreadcrumb(snapshot, selectedId));
+	const outlineContextBreadcrumbItems = $derived(
+		browsingLocation.hoistOccurrenceId ? browsingProjection.breadcrumb : selectedBreadcrumb,
+	);
+	const outlineContextBreadcrumb = $derived(
+		outlineContextBreadcrumbItems.map(titleFor).join(" › "),
+	);
+	const outlineContextTitle = $derived(
+		browsingLocation.hoistOccurrenceId
+			? titleForId(browsingLocation.hoistOccurrenceId)
+			: "ルート",
+	);
+	const recentEditedItems = $derived.by(() => {
+		const stashedIds = new Set(snapshot.stashItemIds);
+		const seenWorkIds = new Set<string>();
+		return [...snapshot.items]
+			.filter((item) => !stashedIds.has(item.id))
+			.sort((left, right) => {
+				const leftTime = Date.parse(left.updatedAt);
+				const rightTime = Date.parse(right.updatedAt);
+				return (Number.isNaN(rightTime) ? 0 : rightTime) -
+					(Number.isNaN(leftTime) ? 0 : leftTime) ||
+					left.id.localeCompare(right.id);
+			})
+			.filter((item) => {
+				if (seenWorkIds.has(item.workId)) return false;
+				seenWorkIds.add(item.workId);
+				return true;
+			})
+			.slice(0, 6);
+	});
 	const selectedBranchId = $derived(
 		selectedItem?.revisionSelector.mode === "branch"
 			? selectedItem.revisionSelector.branchId
@@ -583,14 +611,6 @@
 		browsing = browseToOutlineOccurrence(browsing, snapshot, id);
 	}
 
-	function goBrowsingHistory(delta: -1 | 1): void {
-		browsing = moveBrowsingHistory(browsing, delta);
-		browsing = reconcileBrowsingState(browsing, snapshot);
-		selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
-		transientExpandedIds = ancestorBreadcrumb(snapshot, selectedId).map((item) => item.id);
-		if (selectedId) requestFocus(selectedId);
-	}
-
 	function hoistSelected(): void {
 		if (!selectedId) return;
 		transientExpandedIds = [...new Set([...transientExpandedIds, selectedId])];
@@ -819,8 +839,12 @@
 		const text = textarea.value;
 		const item = snapshot.items.find((candidate) => candidate.id === id);
 		if (!item) return;
+		const updatedAt = new Date().toISOString();
 		for (const placement of snapshot.items) {
-			if (placement.workId === item.workId) placement.text = text;
+			if (placement.workId === item.workId) {
+				placement.text = text;
+				placement.updatedAt = updatedAt;
+			}
 		}
 		autosave.queue(item.workId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
@@ -1675,6 +1699,11 @@
 		await load(item.id);
 	}
 
+	async function openRecentItem(item: OutlineItem): Promise<void> {
+		viewMode = "outline";
+		await selectItem(item, ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id));
+	}
+
 	async function loadEmergence(id: string): Promise<void> {
 		emergenceLoading = true;
 		try {
@@ -1780,12 +1809,21 @@
 		await load();
 	}
 
-	function otherName(link: OutlineLink): string {
-		const id = link.fromId === selectedItem?.workId ? link.toId : link.fromId;
-		const item = itemByWorkId.get(id);
-		return item ? titleFor(item) : `(空の${vocabulary.work})`;
+	async function reverseLink(link: OutlineLink): Promise<void> {
+		if (isSymmetricLinkType(link.type)) return;
+		await api.deleteLink(link.fromId, link.toId, link.type);
+		await api.createLink({
+			fromId: link.toId,
+			toId: link.fromId,
+			fromEndpoint: link.to,
+			toEndpoint: link.from,
+			type: link.type,
+			status: link.status,
+			origin: link.origin,
+			reason: link.reason,
+		});
+		await load();
 	}
-
 	function splitTagInput(value: string): string[] {
 		return value.split(/[,、\s]+/).map((tag) => tag.trim()).filter(Boolean);
 	}
@@ -1917,7 +1955,7 @@
 				case "addBookmark": await performAddBookmark(); break;
 				case "createLink":
 					if (linkInput) await performAddLink(linkInput);
-					else await openAdvancedLinkEditor();
+					else await openLinkEditor();
 					break;
 				case "runQuery": await performExecuteRule(); break;
 				case "saveQuery": await performSaveRule(); break;
@@ -1979,12 +2017,12 @@
 		await executeCommand(command.id);
 	}
 
-	async function openAdvancedLinkEditor(): Promise<void> {
+	async function openLinkEditor(): Promise<void> {
 		if (!selectedItem) return;
 		asideMode = "relation";
 		await tick();
-		const input = document.querySelector<HTMLTextAreaElement>(
-			".advanced-link-editor textarea",
+		const input = document.querySelector<HTMLInputElement>(
+			".link-editor input[type=search]",
 		);
 		input?.focus();
 	}
@@ -2261,6 +2299,18 @@
 		return Number.isNaN(date.getTime()) ? "不明" : date.toLocaleDateString("ja-JP");
 	}
 
+	function formatRecentEditAt(value: string): string {
+		const date = new Date(value);
+		return Number.isNaN(date.getTime())
+			? "更新日時不明"
+			: date.toLocaleString("ja-JP", {
+				month: "numeric",
+				day: "numeric",
+				hour: "2-digit",
+				minute: "2-digit",
+			});
+	}
+
 	function localDateValue(date: Date): string {
 		const offset = date.getTimezoneOffset() * 60_000;
 		return new Date(date.getTime() - offset).toISOString().slice(0, 10);
@@ -2336,8 +2386,16 @@
 	</dialog>
 {/if}
 
-<div class="shell">
-	<nav class="primary-nav" aria-label="主な画面">
+<div class="shell" class:nav-collapsed={navCollapsed}>
+	<nav class="primary-nav" class:nav-collapsed={navCollapsed} aria-label="主な画面">
+		<button
+			class="nav-collapse-toggle"
+			type="button"
+			aria-label={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
+			aria-expanded={!navCollapsed}
+			title={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
+			onclick={() => (navCollapsed = !navCollapsed)}
+		>{navCollapsed ? "»" : "«"}</button>
 		<div class="brand"><strong>Radiora</strong><span>v2</span></div>
 		<section>
 			<p>作業</p>
@@ -2347,6 +2405,20 @@
 				onclick={openUnplaced}>{vocabulary.unplacedInbox}</button>
 			<button class:active={viewMode === "stubs"} aria-pressed={viewMode === "stubs"}
 				onclick={openStubs}>{vocabulary.stubList}</button>
+		</section>
+		<section class="recent-edits" aria-labelledby="recent-edits-heading">
+			<p id="recent-edits-heading">最近編集した{vocabulary.work}</p>
+			{#each recentEditedItems as item (item.workId)}
+				<button
+					class:active={viewMode === "outline" && selectedId === item.id}
+					onclick={() => void openRecentItem(item)}
+				>
+					<strong>{titleFor(item)}</strong>
+					<small>{item.parentId ? titleForId(item.parentId) : "ルート"} · {formatRecentEditAt(item.updatedAt)}</small>
+				</button>
+			{:else}
+				<span class="nav-empty">編集した{vocabulary.work}はありません</span>
+			{/each}
 		</section>
 		<section>
 			<p>探索</p>
@@ -2485,9 +2557,6 @@
 			{/if}
 				</div>
 			</details>
-			{#if selectedItem}
-				<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆</button>
-			{/if}
 			{#each bookmarks as bookmark}
 				<span class="bookmark-control">
 					<button onclick={() => openBookmark(bookmark.id)}>{vocabulary.bookmark} {bookmark.id.slice(0, 4)}</button>
@@ -2544,35 +2613,6 @@
 		{#if viewMode === "outline"}
 			<section class="outline-panel">
 				<!-- browsing.panes remains an internal extension point; vocabulary.pane is intentionally not rendered. -->
-				<nav class="browsing-navigation" aria-label="閲覧履歴">
-					<div class="history-controls" aria-label="閲覧履歴">
-						<button
-							class="history-button"
-							aria-label={`${vocabulary.browsingHistory}を戻る`}
-							title="前の閲覧位置へ戻る"
-							disabled={!canMoveBrowsingHistory(browsing, -1)}
-							onclick={() => goBrowsingHistory(-1)}
-						>‹ 前の表示</button>
-						<button
-							class="history-button"
-							aria-label={`${vocabulary.browsingHistory}を進む`}
-							title="次の閲覧位置へ進む"
-							disabled={!canMoveBrowsingHistory(browsing, 1)}
-							onclick={() => goBrowsingHistory(1)}
-						>次の表示 ›</button>
-						{#if browsingLocation.hoistOccurrenceId}
-							<button onclick={requestClearHoist} disabled={!commands.clearHoist.enabled} title={commands.clearHoist.reason}>{vocabulary.hoist}を解除</button>
-						{/if}
-					</div>
-					{#if selectedBreadcrumb.length}
-						<div class="breadcrumb" aria-label={vocabulary.breadcrumb}>
-							{#each selectedBreadcrumb as ancestor (ancestor.id)}
-								<button onclick={() => openBreadcrumb(ancestor.id)}>{titleFor(ancestor)}</button>
-								<span aria-hidden="true">›</span>
-							{/each}
-						</div>
-					{/if}
-			</nav>
 				{#if longForm.active}
 					{#if selectedItem}
 						<div class="section-title"><span>Outline · 長文編集</span></div>
@@ -2614,18 +2654,23 @@
 			{:else}
 				<div class="outline-context">
 					<div>
-						<p class="outline-context__breadcrumb">
-							{selectedBreadcrumb.map(titleFor).join(" › ") || "ルート"}
-						</p>
-						<h1>アウトライン</h1>
-						{#if selectedItem}
-							<p class="outline-context__meta">
-								{selectedPlacements.length}件の配置 · 行をそのまま編集できます
-							</p>
+						{#if outlineContextBreadcrumb}
+							<nav class="outline-context__breadcrumb" aria-label={vocabulary.breadcrumb}>
+								{#each outlineContextBreadcrumbItems as ancestor (ancestor.id)}
+									<button onclick={() => openBreadcrumb(ancestor.id)}>{titleFor(ancestor)}</button>
+									<span aria-hidden="true">›</span>
+								{/each}
+							</nav>
 						{/if}
+						<h1>{outlineContextTitle}</h1>
+						<p class="outline-context__meta">
+							{visibleRows.filter((row) => !row.stash).length}件の{vocabulary.work} · 行をそのまま編集できます
+						</p>
 					</div>
 					<div class="section-title outline-actions">
-						<button onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
+						{#if browsingLocation.hoistOccurrenceId}
+							<button onclick={requestClearHoist} disabled={!commands.clearHoist.enabled} title={commands.clearHoist.reason}>{vocabulary.hoist}を解除</button>
+						{/if}
 						<button onclick={createRoot}>＋ ルートに追加</button>
 					</div>
 				</div>
@@ -2638,6 +2683,7 @@
 						{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
 							{@const inlineLinks = inlineSemanticLinksFor(row.item.text)}
 							{@const annotations = semanticLinkAnnotationsFor(row.item.id)}
+							{@const rowBody = bodyFor(row.item)}
 							<div class:selected={selectedId === row.item.id} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
 								aria-selected={selectedId === row.item.id} tabindex="-1"
 								draggable="true" ondragstart={() => draggedId = row.item.id} ondragend={() => draggedId = null}
@@ -2657,6 +2703,9 @@
 											handleKeydown(event, row, textarea, compositionGuard)}
 										onInternalReference={openEditorInternalReference}
 									/>
+									{#if rowBody && selectedId !== row.item.id}
+										<p class="row-body-preview">{rowBody.replace(/\s+/gu, " ").trim()}</p>
+									{/if}
 					{#if inlineLinkCompletion?.itemId === row.item.id}
 						<div class="inline-link-completions" role="listbox" aria-label={`@${vocabulary.semanticLink}候補`}>
 							{#if inlineLinkCompletion.phase === "candidate"}
@@ -3164,7 +3213,14 @@
 					<button class:active={asideMode === "history"} onclick={() => (asideMode = "history")}>履歴</button>
 				</nav>
 				<p class="eyebrow">選択中</p>
-				<div class="inspector-heading"><h2>{titleFor(selectedItem)}</h2><div class="inspector-heading-actions"><button class="clear-selection" onclick={() => selectOccurrence(null)}>選択解除</button><button class="clear-selection" onclick={() => (inspectorCollapsed = true)}>閉じる</button></div></div>
+				<div class="inspector-heading">
+					<h2>{titleFor(selectedItem)}</h2>
+					<div class="inspector-heading-actions">
+						<button class="inspector-action" onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
+						<button class="clear-selection" onclick={() => selectOccurrence(null)}>選択解除</button>
+						<button class="clear-selection" onclick={() => (inspectorCollapsed = true)}>閉じる</button>
+					</div>
+				</div>
 				{#if asideMode === "overview"}
 					<label>
 						{vocabulary.occurrence}固有の見出し
@@ -3205,27 +3261,19 @@
 						<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
 					{/if}
 				{:else if asideMode === "relation"}
-					<AdvancedLinkEditor
+					<LinkEditor
 						selectedWorkId={selectedItem.workId}
 						selectedDisplayName={titleFor(selectedItem)}
+						links={selectedLinks}
+						titleForWork={titleForWorkId}
 						onConfirm={(input) => executeCommand("createLink", undefined, input)}
+						onDelete={removeLink}
+						onReverse={reverseLink}
+						onCompare={(link) => openLinkComparison(link.id)}
 					/>
 					{#if inlineSemanticLinkNotice}
 						<p class="inline-semantic-link-notice" role="status">{inlineSemanticLinkNotice}</p>
 					{/if}
-					<div class="links">
-						{#each selectedLinks as link}
-							<div>
-								<span class={`tag ${link.type.toLowerCase()}`}>{link.type}</span>
-								<span>{link.fromId === selectedItem.workId ? "→" : "←"} {otherName(link)}</span>
-								{#if link.reason}<small class="link-reason">「{link.reason}」</small>{/if}
-								{#if isComparableLinkType(link.type)}
-									<button onclick={() => openLinkComparison(link.id)}>{vocabulary.comparisonPane}</button>
-								{/if}
-								<button aria-label={`${link.type}を削除`} title={`${link.type}を削除`} onclick={() => removeLink(link)}>×</button>
-							</div>
-						{:else}<p class="empty">任意の{vocabulary.semanticLink}はありません</p>{/each}
-					</div>
 					<section class="internal-reference-backlinks">
 						<h3>{vocabulary.backlink}<small>{internalReferenceBacklinks.length}件</small></h3>
 						{#each internalReferenceBacklinks as backlink (JSON.stringify(backlink.source))}
@@ -3336,7 +3384,10 @@
 					</div>
 				{/if}
 			{:else}
-				<div class="aside-empty"><span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p></div>
+				<div class="aside-empty">
+					<button class="inspector-close" type="button" onclick={() => (inspectorCollapsed = true)}>閉じる</button>
+					<span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p>
+				</div>
 			{/if}
 		</aside>
 		{/if}

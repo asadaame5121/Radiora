@@ -16,7 +16,7 @@ const vite = new Deno.Command(npmCommand, {
 try {
 	await waitForVite(uiOrigin);
 	const desktop = new Deno.Command(Deno.execPath(), {
-		args: ["desktop", "-A", "--hmr", "src/main.ts"],
+		args: ["desktop", "-A", "--hmr", ...inspectorArgs(), "src/main.ts"],
 		env: {
 			...sharedEnvironment,
 			RADIORA_HMR_UI_ORIGIN: uiOrigin,
@@ -39,6 +39,23 @@ try {
 		// Vite already exited.
 	}
 	await Deno.remove(bridgeFile).catch(() => undefined);
+}
+
+function inspectorArgs(): string[] {
+	const supported = Deno.args.filter((arg) =>
+		arg === "--inspect" ||
+		arg.startsWith("--inspect=") ||
+		arg === "--inspect-wait" ||
+		arg.startsWith("--inspect-wait=") ||
+		arg === "--inspect-brk" ||
+		arg.startsWith("--inspect-brk=") ||
+		arg.startsWith("--inspect-renderer=")
+	);
+	const unsupported = Deno.args.filter((arg) => !supported.includes(arg));
+	if (unsupported.length > 0) {
+		throw new Error(`Unsupported desktop HMR arguments: ${unsupported.join(" ")}`);
+	}
+	return supported;
 }
 
 async function reserveLoopbackPort(): Promise<number> {
