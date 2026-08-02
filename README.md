@@ -27,6 +27,27 @@ deno task desktop
 `desktop:build` はDeno Desktopが再ビルドを拒否しないよう、前回のWindows bundleとその配下の
 WebView2ランタイムキャッシュを削除してから新しいbundleを生成します。
 
+### DevTools/CDP監査
+
+通常起動とは分離した、CEF rendererとDeno runtimeのDevTools接続用起動は次で行います。
+
+```powershell
+deno task desktop:inspect
+```
+
+別のPowerShellから監査レポートを取得できます。監査CLIは既定で`127.0.0.1:9230`へ接続し、
+Rendererの概要、Console、例外、失敗したNetwork要求をJSONで出力します。
+
+```powershell
+deno task desktop:audit
+deno task desktop:audit --expression "({ title: document.title, buttons: document.querySelectorAll('button').length })"
+deno task desktop:audit --screenshot output/devtools/radiora.png
+deno task desktop:audit --target deno --strict
+```
+
+`--strict`を付けると、Console error、未処理例外、失敗Network要求がある場合に終了コード2になります。
+DevTools inspectorはローカルホストだけへ公開し、通常の`desktop`／`desktop:run`には有効化しません。
+
 ### UIの目視確認
 
 Desktop Backendを起動せず、固定の高密度グラフでOutlineとTreeを確認する場合は次を実行します。

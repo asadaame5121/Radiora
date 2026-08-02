@@ -65,8 +65,8 @@ Deno.test("branch rewrite and link commands remain keyboard-first and confirmati
 	assert(app.includes("rewriteBranchNameInput?.focus()"));
 	assert(app.includes('event.key === "Enter" && rewriteBranchName.trim()'));
 	assert(app.includes('case "createLink":'));
-	assert(app.includes("else await openAdvancedLinkEditor()"));
-	assert(app.includes('".advanced-link-editor textarea"'));
+	assert(app.includes("else await openLinkEditor()"));
+	assert(app.includes('".link-editor input[type=search]"'));
 	assert(app.includes("input?.focus()"));
 	assert(bindings.includes("rewriteAsNewBranch("));
 	assert(

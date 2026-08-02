@@ -14,7 +14,7 @@ Deno.test("desktop HMR routes the renderer through Vite while preserving the des
 	assertEquals(config.tasks["desktop:hmr"], "deno run -A scripts/desktop_hmr.ts");
 	assertMatch(launcher, /npm(?:\.cmd)?/);
 	assertMatch(launcher, /"dev:web"/);
-	assertMatch(launcher, /"desktop", "-A", "--hmr", "src\/main\.ts"/);
+	assertMatch(launcher, /"desktop", "-A", "--hmr", \.\.\.inspectorArgs\(\), "src\/main\.ts"/);
 	assert(launcher.includes("RADIORA_HMR_UI_ORIGIN"));
 	assert(launcher.includes("RADIORA_HMR_BRIDGE_FILE"));
 	assert(viteConfig.includes("desktopHmrProxyPlugin()"));

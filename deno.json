@@ -39,6 +39,8 @@
 		"desktop:run:surreal": "deno task desktop:run",
 		"desktop:run:json": "deno run -A scripts/desktop_run.ts --json",
 		"desktop:run:surreal-diagnostic": "deno run -A scripts/desktop_run.ts --surreal-diagnostic",
-		"desktop:hmr": "deno run -A scripts/desktop_hmr.ts"
+		"desktop:hmr": "deno run -A scripts/desktop_hmr.ts",
+		"desktop:inspect": "deno run -A scripts/desktop_hmr.ts --inspect=127.0.0.1:9230",
+		"desktop:audit": "deno run -A scripts/desktop_cdp_audit.ts"
 	}
 }

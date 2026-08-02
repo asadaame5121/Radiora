@@ -1,16 +1,17 @@
 import { assert, assertFalse } from "jsr:@std/assert@1";
 
-Deno.test("App exposes hoist, breadcrumb, history, and independent pane controls through vocabulary", async () => {
+Deno.test("App exposes browsing scope, breadcrumb, and recent-edit navigation", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 
 	assert(app.includes("createBrowsingNavigationState"));
 	assert(app.includes("projectBrowsingOutline"));
 	assert(app.includes("vocabulary.hoist"));
 	assert(app.includes("vocabulary.breadcrumb"));
-	assert(app.includes("vocabulary.browsingHistory"));
-	assert(app.includes("vocabulary.pane"));
-	assert(app.includes("goBrowsingHistory(-1)"));
-	assert(app.includes("goBrowsingHistory(1)"));
+	assert(app.includes("recentEditedItems"));
+	assert(app.includes("openRecentItem"));
+	assert(app.includes("outlineContextTitle"));
+	assertFalse(app.includes("goBrowsingHistory(-1)"));
+	assertFalse(app.includes("goBrowsingHistory(1)"));
 	assert(app.includes("openBrowsingPane"));
 	assert(app.includes("activateBrowsingPane"));
 });
