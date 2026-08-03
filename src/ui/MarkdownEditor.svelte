@@ -28,7 +28,7 @@
 
 	let host: HTMLDivElement;
 	let adapter = $state<MarkdownEditorAdapter | null>(null);
-	let mode = $state<MarkdownEditorMode>("normal");
+	let mode = $state<MarkdownEditorMode>("preview");
 	let fallback = $state(false);
 	const vocabulary = useUiVocabulary();
 
@@ -44,11 +44,15 @@
 			onChange,
 			onKeydown,
 			onSelectionChange,
-			onFocus,
+			onFocus: handleFocus,
+			onBlur: handleBlur,
 			onInternalReference,
 			onFallback: () => fallback = true,
 		});
 		adapter.setMode(mode);
+		const onHostClick = (event: MouseEvent) => focusEditor(event);
+		host.addEventListener("click", onHostClick);
+		return () => host.removeEventListener("click", onHostClick);
 	});
 
 	$effect(() => {
@@ -58,8 +62,25 @@
 	});
 
 	function changeMode(next: MarkdownEditorMode): void {
+		if (mode === next) return;
 		mode = next;
 		adapter?.setMode(next);
+	}
+
+	function handleFocus(textarea: HTMLTextAreaElement): void {
+		changeMode("plain");
+		onFocus?.(textarea);
+	}
+
+	function handleBlur(_textarea: HTMLTextAreaElement): void {
+		changeMode("preview");
+	}
+
+	function focusEditor(event: MouseEvent): void {
+		const target = event.target;
+		if (target instanceof Element && target.closest("a, button, select, option")) return;
+		changeMode("plain");
+		adapter?.focus();
 	}
 
 	onDestroy(() => {
