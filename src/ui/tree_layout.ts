@@ -128,9 +128,10 @@ export function calculateLineageProjection(snapshot: OutlineSnapshot): LineagePr
 			!visibleWorkIds.has(link.fromId) ||
 			!visibleWorkIds.has(link.toId)
 		) continue;
-		// FROM is stored Child -> Parent. Lineage reads Parent -> Child.
-		children.get(link.toId)?.add(link.fromId);
-		parents.get(link.fromId)?.add(link.toId);
+		// Lineage levels follow the asserted FROM direction so every visible
+		// source starts at G0 and each reachable target advances one generation.
+		children.get(link.fromId)?.add(link.toId);
+		parents.get(link.toId)?.add(link.fromId);
 	}
 
 	const knotWorkIds = findCyclicWorkIds(workIds, children);

@@ -10,15 +10,25 @@
 		type TreeLayoutNode,
 		type TreeProjection,
 	} from "./tree_layout";
+	import {
+		loadTreeProjectionPreference,
+		saveTreeProjectionPreference,
+	} from "./tree_projection_preference";
 
 	let {
 		snapshot,
 		selectedId = null,
 		onSelect,
+		onOpen,
+		onContextMenu,
+		onProjectionChange,
 	}: {
 		snapshot: OutlineSnapshot;
 		selectedId?: string | null;
-		onSelect: (id: string) => void;
+		onSelect: (id: string | null) => void;
+		onOpen: (id: string) => void;
+		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
+		onProjectionChange?: (projection: TreeProjection) => void;
 	} = $props();
 
 	let svgElement: SVGSVGElement;
@@ -133,12 +143,14 @@
 	});
 
 	onMount(() => {
+		projection = loadTreeProjectionPreference();
 		const resizeObserver = new ResizeObserver(([entry]) => {
 			if (!entry) return;
 			width = entry.contentRect.width;
 			height = entry.contentRect.height;
 		});
 		if (svgElement.parentElement) resizeObserver.observe(svgElement.parentElement);
+		svgElement.addEventListener("click", handleCanvasClick);
 
 		zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
 			.scaleExtent([.25, 24])
@@ -148,7 +160,10 @@
 			});
 		d3.select(svgElement).call(zoomBehavior).on("dblclick.zoom", null);
 
-		return () => resizeObserver.disconnect();
+		return () => {
+			resizeObserver.disconnect();
+			svgElement.removeEventListener("click", handleCanvasClick);
+		};
 	});
 
 	function nodeY(node: TreeLayoutNode): number {
@@ -230,7 +245,26 @@
 		onSelect(node.id);
 	}
 
+	function handleCanvasClick(event: MouseEvent): void {
+		const target = event.target;
+		if (target instanceof Element && target.closest(".tree-node")) return;
+		hoveredId = null;
+		onSelect(null);
+		svgElement.focus({ preventScroll: true });
+	}
+
+	function handleNodeDoubleClick(event: MouseEvent, node: TreeLayoutNode): void {
+		event.stopPropagation();
+		if (node.aggregate) return;
+		onOpen(node.id);
+	}
+
 	function handleNodeKeydown(event: KeyboardEvent, node: TreeLayoutNode): void {
+		if (!node.aggregate && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) {
+			event.preventDefault();
+			onContextMenu(node.id, event);
+			return;
+		}
 		if (event.key !== "Enter" && event.key !== " ") return;
 		event.preventDefault();
 		handleNodeClick(node);
@@ -264,6 +298,8 @@
 	function selectProjection(next: TreeProjection): void {
 		if (projection === next) return;
 		projection = next;
+		saveTreeProjectionPreference(next);
+		onProjectionChange?.(next);
 		fitView();
 	}
 
@@ -315,7 +351,12 @@
 		</div>
 	{/if}
 
-	<svg bind:this={svgElement} aria-label="思索の系統樹">
+	<svg
+		bind:this={svgElement}
+		role="group"
+		aria-label="思索の系統樹"
+		tabindex="-1"
+	>
 		<g class="time-grid" aria-hidden="true">
 			{#each axisMarks as mark (mark.key)}
 				<line
@@ -362,6 +403,12 @@
 						onfocus={() => (hoveredId = node.aggregate ? null : node.id)}
 						onblur={() => (hoveredId = null)}
 						onclick={() => handleNodeClick(node)}
+						ondblclick={(event) => handleNodeDoubleClick(event, node)}
+						oncontextmenu={(event) => {
+							if (node.aggregate) return;
+							event.preventDefault();
+							onContextMenu(node.id, event);
+						}}
 						onkeydown={(event) => handleNodeKeydown(event, node)}
 					>
 						<title>{nodeTitle(node)}</title>
