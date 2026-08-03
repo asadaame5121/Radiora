@@ -10,6 +10,10 @@
 		type TreeLayoutNode,
 		type TreeProjection,
 	} from "./tree_layout";
+	import {
+		loadTreeProjectionPreference,
+		saveTreeProjectionPreference,
+	} from "./tree_projection_preference";
 
 	let {
 		snapshot,
@@ -133,6 +137,7 @@
 	});
 
 	onMount(() => {
+		projection = loadTreeProjectionPreference();
 		const resizeObserver = new ResizeObserver(([entry]) => {
 			if (!entry) return;
 			width = entry.contentRect.width;
@@ -264,6 +269,7 @@
 	function selectProjection(next: TreeProjection): void {
 		if (projection === next) return;
 		projection = next;
+		saveTreeProjectionPreference(next);
 		fitView();
 	}
 
@@ -315,7 +321,12 @@
 		</div>
 	{/if}
 
-	<svg bind:this={svgElement} aria-label="思索の系統樹">
+	<svg
+		bind:this={svgElement}
+		role="group"
+		aria-label="思索の系統樹"
+		tabindex="-1"
+	>
 		<g class="time-grid" aria-hidden="true">
 			{#each axisMarks as mark (mark.key)}
 				<line
