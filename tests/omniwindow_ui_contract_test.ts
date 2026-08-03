@@ -37,12 +37,16 @@ Deno.test("shell keeps global navigation, contextual inspector, and dedicated fu
 });
 
 Deno.test("left and right sidebars are collapsible", () => {
-	assertMatch(app, /let navCollapsed = \$state\(false\)/);
+	assertMatch(app, /let navCollapsed = \$state\(initialUiLayoutPreference\.navCollapsed\)/);
 	assertMatch(app, /class="shell" class:nav-collapsed=\{navCollapsed\}/);
 	assertMatch(app, /class="primary-nav" class:nav-collapsed=\{navCollapsed\}/);
 	assertMatch(app, /nav-collapse-toggle/);
 	assertMatch(app, /aria-expanded=\{!navCollapsed\}/);
-	assertMatch(app, /onclick=\{\(\) => \(navCollapsed = !navCollapsed\)\}/);
+	assertMatch(app, /onclick=\{toggleNavigation\}/);
+	assertMatch(
+		app,
+		/saveUiLayoutPreference\(\{ navCollapsed, inspectorCollapsed, inspectorWidth \}\)/,
+	);
 	assertMatch(styles, /\.shell\.nav-collapsed \{\s*grid-template-columns: 42px minmax\(0, 1fr\);/);
 	assertMatch(
 		styles,
