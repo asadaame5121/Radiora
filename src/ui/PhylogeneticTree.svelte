@@ -19,16 +19,10 @@
 		snapshot,
 		selectedId = null,
 		onSelect,
-		onOpen,
-		onContextMenu,
-		onProjectionChange,
 	}: {
 		snapshot: OutlineSnapshot;
 		selectedId?: string | null;
-		onSelect: (id: string | null) => void;
-		onOpen: (id: string) => void;
-		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
-		onProjectionChange?: (projection: TreeProjection) => void;
+		onSelect: (id: string) => void;
 	} = $props();
 
 	let svgElement: SVGSVGElement;
@@ -150,7 +144,6 @@
 			height = entry.contentRect.height;
 		});
 		if (svgElement.parentElement) resizeObserver.observe(svgElement.parentElement);
-		svgElement.addEventListener("click", handleCanvasClick);
 
 		zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
 			.scaleExtent([.25, 24])
@@ -160,10 +153,7 @@
 			});
 		d3.select(svgElement).call(zoomBehavior).on("dblclick.zoom", null);
 
-		return () => {
-			resizeObserver.disconnect();
-			svgElement.removeEventListener("click", handleCanvasClick);
-		};
+		return () => resizeObserver.disconnect();
 	});
 
 	function nodeY(node: TreeLayoutNode): number {
@@ -245,26 +235,7 @@
 		onSelect(node.id);
 	}
 
-	function handleCanvasClick(event: MouseEvent): void {
-		const target = event.target;
-		if (target instanceof Element && target.closest(".tree-node")) return;
-		hoveredId = null;
-		onSelect(null);
-		svgElement.focus({ preventScroll: true });
-	}
-
-	function handleNodeDoubleClick(event: MouseEvent, node: TreeLayoutNode): void {
-		event.stopPropagation();
-		if (node.aggregate) return;
-		onOpen(node.id);
-	}
-
 	function handleNodeKeydown(event: KeyboardEvent, node: TreeLayoutNode): void {
-		if (!node.aggregate && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) {
-			event.preventDefault();
-			onContextMenu(node.id, event);
-			return;
-		}
 		if (event.key !== "Enter" && event.key !== " ") return;
 		event.preventDefault();
 		handleNodeClick(node);
@@ -299,7 +270,6 @@
 		if (projection === next) return;
 		projection = next;
 		saveTreeProjectionPreference(next);
-		onProjectionChange?.(next);
 		fitView();
 	}
 
@@ -403,12 +373,6 @@
 						onfocus={() => (hoveredId = node.aggregate ? null : node.id)}
 						onblur={() => (hoveredId = null)}
 						onclick={() => handleNodeClick(node)}
-						ondblclick={(event) => handleNodeDoubleClick(event, node)}
-						oncontextmenu={(event) => {
-							if (node.aggregate) return;
-							event.preventDefault();
-							onContextMenu(node.id, event);
-						}}
 						onkeydown={(event) => handleNodeKeydown(event, node)}
 					>
 						<title>{nodeTitle(node)}</title>
