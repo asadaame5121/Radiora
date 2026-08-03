@@ -10,7 +10,7 @@
 	}: {
 		projection: GlobalLineageProjection;
 		selectedId?: string | null;
-		onSelect: (id: string) => void;
+		onSelect: (id: string | null) => void;
 	} = $props();
 
 	const vocabulary = useUiVocabulary();

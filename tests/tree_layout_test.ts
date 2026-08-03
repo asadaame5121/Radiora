@@ -140,7 +140,7 @@ Deno.test("FROM draws from parent source to child target", () => {
 	assertEquals(edge?.count, 1);
 });
 
-Deno.test("Lineage generation follows only normalized FROM links and takes the deepest parent", () => {
+Deno.test("Lineage generation anchors asserted FROM sources at G0 and takes the deepest parent", () => {
 	const data = snapshot([
 		item("root-a", "2026-04-01T00:00:00.000Z"),
 		item("root-b", "2026-01-01T00:00:00.000Z"),
@@ -156,10 +156,10 @@ Deno.test("Lineage generation follows only normalized FROM links and takes the d
 	);
 
 	const lineage = calculateLineageProjection(data);
-	assertEquals(lineage.generationByWorkId.get("root-a"), 0);
-	assertEquals(lineage.generationByWorkId.get("root-b"), 0);
+	assertEquals(lineage.generationByWorkId.get("child"), 0);
 	assertEquals(lineage.generationByWorkId.get("middle"), 1);
-	assertEquals(lineage.generationByWorkId.get("child"), 2);
+	assertEquals(lineage.generationByWorkId.get("root-b"), 1);
+	assertEquals(lineage.generationByWorkId.get("root-a"), 2);
 
 	const layout = calculateTreeLayout(data, {
 		width: 600,
@@ -168,7 +168,24 @@ Deno.test("Lineage generation follows only normalized FROM links and takes the d
 		projectX: () => -1,
 		projectGeneration: (generation) => generation * 100,
 	});
-	assertEquals(layout.nodes.find((node) => node.id === "child")?.x, 200);
+	assertEquals(layout.nodes.find((node) => node.id === "child")?.x, 0);
+});
+
+Deno.test("Lineage keeps a source with multiple FROM targets at G0", () => {
+	const data = snapshot([
+		item("improvement", "2026-04-01T00:00:00.000Z"),
+		item("target-a", "2026-03-01T00:00:00.000Z"),
+		item("target-b", "2026-02-01T00:00:00.000Z"),
+	]);
+	data.links.push(
+		link("improvement", "target-a", "FROM"),
+		link("improvement", "target-b", "FROM"),
+	);
+
+	const lineage = calculateLineageProjection(data);
+	assertEquals(lineage.generationByWorkId.get("improvement"), 0);
+	assertEquals(lineage.generationByWorkId.get("target-a"), 1);
+	assertEquals(lineage.generationByWorkId.get("target-b"), 1);
 });
 
 Deno.test("Lineage detects FROM cycles and deterministically isolates them in a Knot band", () => {
