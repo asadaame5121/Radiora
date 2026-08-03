@@ -649,6 +649,14 @@
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
 
+	async function toggleInspector(): Promise<void> {
+		if (inspectorCollapsed) {
+			await revealInspector();
+			return;
+		}
+		inspectorCollapsed = true;
+	}
+
 	function startInspectorResize(event: PointerEvent): void {
 		if (event.button !== 0 || inspectorCollapsed) return;
 		event.preventDefault();
@@ -2712,7 +2720,14 @@
 					<button aria-label={`${vocabulary.bookmark}を削除`} onclick={() => removeBookmark(bookmark.id)}>×</button>
 				</span>
 			{/each}
-			<button class="inspector-jump" onclick={revealInspector}>詳細</button>
+			<button
+				class="inspector-jump"
+				type="button"
+				aria-expanded={!inspectorCollapsed}
+				aria-label={inspectorCollapsed ? "インスペクターペインを開く" : "インスペクターペインを閉じる"}
+				title={inspectorCollapsed ? "インスペクターペインを開く" : "インスペクターペインを閉じる"}
+				onclick={toggleInspector}
+			>詳細</button>
 		</div>
 		{#if workingCopySaveStatus}
 			<div
