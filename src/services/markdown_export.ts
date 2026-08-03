@@ -3,10 +3,112 @@ import type { InternalReferenceResolution } from "./internal_reference_service.t
 import { rewriteCanonicalInternalReferences } from "./markdown_parser.ts";
 
 export type MarkdownExportReferenceMode = "radiora" | "portable" | "obsidian";
+export type MarkdownExportScope = "all" | "selected";
+
+export interface MarkdownExportSelectionOptions {
+	readonly scope: MarkdownExportScope;
+	readonly selectedOccurrenceId: string | null;
+	readonly includeAncestors: boolean;
+	readonly includeDescendants: boolean;
+	readonly includeSemanticNeighbors: boolean;
+}
 
 interface ExportNode {
 	readonly item: OutlineItem;
 	readonly index: number;
+}
+
+/**
+ * Selects the placements that belong to one Markdown export without mutating the snapshot.
+ *
+ * Semantic expansion is deliberately limited to one Work-to-Work hop. Outline expansion
+ * applies only to the selected placement, never to placements added through semantic links.
+ */
+export function selectMarkdownExportSnapshot(
+	snapshot: OutlineSnapshot,
+	options: MarkdownExportSelectionOptions,
+): OutlineSnapshot {
+	if (options.scope === "all") return copySnapshot(snapshot);
+	if (!options.selectedOccurrenceId) {
+		throw new RangeError("選択した配置を基準にするには、項目を選択してください。");
+	}
+
+	const primaryIndexById = new Map<string, number>();
+	for (const [index, item] of snapshot.items.entries()) {
+		if (!primaryIndexById.has(item.id)) primaryIndexById.set(item.id, index);
+	}
+	const selectedIndex = primaryIndexById.get(options.selectedOccurrenceId);
+	if (selectedIndex === undefined) {
+		throw new RangeError("選択した配置が現在のアウトラインにありません。");
+	}
+
+	const includedIndexes = new Set<number>([selectedIndex]);
+	if (options.includeAncestors) {
+		const seen = new Set<number>();
+		let current = selectedIndex;
+		while (!seen.has(current)) {
+			seen.add(current);
+			const parentId = snapshot.items[current].parentId;
+			if (parentId === null) break;
+			const parentIndex = primaryIndexById.get(parentId);
+			if (parentIndex === undefined) break;
+			includedIndexes.add(parentIndex);
+			current = parentIndex;
+		}
+	}
+	if (options.includeDescendants) {
+		const childIndexesByParentId = new Map<string, number[]>();
+		for (const [index, item] of snapshot.items.entries()) {
+			if (item.parentId === null) continue;
+			const children = childIndexesByParentId.get(item.parentId) ?? [];
+			children.push(index);
+			childIndexesByParentId.set(item.parentId, children);
+		}
+		const pending = [selectedIndex];
+		const traversed = new Set<number>();
+		while (pending.length > 0) {
+			const current = pending.pop()!;
+			if (traversed.has(current)) continue;
+			traversed.add(current);
+			for (const childIndex of childIndexesByParentId.get(snapshot.items[current].id) ?? []) {
+				includedIndexes.add(childIndex);
+				pending.push(childIndex);
+			}
+		}
+	}
+	if (options.includeSemanticNeighbors) {
+		const selectedWorkId = snapshot.items[selectedIndex].workId;
+		const neighborWorkIds = new Set<string>();
+		for (const link of snapshot.links) {
+			if (link.status === "retracted") continue;
+			if (link.from.workId === selectedWorkId) neighborWorkIds.add(link.to.workId);
+			if (link.to.workId === selectedWorkId) neighborWorkIds.add(link.from.workId);
+		}
+		for (const [index, item] of snapshot.items.entries()) {
+			if (neighborWorkIds.has(item.workId)) includedIndexes.add(index);
+		}
+	}
+
+	const items = snapshot.items.filter((_, index) => includedIndexes.has(index));
+	const includedIds = new Set(items.map((item) => item.id));
+	const includedWorkIds = new Set(items.map((item) => item.workId));
+	return {
+		items,
+		links: snapshot.links.filter((link) =>
+			includedWorkIds.has(link.from.workId) && includedWorkIds.has(link.to.workId)
+		),
+		knots: snapshot.knots.filter((knot) => knot.cycleIds.some((id) => includedIds.has(id))),
+		stashItemIds: snapshot.stashItemIds.filter((id) => includedIds.has(id)),
+	};
+}
+
+function copySnapshot(snapshot: OutlineSnapshot): OutlineSnapshot {
+	return {
+		items: [...snapshot.items],
+		links: [...snapshot.links],
+		knots: [...snapshot.knots],
+		stashItemIds: [...snapshot.stashItemIds],
+	};
 }
 
 /**

@@ -9,6 +9,8 @@
 	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import SparseOutlineView from "./SparseOutlineView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
+	import ContextMenu from "./ContextMenu.svelte";
+	import type { ContextMenuItem } from "./context_menu";
 	import { createRpcAdapter } from "./rpc_adapter";
 	import type {
 		Bookmark,
@@ -46,10 +48,24 @@
 	} from "../services/working_copy_autosave";
 	import { ResumePositionAutosaveCoordinator } from "../services/resume_position_autosave";
 	import {
-		type MarkdownExportReferenceMode,
 		renderOutlineSnapshotMarkdown,
 		rewriteMarkdownExportReferences,
+		selectMarkdownExportSnapshot,
 	} from "../services/markdown_export";
+	import {
+		loadMarkdownExportPreference,
+		saveMarkdownExportPreference,
+	} from "./markdown_export_preference";
+	import {
+		clampInspectorWidth,
+		loadUiLayoutPreference,
+		saveUiLayoutPreference,
+	} from "./ui_layout_preference";
+	import {
+		loadTreeProjectionPreference,
+		saveTreeProjectionPreference,
+	} from "./tree_projection_preference";
+	import type { TreeProjection } from "./tree_layout";
 	import {
 		activateBrowsingPane,
 		activeBrowsingPane,
@@ -129,7 +145,8 @@
 		| "globalLineage"
 		| "workLineage"
 		| "comparison"
-		| "trash";
+		| "trash"
+		| "options";
 	type AsideMode = "overview" | "relation" | "history" | "query";
 	type PendingConfirmation =
 		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
@@ -166,6 +183,13 @@
 	type TagCloudEntry = {
 		name: string;
 		workIds: readonly string[];
+	};
+	type OccurrenceContextMenuState = {
+		targetId: string;
+		source: "outline" | "tree";
+		x: number;
+		y: number;
+		triggerElement: HTMLElement | SVGElement | null;
 	};
 
 	const vocabulary = useUiVocabulary();
@@ -259,14 +283,17 @@
 	let internalReferenceNotice = $state("");
 	let inlineSemanticLinkNotice = $state("");
 	let markdownExportNotice = $state("");
-	let markdownExportReferenceMode = $state<MarkdownExportReferenceMode>("radiora");
+	let markdownExportPreference = $state(loadMarkdownExportPreference());
 	let opmlNotice = $state("");
 	let jsonBackupNotice = $state("");
-	let opmlFileInput: HTMLInputElement;
-	let jsonBackupFileInput: HTMLInputElement;
-	let inspectorWidth = $state(320);
-	let inspectorCollapsed = $state(false);
-	let navCollapsed = $state(false);
+	let opmlFileInput = $state<HTMLInputElement>();
+	let jsonBackupFileInput = $state<HTMLInputElement>();
+	const initialUiLayoutPreference = loadUiLayoutPreference();
+	let inspectorWidth = $state(initialUiLayoutPreference.inspectorWidth);
+	let inspectorCollapsed = $state(initialUiLayoutPreference.inspectorCollapsed);
+	let navCollapsed = $state(initialUiLayoutPreference.navCollapsed);
+	let occurrenceContextMenu = $state<OccurrenceContextMenuState | null>(null);
+	let treeProjectionPreference = $state<TreeProjection>(loadTreeProjectionPreference());
 	let internalReferenceCompletionRequest = 0;
 	let inlineLinkCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
@@ -302,6 +329,9 @@
 		selectedTag ? tagCloud.find((tag) => tag.name === selectedTag)?.workIds ?? [] : [],
 	);
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
+	const markdownExportSelectionRequired = $derived(
+		markdownExportPreference.scope === "selected" && !selectedItem,
+	);
 	const browsingLocation = $derived(currentBrowsingLocation(browsing));
 	const browsingPane = $derived(activeBrowsingPane(browsing));
 	const browsingProjection = $derived(projectBrowsingOutline(
@@ -376,7 +406,7 @@
 	const omniEntryCount = $derived(searchEntries.length + (quickCaptureText.trim() ? 1 : 0));
 	const dedicatedView = $derived(
 		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison" ||
-			viewMode === "tags",
+			viewMode === "tags" || viewMode === "options",
 	);
 	const viewModeLabel = $derived(
 		viewMode === "outline"
@@ -397,6 +427,8 @@
 			? vocabulary.workLineage
 			: viewMode === "comparison"
 			? `${vocabulary.revision}${vocabulary.comparisonPane}`
+			: viewMode === "options"
+			? "Option"
 			: "ゴミ箱",
 	);
 	const inspectorColumn = $derived(inspectorCollapsed ? "0px" : `${inspectorWidth}px`);
@@ -436,6 +468,47 @@
 		isHoisted: Boolean(browsingLocation.hoistOccurrenceId),
 	});
 	const commands = $derived(commandAvailability(commandContext));
+	const occurrenceContextMenuItems = $derived.by((): readonly ContextMenuItem[] => {
+		const bookmarked = Boolean(
+			selectedId && (bookmarks ?? []).some((bookmark) => bookmark.occurrenceId === selectedId),
+		);
+		return [
+			{ id: "open-outline", label: "アウトラインで開く" },
+			{ id: "zoom", label: `この${vocabulary.occurrence}へZoom` },
+			{
+				id: "long-form",
+				label: "長文編集",
+				disabled: !commands.startLongFormEditing.enabled,
+				reason: commands.startLongFormEditing.reason,
+			},
+			{
+				id: "bookmark",
+				label: bookmarked ? `${vocabulary.bookmark}を解除` : `${vocabulary.bookmark}に追加`,
+				separatorBefore: true,
+				disabled: !bookmarked && !commands.addBookmark.enabled,
+				reason: commands.addBookmark.reason,
+			},
+			{ id: "duplicate", label: `同じ${vocabulary.work}を別の場所へ配置` },
+			{
+				id: "create-link",
+				label: `${vocabulary.semanticLink}を追加`,
+				disabled: !commands.createLink.enabled,
+				reason: commands.createLink.reason,
+			},
+			{
+				id: "create-branch",
+				label: `新しい${vocabulary.branch}を作る`,
+				separatorBefore: true,
+				disabled: !commands.createBranch.enabled,
+				reason: commands.createBranch.reason,
+			},
+			{ id: "work-lineage", label: `${vocabulary.workLineage}を開く` },
+			{ id: "revision-comparison", label: `${vocabulary.revision}${vocabulary.comparisonPane}を開く` },
+			{ id: "export-selected", label: `この${vocabulary.occurrence}を起点にMarkdown書き出し`, separatorBefore: true },
+			{ id: "remove-occurrence", label: `この${vocabulary.occurrence}を外す`, separatorBefore: true, danger: true },
+			{ id: "trash-work", label: `${vocabulary.work}をゴミ箱へ`, danger: true },
+		];
+	});
 	const commandPaletteCommands = $derived(commandPaletteItems(
 		commandPaletteQuery,
 		commandContext,
@@ -627,6 +700,94 @@
 		selectOccurrence(null);
 	}
 
+	function openOccurrenceContextMenu(
+		id: string,
+		source: "outline" | "tree",
+		event: MouseEvent | KeyboardEvent,
+	): void {
+		if (!itemById.has(id)) return;
+		if (source === "outline" && isEditableTarget(event.target)) return;
+		event.preventDefault();
+		selectOccurrence(id);
+		const triggerElement = event.currentTarget instanceof HTMLElement || event.currentTarget instanceof SVGElement
+			? event.currentTarget
+			: null;
+		const rect = triggerElement?.getBoundingClientRect();
+		occurrenceContextMenu = {
+			targetId: id,
+			source,
+			x: event instanceof MouseEvent ? event.clientX : rect?.left ?? 8,
+			y: event instanceof MouseEvent ? event.clientY : rect?.bottom ?? 8,
+			triggerElement,
+		};
+	}
+
+	function handleOccurrenceContextMenuKeydown(
+		id: string,
+		source: "outline" | "tree",
+		event: KeyboardEvent,
+	): void {
+		if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+		openOccurrenceContextMenu(id, source, event);
+	}
+
+	async function executeOccurrenceContextMenuAction(id: string): Promise<void> {
+		const targetId = occurrenceContextMenu?.targetId ?? selectedId;
+		if (!targetId || !itemById.has(targetId)) return;
+		selectOccurrence(targetId);
+		switch (id) {
+			case "open-outline":
+				await openTreeOccurrence(targetId);
+				break;
+			case "zoom":
+				viewMode = "outline";
+				transientExpandedIds = ancestorBreadcrumb(snapshot, targetId).map((item) => item.id);
+				browsing = setBrowsingHoist(browsing, targetId);
+				break;
+			case "long-form":
+				await executeCommand("startLongFormEditing");
+				break;
+			case "bookmark": {
+				const bookmark = (bookmarks ?? []).find((candidate) => candidate.occurrenceId === targetId);
+				if (bookmark) await removeBookmark(bookmark.id);
+				else await executeCommand("addBookmark");
+				break;
+			}
+			case "duplicate":
+				await duplicateSelectedOccurrence();
+				break;
+			case "create-link":
+				await executeCommand("createLink");
+				break;
+			case "create-branch":
+				await executeCommand("createBranch");
+				break;
+			case "work-lineage":
+				viewMode = "workLineage";
+				break;
+			case "revision-comparison":
+				openSelectedRevisionComparison();
+				break;
+			case "export-selected":
+				await performMarkdownExport(targetId);
+				break;
+			case "remove-occurrence":
+				await remove(targetId);
+				break;
+			case "trash-work":
+				await trashSelectedWork();
+				break;
+		}
+	}
+
+	async function openTreeOccurrence(id: string): Promise<void> {
+		if (!itemById.has(id)) return;
+		transientExpandedIds = ancestorBreadcrumb(snapshot, id).map((item) => item.id);
+		viewMode = "outline";
+		selectOccurrence(id);
+		await tick();
+		requestFocus(id);
+	}
 	function hoistSelected(): void {
 		if (!selectedId) return;
 		transientExpandedIds = [...new Set([...transientExpandedIds, selectedId])];
@@ -644,6 +805,7 @@
 
 	async function revealInspector(): Promise<void> {
 		inspectorCollapsed = false;
+		persistUiLayoutPreference();
 		asideMode = "overview";
 		await tick();
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -655,6 +817,36 @@
 			return;
 		}
 		inspectorCollapsed = true;
+		persistUiLayoutPreference();
+	}
+
+	function toggleNavigation(): void {
+		navCollapsed = !navCollapsed;
+		persistUiLayoutPreference();
+	}
+
+	function setNavigationCollapsed(next: boolean): void {
+		navCollapsed = next;
+		persistUiLayoutPreference();
+	}
+
+	function setInspectorCollapsed(next: boolean): void {
+		inspectorCollapsed = next;
+		persistUiLayoutPreference();
+	}
+
+	function setInspectorWidth(next: number): void {
+		inspectorWidth = clampInspectorWidth(next);
+		persistUiLayoutPreference();
+	}
+
+	function persistUiLayoutPreference(): void {
+		saveUiLayoutPreference({ navCollapsed, inspectorCollapsed, inspectorWidth });
+	}
+
+	function setTreeProjectionPreference(next: TreeProjection): void {
+		treeProjectionPreference = next;
+		saveTreeProjectionPreference(next);
 	}
 
 	function startInspectorResize(event: PointerEvent): void {
@@ -662,9 +854,10 @@
 		event.preventDefault();
 		const move = (next: PointerEvent) => {
 			const width = window.innerWidth - next.clientX;
-			inspectorWidth = Math.max(240, Math.min(560, width));
+			inspectorWidth = clampInspectorWidth(width);
 		};
 		const stop = () => {
+			persistUiLayoutPreference();
 			window.removeEventListener("pointermove", move);
 			window.removeEventListener("pointerup", stop);
 		};
@@ -2245,17 +2438,22 @@
 		});
 	}
 
-	async function performMarkdownExport(): Promise<void> {
+	async function performMarkdownExport(selectedOccurrenceId?: string): Promise<void> {
 		markdownExportNotice = "";
 		try {
 			await autosave.flush();
-			const rendered = renderOutlineSnapshotMarkdown(snapshot);
-			const resolutions = markdownExportReferenceMode === "obsidian"
+			const exportSnapshot = selectMarkdownExportSnapshot(snapshot, {
+				...markdownExportPreference,
+				scope: selectedOccurrenceId ? "selected" : markdownExportPreference.scope,
+				selectedOccurrenceId: selectedOccurrenceId ?? selectedId,
+			});
+			const rendered = renderOutlineSnapshotMarkdown(exportSnapshot);
+			const resolutions = markdownExportPreference.referenceMode === "obsidian"
 				? await api.resolveInternalReferences(rendered)
 				: [];
 			const markdown = rewriteMarkdownExportReferences(
 				rendered,
-				markdownExportReferenceMode,
+				markdownExportPreference.referenceMode,
 				resolutions,
 			);
 			const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
@@ -2272,6 +2470,10 @@
 		} catch (cause) {
 			error = `Markdownをエクスポートできませんでした: ${errorMessage(cause)}`;
 		}
+	}
+
+	function persistMarkdownExportPreference(): void {
+		saveMarkdownExportPreference({ ...markdownExportPreference });
 	}
 
 	async function performOpmlExport(): Promise<void> {
@@ -2543,6 +2745,17 @@
 	</dialog>
 {/if}
 
+{#if occurrenceContextMenu}
+	<ContextMenu
+		items={occurrenceContextMenuItems}
+		x={occurrenceContextMenu.x}
+		y={occurrenceContextMenu.y}
+		triggerElement={occurrenceContextMenu.triggerElement}
+		onSelect={(id) => void executeOccurrenceContextMenuAction(id)}
+		onClose={() => (occurrenceContextMenu = null)}
+	/>
+{/if}
+
 <div class="shell" class:nav-collapsed={navCollapsed}>
 	<nav class="primary-nav" class:nav-collapsed={navCollapsed} aria-label="主な画面">
 		<button
@@ -2551,7 +2764,7 @@
 			aria-label={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
 			aria-expanded={!navCollapsed}
 			title={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
-			onclick={() => (navCollapsed = !navCollapsed)}
+			onclick={toggleNavigation}
 		>{navCollapsed ? "»" : "«"}</button>
 		<div class="brand"><strong>Radiora</strong><span>v2</span></div>
 		<section>
@@ -2586,6 +2799,8 @@
 			<p>管理</p>
 			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
 				onclick={openTrash}>ゴミ箱</button>
+			<button class:active={viewMode === "options"} aria-pressed={viewMode === "options"}
+				onclick={() => (viewMode = "options")}>Option</button>
 		</section>
 		<section class="nav-tools">
 			<p>ツール</p>
@@ -2652,68 +2867,14 @@
 			<div class="toolbar-group toolbar-nav" aria-label="ナビゲーション">
 				<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
 			</div>
-			<details class="toolbar-menu">
-				<summary>書き出し／データ</summary>
-				<div class="toolbar-menu__content">
-			<input
-				class="sr-only"
-				type="file"
-				accept=".opml,.xml,text/x-opml,application/xml,text/xml"
-				aria-label={vocabulary.opmlImport}
-				bind:this={opmlFileInput}
-				onchange={importOpmlFile}
-			/>
-			<button
-				onclick={() => opmlFileInput.click()}
-				disabled={startup.phase !== "ready"}
-			>{vocabulary.opmlImport}</button>
-			<button
-				onclick={performOpmlExport}
-				disabled={startup.phase !== "ready"}
-			>{vocabulary.opmlExport}</button>
-			{#if opmlNotice}
-				<small class="opml-notice" role="status">{opmlNotice}</small>
-			{/if}
-			<button
-				onclick={performJsonBackupExport}
-				disabled={startup.phase !== "ready"}
-			>{vocabulary.jsonBackupExport}</button>
-			<input
-				class="sr-only"
-				type="file"
-				accept=".json,application/json"
-				aria-label={vocabulary.jsonBackupRestore}
-				bind:this={jsonBackupFileInput}
-				onchange={restoreJsonBackupFile}
-			/>
-			<button
-				onclick={() => jsonBackupFileInput.click()}
-				disabled={startup.phase !== "ready"}
-			>{vocabulary.jsonBackupRestore}</button>
-			{#if jsonBackupNotice}
-				<small class="json-backup-notice" role="status">{jsonBackupNotice}</small>
-			{/if}
-			<label>
-				<span class="sr-only">{vocabulary.markdownExportMode}</span>
-				<select
-					bind:value={markdownExportReferenceMode}
-					aria-label={vocabulary.markdownExportMode}
-				>
-					<option value="radiora">{vocabulary.markdownExportRadiora}</option>
-					<option value="portable">{vocabulary.markdownExportPortable}</option>
-					<option value="obsidian">{vocabulary.markdownExportObsidian}</option>
-				</select>
-			</label>
 			<button
 				onclick={exportMarkdown}
-				disabled={!commands.exportMarkdown.enabled}
-				title={commands.exportMarkdown.reason}
-			>Markdownでエクスポート</button>
-			{#if markdownExportNotice}
-				<small class="markdown-export-notice" role="status">{markdownExportNotice}</small>
-			{/if}
-				</div>
-			</details>
+				disabled={!commands.exportMarkdown.enabled || markdownExportSelectionRequired}
+				title={markdownExportSelectionRequired
+					? vocabulary.markdownExportSelectionRequired
+					: commands.exportMarkdown.reason}
+			>{vocabulary.markdownExportAction}</button>
+			<button class:active={viewMode === "options"} onclick={() => (viewMode = "options")}>Option</button>
 			{#each bookmarks as bookmark}
 				<span class="bookmark-control">
 					<button onclick={() => openBookmark(bookmark.id)}>{vocabulary.bookmark} {bookmark.id.slice(0, 4)}</button>
@@ -2854,6 +3015,8 @@
 							{@const rowBody = bodyFor(row.item)}
 							<div class:selected={selectedId === row.item.id} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
 								aria-selected={selectedId === row.item.id} tabindex="-1"
+								oncontextmenu={(event) => openOccurrenceContextMenu(row.item.id, "outline", event)}
+								onkeydown={(event) => handleOccurrenceContextMenuKeydown(row.item.id, "outline", event)}
 								draggable="true" ondragstart={() => draggedId = row.item.id} ondragend={() => draggedId = null}
 								onmousedown={(event) => {
 									if (event.target === event.currentTarget) deselectFromBlank(event);
@@ -3031,7 +3194,6 @@
 										</div>
 									{/if}
 								</div>
-								<button class="delete" title={`この${vocabulary.occurrence}を外す`} onclick={() => remove(row.item.id)}>×</button>
 							</div>
 						{/each}
 					</div>
@@ -3327,6 +3489,82 @@
 					{/each}
 				</div>
 			</section>
+		{:else if viewMode === "options"}
+			<section class="options-panel" aria-labelledby="options-title">
+				<header class="options-heading">
+					<p class="eyebrow">APPLICATION</p>
+					<h1 id="options-title">Option</h1>
+					<p>書き出し、データ交換、バックアップ、表示方法を設定します。</p>
+				</header>
+				<div class="options-grid">
+					<section class="option-card" aria-labelledby="option-export-title">
+						<h2 id="option-export-title">書き出し</h2>
+						<label>
+							<span>{vocabulary.markdownExportScope}</span>
+							<select bind:value={markdownExportPreference.scope} onchange={persistMarkdownExportPreference}>
+								<option value="all">{vocabulary.markdownExportAll}</option>
+								<option value="selected">{vocabulary.markdownExportSelected}</option>
+							</select>
+						</label>
+						<label>
+							<span>{vocabulary.markdownExportMode}</span>
+							<select bind:value={markdownExportPreference.referenceMode} onchange={persistMarkdownExportPreference}>
+								<option value="radiora">{vocabulary.markdownExportRadiora}</option>
+								<option value="portable">{vocabulary.markdownExportPortable}</option>
+								<option value="obsidian">{vocabulary.markdownExportObsidian}</option>
+							</select>
+						</label>
+						<div class="option-checks">
+							<label><input type="checkbox" bind:checked={markdownExportPreference.includeAncestors} onchange={persistMarkdownExportPreference} />{vocabulary.markdownExportAncestors}</label>
+							<label><input type="checkbox" bind:checked={markdownExportPreference.includeDescendants} onchange={persistMarkdownExportPreference} />{vocabulary.markdownExportDescendants}</label>
+							<label><input type="checkbox" bind:checked={markdownExportPreference.includeSemanticNeighbors} onchange={persistMarkdownExportPreference} />{vocabulary.markdownExportSemanticNeighbors}</label>
+						</div>
+						<button onclick={exportMarkdown} disabled={!commands.exportMarkdown.enabled || markdownExportSelectionRequired} title={markdownExportSelectionRequired ? vocabulary.markdownExportSelectionRequired : commands.exportMarkdown.reason}>{vocabulary.markdownExportAction}</button>
+						{#if markdownExportNotice}<small class="markdown-export-notice" role="status">{markdownExportNotice}</small>{/if}
+					</section>
+
+					<section class="option-card" aria-labelledby="option-exchange-title">
+						<h2 id="option-exchange-title">データ交換</h2>
+						<p>アウトラインの階層と本文をOPML形式で交換します。</p>
+						<input class="sr-only" type="file" accept=".opml,.xml,text/x-opml,application/xml,text/xml" aria-label={vocabulary.opmlImport} bind:this={opmlFileInput} onchange={importOpmlFile} />
+						<div class="option-actions">
+							<button onclick={() => opmlFileInput?.click()} disabled={startup.phase !== "ready"}>{vocabulary.opmlImport}</button>
+							<button onclick={performOpmlExport} disabled={startup.phase !== "ready"}>{vocabulary.opmlExport}</button>
+						</div>
+						{#if opmlNotice}<small class="opml-notice" role="status">{opmlNotice}</small>{/if}
+					</section>
+
+					<section class="option-card option-card--danger" aria-labelledby="option-backup-title">
+						<h2 id="option-backup-title">バックアップ</h2>
+						<p>完全バックアップはRadioraの全状態を扱います。復元すると現在の状態が置き換わります。</p>
+						<input class="sr-only" type="file" accept=".json,application/json" aria-label={vocabulary.jsonBackupRestore} bind:this={jsonBackupFileInput} onchange={restoreJsonBackupFile} />
+						<div class="option-actions">
+							<button onclick={performJsonBackupExport} disabled={startup.phase !== "ready"}>{vocabulary.jsonBackupExport}</button>
+							<button class="delete" onclick={() => jsonBackupFileInput?.click()} disabled={startup.phase !== "ready"}>{vocabulary.jsonBackupRestore}</button>
+						</div>
+						{#if jsonBackupNotice}<small class="json-backup-notice" role="status">{jsonBackupNotice}</small>{/if}
+					</section>
+
+					<section class="option-card" aria-labelledby="option-display-title">
+						<h2 id="option-display-title">表示</h2>
+						<label>
+							<span>ツリーの表示方式</span>
+							<select value={treeProjectionPreference} onchange={(event) => setTreeProjectionPreference(event.currentTarget.value as TreeProjection)}>
+								<option value="chronology">Chronology</option>
+								<option value="lineage">Lineage</option>
+							</select>
+						</label>
+						<div class="option-checks">
+							<label><input type="checkbox" checked={navCollapsed} onchange={(event) => setNavigationCollapsed(event.currentTarget.checked)} />ナビゲーションを折りたたむ</label>
+							<label><input type="checkbox" checked={inspectorCollapsed} onchange={(event) => setInspectorCollapsed(event.currentTarget.checked)} />インスペクターを閉じる</label>
+						</div>
+						<label>
+							<span>インスペクター幅: {inspectorWidth}px</span>
+							<input type="range" min="240" max="560" step="8" value={inspectorWidth} oninput={(event) => setInspectorWidth(event.currentTarget.valueAsNumber)} />
+						</label>
+					</section>
+				</div>
+			</section>
 		{:else if viewMode === "comparison"}
 			{#if linkComparison}
 				{#key linkComparison.linkId}
@@ -3400,6 +3638,9 @@
 				projection={globalLineage}
 				{selectedId}
 				onSelect={(id) => selectOccurrence(id)}
+				onOpen={(id) => void openTreeOccurrence(id)}
+				onContextMenu={(id, event) => openOccurrenceContextMenu(id, "tree", event)}
+				onProjectionChange={setTreeProjectionPreference}
 			/>
 		{:else}
 			<section class="tree-panel"><p class="empty">{vocabulary.globalLineage}を読み込んでいます…</p></section>
@@ -3426,7 +3667,7 @@
 					<div class="inspector-heading-actions">
 						<button class="inspector-action" onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
 						<button class="clear-selection" onclick={() => selectOccurrence(null)}>選択解除</button>
-						<button class="clear-selection" onclick={() => (inspectorCollapsed = true)}>閉じる</button>
+						<button class="clear-selection" onclick={() => setInspectorCollapsed(true)}>閉じる</button>
 					</div>
 				</div>
 				{#if asideMode === "overview"}
@@ -3454,9 +3695,6 @@
 					</section>
 				<div class="discovery-actions">
 						<button onclick={startLongFormEditing} disabled={!commands.startLongFormEditing.enabled} title={commands.startLongFormEditing.reason}>長文編集</button>
-						<button onclick={duplicateSelectedOccurrence}>同じ{vocabulary.work}をもう一箇所へ配置</button>
-						<button onclick={() => remove(selectedItem.id)}>この{vocabulary.occurrence}を外す</button>
-						<button onclick={trashSelectedWork}>{vocabulary.work}をゴミ箱へ</button>
 					</div>
 					<div class="thought-meta">
 						<div><span class="meta-label">作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
@@ -3533,6 +3771,9 @@
 				{:else if asideMode === "history"}
 					<div class="history-panel">
 						<p class="hint">選択中の{vocabulary.work}に従属する履歴です。</p>
+						<button onclick={() => void executeCommand("createBranch")} disabled={!commands.createBranch.enabled} title={commands.createBranch.reason}>
+							新しい{vocabulary.branch}を作る
+						</button>
 						<button onclick={() => (viewMode = "workLineage")} disabled={!selectedItem}>
 							{vocabulary.workLineage}を開く
 						</button>
@@ -3593,7 +3834,7 @@
 				{/if}
 			{:else}
 				<div class="aside-empty">
-					<button class="inspector-close" type="button" onclick={() => (inspectorCollapsed = true)}>閉じる</button>
+					<button class="inspector-close" type="button" onclick={() => setInspectorCollapsed(true)}>閉じる</button>
 					<span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p>
 				</div>
 			{/if}

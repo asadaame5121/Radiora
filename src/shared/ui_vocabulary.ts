@@ -72,6 +72,16 @@ export type UiEntityCode =
 	| "manuscriptBranchCount"
 	| "manuscriptReadOnly"
 	| "markdownExportMode"
+	| "markdownExportSettings"
+	| "markdownExportScope"
+	| "markdownExportAll"
+	| "markdownExportSelected"
+	| "markdownExportAdvanced"
+	| "markdownExportAncestors"
+	| "markdownExportDescendants"
+	| "markdownExportSemanticNeighbors"
+	| "markdownExportSelectionRequired"
+	| "markdownExportAction"
 	| "markdownExportRadiora"
 	| "markdownExportPortable"
 	| "markdownExportObsidian"
@@ -162,6 +172,16 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	manuscriptBranchCount: "枝の文字数",
 	manuscriptReadOnly: "固定版のため読み取り専用",
 	markdownExportMode: "Markdown参照形式",
+	markdownExportSettings: "Markdown書き出し設定",
+	markdownExportScope: "書き出す範囲",
+	markdownExportAll: "アウトライン全体",
+	markdownExportSelected: "選択した項目を基準",
+	markdownExportAdvanced: "高度な範囲設定",
+	markdownExportAncestors: "同じアウトラインの祖先を含める",
+	markdownExportDescendants: "配下の項目をすべて含める",
+	markdownExportSemanticNeighbors: "直接の意味関係でつながる項目を含める",
+	markdownExportSelectionRequired: "選択した項目を基準にするには、項目を選択してください。",
+	markdownExportAction: "Markdownでエクスポート",
 	markdownExportRadiora: "Radiora（内部参照を保持）",
 	markdownExportPortable: "ポータブル（表示名のみ）",
 	markdownExportObsidian: "Obsidian（Wikiリンク）",

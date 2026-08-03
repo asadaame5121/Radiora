@@ -5,7 +5,7 @@ const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.
 Deno.test("Markdown export flushes edits, renders the active snapshot, and downloads UTF-8 Markdown", () => {
 	assertMatch(
 		app,
-		/async function performMarkdownExport\(\): Promise<void> \{[\s\S]*?await autosave\.flush\(\);[\s\S]*?renderOutlineSnapshotMarkdown\(snapshot\)[\s\S]*?rewriteMarkdownExportReferences\(/,
+		/async function performMarkdownExport\(selectedOccurrenceId\?: string\): Promise<void> \{[\s\S]*?await autosave\.flush\(\);[\s\S]*?selectMarkdownExportSnapshot\(snapshot,[\s\S]*?renderOutlineSnapshotMarkdown\(exportSnapshot\)[\s\S]*?rewriteMarkdownExportReferences\(/,
 	);
 	assertMatch(app, /new Blob\(\[markdown\], \{ type: "text\/markdown;charset=utf-8" \}\)/);
 	assertMatch(app, /anchor\.download = `radiora-\$\{localDateValue\(new Date\(\)\)\}\.md`/);
@@ -19,19 +19,38 @@ Deno.test("Markdown export flushes edits, renders the active snapshot, and downl
 
 Deno.test("Markdown export has a visible command button and success notification", () => {
 	assertMatch(app, /onclick=\{exportMarkdown\}/);
-	assertMatch(app, /disabled=\{!commands\.exportMarkdown\.enabled\}/);
+	assertMatch(
+		app,
+		/disabled=\{!commands\.exportMarkdown\.enabled \|\| markdownExportSelectionRequired\}/,
+	);
 	assertMatch(app, /<small class="markdown-export-notice" role="status">/);
 	assertMatch(app, /Markdownをエクスポートしました。/);
 	assertMatch(app, /Markdownをエクスポートできませんでした/);
 });
 
+Deno.test("Markdown export exposes persisted selected-node scope and independent advanced options", () => {
+	assertMatch(app, /let markdownExportPreference = \$state\(loadMarkdownExportPreference\(\)\)/);
+	assertMatch(app, /bind:value=\{markdownExportPreference\.scope\}/);
+	assertMatch(app, /value="all">\{vocabulary\.markdownExportAll\}/);
+	assertMatch(app, /<option value="selected">\{vocabulary\.markdownExportSelected\}<\/option>/);
+	assertMatch(app, /bind:checked=\{markdownExportPreference\.includeAncestors\}/);
+	assertMatch(app, /bind:checked=\{markdownExportPreference\.includeDescendants\}/);
+	assertMatch(app, /bind:checked=\{markdownExportPreference\.includeSemanticNeighbors\}/);
+	assertMatch(app, /saveMarkdownExportPreference\(\{ \.\.\.markdownExportPreference \}\)/);
+	assertMatch(
+		app,
+		/markdownExportPreference\.scope === "selected" && !selectedItem/,
+	);
+	assertMatch(app, /vocabulary\.markdownExportSelectionRequired/);
+});
+
 Deno.test("Markdown export exposes all reference modes through shared vocabulary", () => {
-	assertMatch(app, /bind:value=\{markdownExportReferenceMode\}/);
+	assertMatch(app, /bind:value=\{markdownExportPreference\.referenceMode\}/);
 	assertMatch(app, /value="radiora">\{vocabulary\.markdownExportRadiora\}/);
 	assertMatch(app, /value="portable">\{vocabulary\.markdownExportPortable\}/);
 	assertMatch(app, /value="obsidian">\{vocabulary\.markdownExportObsidian\}/);
 	assertMatch(
 		app,
-		/markdownExportReferenceMode === "obsidian"[\s\S]*?api\.resolveInternalReferences\(rendered\)/,
+		/markdownExportPreference\.referenceMode === "obsidian"[\s\S]*?api\.resolveInternalReferences\(rendered\)/,
 	);
 });
