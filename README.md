@@ -232,5 +232,4 @@ deno task desktop
 `deno task desktop:run:surreal-diagnostic`を使用します。
 
 P3/P5で検出された親IDが`outline_item:⟨UUID⟩`形式になる不具合は、親側にも
-`record::id(...)`を適用することで修正済みです。詳細は
-`docs/log/2026-07-17-surrealdb-detection-implementation.md`を参照してください。
+`record::id(...)`を適用することで修正済みです。

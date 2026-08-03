@@ -1,8 +1,7 @@
 # Changelog
 
-このファイルは、現行PoCに統合された利用者向けの変化を簡潔に記録する。各Phaseの詳細な
-設計判断、schema移行、検証結果は`docs/log/`を参照する。未統合の専用bookmark上のchangeを
-提供済み機能としては扱わない。
+このファイルは、現行PoCに統合された利用者向けの変化を簡潔に記録する。未統合の専用
+bookmark上のchangeを提供済み機能としては扱わない。
 
 ## Unreleased
 
