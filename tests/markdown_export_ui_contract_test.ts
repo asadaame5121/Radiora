@@ -5,7 +5,7 @@ const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.
 Deno.test("Markdown export flushes edits, renders the active snapshot, and downloads UTF-8 Markdown", () => {
 	assertMatch(
 		app,
-		/async function performMarkdownExport\(\): Promise<void> \{[\s\S]*?await autosave\.flush\(\);[\s\S]*?renderOutlineSnapshotMarkdown\(snapshot\)[\s\S]*?rewriteMarkdownExportReferences\(/,
+		/async function performMarkdownExport\(selectedOccurrenceId\?: string\): Promise<void> \{[\s\S]*?await autosave\.flush\(\);[\s\S]*?selectMarkdownExportSnapshot\(snapshot,[\s\S]*?renderOutlineSnapshotMarkdown\(exportSnapshot\)[\s\S]*?rewriteMarkdownExportReferences\(/,
 	);
 	assertMatch(app, /new Blob\(\[markdown\], \{ type: "text\/markdown;charset=utf-8" \}\)/);
 	assertMatch(app, /anchor\.download = `radiora-\$\{localDateValue\(new Date\(\)\)\}\.md`/);
