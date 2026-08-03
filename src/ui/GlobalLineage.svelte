@@ -7,10 +7,16 @@
 		projection,
 		selectedId = null,
 		onSelect,
+		onOpen,
+		onContextMenu,
+		onProjectionChange,
 	}: {
 		projection: GlobalLineageProjection;
 		selectedId?: string | null;
-		onSelect: (id: string) => void;
+		onSelect: (id: string | null) => void;
+		onOpen: (id: string) => void;
+		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
+		onProjectionChange?: (projection: import("./tree_layout").TreeProjection) => void;
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
@@ -38,6 +44,9 @@
 			snapshot={projection.snapshot}
 			{selectedId}
 			{onSelect}
+			{onOpen}
+			{onContextMenu}
+			{onProjectionChange}
 		/>
 	</div>
 	<aside class="promoted-lineage" aria-label={`${vocabulary.globalLineage}に表示した${vocabulary.branch}`}>

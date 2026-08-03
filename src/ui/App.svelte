@@ -9,6 +9,8 @@
 	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import SparseOutlineView from "./SparseOutlineView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
+	import ContextMenu from "./ContextMenu.svelte";
+	import type { ContextMenuItem } from "./context_menu";
 	import { createRpcAdapter } from "./rpc_adapter";
 	import type {
 		Bookmark,
@@ -49,6 +51,7 @@
 		type MarkdownExportReferenceMode,
 		renderOutlineSnapshotMarkdown,
 		rewriteMarkdownExportReferences,
+		selectMarkdownExportSnapshot,
 	} from "../services/markdown_export";
 	import {
 		activateBrowsingPane,
@@ -167,6 +170,13 @@
 		name: string;
 		workIds: readonly string[];
 	};
+	type OccurrenceContextMenuState = {
+		targetId: string;
+		source: "outline" | "tree";
+		x: number;
+		y: number;
+		triggerElement: HTMLElement | SVGElement | null;
+	};
 
 	const vocabulary = useUiVocabulary();
 	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
@@ -267,6 +277,7 @@
 	let inspectorWidth = $state(320);
 	let inspectorCollapsed = $state(false);
 	let navCollapsed = $state(false);
+	let occurrenceContextMenu = $state<OccurrenceContextMenuState | null>(null);
 	let internalReferenceCompletionRequest = 0;
 	let inlineLinkCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
@@ -436,6 +447,47 @@
 		isHoisted: Boolean(browsingLocation.hoistOccurrenceId),
 	});
 	const commands = $derived(commandAvailability(commandContext));
+	const occurrenceContextMenuItems = $derived.by((): readonly ContextMenuItem[] => {
+		const bookmarked = Boolean(
+			selectedId && (bookmarks ?? []).some((bookmark) => bookmark.occurrenceId === selectedId),
+		);
+		return [
+			{ id: "open-outline", label: "アウトラインで開く" },
+			{ id: "zoom", label: `この${vocabulary.occurrence}へZoom` },
+			{
+				id: "long-form",
+				label: "長文編集",
+				disabled: !commands.startLongFormEditing.enabled,
+				reason: commands.startLongFormEditing.reason,
+			},
+			{
+				id: "bookmark",
+				label: bookmarked ? `${vocabulary.bookmark}を解除` : `${vocabulary.bookmark}に追加`,
+				separatorBefore: true,
+				disabled: !bookmarked && !commands.addBookmark.enabled,
+				reason: commands.addBookmark.reason,
+			},
+			{ id: "duplicate", label: `同じ${vocabulary.work}を別の場所へ配置` },
+			{
+				id: "create-link",
+				label: `${vocabulary.semanticLink}を追加`,
+				disabled: !commands.createLink.enabled,
+				reason: commands.createLink.reason,
+			},
+			{
+				id: "create-branch",
+				label: `新しい${vocabulary.branch}を作る`,
+				separatorBefore: true,
+				disabled: !commands.createBranch.enabled,
+				reason: commands.createBranch.reason,
+			},
+			{ id: "work-lineage", label: `${vocabulary.workLineage}を開く` },
+			{ id: "revision-comparison", label: `${vocabulary.revision}${vocabulary.comparisonPane}を開く` },
+			{ id: "export-selected", label: `この${vocabulary.occurrence}を起点にMarkdown書き出し`, separatorBefore: true },
+			{ id: "remove-occurrence", label: `この${vocabulary.occurrence}を外す`, separatorBefore: true, danger: true },
+			{ id: "trash-work", label: `${vocabulary.work}をゴミ箱へ`, danger: true },
+		];
+	});
 	const commandPaletteCommands = $derived(commandPaletteItems(
 		commandPaletteQuery,
 		commandContext,
@@ -627,6 +679,94 @@
 		selectOccurrence(null);
 	}
 
+	function openOccurrenceContextMenu(
+		id: string,
+		source: "outline" | "tree",
+		event: MouseEvent | KeyboardEvent,
+	): void {
+		if (!itemById.has(id)) return;
+		if (source === "outline" && isEditableTarget(event.target)) return;
+		event.preventDefault();
+		selectOccurrence(id);
+		const triggerElement = event.currentTarget instanceof HTMLElement || event.currentTarget instanceof SVGElement
+			? event.currentTarget
+			: null;
+		const rect = triggerElement?.getBoundingClientRect();
+		occurrenceContextMenu = {
+			targetId: id,
+			source,
+			x: event instanceof MouseEvent ? event.clientX : rect?.left ?? 8,
+			y: event instanceof MouseEvent ? event.clientY : rect?.bottom ?? 8,
+			triggerElement,
+		};
+	}
+
+	function handleOccurrenceContextMenuKeydown(
+		id: string,
+		source: "outline" | "tree",
+		event: KeyboardEvent,
+	): void {
+		if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+		openOccurrenceContextMenu(id, source, event);
+	}
+
+	async function executeOccurrenceContextMenuAction(id: string): Promise<void> {
+		const targetId = occurrenceContextMenu?.targetId ?? selectedId;
+		if (!targetId || !itemById.has(targetId)) return;
+		selectOccurrence(targetId);
+		switch (id) {
+			case "open-outline":
+				await openTreeOccurrence(targetId);
+				break;
+			case "zoom":
+				viewMode = "outline";
+				transientExpandedIds = ancestorBreadcrumb(snapshot, targetId).map((item) => item.id);
+				browsing = setBrowsingHoist(browsing, targetId);
+				break;
+			case "long-form":
+				await executeCommand("startLongFormEditing");
+				break;
+			case "bookmark": {
+				const bookmark = (bookmarks ?? []).find((candidate) => candidate.occurrenceId === targetId);
+				if (bookmark) await removeBookmark(bookmark.id);
+				else await executeCommand("addBookmark");
+				break;
+			}
+			case "duplicate":
+				await duplicateSelectedOccurrence();
+				break;
+			case "create-link":
+				await executeCommand("createLink");
+				break;
+			case "create-branch":
+				await executeCommand("createBranch");
+				break;
+			case "work-lineage":
+				viewMode = "workLineage";
+				break;
+			case "revision-comparison":
+				openSelectedRevisionComparison();
+				break;
+			case "export-selected":
+				await performMarkdownExport(targetId);
+				break;
+			case "remove-occurrence":
+				await remove(targetId);
+				break;
+			case "trash-work":
+				await trashSelectedWork();
+				break;
+		}
+	}
+
+	async function openTreeOccurrence(id: string): Promise<void> {
+		if (!itemById.has(id)) return;
+		transientExpandedIds = ancestorBreadcrumb(snapshot, id).map((item) => item.id);
+		viewMode = "outline";
+		selectOccurrence(id);
+		await tick();
+		requestFocus(id);
+	}
 	function hoistSelected(): void {
 		if (!selectedId) return;
 		transientExpandedIds = [...new Set([...transientExpandedIds, selectedId])];
@@ -2245,11 +2385,20 @@
 		});
 	}
 
-	async function performMarkdownExport(): Promise<void> {
+	async function performMarkdownExport(selectedOccurrenceId?: string): Promise<void> {
 		markdownExportNotice = "";
 		try {
 			await autosave.flush();
-			const rendered = renderOutlineSnapshotMarkdown(snapshot);
+			const exportSnapshot = selectedOccurrenceId
+				? selectMarkdownExportSnapshot(snapshot, {
+					scope: "selected",
+					selectedOccurrenceId,
+					includeAncestors: false,
+					includeDescendants: false,
+					includeSemanticNeighbors: false,
+				})
+				: snapshot;
+			const rendered = renderOutlineSnapshotMarkdown(exportSnapshot);
 			const resolutions = markdownExportReferenceMode === "obsidian"
 				? await api.resolveInternalReferences(rendered)
 				: [];
@@ -2541,6 +2690,17 @@
 			{/if}
 		</div>
 	</dialog>
+{/if}
+
+{#if occurrenceContextMenu}
+	<ContextMenu
+		items={occurrenceContextMenuItems}
+		x={occurrenceContextMenu.x}
+		y={occurrenceContextMenu.y}
+		triggerElement={occurrenceContextMenu.triggerElement}
+		onSelect={(id) => void executeOccurrenceContextMenuAction(id)}
+		onClose={() => (occurrenceContextMenu = null)}
+	/>
 {/if}
 
 <div class="shell" class:nav-collapsed={navCollapsed}>
@@ -2854,6 +3014,8 @@
 							{@const rowBody = bodyFor(row.item)}
 							<div class:selected={selectedId === row.item.id} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
 								aria-selected={selectedId === row.item.id} tabindex="-1"
+								oncontextmenu={(event) => openOccurrenceContextMenu(row.item.id, "outline", event)}
+								onkeydown={(event) => handleOccurrenceContextMenuKeydown(row.item.id, "outline", event)}
 								draggable="true" ondragstart={() => draggedId = row.item.id} ondragend={() => draggedId = null}
 								onmousedown={(event) => {
 									if (event.target === event.currentTarget) deselectFromBlank(event);
@@ -3031,7 +3193,6 @@
 										</div>
 									{/if}
 								</div>
-								<button class="delete" title={`この${vocabulary.occurrence}を外す`} onclick={() => remove(row.item.id)}>×</button>
 							</div>
 						{/each}
 					</div>
@@ -3400,6 +3561,8 @@
 				projection={globalLineage}
 				{selectedId}
 				onSelect={(id) => selectOccurrence(id)}
+				onOpen={(id) => void openTreeOccurrence(id)}
+				onContextMenu={(id, event) => openOccurrenceContextMenu(id, "tree", event)}
 			/>
 		{:else}
 			<section class="tree-panel"><p class="empty">{vocabulary.globalLineage}を読み込んでいます…</p></section>
@@ -3454,9 +3617,6 @@
 					</section>
 				<div class="discovery-actions">
 						<button onclick={startLongFormEditing} disabled={!commands.startLongFormEditing.enabled} title={commands.startLongFormEditing.reason}>長文編集</button>
-						<button onclick={duplicateSelectedOccurrence}>同じ{vocabulary.work}をもう一箇所へ配置</button>
-						<button onclick={() => remove(selectedItem.id)}>この{vocabulary.occurrence}を外す</button>
-						<button onclick={trashSelectedWork}>{vocabulary.work}をゴミ箱へ</button>
 					</div>
 					<div class="thought-meta">
 						<div><span class="meta-label">作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
@@ -3533,6 +3693,9 @@
 				{:else if asideMode === "history"}
 					<div class="history-panel">
 						<p class="hint">選択中の{vocabulary.work}に従属する履歴です。</p>
+						<button onclick={() => void executeCommand("createBranch")} disabled={!commands.createBranch.enabled} title={commands.createBranch.reason}>
+							新しい{vocabulary.branch}を作る
+						</button>
 						<button onclick={() => (viewMode = "workLineage")} disabled={!selectedItem}>
 							{vocabulary.workLineage}を開く
 						</button>
