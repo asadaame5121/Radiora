@@ -165,6 +165,17 @@
 		candidates: InternalReferenceCompletion[];
 		activeIndex: number;
 	};
+	type LicenseEntry = {
+		name: string;
+		version: string;
+		license: string;
+		file: string | null;
+		summary: string;
+	};
+	type LicenseIndex = {
+		runtime: LicenseEntry[];
+		npm: LicenseEntry[];
+	};
 	type InlineLinkCompletionPhase = "candidate" | "type" | "direction";
 	type InlineLinkDirection = "forward" | "reverse";
 	type InlineLinkCompletionState = {
@@ -268,6 +279,11 @@
 	let pendingConfirmation = $state<PendingConfirmation | null>(null);
 	let confirmationSubmitting = $state(false);
 	let confirmationDialog: HTMLDialogElement;
+	let licensesDialog: HTMLDialogElement;
+	let licenseIndex = $state<LicenseIndex | null>(null);
+	let licenseDetail = $state<{ name: string; text: string } | null>(null);
+	let licenseError = $state("");
+	let licenseLoading = $state(false);
 	let rewriteBranchName = $state("");
 	let rewriteBranchNameInput = $state<HTMLInputElement | null>(null);
 	let commandPaletteOpen = $state(false);
@@ -2552,6 +2568,41 @@
 		}
 	}
 
+	async function openLicenses(): Promise<void> {
+		licenseError = "";
+		licenseDetail = null;
+		licenseLoading = true;
+		try {
+			const response = await fetch("/licenses/index.json");
+			if (!response.ok) {
+				throw new Error(`ライセンス情報を読み込めませんでした (${response.status})`);
+			}
+			licenseIndex = await response.json();
+		} catch (cause) {
+			licenseError = errorMessage(cause);
+		} finally {
+			licenseLoading = false;
+		}
+		licensesDialog?.showModal();
+	}
+
+	async function selectLicense(entry: LicenseEntry): Promise<void> {
+		if (!entry.file) return;
+		licenseDetail = { name: `${entry.name} ${entry.version}`, text: "ライセンス全文を読み込んでいます…" };
+		try {
+			const response = await fetch(`/licenses/${entry.file}`);
+			licenseDetail = {
+				name: `${entry.name} ${entry.version}`,
+				text: response.ok
+					? await response.text()
+					: `ライセンス全文を読み込めませんでした (${response.status})。`,
+			};
+		} catch (cause) {
+			licenseDetail = { name: `${entry.name} ${entry.version}`, text: errorMessage(cause) };
+		}
+	}
+
+
 	async function requestConfirmation(confirmation: PendingConfirmation): Promise<void> {
 		if (pendingConfirmation) return;
 		pendingConfirmation = confirmation;
@@ -3563,6 +3614,14 @@
 							<input type="range" min="240" max="560" step="8" value={inspectorWidth} oninput={(event) => setInspectorWidth(event.currentTarget.valueAsNumber)} />
 						</label>
 					</section>
+
+					<section class="option-card" aria-labelledby="option-licenses-title">
+						<h2 id="option-licenses-title">ライセンス</h2>
+						<p>このアプリが利用しているサードパーティソフトウェアのライセンス情報を表示します。</p>
+						<div class="option-actions">
+							<button onclick={openLicenses}>ライセンス情報を表示</button>
+						</div>
+					</section>
 				</div>
 			</section>
 		{:else if viewMode === "comparison"}
@@ -3924,4 +3983,48 @@
 			</div>
 		</div>
 	{/if}
+</dialog>
+
+<dialog
+	bind:this={licensesDialog}
+	class="licenses-dialog"
+	aria-labelledby="licenses-title"
+	aria-modal="true"
+>
+	<div class="licenses-dialog__content">
+		<header class="licenses-dialog__header">
+			<p class="eyebrow">THIRD-PARTY NOTICES</p>
+			<h2 id="licenses-title">ライセンス情報</h2>
+			<p>Radioraが利用しているサードパーティソフトウェアのライセンスを表示します。</p>
+		</header>
+		{#if licenseError}
+			<p class="licenses-dialog__error" role="alert">{licenseError}</p>
+		{:else if licenseIndex}
+			<div class="licenses-dialog__layout">
+				<ul class="licenses-dialog__list">
+					{#each [...licenseIndex.runtime, ...licenseIndex.npm] as entry}
+						<li>
+							<button onclick={() => selectLicense(entry)}>
+								<strong>{entry.name}</strong>
+								<small>{entry.license}{entry.version ? ` · ${entry.version}` : ""}</small>
+							</button>
+						</li>
+					{/each}
+				</ul>
+				<div class="licenses-dialog__detail">
+					{#if licenseDetail}
+						<h3>{licenseDetail.name}</h3>
+						<pre>{licenseDetail.text}</pre>
+					{:else}
+						<p class="licenses-dialog__hint">左の一覧からライセンスを選択してください。</p>
+					{/if}
+				</div>
+			</div>
+		{:else if licenseLoading}
+			<p>読み込んでいます…</p>
+		{/if}
+		<div class="licenses-dialog__actions">
+			<button onclick={() => licensesDialog?.close()}>閉じる</button>
+		</div>
+	</div>
 </dialog>

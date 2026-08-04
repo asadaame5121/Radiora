@@ -36,6 +36,8 @@ bookmark上のchangeを提供済み機能としては扱わない。
 ## 現行PoCの範囲と既知の制約
 
 - 本記録は開発中のPoCを対象とし、リリース済みまたは一般提供済みであることを示さない。
-- Revisionの重要度属性、ユーザーが変更できるショートカット設定、原稿投影範囲だけのMarkdown export導線は未提供。
-- OPMLは階層と本文の交換形式であり、Revisionや意味リンクは復元しない。portable MarkdownはRadiora内部IDを保持しない。
+- Revisionの重要度属性、ユーザーが変更できるショートカット設定、原稿投影範囲だけのMarkdown
+  export導線は未提供。
+- OPMLは階層と本文の交換形式であり、Revisionや意味リンクは復元しない。portable
+  MarkdownはRadiora内部IDを保持しない。
 - 高密度検索の回帰テストはSparse Outline生成を対象とし、Svelte描画全体の性能を表すものではない。

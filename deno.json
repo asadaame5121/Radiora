@@ -22,7 +22,8 @@
 		"useTabs": true
 	},
 	"tasks": {
-		"build": "npm run build",
+		"build": "npm run build && deno task licenses",
+		"licenses": "deno run -A scripts/licenses.ts",
 		"check": "deno check src/main.ts && npm run check",
 		"verify": "deno fmt --check src scripts tests deno.json && deno task check && deno task test && npm run build",
 		"desktop:preflight": "deno run -A scripts/desktop_preflight.ts",
@@ -41,6 +42,7 @@
 		"desktop:run:surreal-diagnostic": "deno run -A scripts/desktop_run.ts --surreal-diagnostic",
 		"desktop:hmr": "deno run -A scripts/desktop_hmr.ts",
 		"desktop:inspect": "deno run -A scripts/desktop_hmr.ts --inspect=127.0.0.1:9230",
-		"desktop:audit": "deno run -A scripts/desktop_cdp_audit.ts"
+		"desktop:audit": "deno run -A scripts/desktop_cdp_audit.ts",
+		"desktop:msix": "deno task licenses && deno run -A scripts/desktop_msix.ts"
 	}
 }

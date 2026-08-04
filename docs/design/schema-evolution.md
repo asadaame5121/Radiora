@@ -31,26 +31,25 @@ Phase 0時点のPoCは次の状態にあった。
 
 この現行形式を次のように扱う。
 
-| 対象 | 現行形式 |
-|---|---|
-| SurrealDB storage schema | version `0` |
-| versionなしJSON | backup schema version `0` |
-| Work / Occurrence以降の最初の正式形式 | version `1` |
+| 対象                                  | 現行形式                  |
+| ------------------------------------- | ------------------------- |
+| SurrealDB storage schema              | version `0`               |
+| versionなしJSON                       | backup schema version `0` |
+| Work / Occurrence以降の最初の正式形式 | version `1`               |
 
 version `0`は互換入力として扱うlegacy形式であり、今後同じ形へ新規出力しない。
 
 2026-07-27に`0001_work_occurrence`を導入し、Work、main Branch、Working Copy、Occurrence、
-意味リンク、システム関係へ分離した。詳細は
-[[../log/2026-07-27-phase-1-work-occurrence]]を参照する。
+意味リンク、システム関係へ分離した。詳細は [[../log/2026-07-27-phase-1-work-occurrence]]を参照する。
 
-2026-07-28に`0002_revision_snapshot`を導入し、storage schemaとbackup schemaは
-version `2`になった。複数Branch、変更不能なRevision、Working Copy単位のRecovery Snapshotを
+2026-07-28に`0002_revision_snapshot`を導入し、storage schemaとbackup schemaは version
+`2`になった。複数Branch、変更不能なRevision、Working Copy単位のRecovery Snapshotを
 永続化する。version `1`のWork、Branch、Working Copy、Occurrence、リンクなどはそのまま保持し、
 RevisionとRecovery Snapshotを空集合として追加する。
 
-2026-07-29に`0003_bookmark_resume`を導入し、現在のstorage schemaとbackup schemaは
-version `3`である。手動で複数残す栞と、自動更新する単一の作業再開位置を別レコードとして
-永続化する。version `2`の内容は保持し、栞を空集合、作業再開位置を未設定として追加する。
+2026-07-29に`0003_bookmark_resume`を導入し、現在のstorage schemaとbackup schemaは version
+`3`である。手動で複数残す栞と、自動更新する単一の作業再開位置を別レコードとして 永続化する。version
+`2`の内容は保持し、栞を空集合、作業再開位置を未設定として追加する。
 
 ## 3. 二つのschema version
 
@@ -182,14 +181,14 @@ version `1`以降のJSONは次のenvelopeを持つ。
 
 ```json
 {
-  "format": "radiora-backup",
-  "schemaVersion": 1,
-  "exportedAt": "2026-07-26T00:00:00.000Z",
-  "appVersion": "0.0.0",
-  "source": {
-    "storageSchemaVersion": 1
-  },
-  "data": {}
+	"format": "radiora-backup",
+	"schemaVersion": 1,
+	"exportedAt": "2026-07-26T00:00:00.000Z",
+	"appVersion": "0.0.0",
+	"source": {
+		"storageSchemaVersion": 1
+	},
+	"data": {}
 }
 ```
 
@@ -200,8 +199,8 @@ version `1`以降のJSONは次のenvelopeを持つ。
 - 新しいexportでversion `0`を生成しない
 
 Import時は入力ファイルを直接書き換えない。旧versionはメモリ内または一時領域で一段ずつ
-現行形式へ変換し、全体検証に成功してからDBへtransactionalに反映する。現在のアプリより新しい
-backup schema versionは、部分的に読み込まず明示的に拒否する。
+現行形式へ変換し、全体検証に成功してからDBへtransactionalに反映する。現在のアプリより新しい backup
+schema versionは、部分的に読み込まず明示的に拒否する。
 
 一度公開したbackup schemaのmigration chainは原則として維持する。将来アプリ本体から外す必要が
 生じた場合も、旧形式から現行形式へ変換する独立ツールを先に提供する。
@@ -243,8 +242,8 @@ version `1`から`2`へのmigrationは、Phase 1で先行導入した`revision`�
 
 ```json
 {
-  "revisions": [],
-  "recoverySnapshots": []
+	"revisions": [],
+	"recoverySnapshots": []
 }
 ```
 
@@ -261,14 +260,14 @@ version `1`から`2`へのmigrationは、Phase 1で先行導入した`revision`�
 - version `1` JSONを上書きする前に`.v1.bak`へ一度だけ保護する
 - SurrealDBのcold backupをsource schema versionごとに分離し、失敗時に同じversionへ復元する
 
-JSON version `1`の日本語、改行、Markdown、`radiora://`を含む既存本文は変換せず、
-version `2` envelopeへ保持する。自動のRevision生成、Snapshot保持ポリシー、Branch操作の
-サービス手順はこのschema migrationへ含めない。
+JSON version `1`の日本語、改行、Markdown、`radiora://`を含む既存本文は変換せず、 version `2`
+envelopeへ保持する。自動のRevision生成、Snapshot保持ポリシー、Branch操作の サービス手順はこのschema
+migrationへ含めない。
 
 ## 12. Stub state 移行(version 3 から 4)
 
-2026-07-30に`0004_stub_state`を導入し、現在のstorage schemaとbackup schemaは
-version `4`である。Stubは、本文をこれから書くために利用者が明示的に作成した未配置Workを表す
+2026-07-30に`0004_stub_state`を導入し、現在のstorage schemaとbackup schemaは version
+`4`である。Stubは、本文をこれから書くために利用者が明示的に作成した未配置Workを表す
 任意のマーカーであり、Workへ次のoptional値を追加する。
 
 ```ts
@@ -280,8 +279,8 @@ interface WorkStub {
 ```
 
 versionを上げる理由: version `3`のままStubを書き込むと、旧アプリはそのJSONをversion `3`と
-して受理し、再保存時にStubを黙って落とす。黙示のデータ損失を防ぐため、Stubを含む形式は
-version `4`として旧アプリに明示拒否させる。
+して受理し、再保存時にStubを黙って落とす。黙示のデータ損失を防ぐため、Stubを含む形式は version
+`4`として旧アプリに明示拒否させる。
 
 SurrealDBでは`work` tableへ`stub` objectと`stub.created_at`、`stub.created_via`、
 `stub.context`の各`option<string>` fieldをExpandする。既存recordは`stub = NONE`のままで
@@ -303,8 +302,8 @@ SurrealDBでは`work` tableへ`stub` objectと`stub.created_at`、`stub.created_
 
 JSON backupは`StoredGraphV4`が`StoredGraphV3`をそのまま継承する。配列の追加や改名はなく、
 `Work`へoptionalな`stub`が乗るだけである。それでもbackup schemaを`4`へ上げるのは、上記の
-黙示損失を防ぐためであり、storage schemaと同じ番号で併走させて運用上の対応関係を保つ。
-version `3`のJSONを上書きする前に`.v3.bak`へ一度だけ保護する。
+黙示損失を防ぐためであり、storage schemaと同じ番号で併走させて運用上の対応関係を保つ。 version
+`3`のJSONを上書きする前に`.v3.bak`へ一度だけ保護する。
 
 最低限、次を検証する。
 
@@ -318,16 +317,16 @@ version `3`のJSONを上書きする前に`.v3.bak`へ一度だけ保護する�
 ## 13. Duplicate merge provenance 移行(version 4 から 5)
 
 2026-07-30に`0005_merge_provenance`を導入し、storage schemaとbackup schemaはversion `5`
-になった。重複統合で吸収されたWorkは削除せず、`mergedIntoWorkId`と`mergedAt`を持つ
-provenance tombstoneとして残す。旧アプリによる統合状態の再表示や黙示損失を防ぐためversionを
-上げ、version `4` JSONは配列構造を変えず一段変換し、上書き前に`.v4.bak`へ保護する。
+になった。重複統合で吸収されたWorkは削除せず、`mergedIntoWorkId`と`mergedAt`を持つ provenance
+tombstoneとして残す。旧アプリによる統合状態の再表示や黙示損失を防ぐためversionを 上げ、version `4`
+JSONは配列構造を変えず一段変換し、上書き前に`.v4.bak`へ保護する。
 
-統合transactionは、選択したsurvivorへOccurrence、Branch、Working Copy、Revision、
-Recovery Snapshot、Bookmark、Resume Position、意味リンクとSystem Relationのendpointを同時に
+統合transactionは、選択したsurvivorへOccurrence、Branch、Working Copy、Revision、 Recovery
+Snapshot、Bookmark、Resume Position、意味リンクとSystem Relationのendpointを同時に
 移す。各ID、Revision親ID、Occurrence親IDは変更しない。source BranchはIDを保ったまま
 `merged/<source-work-id>/<old-name>`へ決定的に改名する。張替えで生じるactiveな自己リンクと
-同一意味リンクは削除せず`retracted`にし、System Relationはstatusがないため自己関係や重複も
-record IDを残す。
+同一意味リンクは削除せず`retracted`にし、System Relationはstatusがないため自己関係や重複も record
+IDを残す。
 
 最低限、previewが本文、配置、Branch改名、リンク、Revision、Snapshot、aliasを列挙すること、
 Memory/JSON/Surrealの統合が原子的であること、検証失敗時に全状態が不変であること、version `4`

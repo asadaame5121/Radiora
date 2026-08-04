@@ -180,9 +180,9 @@ deno check src/main.ts
 
 現在の対象はWork／Occurrenceによる実身・化身、配置ごとに独立した階層・順序・折りたたみ、
 化身削除、実身のゴミ箱と復元、本文部分一致検索、標準7種の意味リンク、
-循環・孤児OccurrenceのKnot/Stash投影です。同じWorkを複数箇所へ配置しても本文は共有されます。
-Phase 2ではこれに加え、変更不能なRevisionと複数親DAG、Branchごとに独立したWorking Copy、
-Recovery Snapshotの確認付き復元・版への昇格、全体系統とWork内版系統の分離、
+循環・孤児OccurrenceのKnot/Stash投影です。同じWorkを複数箇所へ配置しても本文は共有されます。 Phase
+2ではこれに加え、変更不能なRevisionと複数親DAG、Branchごとに独立したWorking Copy、 Recovery
+Snapshotの確認付き復元・版への昇格、全体系統とWork内版系統の分離、
 任意2版の本文Diffを契約テストで検証します。
 
 ### SurrealDB Desktop probe

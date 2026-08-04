@@ -78,6 +78,7 @@ Backendとdomain modelは`work`、`occurrence`、`semanticLink`の意味コー�
 Svelte entrypointが既定語彙をContextへ設定し、`App.svelte`はContextからのみ取得する。
 設計上の説明語である「実身」「化身」は利用者向けUIへ直書きしない。将来別の語彙を使う場合も
 store、service、RPCを変更せず、Contextへ渡す`UiVocabulary`だけを置き換える。
+
 ## Store共通契約
 
 `tests/support/graph_store_contract.ts`をMemory、JSON、SurrealDBへ同じまま適用する。
