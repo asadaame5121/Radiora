@@ -1,4 +1,4 @@
-import { assert, assertFalse } from "jsr:@std/assert@1";
+import { assert, assertFalse, assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("App exposes browsing scope, breadcrumb, and recent-edit navigation", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
@@ -42,4 +42,17 @@ Deno.test("App browsing routes do not persist expansion or placement", async () 
 	assertFalse(browsingControls.includes("parentId ="));
 	assertFalse(browsingControls.includes("orderKey ="));
 	assertFalse(browsingControls.includes("collapsed ="));
+});
+
+Deno.test("loading a focus target selects it before restoring editor focus", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const load = app.slice(
+		app.indexOf("async function load"),
+		app.indexOf("function selectOccurrence"),
+	);
+
+	assertMatch(
+		load,
+		/if \(focusId\) \{\s*selectOccurrence\(focusId\);\s*await tick\(\);\s*requestFocus\(focusId\);/,
+	);
 });

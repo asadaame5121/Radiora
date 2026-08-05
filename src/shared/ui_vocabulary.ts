@@ -14,6 +14,9 @@ export type UiEntityCode =
 	| "resumePosition"
 	| "today"
 	| "quickCapture"
+	| "quickCaptureDestination"
+	| "quickCaptureDestinationRoot"
+	| "quickCaptureDestinationUnplaced"
 	| "unplacedInbox"
 	| "hoist"
 	| "breadcrumb"
@@ -113,6 +116,9 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	resumePosition: "作業再開位置",
 	today: "今日",
 	quickCapture: "クイック入力",
+	quickCaptureDestination: "クイック入力の保存先",
+	quickCaptureDestinationRoot: "ルート直下",
+	quickCaptureDestinationUnplaced: "未配置箱",
 	unplacedInbox: "未配置箱",
 	hoist: "絞り込み表示",
 	breadcrumb: "祖先",

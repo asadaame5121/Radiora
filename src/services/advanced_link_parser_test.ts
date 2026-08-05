@@ -11,6 +11,11 @@ Deno.test("Advanced Link parser trims outer spaces and normalizes link types", (
 		type: "SUPPORT",
 		target: "target",
 	});
+	assertEquals(parseAdvancedLinkInput("source :: Def :: target"), {
+		source: "source",
+		type: "DEF",
+		target: "target",
+	});
 });
 
 Deno.test("Advanced Link parser preserves internal whitespace and Japanese names", () => {

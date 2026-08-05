@@ -17,7 +17,9 @@ Deno.test("Omniwindow shares the quick-capture command value with search", () =>
 	assertMatch(app, /searchRequestId\+\+/);
 	assertMatch(app, /searchActiveIndex === searchEntries\.length/);
 	assertMatch(app, /executeCommand\("quickCapture"\)/);
-	assertMatch(app, /を未配置箱へ作成/);
+	assertMatch(app, /quickCaptureDestinationLabel/);
+	assertMatch(app, /vocabulary\.quickCaptureDestinationRoot/);
+	assertMatch(app, /vocabulary\.quickCaptureDestinationUnplaced/);
 });
 
 Deno.test("shell keeps global navigation, contextual inspector, and dedicated full-width views separate", () => {

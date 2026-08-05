@@ -9,6 +9,7 @@
 	import MarkdownEditor from "./MarkdownEditor.svelte";
 	import SparseOutlineView from "./SparseOutlineView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
+	import InAppHelp from "./InAppHelp.svelte";
 	import ContextMenu from "./ContextMenu.svelte";
 	import type { ContextMenuItem } from "./context_menu";
 	import { createRpcAdapter } from "./rpc_adapter";
@@ -56,6 +57,10 @@
 		loadMarkdownExportPreference,
 		saveMarkdownExportPreference,
 	} from "./markdown_export_preference";
+	import {
+		loadQuickCapturePreference,
+		saveQuickCapturePreference,
+	} from "./quick_capture_preference";
 	import {
 		clampInspectorWidth,
 		loadUiLayoutPreference,
@@ -146,6 +151,7 @@
 		| "workLineage"
 		| "comparison"
 		| "trash"
+		| "help"
 		| "options";
 	type AsideMode = "overview" | "relation" | "history" | "query";
 	type PendingConfirmation =
@@ -300,6 +306,7 @@
 	let inlineSemanticLinkNotice = $state("");
 	let markdownExportNotice = $state("");
 	let markdownExportPreference = $state(loadMarkdownExportPreference());
+	let quickCapturePreference = $state(loadQuickCapturePreference());
 	let opmlNotice = $state("");
 	let jsonBackupNotice = $state("");
 	let opmlFileInput = $state<HTMLInputElement>();
@@ -422,7 +429,7 @@
 	const omniEntryCount = $derived(searchEntries.length + (quickCaptureText.trim() ? 1 : 0));
 	const dedicatedView = $derived(
 		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison" ||
-			viewMode === "tags" || viewMode === "options",
+			viewMode === "tags" || viewMode === "options" || viewMode === "help",
 	);
 	const viewModeLabel = $derived(
 		viewMode === "outline"
@@ -445,7 +452,14 @@
 			? `${vocabulary.revision}${vocabulary.comparisonPane}`
 			: viewMode === "options"
 			? "Option"
+			: viewMode === "help"
+			? "ヘルプ"
 			: "ゴミ箱",
+	);
+	const quickCaptureDestinationLabel = $derived(
+		quickCapturePreference.destination === "root"
+			? vocabulary.quickCaptureDestinationRoot
+			: vocabulary.quickCaptureDestinationUnplaced,
 	);
 	const inspectorColumn = $derived(inspectorCollapsed ? "0px" : `${inspectorWidth}px`);
 	const workingCopySaveStatus = $derived.by(() => {
@@ -536,6 +550,10 @@
 	const shortcuts = validateShortcuts(COMMAND_DEFINITIONS.flatMap((command) =>
 		command.shortcut ? [{ commandId: command.id, shortcut: command.shortcut }] : []
 	));
+	const helpShortcuts = shortcuts.bindings.map(({ commandId, shortcut }) => ({
+		label: COMMAND_DEFINITIONS.find((command) => command.id === commandId)?.label(vocabulary) ?? commandId,
+		shortcut,
+	}));
 
 	$effect(() => {
 		const id = selectedId;
@@ -591,6 +609,15 @@
 			}
 		};
 		const handleGlobalShortcut = (event: KeyboardEvent) => {
+			if (
+				event.key === "F1" &&
+				!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey
+			) {
+				event.preventDefault();
+				if (commandPaletteOpen) void closeCommandPalette();
+				openHelp();
+				return;
+			}
 			if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLocaleLowerCase() === "k") {
 				event.preventDefault();
 				if (commandPaletteOpen) void closeCommandPalette();
@@ -690,7 +717,11 @@
 			selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
 			globalLineage = nextGlobalLineage;
 			bookmarks = nextBookmarks;
-			if (focusId) requestFocus(focusId);
+			if (focusId) {
+				selectOccurrence(focusId);
+				await tick();
+				requestFocus(focusId);
+			}
 		} catch (cause) {
 			error = errorMessage(cause);
 		} finally {
@@ -1473,9 +1504,22 @@
 	async function performQuickCapture(): Promise<void> {
 		quickCaptureSubmitting = true;
 		try {
-			await api.quickCapture(quickCaptureText);
+			if (quickCapturePreference.destination === "root") {
+				const roots = snapshot.items
+					.filter((item) => item.parentId === null)
+					.sort((left, right) => left.orderKey - right.orderKey);
+				const created = await api.createItem({
+					text: quickCaptureText,
+					parentId: null,
+					afterId: roots.at(-1)?.id ?? null,
+				});
+				viewMode = "outline";
+				await load(created.id);
+			} else {
+				await api.quickCapture(quickCaptureText);
+				await Promise.all([load(), loadUnplacedWorks()]);
+			}
 			clearOmniwindow();
-			await Promise.all([load(), loadUnplacedWorks()]);
 		} catch (cause) {
 			error = errorMessage(cause);
 		} finally {
@@ -2070,6 +2114,10 @@
 		await selectItem(item, ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id));
 	}
 
+	function openHelp(): void {
+		viewMode = "help";
+	}
+
 	async function loadEmergence(id: string): Promise<void> {
 		emergenceLoading = true;
 		try {
@@ -2492,6 +2540,10 @@
 		saveMarkdownExportPreference({ ...markdownExportPreference });
 	}
 
+	function persistQuickCapturePreference(): void {
+		saveQuickCapturePreference({ ...quickCapturePreference });
+	}
+
 	async function performOpmlExport(): Promise<void> {
 		opmlNotice = "";
 		try {
@@ -2858,6 +2910,7 @@
 			<button class:active={viewMode === "tags"} onclick={openTags}>{vocabulary.tag}管理</button>
 			<button class:active={asideMode === "query"} onclick={() => openInspectorTool("query")}
 				disabled={!selectedItem}>Query・検索別名</button>
+			<button class:active={viewMode === "help"} onclick={openHelp} title="F1">ヘルプ</button>
 		</section>
 	</nav>
 
@@ -2875,8 +2928,8 @@
 		</div>
 		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
 			<input
-				aria-label={`${vocabulary.quickCapture}・思索を検索`}
-				placeholder="思索を検索、Shift+Enterで未配置箱へ作成…"
+				aria-label={`検索・${vocabulary.quickCapture}`}
+				placeholder={`思索を検索、Shift+Enterで${quickCaptureDestinationLabel}へ作成…`}
 				bind:value={quickCaptureText}
 				oninput={queueSearch}
 				onkeydown={handleSearchKeydown}
@@ -2908,7 +2961,7 @@
 						disabled={!commands.quickCapture.enabled}
 						title={commands.quickCapture.reason}
 						onclick={() => executeCommand("quickCapture")}>
-						<strong>「{quickCaptureText.trim()}」を未配置箱へ作成</strong>
+						<strong>「{quickCaptureText.trim()}」を{quickCaptureDestinationLabel}へ作成</strong>
 						<small>Shift+Enter</small>
 					</button>
 				</div>
@@ -2925,6 +2978,7 @@
 					? vocabulary.markdownExportSelectionRequired
 					: commands.exportMarkdown.reason}
 			>{vocabulary.markdownExportAction}</button>
+			<button class:active={viewMode === "help"} onclick={openHelp} title="F1でヘルプを開く">ヘルプ</button>
 			<button class:active={viewMode === "options"} onclick={() => (viewMode = "options")}>Option</button>
 			{#each bookmarks as bookmark}
 				<span class="bookmark-control">
@@ -3545,7 +3599,7 @@
 				<header class="options-heading">
 					<p class="eyebrow">APPLICATION</p>
 					<h1 id="options-title">Option</h1>
-					<p>書き出し、データ交換、バックアップ、表示方法を設定します。</p>
+					<p>入力、書き出し、データ交換、バックアップ、表示方法を設定します。</p>
 				</header>
 				<div class="options-grid">
 					<section class="option-card" aria-labelledby="option-export-title">
@@ -3615,6 +3669,18 @@
 						</label>
 					</section>
 
+					<section class="option-card" aria-labelledby="option-quick-capture-title">
+						<h2 id="option-quick-capture-title">入力</h2>
+						<p>上部の入力欄から新しく作る本文を、どこへ保存するか選びます。検索結果を開く動作には影響しません。</p>
+						<label>
+							<span>{vocabulary.quickCaptureDestination}</span>
+							<select bind:value={quickCapturePreference.destination} onchange={persistQuickCapturePreference}>
+								<option value="root">{vocabulary.quickCaptureDestinationRoot}</option>
+								<option value="unplaced">{vocabulary.quickCaptureDestinationUnplaced}</option>
+							</select>
+						</label>
+					</section>
+
 					<section class="option-card" aria-labelledby="option-licenses-title">
 						<h2 id="option-licenses-title">ライセンス</h2>
 						<p>このアプリが利用しているサードパーティソフトウェアのライセンス情報を表示します。</p>
@@ -3624,6 +3690,15 @@
 					</section>
 				</div>
 			</section>
+		{:else if viewMode === "help"}
+			<InAppHelp
+				shortcuts={helpShortcuts}
+				onOpenOutline={() => { viewMode = "outline"; }}
+				onOpenToday={() => void openToday()}
+				onOpenUnplaced={() => void openUnplaced()}
+				onOpenOptions={() => { viewMode = "options"; }}
+				onOpenCommandPalette={() => void openCommandPalette()}
+			/>
 		{:else if viewMode === "comparison"}
 			{#if linkComparison}
 				{#key linkComparison.linkId}
