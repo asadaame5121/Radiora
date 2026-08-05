@@ -92,6 +92,23 @@ Deno.test("SemanticLinkOperations validates revision ownership and keeps revisio
 	assertEquals((await store.listLinks()).length, 2);
 });
 
+Deno.test("SemanticLinkOperations keeps definition links directed", async () => {
+	const store = new MemoryGraphStore();
+	await addWork(store, "definition");
+	await addWork(store, "concept");
+	const operations = new SemanticLinkOperations(store);
+
+	await operations.createLink({ fromId: "definition", toId: "concept", type: "DEF" });
+
+	const links = await store.listLinks();
+	assertEquals(links.length, 1);
+	assertEquals(links[0].fromId, "definition");
+	assertEquals(links[0].toId, "concept");
+	assertEquals(links[0].type, "DEF");
+	assertEquals(links[0].status, "asserted");
+	assertEquals(links[0].origin, "human");
+});
+
 Deno.test("SemanticLinkOperations retracts symmetric links when deleting through reversed occurrence ids", async () => {
 	const store = new MemoryGraphStore();
 	const alpha = await addWork(store, "alpha");

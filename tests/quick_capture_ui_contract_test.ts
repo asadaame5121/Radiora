@@ -18,6 +18,11 @@ Deno.test("Quick Capture and unplaced inbox remain reachable and expose required
 		assert(app.includes(`api.${method}(`));
 	}
 	assert(app.includes("vocabulary.quickCapture"));
+	assert(app.includes("loadQuickCapturePreference()"));
+	assert(app.includes("saveQuickCapturePreference"));
+	assert(app.includes("quickCapturePreference.destination"));
+	assert(app.includes("api.createItem({"));
+	assert(app.includes("vocabulary.quickCaptureDestinationRoot"));
 	assert(app.includes("vocabulary.unplacedInbox"));
 	assert(app.includes("#タグ"));
 	assert(app.includes("Rootへ配置"));

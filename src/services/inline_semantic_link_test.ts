@@ -75,6 +75,15 @@ Deno.test("inline semantic links parse multiple same-line candidates and normali
 	);
 });
 
+Deno.test("inline semantic links accept the definition relation", () => {
+	const result = parseInlineSemanticLinks("[[Definition::Def::Concept]]");
+
+	assertEquals(result.diagnostics, []);
+	assertEquals(result.candidates.map(({ source, type, target }) => ({ source, type, target })), [
+		{ source: "Definition", type: "DEF", target: "Concept" },
+	]);
+});
+
 Deno.test("inline semantic links decode escaped quotes, backslashes, and delimiters", () => {
 	const source = String.raw`[["A :: \\ C \"D"::RELATED("理由 \"引用\" と \\")::"対象 :: 名"]]`;
 	const result = parseInlineSemanticLinks(source);

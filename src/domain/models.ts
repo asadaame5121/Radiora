@@ -1,4 +1,13 @@
-export const LINK_TYPES = ["RELATED", "FROM", "LIKE", "SUPPORT", "VS", "FIX", "CITE"] as const;
+export const LINK_TYPES = [
+	"RELATED",
+	"FROM",
+	"LIKE",
+	"SUPPORT",
+	"DEF",
+	"VS",
+	"FIX",
+	"CITE",
+] as const;
 export type LinkType = (typeof LINK_TYPES)[number];
 export const SYMMETRIC_LINK_TYPES = [
 	"RELATED",

@@ -107,6 +107,10 @@ Deno.test("Advanced Link preview follows canonical directed and symmetric semant
 		"「Source」は「Target」を支持します。",
 	);
 	assertEquals(
+		(await service.resolveAdvancedLink("Source :: DEF :: Target")).preview,
+		"「Source」は「Target」を定義します。",
+	);
+	assertEquals(
 		(await service.resolveAdvancedLink("Source :: RELATED :: Target")).preview,
 		"「Source」と「Target」は関連します。",
 	);

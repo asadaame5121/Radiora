@@ -226,6 +226,8 @@ export function previewDirection(source: string, type: LinkType, target: string)
 			return `「${source}」は「${target}」から派生します。`;
 		case "SUPPORT":
 			return `「${source}」は「${target}」を支持します。`;
+		case "DEF":
+			return `「${source}」は「${target}」を定義します。`;
 		case "FIX":
 			return `「${source}」は「${target}」を修正します。`;
 		case "CITE":
