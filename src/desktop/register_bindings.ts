@@ -1,3 +1,8 @@
+import {
+	defaultGlobalLineageFilter,
+	type GlobalLineageFilter,
+	isValidGlobalLineageFilter,
+} from "../services/global_lineage_filter.ts";
 import type { RadioraBindings, StartupStatus } from "../shared/bindings.ts";
 import type { OutlineService } from "../services/outline_service.ts";
 import type {
@@ -55,7 +60,10 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 				confirmation,
 				message,
 			),
-		listGlobalLineage: () => service().listGlobalLineage(),
+		listGlobalLineage: async (filter) =>
+			service().listGlobalLineage(
+				filter === undefined ? defaultGlobalLineageFilter() : validateFilter(filter),
+			),
 		listWorkLineage: (workId) => service().listWorkLineage(workId),
 		rewriteAsNewBranch: (sourceBranchId, newBranchName, confirmation) => {
 			service();
@@ -117,6 +125,13 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		buildQueryProjectionNodes: (queryId, limit) =>
 			service().buildQueryProjectionNodes(queryId, limit),
 	};
+}
+
+export function validateFilter(input: unknown): GlobalLineageFilter {
+	if (isValidGlobalLineageFilter(input)) return input;
+	throw new Error(
+		"Invalid GlobalLineageFilter: expected includeIsolated, linkTypes, and includeWorkIds",
+	);
 }
 
 export function registerBindings(win: Deno.BrowserWindow, context: BindingContext): void {

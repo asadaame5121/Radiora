@@ -148,7 +148,11 @@ Deno.test("global lineage projects one node per Work and only promoted confirmed
 	const branches = service(store);
 	await branches.promoteBranch("source");
 
-	const projection = await branches.listGlobalLineage();
+	const projection = await branches.listGlobalLineage({
+		includeIsolated: true,
+		linkTypes: ["FROM"],
+		includeWorkIds: [],
+	});
 
 	assertEquals(projection.snapshot.items.map((item) => item.workId), ["work", "other-work"]);
 	assertEquals(projection.snapshot.items.every((item) => item.parentId === null), true);
@@ -164,6 +168,73 @@ Deno.test("global lineage projects one node per Work and only promoted confirmed
 		projection.promotedBranches.some((entry) => entry.headRevision?.id === "main-head"),
 		false,
 	);
+});
+
+Deno.test("global lineage filter removes isolated Works and keeps promoted Branches", async () => {
+	const store = await createStore();
+	await store.createWorkBundle(
+		{ id: "other-work", createdAt: CREATED_AT, updatedAt: CREATED_AT },
+		{
+			id: "other-main",
+			workId: "other-work",
+			name: "main",
+			headRevisionId: null,
+			createdAt: CREATED_AT,
+		},
+		{
+			branchId: "other-main",
+			workId: "other-work",
+			text: "other",
+			updatedAt: CREATED_AT,
+		},
+		{
+			id: "other-occurrence",
+			workId: "other-work",
+			parentOccurrenceId: null,
+			orderKey: 3,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "other-main" },
+		},
+	);
+	await store.createLink({
+		id: "meaning",
+		fromId: "work",
+		toId: "other-work",
+		from: { scope: "work", workId: "work" },
+		to: { scope: "work", workId: "other-work" },
+		type: "RELATED",
+		status: "asserted",
+		origin: "human",
+		createdAt: CREATED_AT,
+	});
+	const branches = service(store);
+	await branches.promoteBranch("source");
+
+	const filtered = await branches.listGlobalLineage({
+		includeIsolated: false,
+		linkTypes: ["FROM"],
+		includeWorkIds: [],
+	});
+	assertEquals(filtered.totalWorkCount, 2);
+	assertEquals(filtered.filteredWorkCount, 0);
+	assertEquals(filtered.snapshot.items, []);
+	assertEquals(filtered.snapshot.links, []);
+	assertEquals(
+		filtered.promotedBranches.map((entry) => entry.branch.id),
+		["source"],
+	);
+
+	const withSelected = await branches.listGlobalLineage({
+		includeIsolated: false,
+		linkTypes: ["FROM"],
+		includeWorkIds: ["work"],
+	});
+	assertEquals(withSelected.filteredWorkCount, 1);
+	assertEquals(
+		withSelected.snapshot.items.map((entry) => entry.workId),
+		["work"],
+	);
+	assertEquals(withSelected.snapshot.links, []);
 });
 
 Deno.test("Work lineage contains only its Branches and Revision ancestry", async () => {

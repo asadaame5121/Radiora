@@ -31,6 +31,7 @@ import type {
 	UnplacedWork,
 } from "../domain/models.ts";
 import type { GlobalLineageProjection, WorkLineageProjection } from "../services/branch_service.ts";
+import type { GlobalLineageFilter } from "../services/global_lineage_filter.ts";
 import type { DateProjection, DateRange } from "../services/date_projection.ts";
 import type { RecoverySnapshotPreview } from "../services/recovery_snapshot_service.ts";
 import type {
@@ -95,7 +96,7 @@ export interface RadioraBindings {
 		confirmation: "confirmed" | "cancelled",
 		message?: string,
 	): Promise<Revision | null>;
-	listGlobalLineage(): Promise<GlobalLineageProjection>;
+	listGlobalLineage(filter?: GlobalLineageFilter): Promise<GlobalLineageProjection>;
 	listWorkLineage(workId: string): Promise<WorkLineageProjection>;
 	rewriteAsNewBranch(
 		sourceBranchId: string,
