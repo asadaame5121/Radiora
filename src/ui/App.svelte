@@ -70,6 +70,11 @@
 		loadTreeProjectionPreference,
 		saveTreeProjectionPreference,
 	} from "./tree_projection_preference";
+	import {
+		loadTreeFilterPreference,
+		saveTreeFilterPreference,
+	} from "./tree_filter_preference";
+	import type { GlobalLineageFilter } from "../services/global_lineage_filter";
 	import type { TreeProjection } from "./tree_layout";
 	import {
 		activateBrowsingPane,
@@ -317,6 +322,7 @@
 	let navCollapsed = $state(initialUiLayoutPreference.navCollapsed);
 	let occurrenceContextMenu = $state<OccurrenceContextMenuState | null>(null);
 	let treeProjectionPreference = $state<TreeProjection>(loadTreeProjectionPreference());
+	let treeFilter = $state<GlobalLineageFilter>(loadTreeFilterPreference());
 	let internalReferenceCompletionRequest = 0;
 	let inlineLinkCompletionRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
@@ -700,7 +706,7 @@
 			error = "";
 			const [next, nextGlobalLineage, nextBookmarks] = await Promise.all([
 				api.listOutline(),
-				api.listGlobalLineage(),
+				api.listGlobalLineage(activeGlobalLineageFilter),
 				api.listBookmarks(),
 			]);
 			const drafts = new Map(autosave.drafts().map((draft) => [draft.workId, draft.text]));
@@ -733,6 +739,12 @@
 		selectedId = id;
 		browsing = browseToOutlineOccurrence(browsing, snapshot, id);
 	}
+
+	/** The selected Work joins the filter as a transient, non-persisted exception. */
+	const activeGlobalLineageFilter = $derived<GlobalLineageFilter>({
+		...treeFilter,
+		includeWorkIds: selectedItem ? [selectedItem.workId] : [],
+	});
 
 	function releaseEditorFocus(): void {
 		const active = document.activeElement;
@@ -957,6 +969,24 @@
 		await load(item.id);
 	}
 
+	async function loadGlobalLineage(): Promise<void> {
+		try {
+			globalLineage = await api.listGlobalLineage(activeGlobalLineageFilter);
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
+	function handleGlobalLineageFilterChange(next: GlobalLineageFilter): void {
+		treeFilter = {
+			includeIsolated: next.includeIsolated,
+			linkTypes: next.linkTypes,
+			includeWorkIds: [],
+		};
+		saveTreeFilterPreference(treeFilter);
+		void loadGlobalLineage();
+	}
+
 	async function handleKeydown(
 		event: KeyboardEvent,
 		row: VisibleRow,
@@ -964,6 +994,8 @@
 		compositionGuard = false,
 	): Promise<void> {
 		if (compositionGuard || event.isComposing || event.keyCode === 229) return;
+
+
 		if (inlineLinkCompletion?.itemId === row.item.id) {
 			const completion = inlineLinkCompletion;
 			if (completion.phase === "candidate") {
@@ -2921,7 +2953,10 @@
 				<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
 					onclick={() => (viewMode = "outline")}>アウトライン</button>
 				<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
-					onclick={() => (viewMode = "globalLineage")}>ツリー</button>
+					onclick={() => {
+						viewMode = "globalLineage";
+						void loadGlobalLineage();
+					}}>ツリー</button>
 			</div>
 			{#if viewMode !== "outline" && viewMode !== "globalLineage"}
 				<small class="current-location__status">表示中: {viewModeLabel}</small>
@@ -3771,6 +3806,8 @@
 		{:else if globalLineage}
 			<GlobalLineage
 				projection={globalLineage}
+				filter={activeGlobalLineageFilter}
+				onFilterChange={handleGlobalLineageFilterChange}
 				{selectedId}
 				onSelect={(id) => selectOccurrence(id)}
 				onOpen={(id) => void openTreeOccurrence(id)}

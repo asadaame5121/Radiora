@@ -236,31 +236,35 @@
 						{#each clusterMembers as member (member.id)}
 							{@const internal = internalLinks(member.id)}
 							{@const external = externalStubs(member.id)}
-							<li
-								class:selected={member.id === selectedId}
-								role="button"
-								tabindex="0"
-								onclick={() => onSelect(member.id)}
-								ondblclick={() => onOpen(member.id)}
-								onkeydown={(event) => {
-									if (event.key !== "Enter" && event.key !== " ") return;
-									event.preventDefault();
-									onSelect(member.id);
-								}}
-							>
-								<p class="member-label">{labelForItem(member.text).label}</p>
-								{#if internal.length > 0 || external.length > 0}
-									<div class="member-links" aria-label="構成ノードの意味リンク">
-										{#each internal as link (link.type + link.targetLabel)}
-											<span class="link-chip type-{link.type.toLowerCase()}">
-												{link.type} → {link.targetLabel}
-											</span>
-										{/each}
-										{#each external as type (type)}
-											<span class="link-stub type-{type.toLowerCase()}">{type} → 外部</span>
-										{/each}
-									</div>
-								{/if}
+							<li class:selected={member.id === selectedId}>
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div
+									class="member-main"
+									role="button"
+									tabindex="0"
+									aria-label={labelForItem(member.text).label}
+									onclick={() => onSelect(member.id)}
+									ondblclick={() => onOpen(member.id)}
+									onkeydown={(event) => {
+										if (event.key !== "Enter" && event.key !== " ") return;
+										event.preventDefault();
+										onSelect(member.id);
+									}}
+								>
+									<p class="member-label">{labelForItem(member.text).label}</p>
+									{#if internal.length > 0 || external.length > 0}
+										<div class="member-links" aria-label="構成ノードの意味リンク">
+											{#each internal as link (link.type + link.targetLabel)}
+												<span class="link-chip type-{link.type.toLowerCase()}">
+													{link.type} → {link.targetLabel}
+												</span>
+											{/each}
+											{#each external as type (type)}
+												<span class="link-stub type-{type.toLowerCase()}">{type} → 外部</span>
+											{/each}
+										</div>
+									{/if}
+								</div>
 								<button class="open-member" onclick={() => onOpen(member.id)}>開く</button>
 							</li>
 						{/each}
@@ -462,7 +466,8 @@
 		outline: none;
 	}
 	.cluster-members li:hover,
-	.cluster-members li:focus,
+	.cluster-members li:has(.member-main:hover),
+	.cluster-members li:has(.member-main:focus),
 	.cluster-members li.selected {
 		border-color: #25c6d1;
 		background: #0c1c27;
