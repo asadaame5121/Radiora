@@ -4,6 +4,19 @@ export type TreeLod = "detail" | "context" | "overview";
 export type TreeLinkType = LinkType;
 export type TreeProjection = "chronology" | "lineage";
 
+/**
+ * D3-independent 2D camera. World coordinates become screen coordinates via
+ * `x * k + camera.x` and `y * k + camera.y`; zoom therefore stretches both axes
+ * while node and label sizes stay constant on screen.
+ */
+export interface TreeCamera {
+	k: number;
+	x: number;
+	y: number;
+}
+
+export const IDENTITY_CAMERA: TreeCamera = { k: 1, x: 0, y: 0 };
+
 export interface LineageProjection {
 	generationByWorkId: Map<string, number>;
 	knotWorkIds: Set<string>;
@@ -15,8 +28,12 @@ export interface TreeLayoutNode {
 	id: string;
 	item: OutlineItem;
 	itemIds: string[];
+	/** Screen-space position produced by the camera transform. */
 	x: number;
 	y: number;
+	/** Layout-space position; the camera is applied afterwards. */
+	worldX: number;
+	worldY: number;
 	lane: number;
 	label: string;
 	labelLines: string[];
@@ -26,6 +43,8 @@ export interface TreeLayoutNode {
 	aggregate: boolean;
 	isKnot: boolean;
 	isLineageKnot: boolean;
+	/** World-space bounds of the constituent nodes; present on cluster nodes. */
+	bounds?: { minX: number; minY: number; maxX: number; maxY: number };
 }
 
 export interface TreeLayoutEdge {
@@ -40,20 +59,20 @@ export interface TreeLayout {
 	lod: TreeLod;
 	nodes: TreeLayoutNode[];
 	edges: TreeLayoutEdge[];
-	visibleDensity: number;
+	/** Total occupied height in world units. */
 	contentHeight: number;
-	expandedItemIds: Set<string>;
-	expandedClusterCount: number;
 }
 
 export interface TreeLayoutOptions {
 	width: number;
 	height: number;
+	/** World-space X for a Chronology timestamp. */
 	projectX: (timestamp: number) => number;
 	projection?: TreeProjection;
+	/** World-space X for a Lineage generation. */
 	projectGeneration?: (generation: number) => number;
-	/** Item ids from one overview cluster to display as individual nodes. */
-	expandedOverviewItemIds?: ReadonlySet<string>;
+	/** Applied to the layout to produce screen coordinates; defaults to identity. */
+	camera?: TreeCamera;
 }
 
 interface RawEdge {
@@ -62,11 +81,10 @@ interface RawEdge {
 	type: TreeLinkType;
 }
 
-const DETAIL_DENSITY = 96;
-const CONTEXT_DENSITY = 32;
-const NODE_GAP = 12;
 const OVERVIEW_CELL_WIDTH = 48;
 const OVERVIEW_CELL_HEIGHT = 36;
+const NODE_GAP = 12;
+const LANE_SPACING = 44;
 
 export function calculateTreeLayout(
 	snapshot: OutlineSnapshot,
@@ -77,17 +95,15 @@ export function calculateTreeLayout(
 			lod: "detail",
 			nodes: [],
 			edges: [],
-			visibleDensity: options.width,
 			contentHeight: options.height,
-			expandedItemIds: new Set(),
-			expandedClusterCount: 0,
 		};
 	}
 
+	const camera = options.camera ?? IDENTITY_CAMERA;
 	const lineage = options.projection === "lineage" ? calculateLineageProjection(snapshot) : null;
 	const projected = snapshot.items.map((item) => ({
 		item,
-		x: lineage
+		worldX: lineage
 			? (options.projectGeneration ?? options.projectX)(
 				lineage.knotWorkIds.has(item.workId)
 					? lineage.knotGeneration ?? 0
@@ -95,34 +111,27 @@ export function calculateTreeLayout(
 			)
 			: options.projectX(parseTimestamp(item.createdAt)),
 	}));
-	const visibleCount = Math.max(
-		1,
-		projected.filter(({ x }) => x >= -80 && x <= options.width + 80).length,
-	);
-	const visibleDensity = options.width / visibleCount;
-	const lod = lodForDensity(visibleDensity);
-	const laidOut = assignLanes(projected, snapshot, lod, options.height, lineage?.knotWorkIds);
+	const laidOut = assignLanes(projected, snapshot, options.height, lineage?.knotWorkIds);
+	const screenNodes = laidOut.nodes.map((node) => ({
+		...node,
+		x: node.worldX * camera.k + camera.x,
+		y: node.worldY * camera.k + camera.y,
+	}));
+	const lod = lodForScreenCollisions(screenNodes);
 
-	if (lod === "overview") {
-		return aggregateOverview(
-			laidOut.nodes,
-			rawEdges(snapshot),
-			visibleDensity,
-			laidOut.contentHeight,
-			options.expandedOverviewItemIds,
-		);
+	if (lod === "detail") {
+		return {
+			lod,
+			nodes: screenNodes,
+			edges: materializeEdges(
+				rawEdges(snapshot),
+				new Map(screenNodes.map((node) => [node.id, node])),
+			),
+			contentHeight: laidOut.contentHeight,
+		};
 	}
 
-	const nodesById = new Map(laidOut.nodes.map((node) => [node.id, node]));
-	return {
-		lod,
-		nodes: laidOut.nodes,
-		edges: materializeEdges(rawEdges(snapshot), nodesById),
-		visibleDensity,
-		contentHeight: laidOut.contentHeight,
-		expandedItemIds: new Set(),
-		expandedClusterCount: 0,
-	};
+	return aggregateScreenCells(screenNodes, rawEdges(snapshot), lod, laidOut.contentHeight);
 }
 
 export function calculateLineageProjection(snapshot: OutlineSnapshot): LineageProjection {
@@ -241,10 +250,33 @@ function findCyclicWorkIds(
 	return cyclic;
 }
 
-export function lodForDensity(density: number): TreeLod {
-	if (density >= DETAIL_DENSITY) return "detail";
-	if (density >= CONTEXT_DENSITY) return "context";
-	return "overview";
+/**
+ * Decides the LOD from screen-space collisions instead of a density proxy.
+ * Nodes sharing a 48x36px screen cell are colliding; the fraction of colliding
+ * nodes maps to the shared Chronology/Lineage LOD scale.
+ *
+ * Cells are indexed relative to the bounding-box origin so a pure pan never
+ * changes collision groups (only zoom does).
+ */
+export function lodForScreenCollisions(
+	screenPositions: ReadonlyArray<{ x: number; y: number }>,
+): TreeLod {
+	if (screenPositions.length === 0) return "detail";
+	const minX = Math.min(...screenPositions.map((position) => position.x));
+	const minY = Math.min(...screenPositions.map((position) => position.y));
+	const cells = new Map<string, number>();
+	for (const position of screenPositions) {
+		const key = cellKey(position.x - minX, position.y - minY);
+		cells.set(key, (cells.get(key) ?? 0) + 1);
+	}
+	let colliding = 0;
+	for (const count of cells.values()) {
+		if (count > 1) colliding += count;
+	}
+	const fraction = colliding / screenPositions.length;
+	if (fraction >= .5) return "overview";
+	if (fraction > 0) return "context";
+	return "detail";
 }
 
 export function labelForItem(text: string): { label: string; lines: string[] } {
@@ -276,61 +308,154 @@ export function buildDirectNeighborSet(snapshot: OutlineSnapshot, id: string): S
 	return result;
 }
 
+/**
+ * Deterministic order for placing same-X items onto Y lanes.
+ *
+ * The order walks connected components of FROM links, outline parent/child
+ * placement, and the other asserted semantic links, then falls back to
+ * orderKey and item id. Non-FROM links influence only this proximity order and
+ * never change a generation. Items without links still get their own lane.
+ */
+export function buildLaneOrder(snapshot: OutlineSnapshot): Map<string, number> {
+	const ids = snapshot.items.map((item) => item.id);
+	const adjacency = new Map(ids.map((id) => [id, new Set<string>()]));
+	const addEdge = (a: string, b: string): void => {
+		if (a === b) return;
+		adjacency.get(a)?.add(b);
+		adjacency.get(b)?.add(a);
+	};
+	const idSet = new Set(ids);
+	const itemById = new Map(snapshot.items.map((item) => [item.id, item]));
+	for (const item of snapshot.items) {
+		if (item.parentId && idSet.has(item.parentId)) addEdge(item.id, item.parentId);
+	}
+	const representativeByWork = new Map<string, string>();
+	for (const item of snapshot.items) {
+		if (!representativeByWork.has(item.workId)) representativeByWork.set(item.workId, item.id);
+	}
+	for (const link of snapshot.links) {
+		if (link.status === "retracted") continue;
+		const fromItemId = representativeByWork.get(link.fromId);
+		const toItemId = representativeByWork.get(link.toId);
+		if (fromItemId && toItemId) addEdge(fromItemId, toItemId);
+	}
+
+	const componentOf = new Map<string, number>();
+	const membersByComponent = new Map<number, string[]>();
+	let componentIndex = 0;
+	for (const id of [...ids].sort()) {
+		if (componentOf.has(id)) continue;
+		const members: string[] = [];
+		const stack = [id];
+		while (stack.length > 0) {
+			const current = stack.pop()!;
+			if (componentOf.has(current)) continue;
+			componentOf.set(current, componentIndex);
+			members.push(current);
+			for (const neighbor of adjacency.get(current) ?? []) {
+				if (!componentOf.has(neighbor)) stack.push(neighbor);
+			}
+		}
+		membersByComponent.set(componentIndex, members.sort());
+		componentIndex++;
+	}
+
+	const componentKey = (members: string[]): [number, string] => {
+		const ordered = [...members].sort(compareByOrderKeyThenId(itemById));
+		const first = ordered[0];
+		return [itemById.get(first)!.orderKey, first];
+	};
+	const orderedComponents = [...membersByComponent.keys()].sort((a, b) => {
+		const [orderKeyA, idA] = componentKey(membersByComponent.get(a)!);
+		const [orderKeyB, idB] = componentKey(membersByComponent.get(b)!);
+		return orderKeyA - orderKeyB || idA.localeCompare(idB);
+	});
+
+	const order = new Map<string, number>();
+	let cursor = 0;
+	for (const index of orderedComponents) {
+		const members = membersByComponent.get(index)!;
+		const start = [...members].sort((a, b) => {
+			const left = itemById.get(a)!;
+			const right = itemById.get(b)!;
+			return left.orderKey - right.orderKey || left.id.localeCompare(right.id);
+		})[0];
+		const visited = new Set<string>();
+		const visit = (id: string) => {
+			if (visited.has(id)) return;
+			visited.add(id);
+			order.set(id, cursor++);
+			const current = itemById.get(id)!;
+			const neighbors = [...(adjacency.get(id) ?? [])];
+			const parentChildren = neighbors.filter((neighbor) =>
+				itemById.get(neighbor)?.parentId === id || current.parentId === neighbor
+			).sort(compareByOrderKeyThenId(itemById));
+			const linked = neighbors.filter((neighbor) => !parentChildren.includes(neighbor))
+				.sort(compareByOrderKeyThenId(itemById));
+			for (const neighbor of [...parentChildren, ...linked]) visit(neighbor);
+		};
+		visit(start);
+		for (const member of members) visit(member);
+	}
+	return order;
+}
+
+function compareByOrderKeyThenId(itemById: Map<string, OutlineItem>): (a: string, b: string) => number {
+	return (a, b) => {
+		const left = itemById.get(a)!;
+		const right = itemById.get(b)!;
+		return left.orderKey - right.orderKey || left.id.localeCompare(right.id);
+	};
+}
+
 function assignLanes(
-	projected: Array<{ item: OutlineItem; x: number }>,
+	projected: Array<{ item: OutlineItem; worldX: number }>,
 	snapshot: OutlineSnapshot,
-	lod: TreeLod,
 	height: number,
 	lineageKnotWorkIds: Set<string> = new Set(),
-): { nodes: TreeLayoutNode[]; contentHeight: number } {
+): { nodes: Array<Omit<TreeLayoutNode, "x" | "y">>; contentHeight: number } {
 	const knotIds = new Set(snapshot.stashItemIds);
-	const baseLaneCount = lod === "detail"
-		? Math.min(10, Math.max(1, Math.ceil(Math.sqrt(projected.length))))
-		: Math.min(12, Math.max(4, Math.ceil(Math.sqrt(projected.length) * 1.5)));
-	const preferredLaneById = structuralLanes(snapshot, baseLaneCount);
-	const laneEnds: number[] = Array.from({ length: baseLaneCount }, () => Number.NEGATIVE_INFINITY);
-	const laneById = new Map<string, number>();
-	const laneSpacing = lod === "detail" ? 52 : lod === "context" ? 38 : 16;
+	const order = buildLaneOrder(snapshot);
 	const sorted = [...projected].sort((a, b) =>
-		a.x - b.x || a.item.orderKey - b.item.orderKey || a.item.id.localeCompare(b.item.id)
+		a.worldX - b.worldX ||
+		(order.get(a.item.id) ?? Number.MAX_SAFE_INTEGER) -
+			(order.get(b.item.id) ?? Number.MAX_SAFE_INTEGER) ||
+		a.item.orderKey - b.item.orderKey ||
+		a.item.id.localeCompare(b.item.id)
 	);
-	const pending: Array<Omit<TreeLayoutNode, "y">> = [];
+	const baseLaneCount = Math.min(10, Math.max(1, Math.ceil(Math.sqrt(sorted.length))));
+	const laneEnds: number[] = Array.from(
+		{ length: baseLaneCount },
+		() => Number.NEGATIVE_INFINITY,
+	);
+	const pending: Array<Omit<TreeLayoutNode, "x" | "y" | "worldY">> = [];
 
-	for (const { item, x } of sorted) {
+	for (const { item, worldX } of sorted) {
 		const { label, lines } = labelForItem(item.text);
-		const labelWidth = lod !== "overview"
-			? Math.min(
-				180,
-				Math.max(48, Math.max(...lines.map((line) => splitGraphemes(line).length)) * 13),
-			)
-			: 0;
+		const labelWidth = Math.min(
+			180,
+			Math.max(48, Math.max(...lines.map((line) => splitGraphemes(line).length)) * 13),
+		);
 		const radius = knotIds.has(item.id) ? 10 : 6;
-		const intervalStart = x - radius - 5;
-		const intervalEnd = x + radius + (lod === "detail" ? labelWidth + 18 : 10);
-		const available: number[] = [];
-		for (let lane = 0; lane < laneEnds.length; lane++) {
-			if (laneEnds[lane] + NODE_GAP <= intervalStart) available.push(lane);
+		const intervalStart = worldX - radius - 5;
+		const intervalEnd = worldX + radius + 10;
+		let lane = -1;
+		for (let candidate = 0; candidate < laneEnds.length; candidate++) {
+			if (laneEnds[candidate] + NODE_GAP <= intervalStart) {
+				lane = candidate;
+				break;
+			}
 		}
-
-		const preferredLane = preferredLaneById.get(item.id) ??
-			(item.parentId ? laneById.get(item.parentId) : undefined) ??
-			0;
-		let lane: number;
-		if (available.length > 0) {
-			lane = available.reduce((best, candidate) =>
-				Math.abs(candidate - preferredLane) < Math.abs(best - preferredLane) ? candidate : best
-			);
-		} else {
+		if (lane === -1) {
 			lane = laneEnds.length;
 			laneEnds.push(Number.NEGATIVE_INFINITY);
 		}
 		laneEnds[lane] = intervalEnd;
-		laneById.set(item.id, lane);
 		pending.push({
 			id: item.id,
 			item,
 			itemIds: [item.id],
-			x,
+			worldX,
 			lane,
 			label,
 			labelLines: lines,
@@ -343,125 +468,87 @@ function assignLanes(
 		});
 	}
 
-	const occupiedHeight = Math.max(0, laneEnds.length - 1) * laneSpacing;
+	const occupiedHeight = Math.max(0, laneEnds.length - 1) * LANE_SPACING;
 	const top = Math.max(60, (height - occupiedHeight) / 2);
 	const contentHeight = Math.max(height, top + occupiedHeight + 60);
 	return {
-		nodes: pending.map((node) => ({ ...node, y: top + node.lane * laneSpacing })),
+		nodes: pending.map((node) => ({ ...node, worldY: top + node.lane * LANE_SPACING })),
 		contentHeight,
 	};
 }
 
-function structuralLanes(snapshot: OutlineSnapshot, laneCount: number): Map<string, number> {
-	const byParent = new Map<string | null, OutlineItem[]>();
-	const ids = new Set(snapshot.items.map((item) => item.id));
-	for (const item of snapshot.items) {
-		const parentId = item.parentId && ids.has(item.parentId) ? item.parentId : null;
-		const bucket = byParent.get(parentId) ?? [];
-		bucket.push(item);
-		byParent.set(parentId, bucket);
-	}
-	for (const bucket of byParent.values()) {
-		bucket.sort((a, b) => a.orderKey - b.orderKey || a.id.localeCompare(b.id));
-	}
-
-	const ordered: OutlineItem[] = [];
-	const visited = new Set<string>();
-	const visit = (item: OutlineItem) => {
-		if (visited.has(item.id)) return;
-		visited.add(item.id);
-		ordered.push(item);
-		for (const child of byParent.get(item.id) ?? []) visit(child);
-	};
-	for (const root of byParent.get(null) ?? []) visit(root);
-	for (const item of snapshot.items) visit(item);
-
-	const result = new Map<string, number>();
-	const denominator = Math.max(1, ordered.length - 1);
-	ordered.forEach((item, index) => {
-		result.set(item.id, Math.round(index / denominator * Math.max(0, laneCount - 1)));
-	});
-	return result;
-}
-
-function aggregateOverview(
+function aggregateScreenCells(
 	nodes: TreeLayoutNode[],
 	edges: RawEdge[],
-	visibleDensity: number,
+	lod: TreeLod,
 	contentHeight: number,
-	expandedOverviewItemIds: ReadonlySet<string> | undefined,
 ): TreeLayout {
+	const minX = Math.min(...nodes.map((node) => node.x));
+	const minY = Math.min(...nodes.map((node) => node.y));
 	const buckets = new Map<string, TreeLayoutNode[]>();
 	for (const node of nodes) {
-		const key = `${Math.floor(node.x / OVERVIEW_CELL_WIDTH)}:${
-			Math.floor(node.y / OVERVIEW_CELL_HEIGHT)
-		}`;
+		const key = cellKey(node.x - minX, node.y - minY);
 		const bucket = buckets.get(key) ?? [];
 		bucket.push(node);
 		buckets.set(key, bucket);
 	}
 
 	const aggregatedNodes: TreeLayoutNode[] = [];
-	const aggregateByItemId = new Map<string, TreeLayoutNode>();
-	const expandedItemIds = new Set<string>();
-	let expandedClusterCount = 0;
-	for (const [key, bucket] of buckets) {
-		const representative = [...bucket].sort((a, b) =>
-			b.item.updatedAt.localeCompare(a.item.updatedAt) || a.item.id.localeCompare(b.item.id)
-		)[0];
-		const count = bucket.length;
-		const clusterId = `cluster:${key}`;
-		const centerX = bucket.reduce((total, node) =>
-			total + node.x, 0) / count;
-		const centerY = bucket.reduce((total, node) => total + node.y, 0) / count;
-		const isExpanded = count > 1 && bucket.every((node) => expandedOverviewItemIds?.has(node.id));
-		if (isExpanded) {
-			const members = [...bucket].sort((a, b) =>
-				a.item.orderKey - b.item.orderKey || a.item.id.localeCompare(b.item.id)
-			);
-			const middle = (members.length - 1) / 2;
-			for (const [index, member] of members.entries()) {
-				const offset = index - middle;
-				const expanded = {
-					...member,
-					x: centerX + offset * 10,
-					y: centerY + offset * 52,
-				};
-				aggregatedNodes.push(expanded);
-				aggregateByItemId.set(member.id, expanded);
-				expandedItemIds.add(member.id);
-			}
-			expandedClusterCount = count;
+	const nodeByItemId = new Map<string, TreeLayoutNode>();
+	for (const bucket of buckets.values()) {
+		if (bucket.length === 1) {
+			const single = bucket[0];
+			aggregatedNodes.push(single);
+			nodeByItemId.set(single.id, single);
 			continue;
 		}
-		const aggregate: TreeLayoutNode = {
-			...representative,
-			id: clusterId,
-			itemIds: bucket.map((node) => node.id),
-			x: centerX,
-			y: centerY,
-			label: count > 1 ? String(count) : "",
-			labelLines: count > 1 ? [String(count)] : [],
+		const members = [...bucket].sort((a, b) =>
+			a.item.updatedAt.localeCompare(b.item.updatedAt) || a.id.localeCompare(b.id)
+		);
+		const itemIds = members.map((node) => node.id).sort();
+		// The cluster id derives from sorted constituent item ids so panning or
+		// input reordering can never change it.
+		const cluster: TreeLayoutNode = {
+			id: `cluster:${itemIds.join(":")}`,
+			item: members[members.length - 1].item,
+			itemIds,
+			x: members.reduce((total, node) => total + node.x, 0) / members.length,
+			y: members.reduce((total, node) => total + node.y, 0) / members.length,
+			worldX: members.reduce((total, node) => total + node.worldX, 0) / members.length,
+			worldY: members.reduce((total, node) => total + node.worldY, 0) / members.length,
+			lane: Math.min(...members.map((node) => node.lane)),
+			label: String(members.length),
+			labelLines: [String(members.length)],
 			labelWidth: 0,
-			radius: count > 1 ? Math.min(16, 8 + Math.log2(count) * 2) : representative.radius,
-			count,
-			aggregate: count > 1,
-			isKnot: bucket.some((node) => node.isKnot),
-			isLineageKnot: bucket.some((node) => node.isLineageKnot),
+			radius: Math.min(16, 8 + Math.log2(members.length) * 2),
+			count: members.length,
+			aggregate: true,
+			isKnot: members.some((node) => node.isKnot),
+			isLineageKnot: members.some((node) => node.isLineageKnot),
+			bounds: {
+				minX: Math.min(...members.map((node) => node.worldX)),
+				minY: Math.min(...members.map((node) => node.worldY)),
+				maxX: Math.max(...members.map((node) => node.worldX)),
+				maxY: Math.max(...members.map((node) => node.worldY)),
+			},
 		};
-		aggregatedNodes.push(aggregate);
-		for (const node of bucket) aggregateByItemId.set(node.id, aggregate);
+		aggregatedNodes.push(cluster);
+		for (const node of members) nodeByItemId.set(node.id, cluster);
 	}
 
+	aggregatedNodes.sort((a, b) => a.x - b.x || a.y - b.y || a.id.localeCompare(b.id));
 	return {
-		lod: "overview",
+		lod,
 		nodes: aggregatedNodes,
-		edges: materializeEdges(edges, aggregateByItemId),
-		visibleDensity,
+		edges: materializeEdges(edges, nodeByItemId),
 		contentHeight,
-		expandedItemIds,
-		expandedClusterCount,
 	};
+}
+
+function cellKey(relativeX: number, relativeY: number): string {
+	return `${Math.floor(relativeX / OVERVIEW_CELL_WIDTH)}:${
+		Math.floor(relativeY / OVERVIEW_CELL_HEIGHT)
+	}`;
 }
 
 function rawEdges(snapshot: OutlineSnapshot): RawEdge[] {
