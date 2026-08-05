@@ -37,6 +37,7 @@
 	let transform = $state<d3.ZoomTransform>(d3.zoomIdentity);
 	let hoveredId = $state<string | null>(null);
 	let projection = $state<TreeProjection>("chronology");
+	let expandedOverviewItemIds = $state<Set<string> | null>(null);
 	let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
 
 	const timeDomain = $derived.by((): [Date, Date] => {
@@ -73,6 +74,7 @@
 		projectX: (timestamp) =>
 			transform.applyX(chronologyBaseScale(new Date(timestamp))),
 		projectGeneration: (generation) => transform.applyX(lineageBaseScale(generation)),
+		expandedOverviewItemIds: expandedOverviewItemIds ?? undefined,
 	}));
 	const axisMarks = $derived.by(() => {
 		if (projection === "chronology") {
@@ -232,6 +234,7 @@
 
 	function showLabel(node: TreeLayoutNode): boolean {
 		if (node.aggregate) return true;
+		if (layout.expandedItemIds.has(node.id)) return true;
 		if (layout.lod === "detail") return true;
 		if (layout.lod === "overview") return false;
 		return contextLabelIds.has(node.id);
@@ -239,7 +242,7 @@
 
 	function handleNodeClick(node: TreeLayoutNode): void {
 		if (node.aggregate) {
-			zoomToNode(node, Math.min(24, transform.k * 2.5));
+			expandedOverviewItemIds = new Set(node.itemIds);
 			return;
 		}
 		onSelect(node.id);
@@ -292,12 +295,14 @@
 	}
 
 	function fitView(): void {
+		expandedOverviewItemIds = null;
 		applyTransform(d3.zoomIdentity);
 	}
 
 	function selectProjection(next: TreeProjection): void {
 		if (projection === next) return;
 		projection = next;
+		expandedOverviewItemIds = null;
 		saveTreeProjectionPreference(next);
 		onProjectionChange?.(next);
 		fitView();
@@ -323,7 +328,7 @@
 	}
 
 	function nodeTitle(node: TreeLayoutNode): string {
-		if (node.aggregate) return `${node.count}件の思索。クリックして拡大`;
+		if (node.aggregate) return `${node.count}件の思索。クリックして分散表示`;
 		const parsed = new Date(node.item.createdAt);
 		const createdAt = Number.isFinite(parsed.getTime())
 			? new Intl.DateTimeFormat("ja-JP", {
@@ -455,6 +460,12 @@
 		<button aria-label="ズームイン" title="ズームイン" onclick={() => zoomBy(1.4)}>＋</button>
 		<button aria-label="全体を表示" title="全体を表示" onclick={fitView}>⌗</button>
 		<span><i></i>{layout.lod === "detail" ? "Detail" : layout.lod === "context" ? "Context" : "Overview"}</span>
+		{#if layout.expandedClusterCount > 0}
+			<button
+				class="collapse-cluster"
+				onclick={() => (expandedOverviewItemIds = null)}
+			>まとめ表示に戻す</button>
+		{/if}
 	</div>
 </div>
 
@@ -632,6 +643,11 @@
 		width: 40px;
 		font-size: 18px;
 		cursor: pointer;
+	}
+	.tree-controls .collapse-cluster {
+		width: auto;
+		padding: 0 12px;
+		font-size: 11px;
 	}
 	.tree-controls button:hover {
 		border-color: #25c6d1;
