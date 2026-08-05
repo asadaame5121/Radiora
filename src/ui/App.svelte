@@ -921,11 +921,12 @@
 
 	function requestFocus(id: string, caretOffset?: number): void {
 		setTimeout(() => {
-			const element = document.querySelector<HTMLTextAreaElement>(`[data-item-id="${id}"]`);
-			element?.focus();
-			const caret = Math.min(caretOffset ?? element?.value.length ?? 0, element?.value.length ?? 0);
-			element?.setSelectionRange(caret, caret);
-			element?.scrollIntoView({ block: "center" });
+			const host = document.querySelector<HTMLElement>(
+				`.markdown-editor-host[data-editor-item-id="${CSS.escape(id)}"]`,
+			);
+			host?.dispatchEvent(new CustomEvent("radiora:focus-editor", {
+				detail: { caretOffset },
+			}));
 		}, 0);
 	}
 

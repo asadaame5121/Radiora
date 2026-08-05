@@ -51,8 +51,26 @@
 		});
 		adapter.setMode(mode);
 		const onHostClick = (event: MouseEvent) => focusEditor(event);
+		const onFocusRequest = (event: Event) => {
+			const current = adapter;
+			if (!current) return;
+			const requestedOffset = (event as CustomEvent<{ caretOffset?: number }>).detail
+				?.caretOffset;
+			changeMode("plain");
+			current.focus();
+			const caret = Math.max(
+				0,
+				Math.min(requestedOffset ?? current.getValue().length, current.getValue().length),
+			);
+			current.setSelection({ start: caret, end: caret, direction: "none" });
+			current.textarea.scrollIntoView({ block: "center" });
+		};
 		host.addEventListener("click", onHostClick);
-		return () => host.removeEventListener("click", onHostClick);
+		host.addEventListener("radiora:focus-editor", onFocusRequest);
+		return () => {
+			host.removeEventListener("click", onHostClick);
+			host.removeEventListener("radiora:focus-editor", onFocusRequest);
+		};
 	});
 
 	$effect(() => {
@@ -90,7 +108,7 @@
 </script>
 
 <div class="markdown-editor" class:fallback>
-	<div class="markdown-editor-host" bind:this={host}></div>
+	<div class="markdown-editor-host" data-editor-item-id={itemId} bind:this={host}></div>
 	<label class="markdown-editor-mode">
 		<span>{vocabulary.editorMode}</span>
 		<select value={mode} onchange={(event) => changeMode(event.currentTarget.value as MarkdownEditorMode)}>

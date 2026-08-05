@@ -42,6 +42,8 @@ export interface TreeLayout {
 	edges: TreeLayoutEdge[];
 	visibleDensity: number;
 	contentHeight: number;
+	expandedItemIds: Set<string>;
+	expandedClusterCount: number;
 }
 
 export interface TreeLayoutOptions {
@@ -50,6 +52,8 @@ export interface TreeLayoutOptions {
 	projectX: (timestamp: number) => number;
 	projection?: TreeProjection;
 	projectGeneration?: (generation: number) => number;
+	/** Item ids from one overview cluster to display as individual nodes. */
+	expandedOverviewItemIds?: ReadonlySet<string>;
 }
 
 interface RawEdge {
@@ -75,6 +79,8 @@ export function calculateTreeLayout(
 			edges: [],
 			visibleDensity: options.width,
 			contentHeight: options.height,
+			expandedItemIds: new Set(),
+			expandedClusterCount: 0,
 		};
 	}
 
@@ -103,6 +109,7 @@ export function calculateTreeLayout(
 			rawEdges(snapshot),
 			visibleDensity,
 			laidOut.contentHeight,
+			options.expandedOverviewItemIds,
 		);
 	}
 
@@ -113,6 +120,8 @@ export function calculateTreeLayout(
 		edges: materializeEdges(rawEdges(snapshot), nodesById),
 		visibleDensity,
 		contentHeight: laidOut.contentHeight,
+		expandedItemIds: new Set(),
+		expandedClusterCount: 0,
 	};
 }
 
@@ -380,6 +389,7 @@ function aggregateOverview(
 	edges: RawEdge[],
 	visibleDensity: number,
 	contentHeight: number,
+	expandedOverviewItemIds: ReadonlySet<string> | undefined,
 ): TreeLayout {
 	const buckets = new Map<string, TreeLayoutNode[]>();
 	for (const node of nodes) {
@@ -393,19 +403,43 @@ function aggregateOverview(
 
 	const aggregatedNodes: TreeLayoutNode[] = [];
 	const aggregateByItemId = new Map<string, TreeLayoutNode>();
+	const expandedItemIds = new Set<string>();
+	let expandedClusterCount = 0;
 	for (const [key, bucket] of buckets) {
 		const representative = [...bucket].sort((a, b) =>
 			b.item.updatedAt.localeCompare(a.item.updatedAt) || a.item.id.localeCompare(b.item.id)
 		)[0];
 		const count = bucket.length;
+		const clusterId = `cluster:${key}`;
+		const centerX = bucket.reduce((total, node) =>
+			total + node.x, 0) / count;
+		const centerY = bucket.reduce((total, node) => total + node.y, 0) / count;
+		const isExpanded = count > 1 && bucket.every((node) => expandedOverviewItemIds?.has(node.id));
+		if (isExpanded) {
+			const members = [...bucket].sort((a, b) =>
+				a.item.orderKey - b.item.orderKey || a.item.id.localeCompare(b.item.id)
+			);
+			const middle = (members.length - 1) / 2;
+			for (const [index, member] of members.entries()) {
+				const offset = index - middle;
+				const expanded = {
+					...member,
+					x: centerX + offset * 10,
+					y: centerY + offset * 52,
+				};
+				aggregatedNodes.push(expanded);
+				aggregateByItemId.set(member.id, expanded);
+				expandedItemIds.add(member.id);
+			}
+			expandedClusterCount = count;
+			continue;
+		}
 		const aggregate: TreeLayoutNode = {
 			...representative,
-			id: `cluster:${key}`,
-			itemIds: bucket.map((node) =>
-				node.id
-			),
-			x: bucket.reduce((total, node) => total + node.x, 0) / count,
-			y: bucket.reduce((total, node) => total + node.y, 0) / count,
+			id: clusterId,
+			itemIds: bucket.map((node) => node.id),
+			x: centerX,
+			y: centerY,
 			label: count > 1 ? String(count) : "",
 			labelLines: count > 1 ? [String(count)] : [],
 			labelWidth: 0,
@@ -425,6 +459,8 @@ function aggregateOverview(
 		edges: materializeEdges(edges, aggregateByItemId),
 		visibleDensity,
 		contentHeight,
+		expandedItemIds,
+		expandedClusterCount,
 	};
 }
 
