@@ -102,6 +102,25 @@ Deno.test("filter changes reload the projection and preserve only persisted sett
 	assert(app.includes("includeWorkIds: selectedItem ? [selectedItem.workId] : []"));
 });
 
+Deno.test("selection changes refresh the exception projection while the tree view is open", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+
+	assert(app.includes("lastLoadedGlobalLineageFilterKey"));
+	assert(app.includes("globalLineageFilterKey()"));
+	assertMatch(
+		app,
+		/viewMode !== "globalLineage"[\s\S]*?globalLineageFilterKey\(\)[\s\S]*?void loadGlobalLineage\(\)/,
+	);
+});
+
+Deno.test("global lineage requests are generation-guarded against out-of-order responses", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+
+	assert(app.includes("let globalLineageRequest = 0"));
+	assert(app.includes("const request = ++globalLineageRequest"));
+	assert(app.includes("request !== globalLineageRequest"));
+});
+
 Deno.test("filter state closes a vanished cluster and shows the filter tab", async () => {
 	const global = await Deno.readTextFile(
 		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
@@ -136,7 +155,6 @@ Deno.test("filter results show the displayed and total Work counts in the tree",
 	assert(global.includes("activeConditionCount"));
 	assert(global.includes("条件"));
 });
-
 Deno.test("lineage UI labels come from UiVocabulary", async () => {
 	const global = await Deno.readTextFile(
 		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
