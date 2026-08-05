@@ -5,6 +5,12 @@ bookmark上のchangeを提供済み機能としては扱わない。
 
 ## Unreleased
 
+## 0.2.1 - 2026-08-05
+
+### Fixed
+
+- Release workflowのSurrealDB CLI検証用SHA-256を正しい値に修正。
+
 ## 0.2.0 - 2026-08-05
 
 ### Added
