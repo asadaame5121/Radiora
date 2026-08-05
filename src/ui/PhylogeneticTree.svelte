@@ -109,6 +109,19 @@
 	const directNeighbors = $derived(
 		focusId ? buildDirectNeighborSet(snapshot, focusId) : new Set<string>(),
 	);
+	const nodeGrid = $derived.by(() => {
+		// Spatial index over screen positions so label collision checks stay
+		// local instead of scanning every node.
+		const cellSize = 96;
+		const grid = new Map<string, TreeLayoutNode[]>();
+		for (const node of layout.nodes) {
+			const key = `${Math.floor(node.x / cellSize)}:${Math.floor(node.y / cellSize)}`;
+			const bucket = grid.get(key) ?? [];
+			bucket.push(node);
+			grid.set(key, bucket);
+		}
+		return { cellSize, grid };
+	});
 	const contextLabelIds = $derived.by(() => {
 		const visible = new Set<string>();
 		const accepted: Array<{ x1: number; x2: number; y1: number; y2: number }> = [];
@@ -125,7 +138,7 @@
 				y2: node.y + 10 + Math.max(0, node.labelLines.length - 1) * 14,
 			};
 			if (rect.x1 < 4 || rect.x2 > width - 8 || rect.y1 < 4 || rect.y2 > height - 44) continue;
-			const hitsNode = layout.nodes.some((other) => {
+			const hitsNode = nearNodes(nodeGrid, rect).some((other) => {
 				if (other.id === node.id) return false;
 				const padding = other.radius + 6;
 				return rectanglesOverlap(rect, {
@@ -392,6 +405,25 @@
 		b: { x1: number; x2: number; y1: number; y2: number },
 	): boolean {
 		return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+	}
+
+	function nearNodes(
+		index: { cellSize: number; grid: Map<string, TreeLayoutNode[]> },
+		rect: { x1: number; x2: number; y1: number; y2: number },
+	): TreeLayoutNode[] {
+		const { cellSize, grid } = index;
+		const minCellX = Math.floor(rect.x1 / cellSize);
+		const maxCellX = Math.floor(rect.x2 / cellSize);
+		const minCellY = Math.floor(rect.y1 / cellSize);
+		const maxCellY = Math.floor(rect.y2 / cellSize);
+		const result: TreeLayoutNode[] = [];
+		for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+			for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+				const bucket = grid.get(`${cellX}:${cellY}`);
+				if (bucket) result.push(...bucket);
+			}
+		}
+		return result;
 	}
 </script>
 

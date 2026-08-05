@@ -400,7 +400,9 @@ export function buildLaneOrder(snapshot: OutlineSnapshot): Map<string, number> {
 	return order;
 }
 
-function compareByOrderKeyThenId(itemById: Map<string, OutlineItem>): (a: string, b: string) => number {
+function compareByOrderKeyThenId(
+	itemById: Map<string, OutlineItem>,
+): (a: string, b: string) => number {
 	return (a, b) => {
 		const left = itemById.get(a)!;
 		const right = itemById.get(b)!;
