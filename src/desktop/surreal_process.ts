@@ -13,6 +13,24 @@ export function surrealCommandCandidates(
 	];
 }
 
+export type SurrealCommandProbe = (command: string) => Promise<boolean>;
+
+export async function findSurrealCommand(
+	candidates: readonly string[],
+	probe: SurrealCommandProbe,
+): Promise<string> {
+	for (const command of candidates) {
+		try {
+			if (await probe(command)) return command;
+		} catch {
+			// Try the next known installation location.
+		}
+	}
+	throw new Error(
+		"SurrealDB CLI 3.x が見つかりません。bundle内・PATH・%USERPROFILE%\\.surrealdbを確認してください。",
+	);
+}
+
 function parentDirectory(path: string): string {
 	const index = path.lastIndexOf(pathSeparator);
 	return index < 0 ? "." : path.slice(0, index);
@@ -110,26 +128,20 @@ export class SurrealProcess {
 			bundledSurrealDir,
 			Deno.env.get("USERPROFILE") ?? null,
 		);
-		for (const command of candidates) {
-			try {
-				const output = await new Deno.Command(command, {
-					args: ["version"],
-					stdout: "piped",
-					stderr: "piped",
-				}).output();
-				if (!output.success) continue;
+		return await findSurrealCommand(candidates, async (command) => {
+			const output = await new Deno.Command(command, {
+				args: ["version"],
+				stdout: "piped",
+				stderr: "piped",
+			}).output();
+			if (output.success) {
 				this.trace("process.command-check.ready", {
 					command,
 					version: new TextDecoder().decode(output.stdout).trim(),
 				});
-				return command;
-			} catch {
-				// Try the next known installation location.
 			}
-		}
-		throw new Error(
-			"SurrealDB CLI 3.x が見つかりません。bundle内・PATH・%USERPROFILE%\\.surrealdbを確認してください。",
-		);
+			return output.success;
+		});
 	}
 
 	private async assertPortAvailable(): Promise<void> {
