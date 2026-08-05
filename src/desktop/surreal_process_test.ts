@@ -1,24 +1,7 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert";
-import { surrealCommandCandidates, SurrealProcess } from "./surreal_process.ts";
+import { findSurrealCommand, surrealCommandCandidates } from "./surreal_process.ts";
 
 const sep = Deno.build.os === "windows" ? "\\" : "/";
-
-function bundledProcess(dir: string): SurrealProcess {
-	return new SurrealProcess(
-		`${dir}${sep}main.db`,
-		"127.0.0.1",
-		8012,
-		undefined,
-		dir,
-	);
-}
-
-function writeExecutable(dir: string, name: string, content: string): string {
-	const path = `${dir}${sep}${name}`;
-	Deno.writeTextFileSync(path, content);
-	Deno.chmodSync(path, 0o755);
-	return path;
-}
 
 Deno.test("surrealCommandCandidates: bundle directory is searched first", () => {
 	const candidates = surrealCommandCandidates(
@@ -44,38 +27,29 @@ Deno.test("surrealCommandCandidates: omits empty locations", () => {
 	]);
 });
 
-Deno.test("findCommand: prefers the executable bundled next to the app", async () => {
-	const tmp = await Deno.makeTempDir();
-	try {
-		writeExecutable(
-			tmp,
-			"surreal.exe",
-			"#!/bin/sh\nprintf 'surrealdb 3.0.0 for windows'\n",
-		);
-		const process = bundledProcess(tmp);
-		assertEquals(await process.findCommand(), `${tmp}${sep}surreal.exe`);
-	} finally {
-		await Deno.remove(tmp, { recursive: true });
-	}
+Deno.test("findSurrealCommand: prefers the bundled executable", async () => {
+	const candidates = ["bundle/surreal.exe", "surreal", "profile/surreal.exe"];
+	const probed: string[] = [];
+	const command = await findSurrealCommand(candidates, async (candidate) => {
+		probed.push(candidate);
+		return candidate === candidates[0];
+	});
+	assertEquals(command, candidates[0]);
+	assertEquals(probed, [candidates[0]]);
 });
 
-Deno.test("findCommand: skips a bundled executable that fails the version probe", async () => {
-	const tmp = await Deno.makeTempDir();
-	try {
-		writeExecutable(tmp, "surreal.exe", "#!/bin/sh\necho broken >&2\nexit 1\n");
-		const process = bundledProcess(tmp);
-		await assertRejects(() => process.findCommand(), Error, "SurrealDB CLI 3.x");
-	} finally {
-		await Deno.remove(tmp, { recursive: true });
-	}
+Deno.test("findSurrealCommand: skips candidates that fail the version probe", async () => {
+	const candidates = ["bundle/surreal.exe", "surreal", "profile/surreal.exe"];
+	const command = await findSurrealCommand(candidates, async (candidate) => {
+		return candidate === candidates[2];
+	});
+	assertEquals(command, candidates[2]);
 });
 
-Deno.test("findCommand: reports a clear error when no CLI is available", async () => {
-	const tmp = await Deno.makeTempDir();
-	try {
-		const process = bundledProcess(tmp);
-		await assertRejects(() => process.findCommand(), Error, "bundle内");
-	} finally {
-		await Deno.remove(tmp, { recursive: true });
-	}
+Deno.test("findSurrealCommand: reports a clear error when no CLI is available", async () => {
+	await assertRejects(
+		() => findSurrealCommand(["bundle/surreal.exe", "surreal"], async () => false),
+		Error,
+		"bundle内",
+	);
 });
