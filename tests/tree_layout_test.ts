@@ -104,6 +104,22 @@ Deno.test("dense detail nodes are assigned to separate non-overlapping lanes", (
 	assertGreater(layout.contentHeight, 0);
 });
 
+Deno.test("Chronology lanes reserve space for labels, not only node circles", () => {
+	const data = snapshot([
+		item("early", "2025-01-01T00:00:00.000Z", null, "これは右側へ長く伸びるChronologyラベルです"),
+		item("late", "2025-01-01T00:00:01.000Z", null, "近い時刻の別ラベル"),
+	]);
+	const layout = calculateTreeLayout(data, {
+		width: 600,
+		height: 300,
+		projectX: (timestamp) => timestamp / 1000,
+	});
+	const early = layout.nodes.find((node) => node.id === "early");
+	const late = layout.nodes.find((node) => node.id === "late");
+	assert(early && late);
+	assert(early.lane !== late.lane);
+});
+
 Deno.test("overview aggregates screen cells and merges duplicate projected links", () => {
 	const data = snapshot([
 		item("n1", "2025-01-01T00:00:00.000Z"),

@@ -440,7 +440,10 @@ function assignLanes(
 		);
 		const radius = knotIds.has(item.id) ? 10 : 6;
 		const intervalStart = worldX - radius - 5;
-		const intervalEnd = worldX + radius + 10;
+		// Labels are rendered to the right of the node. Reserve their full
+		// horizontal extent here, otherwise nearby Chronology nodes can share a
+		// lane even though their text overlaps.
+		const intervalEnd = worldX + radius + 12 + labelWidth;
 		let lane = -1;
 		for (let candidate = 0; candidate < laneEnds.length; candidate++) {
 			if (laneEnds[candidate] + NODE_GAP <= intervalStart) {
