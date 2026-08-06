@@ -9,6 +9,7 @@ import type {
 	WorkingCopy,
 } from "../domain/models.ts";
 import type { GraphStore } from "../storage/graph_store.ts";
+import { applyGlobalLineageFilter, type GlobalLineageFilter } from "./global_lineage_filter.ts";
 
 export interface BranchServiceOptions {
 	/** Supplies lifecycle timestamps so callers and tests can make mutations deterministic. */
@@ -53,6 +54,10 @@ export interface GlobalLineageBranch {
 export interface GlobalLineageProjection {
 	snapshot: OutlineSnapshot;
 	promotedBranches: GlobalLineageBranch[];
+	/** Number of representative Works before the filter was applied. */
+	totalWorkCount: number;
+	/** Number of representative Works that survived the filter. */
+	filteredWorkCount: number;
 }
 
 export interface WorkLineageProjection {
@@ -146,10 +151,16 @@ export class BranchService {
 	/**
 	 * Projects the application-wide semantic lineage independently from any outline placement.
 	 *
+	 * The filter is applied at projection time so layout, rendering, and IPC transfer all see a
+	 * reduced Work set. `promotedBranches` is deliberately unaffected by the filter: promotion
+	 * status must stay visible regardless of the tree conditions.
+	 *
 	 * Explicitly promoted Branch heads are returned beside the Work graph so consumers do not
 	 * have to reinterpret a Revision or Branch as a Work node.
 	 */
-	async listGlobalLineage(): Promise<GlobalLineageProjection> {
+	async listGlobalLineage(
+		filter: GlobalLineageFilter,
+	): Promise<GlobalLineageProjection> {
 		const [works, items, links, revisions, promotedBranches] = await Promise.all([
 			this.store.listWorks(),
 			this.store.listItems(),
@@ -173,13 +184,19 @@ export class BranchService {
 			}
 		}
 
+		const candidateLinks = links.filter((link) =>
+			link.status !== "retracted" &&
+			activeWorkIds.has(link.from.workId) &&
+			activeWorkIds.has(link.to.workId)
+		);
+		const filtered = applyGlobalLineageFilter(
+			filter,
+			[...representativeByWork.values()],
+			candidateLinks,
+		);
 		const snapshot: OutlineSnapshot = {
-			items: [...representativeByWork.values()],
-			links: links.filter((link) =>
-				link.status !== "retracted" &&
-				activeWorkIds.has(link.from.workId) &&
-				activeWorkIds.has(link.to.workId)
-			),
+			items: filtered.items,
+			links: filtered.links,
 			knots: [],
 			stashItemIds: [],
 		};
@@ -200,6 +217,8 @@ export class BranchService {
 					(left.branch.promotedAt ?? "").localeCompare(right.branch.promotedAt ?? "") ||
 					left.branch.id.localeCompare(right.branch.id)
 				),
+			totalWorkCount: representativeByWork.size,
+			filteredWorkCount: filtered.items.length,
 		};
 	}
 

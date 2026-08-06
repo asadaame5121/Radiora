@@ -70,6 +70,11 @@
 		loadTreeProjectionPreference,
 		saveTreeProjectionPreference,
 	} from "./tree_projection_preference";
+	import {
+		loadTreeFilterPreference,
+		saveTreeFilterPreference,
+	} from "./tree_filter_preference";
+	import type { GlobalLineageFilter } from "../services/global_lineage_filter";
 	import type { TreeProjection } from "./tree_layout";
 	import {
 		activateBrowsingPane,
@@ -317,8 +322,10 @@
 	let navCollapsed = $state(initialUiLayoutPreference.navCollapsed);
 	let occurrenceContextMenu = $state<OccurrenceContextMenuState | null>(null);
 	let treeProjectionPreference = $state<TreeProjection>(loadTreeProjectionPreference());
+	let treeFilter = $state<GlobalLineageFilter>(loadTreeFilterPreference());
 	let internalReferenceCompletionRequest = 0;
 	let inlineLinkCompletionRequest = 0;
+	let globalLineageRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
 		onStatusChange: (statuses) => workingCopySaveStatuses = statuses,
@@ -696,11 +703,12 @@
 	}
 
 	async function load(focusId?: string): Promise<void> {
+		const request = ++globalLineageRequest;
 		try {
 			error = "";
 			const [next, nextGlobalLineage, nextBookmarks] = await Promise.all([
 				api.listOutline(),
-				api.listGlobalLineage(),
+				api.listGlobalLineage(activeGlobalLineageFilter),
 				api.listBookmarks(),
 			]);
 			const drafts = new Map(autosave.drafts().map((draft) => [draft.workId, draft.text]));
@@ -715,7 +723,10 @@
 			inlineLinkCompletion = null;
 			browsing = reconcileBrowsingState(browsing, snapshot);
 			selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
-			globalLineage = nextGlobalLineage;
+			if (request === globalLineageRequest) {
+				globalLineage = nextGlobalLineage;
+				lastLoadedGlobalLineageFilterKey = globalLineageFilterKey();
+			}
 			bookmarks = nextBookmarks;
 			if (focusId) {
 				selectOccurrence(focusId);
@@ -733,6 +744,13 @@
 		selectedId = id;
 		browsing = browseToOutlineOccurrence(browsing, snapshot, id);
 	}
+
+	/** The selected Work joins the filter as a transient, non-persisted exception. */
+	const activeGlobalLineageFilter = $derived<GlobalLineageFilter>({
+		...treeFilter,
+		includeWorkIds: selectedItem ? [selectedItem.workId] : [],
+	});
+	let lastLoadedGlobalLineageFilterKey = "";
 
 	function releaseEditorFocus(): void {
 		const active = document.activeElement;
@@ -957,6 +975,47 @@
 		await load(item.id);
 	}
 
+	async function loadGlobalLineage(): Promise<void> {
+		const request = ++globalLineageRequest;
+		try {
+			const next = await api.listGlobalLineage(activeGlobalLineageFilter);
+			if (request !== globalLineageRequest) return;
+			globalLineage = next;
+			lastLoadedGlobalLineageFilterKey = globalLineageFilterKey();
+		} catch (cause) {
+			if (request !== globalLineageRequest) return;
+			error = errorMessage(cause);
+		}
+	}
+
+	function globalLineageFilterKey(): string {
+		const filter = activeGlobalLineageFilter;
+		return [
+			filter.includeIsolated,
+			[...filter.linkTypes].sort().join(","),
+			[...filter.includeWorkIds].sort().join(","),
+		].join(":");
+	}
+
+	$effect(() => {
+		// The selected Work is a transient exception to the isolation filter, so
+		// any selection change must refresh the projection while the tree view
+		// is open; otherwise a previously selected Work would stay visible.
+		if (viewMode !== "globalLineage") return;
+		const key = globalLineageFilterKey();
+		if (key === lastLoadedGlobalLineageFilterKey) return;
+		void loadGlobalLineage();
+	});
+
+	function handleGlobalLineageFilterChange(next: GlobalLineageFilter): void {
+		treeFilter = {
+			includeIsolated: next.includeIsolated,
+			linkTypes: next.linkTypes,
+			includeWorkIds: [],
+		};
+		saveTreeFilterPreference(treeFilter);
+	}
+
 	async function handleKeydown(
 		event: KeyboardEvent,
 		row: VisibleRow,
@@ -964,6 +1023,8 @@
 		compositionGuard = false,
 	): Promise<void> {
 		if (compositionGuard || event.isComposing || event.keyCode === 229) return;
+
+
 		if (inlineLinkCompletion?.itemId === row.item.id) {
 			const completion = inlineLinkCompletion;
 			if (completion.phase === "candidate") {
@@ -3771,6 +3832,8 @@
 		{:else if globalLineage}
 			<GlobalLineage
 				projection={globalLineage}
+				filter={activeGlobalLineageFilter}
+				onFilterChange={handleGlobalLineageFilterChange}
 				{selectedId}
 				onSelect={(id) => selectOccurrence(id)}
 				onOpen={(id) => void openTreeOccurrence(id)}

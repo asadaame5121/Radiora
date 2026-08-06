@@ -22,6 +22,7 @@
 		onOpen,
 		onContextMenu,
 		onProjectionChange,
+		onInspectCluster,
 	}: {
 		snapshot: OutlineSnapshot;
 		selectedId?: string | null;
@@ -29,6 +30,7 @@
 		onOpen: (id: string) => void;
 		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
 		onProjectionChange?: (projection: TreeProjection) => void;
+		onInspectCluster?: (cluster: TreeLayoutNode) => void;
 	} = $props();
 
 	let svgElement: SVGSVGElement;
@@ -37,7 +39,6 @@
 	let transform = $state<d3.ZoomTransform>(d3.zoomIdentity);
 	let hoveredId = $state<string | null>(null);
 	let projection = $state<TreeProjection>("chronology");
-	let expandedOverviewItemIds = $state<Set<string> | null>(null);
 	let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
 
 	const timeDomain = $derived.by((): [Date, Date] => {
@@ -71,10 +72,9 @@
 		width,
 		height,
 		projection,
-		projectX: (timestamp) =>
-			transform.applyX(chronologyBaseScale(new Date(timestamp))),
-		projectGeneration: (generation) => transform.applyX(lineageBaseScale(generation)),
-		expandedOverviewItemIds: expandedOverviewItemIds ?? undefined,
+		projectX: (timestamp) => chronologyBaseScale(new Date(timestamp)),
+		projectGeneration: (generation) => lineageBaseScale(generation),
+		camera: { k: transform.k, x: transform.x, y: transform.y },
 	}));
 	const axisMarks = $derived.by(() => {
 		if (projection === "chronology") {
@@ -109,6 +109,19 @@
 	const directNeighbors = $derived(
 		focusId ? buildDirectNeighborSet(snapshot, focusId) : new Set<string>(),
 	);
+	const nodeGrid = $derived.by(() => {
+		// Spatial index over screen positions so label collision checks stay
+		// local instead of scanning every node.
+		const cellSize = 96;
+		const grid = new Map<string, TreeLayoutNode[]>();
+		for (const node of layout.nodes) {
+			const key = `${Math.floor(node.x / cellSize)}:${Math.floor(node.y / cellSize)}`;
+			const bucket = grid.get(key) ?? [];
+			bucket.push(node);
+			grid.set(key, bucket);
+		}
+		return { cellSize, grid };
+	});
 	const contextLabelIds = $derived.by(() => {
 		const visible = new Set<string>();
 		const accepted: Array<{ x1: number; x2: number; y1: number; y2: number }> = [];
@@ -118,23 +131,21 @@
 			return aEmphasized - bEmphasized || a.x - b.x;
 		});
 		for (const node of candidates) {
-			const y = node.y + transform.y;
 			const rect = {
 				x1: node.x + node.radius + 8,
 				x2: node.x + node.radius + 12 + node.labelWidth,
-				y1: y - 10,
-				y2: y + 10 + Math.max(0, node.labelLines.length - 1) * 14,
+				y1: node.y - 10,
+				y2: node.y + 10 + Math.max(0, node.labelLines.length - 1) * 14,
 			};
 			if (rect.x1 < 4 || rect.x2 > width - 8 || rect.y1 < 4 || rect.y2 > height - 44) continue;
-			const hitsNode = layout.nodes.some((other) => {
+			const hitsNode = nearNodes(nodeGrid, rect).some((other) => {
 				if (other.id === node.id) return false;
-				const otherY = other.y + transform.y;
 				const padding = other.radius + 6;
 				return rectanglesOverlap(rect, {
 					x1: other.x - padding,
 					x2: other.x + padding,
-					y1: otherY - padding,
-					y2: otherY + padding,
+					y1: other.y - padding,
+					y2: other.y + padding,
 				});
 			});
 			if (hitsNode || accepted.some((other) => rectanglesOverlap(rect, other))) continue;
@@ -143,6 +154,7 @@
 		}
 		return visible;
 	});
+	const minZoom = $derived(Math.min(1, fitCamera().k));
 
 	onMount(() => {
 		projection = loadTreeProjectionPreference();
@@ -155,7 +167,7 @@
 		svgElement.addEventListener("click", handleCanvasClick);
 
 		zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
-			.scaleExtent([.25, 24])
+			.scaleExtent([minZoom, 24])
 			.filter((event) => event.type !== "dblclick")
 			.on("zoom", (event) => {
 				transform = event.transform;
@@ -168,13 +180,16 @@
 		};
 	});
 
-	function nodeY(node: TreeLayoutNode): number {
-		return node.y + transform.y;
-	}
+	$effect(() => {
+		if (!zoomBehavior) return;
+		// The minimum zoom must reach the whole-content fit view, so it follows
+		// the content bounds dynamically. d3 clamps gestures to this range.
+		zoomBehavior.scaleExtent([minZoom, 24]);
+	});
 
 	function edgePath(edge: TreeLayoutEdge): string {
-		const sourceY = nodeY(edge.source);
-		const targetY = nodeY(edge.target);
+		const sourceY = edge.source.y;
+		const targetY = edge.target.y;
 		const dx = edge.target.x - edge.source.x;
 		const dy = targetY - sourceY;
 		const distance = Math.max(1, Math.hypot(dx, dy));
@@ -220,8 +235,8 @@
 
 	function edgeIsInViewport(edge: TreeLayoutEdge): boolean {
 		const padding = 120;
-		const sourceY = nodeY(edge.source);
-		const targetY = nodeY(edge.target);
+		const sourceY = edge.source.y;
+		const targetY = edge.target.y;
 		return edge.source.x >= -padding
 			&& edge.source.x <= width + padding
 			&& edge.target.x >= -padding
@@ -234,7 +249,6 @@
 
 	function showLabel(node: TreeLayoutNode): boolean {
 		if (node.aggregate) return true;
-		if (layout.expandedItemIds.has(node.id)) return true;
 		if (layout.lod === "detail") return true;
 		if (layout.lod === "overview") return false;
 		return contextLabelIds.has(node.id);
@@ -242,7 +256,8 @@
 
 	function handleNodeClick(node: TreeLayoutNode): void {
 		if (node.aggregate) {
-			expandedOverviewItemIds = new Set(node.itemIds);
+			// Inspecting a cluster must not move the central camera.
+			onInspectCluster?.(node);
 			return;
 		}
 		onSelect(node.id);
@@ -274,35 +289,80 @@
 	}
 
 	function zoomBy(factor: number): void {
-		const nextK = Math.max(.25, Math.min(24, transform.k * factor));
-		const baseCenter = (width / 2 - transform.x) / transform.k;
+		const nextK = Math.max(minZoom, Math.min(24, transform.k * factor));
 		applyTransform(d3.zoomIdentity
-			.translate(width / 2 - baseCenter * nextK, transform.y)
-			.scale(nextK));
-	}
-
-	function zoomToNode(node: TreeLayoutNode, nextK: number): void {
-		const timestamp = Date.parse(node.item.createdAt);
-		const generation = node.isLineageKnot
-			? lineageProjection.knotGeneration ?? 0
-			: lineageProjection.generationByWorkId.get(node.item.workId) ?? 0;
-		const baseX = projection === "lineage"
-			? lineageBaseScale(generation)
-			: chronologyBaseScale(new Date(Number.isFinite(timestamp) ? timestamp : 0));
-		applyTransform(d3.zoomIdentity
-			.translate(width / 2 - baseX * nextK, height / 2 - node.y)
+			.translate(width / 2 - (width / 2 - transform.x) / transform.k * nextK, transform.y)
 			.scale(nextK));
 	}
 
 	function fitView(): void {
-		expandedOverviewItemIds = null;
-		applyTransform(d3.zoomIdentity);
+		const fit = fitCamera();
+		applyTransform(d3.zoomIdentity
+			.translate(fit.x, fit.y)
+			.scale(fit.k));
+	}
+
+	/** Zooms the camera so the given world-space bounds fill the viewport. */
+	export function zoomToBounds(bounds: {
+		minX: number;
+		minY: number;
+		maxX: number;
+		maxY: number;
+	}): void {
+		const fit = fitTransformFor(bounds);
+		applyTransform(d3.zoomIdentity
+			.translate(fit.x, fit.y)
+			.scale(fit.k));
+	}
+
+	function fitCamera(): { k: number; x: number; y: number } {
+		if (layout.nodes.length === 0) {
+			return { k: 1, x: 0, y: 0 };
+		}
+		let minX = Number.POSITIVE_INFINITY;
+		let minY = Number.POSITIVE_INFINITY;
+		let maxX = Number.NEGATIVE_INFINITY;
+		let maxY = Number.NEGATIVE_INFINITY;
+		for (const node of layout.nodes) {
+			const bounds = node.aggregate && node.bounds
+				? node.bounds
+				: {
+					minX: node.worldX,
+					minY: node.worldY,
+					maxX: node.worldX,
+					maxY: node.worldY,
+				};
+			minX = Math.min(minX, bounds.minX);
+			minY = Math.min(minY, bounds.minY);
+			maxX = Math.max(maxX, bounds.maxX);
+			maxY = Math.max(maxY, bounds.maxY);
+		}
+		return fitTransformFor({ minX, minY, maxX, maxY });
+	}
+
+	function fitTransformFor(bounds: {
+		minX: number;
+		minY: number;
+		maxX: number;
+		maxY: number;
+	}): { k: number; x: number; y: number } {
+		const padding = 60;
+		const spanX = Math.max(1, bounds.maxX - bounds.minX);
+		const spanY = Math.max(1, bounds.maxY - bounds.minY);
+		const k = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanY);
+		const clamped = Math.max(.05, Math.min(24, k));
+		const centerX = (bounds.minX + bounds.maxX) / 2;
+		const centerY = (bounds.minY + bounds.maxY) / 2;
+		return {
+			k: clamped,
+			x: width / 2 - centerX * clamped,
+			y: height / 2 - centerY * clamped,
+		};
 	}
 
 	function selectProjection(next: TreeProjection): void {
 		if (projection === next) return;
 		projection = next;
-		expandedOverviewItemIds = null;
 		saveTreeProjectionPreference(next);
 		onProjectionChange?.(next);
 		fitView();
@@ -328,7 +388,7 @@
 	}
 
 	function nodeTitle(node: TreeLayoutNode): string {
-		if (node.aggregate) return `${node.count}件の思索。クリックして分散表示`;
+		if (node.aggregate) return `${node.count}件の思索。クリックで右側に表示`;
 		const parsed = new Date(node.item.createdAt);
 		const createdAt = Number.isFinite(parsed.getTime())
 			? new Intl.DateTimeFormat("ja-JP", {
@@ -345,6 +405,25 @@
 		b: { x1: number; x2: number; y1: number; y2: number },
 	): boolean {
 		return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
+	}
+
+	function nearNodes(
+		index: { cellSize: number; grid: Map<string, TreeLayoutNode[]> },
+		rect: { x1: number; x2: number; y1: number; y2: number },
+	): TreeLayoutNode[] {
+		const { cellSize, grid } = index;
+		const minCellX = Math.floor(rect.x1 / cellSize);
+		const maxCellX = Math.floor(rect.x2 / cellSize);
+		const minCellY = Math.floor(rect.y1 / cellSize);
+		const maxCellY = Math.floor(rect.y2 / cellSize);
+		const result: TreeLayoutNode[] = [];
+		for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+			for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+				const bucket = grid.get(`${cellX}:${cellY}`);
+				if (bucket) result.push(...bucket);
+			}
+		}
+		return result;
 	}
 </script>
 
@@ -389,8 +468,7 @@
 
 		<g class="tree-nodes">
 			{#each layout.nodes as node (node.id)}
-				{@const y = nodeY(node)}
-				{#if node.x >= -200 && node.x <= width + 200 && y >= -80 && y <= height + 80}
+				{#if node.x >= -200 && node.x <= width + 200 && node.y >= -80 && node.y <= height + 80}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<g
 						class="tree-node"
@@ -399,7 +477,7 @@
 						class:selected={node.itemIds.includes(selectedId ?? "")}
 						class:aggregate={node.aggregate}
 						class:knot={node.isKnot}
-						transform={`translate(${node.x} ${y})`}
+						transform={`translate(${node.x} ${node.y})`}
 						role="button"
 						tabindex="0"
 						aria-label={node.aggregate ? `${node.count}件の思索` : node.label}
@@ -460,12 +538,6 @@
 		<button aria-label="ズームイン" title="ズームイン" onclick={() => zoomBy(1.4)}>＋</button>
 		<button aria-label="全体を表示" title="全体を表示" onclick={fitView}>⌗</button>
 		<span><i></i>{layout.lod === "detail" ? "Detail" : layout.lod === "context" ? "Context" : "Overview"}</span>
-		{#if layout.expandedClusterCount > 0}
-			<button
-				class="collapse-cluster"
-				onclick={() => (expandedOverviewItemIds = null)}
-			>まとめ表示に戻す</button>
-		{/if}
 	</div>
 </div>
 
@@ -643,11 +715,6 @@
 		width: 40px;
 		font-size: 18px;
 		cursor: pointer;
-	}
-	.tree-controls .collapse-cluster {
-		width: auto;
-		padding: 0 12px;
-		font-size: 11px;
 	}
 	.tree-controls button:hover {
 		border-color: #25c6d1;

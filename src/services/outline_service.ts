@@ -36,6 +36,7 @@ import {
 	type GlobalLineageProjection,
 	type WorkLineageProjection,
 } from "./branch_service.ts";
+import { defaultGlobalLineageFilter, type GlobalLineageFilter } from "./global_lineage_filter.ts";
 import {
 	type RecoverySnapshotPreview,
 	RecoverySnapshotService,
@@ -184,8 +185,10 @@ export class OutlineService {
 			message,
 		);
 	}
-	listGlobalLineage(): Promise<GlobalLineageProjection> {
-		return new BranchService(this.store).listGlobalLineage();
+	listGlobalLineage(
+		filter: GlobalLineageFilter = defaultGlobalLineageFilter(),
+	): Promise<GlobalLineageProjection> {
+		return new BranchService(this.store).listGlobalLineage(filter);
 	}
 	listWorkLineage(workId: string): Promise<WorkLineageProjection> {
 		return new BranchService(this.store).listWorkLineage(workId);

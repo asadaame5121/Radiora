@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import { OutlineService } from "../services/outline_service.ts";
 import { RevisionService } from "../services/revision_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
@@ -129,4 +129,46 @@ Deno.test("desktop bindings expose startup failure and retry without dereferenci
 	assertThrows(() => handlers.listOutline(), Error, "DB migration failed");
 	assertEquals(await handlers.retryStartup(), { phase: "starting", message: "retrying" });
 	assertEquals(retries, 1);
+});
+
+Deno.test("desktop bindings validate the global lineage filter at the IPC boundary", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const ready: StartupStatus = { phase: "ready", message: "ready" };
+	const handlers = createBindingHandlers({
+		getService: () => service,
+		getStartupStatus: () => ready,
+		retryStartup: () => Promise.resolve(ready),
+		rewriteAsNewBranch: (sourceBranchId, name, confirmation) =>
+			new RevisionService(store).rewriteAsNewBranch(sourceBranchId, name, confirmation),
+	});
+
+	assertEquals((await handlers.listGlobalLineage()).filteredWorkCount, 0);
+	assertEquals(
+		(
+			await handlers.listGlobalLineage({
+				includeIsolated: true,
+				linkTypes: ["FROM"],
+				includeWorkIds: [],
+			})
+		).filteredWorkCount,
+		0,
+	);
+	await assertRejects(
+		() =>
+			handlers.listGlobalLineage(
+				{
+					includeIsolated: true,
+					linkTypes: ["NONSENSE"],
+					includeWorkIds: [],
+				} as unknown as Parameters<typeof handlers.listGlobalLineage>[0],
+			),
+		Error,
+		"Invalid GlobalLineageFilter",
+	);
+	await assertRejects(
+		() => handlers.listGlobalLineage({ includeIsolated: "yes" } as unknown as never),
+		Error,
+		"Invalid GlobalLineageFilter",
+	);
 });

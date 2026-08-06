@@ -2,10 +2,11 @@ import { assert, assertEquals, assertGreater } from "jsr:@std/assert@1";
 import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
 import {
 	buildDirectNeighborSet,
+	buildLaneOrder,
 	calculateLineageProjection,
 	calculateTreeLayout,
 	labelForItem,
-	lodForDensity,
+	lodForScreenCollisions,
 } from "../src/ui/tree_layout.ts";
 
 function item(
@@ -56,10 +57,35 @@ Deno.test("tree labels use the first non-empty line and clamp to two lines", () 
 	assertEquals([...result.label].length, 32);
 });
 
-Deno.test("LOD follows the agreed screen density thresholds", () => {
-	assertEquals(lodForDensity(120), "detail");
-	assertEquals(lodForDensity(64), "context");
-	assertEquals(lodForDensity(20), "overview");
+Deno.test("LOD follows screen-space collisions instead of a density proxy", () => {
+	assertEquals(
+		lodForScreenCollisions([
+			{ x: 0, y: 0 },
+			{ x: 100, y: 100 },
+			{ x: 200, y: 200 },
+		]),
+		"detail",
+	);
+	assertEquals(
+		lodForScreenCollisions([
+			{ x: 100, y: 100 },
+			{ x: 110, y: 100 },
+			{ x: 200, y: 200 },
+			{ x: 300, y: 300 },
+			{ x: 400, y: 400 },
+		]),
+		"context",
+	);
+	assertEquals(
+		lodForScreenCollisions([
+			{ x: 100, y: 100 },
+			{ x: 110, y: 100 },
+			{ x: 200, y: 200 },
+			{ x: 210, y: 200 },
+			{ x: 400, y: 400 },
+		]),
+		"overview",
+	);
 });
 
 Deno.test("dense detail nodes are assigned to separate non-overlapping lanes", () => {
@@ -78,6 +104,22 @@ Deno.test("dense detail nodes are assigned to separate non-overlapping lanes", (
 	assertGreater(layout.contentHeight, 0);
 });
 
+Deno.test("Chronology lanes reserve space for labels, not only node circles", () => {
+	const data = snapshot([
+		item("early", "2025-01-01T00:00:00.000Z", null, "これは右側へ長く伸びるChronologyラベルです"),
+		item("late", "2025-01-01T00:00:01.000Z", null, "近い時刻の別ラベル"),
+	]);
+	const layout = calculateTreeLayout(data, {
+		width: 600,
+		height: 300,
+		projectX: (timestamp) => timestamp / 1000,
+	});
+	const early = layout.nodes.find((node) => node.id === "early");
+	const late = layout.nodes.find((node) => node.id === "late");
+	assert(early && late);
+	assert(early.lane !== late.lane);
+});
+
 Deno.test("overview aggregates screen cells and merges duplicate projected links", () => {
 	const data = snapshot([
 		item("n1", "2025-01-01T00:00:00.000Z"),
@@ -85,11 +127,13 @@ Deno.test("overview aggregates screen cells and merges duplicate projected links
 		item("n3", "2025-01-03T00:00:00.000Z", "n1"),
 		item("n4", "2025-01-04T00:00:00.000Z"),
 	]);
-	data.links.push(link("n1", "n2", "RELATED"), link("n1", "n3", "RELATED"));
+	data.links.push(link("n2", "n4", "RELATED"), link("n3", "n4", "RELATED"));
 	const layout = calculateTreeLayout(data, {
 		width: 30,
 		height: 120,
-		projectX: () => 10,
+		projectX: (timestamp) => timestamp === Date.parse("2025-01-04T00:00:00.000Z") ? 200 : 10,
+		// Zoomed out enough that lane spacing falls below one 36px cell.
+		camera: { k: .45, x: 0, y: 0 },
 	});
 	assertEquals(layout.lod, "overview");
 	assert(layout.nodes.some((node) => node.aggregate));
@@ -284,4 +328,125 @@ Deno.test("moving an Occurrence does not change projected semantic link endpoint
 		"FROM:target-work:target->source-work:source-primary",
 	]);
 	assertEquals(after, before);
+});
+
+Deno.test("cluster ids derive from sorted item ids and survive panning and reordering", () => {
+	const data = snapshot([
+		item("n1", "2025-01-01T00:00:00.000Z"),
+		item("n2", "2025-01-02T00:00:00.000Z", "n1"),
+		item("n3", "2025-01-03T00:00:00.000Z", "n1"),
+		item("n4", "2025-01-04T00:00:00.000Z"),
+	]);
+	const options = {
+		width: 300,
+		height: 200,
+		projectX: () => 50,
+		camera: { k: .4, x: 0, y: 0 },
+	};
+	const first = calculateTreeLayout(data, options);
+	const panned = calculateTreeLayout(data, {
+		...options,
+		camera: { k: .4, x: 123, y: -77 },
+	});
+	const reordered = calculateTreeLayout(
+		{ ...data, items: [...data.items].reverse() },
+		options,
+	);
+	const clusterOf = (layout: ReturnType<typeof calculateTreeLayout>): string | undefined =>
+		layout.nodes.find((node) => node.aggregate)?.id;
+
+	assert(clusterOf(first), "the zoomed-out items should form a cluster");
+	assertEquals(clusterOf(first), clusterOf(panned));
+	assertEquals(clusterOf(first), clusterOf(reordered));
+});
+
+Deno.test("cluster nodes expose their constituent item ids and world-space bounds", () => {
+	const data = snapshot([
+		item("n1", "2025-01-01T00:00:00.000Z"),
+		item("n2", "2025-01-02T00:00:00.000Z", "n1"),
+		item("n3", "2025-01-03T00:00:00.000Z", "n1"),
+		item("n4", "2025-01-04T00:00:00.000Z"),
+	]);
+	const layout = calculateTreeLayout(data, {
+		width: 300,
+		height: 200,
+		projectX: () => 50,
+		camera: { k: .4, x: 0, y: 0 },
+	});
+	const cluster = layout.nodes.find((node) => node.aggregate);
+	assert(cluster);
+	assertEquals(cluster.itemIds, ["n1", "n2", "n3", "n4"]);
+	assert(cluster.bounds);
+	assertEquals(cluster.bounds.minX, 50);
+	assertEquals(cluster.bounds.maxX, 50);
+	assertEquals(cluster.bounds.minY, 60);
+	assertEquals(cluster.bounds.maxY, 192);
+});
+
+Deno.test("world coordinates stay fixed while the camera moves nodes on screen", () => {
+	const data = snapshot([
+		item("early", "2026-01-01T00:00:00.000Z"),
+		item("late", "2026-01-03T00:00:00.000Z"),
+	]);
+	const base = calculateTreeLayout(data, {
+		width: 600,
+		height: 300,
+		projectX: (timestamp) => timestamp / 1000,
+		camera: { k: 2, x: 50, y: -20 },
+	});
+	assertEquals(base.lod, "detail");
+	for (const node of base.nodes) {
+		assertEquals(node.x, node.worldX * 2 + 50);
+		assertEquals(node.y, node.worldY * 2 - 20);
+	}
+
+	const unzoomed = calculateTreeLayout(data, {
+		width: 600,
+		height: 300,
+		projectX: (timestamp) => timestamp / 1000,
+	});
+	for (const node of unzoomed.nodes) {
+		assertEquals(node.x, node.worldX);
+		assertEquals(node.y, node.worldY);
+	}
+	const shared = new Map(base.nodes.map((node) => [node.id, node]));
+	for (const node of unzoomed.nodes) {
+		assertEquals(node.worldX, shared.get(node.id)?.worldX);
+		assertEquals(node.worldY, shared.get(node.id)?.worldY);
+	}
+});
+
+Deno.test("same-generation items are ordered by FROM component then orderKey and id", () => {
+	const data = snapshot([
+		item("b", "2026-01-01T00:00:00.000Z", null, "component-a"),
+		item("a", "2026-01-01T00:00:00.000Z", null, "component-a"),
+		item("d", "2026-01-01T00:00:00.000Z", null, "component-b"),
+		item("c", "2026-01-01T00:00:00.000Z", null, "component-b"),
+	]);
+	data.links.push(
+		link("a", "b", "FROM"),
+		link("c", "d", "FROM"),
+	);
+	// Component {a,b} has the smallest orderKey (a=1, b=2) so it is placed first.
+	const layout = calculateTreeLayout(data, {
+		width: 600,
+		height: 300,
+		projectX: () => 280,
+	});
+	assertEquals(layout.lod, "detail");
+	assertEquals(layout.nodes.map((node) => node.id), ["a", "b", "c", "d"]);
+	assertEquals(
+		layout.nodes.map((node) => node.lane),
+		[0, 1, 2, 3],
+	);
+});
+
+Deno.test("buildLaneOrder keeps unlinked items in stable orderKey sequence", () => {
+	const data = snapshot([
+		item("z", "2026-01-01T00:00:00.000Z"),
+		item("a", "2026-01-01T00:00:00.000Z"),
+	]);
+	const order = buildLaneOrder(data);
+	assertEquals(order.get("a"), 0);
+	assertEquals(order.get("z"), 1);
 });
