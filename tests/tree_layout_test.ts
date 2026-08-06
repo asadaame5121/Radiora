@@ -127,11 +127,11 @@ Deno.test("overview aggregates screen cells and merges duplicate projected links
 		item("n3", "2025-01-03T00:00:00.000Z", "n1"),
 		item("n4", "2025-01-04T00:00:00.000Z"),
 	]);
-	data.links.push(link("n1", "n3", "RELATED"), link("n2", "n4", "RELATED"));
+	data.links.push(link("n2", "n4", "RELATED"), link("n3", "n4", "RELATED"));
 	const layout = calculateTreeLayout(data, {
 		width: 30,
 		height: 120,
-		projectX: () => 10,
+		projectX: (timestamp) => timestamp === Date.parse("2025-01-04T00:00:00.000Z") ? 200 : 10,
 		// Zoomed out enough that lane spacing falls below one 36px cell.
 		camera: { k: .45, x: 0, y: 0 },
 	});
@@ -375,12 +375,12 @@ Deno.test("cluster nodes expose their constituent item ids and world-space bound
 	});
 	const cluster = layout.nodes.find((node) => node.aggregate);
 	assert(cluster);
-	assertEquals(cluster.itemIds, ["n1", "n2", "n3"]);
+	assertEquals(cluster.itemIds, ["n1", "n2", "n3", "n4"]);
 	assert(cluster.bounds);
 	assertEquals(cluster.bounds.minX, 50);
 	assertEquals(cluster.bounds.maxX, 50);
 	assertEquals(cluster.bounds.minY, 60);
-	assertEquals(cluster.bounds.maxY, 148);
+	assertEquals(cluster.bounds.maxY, 192);
 });
 
 Deno.test("world coordinates stay fixed while the camera moves nodes on screen", () => {

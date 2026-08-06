@@ -111,7 +111,13 @@ export function calculateTreeLayout(
 			)
 			: options.projectX(parseTimestamp(item.createdAt)),
 	}));
-	const laidOut = assignLanes(projected, snapshot, options.height, lineage?.knotWorkIds);
+	const laidOut = assignLanes(
+		projected,
+		snapshot,
+		options.height,
+		camera,
+		lineage?.knotWorkIds,
+	);
 	const screenNodes = laidOut.nodes.map((node) => ({
 		...node,
 		x: node.worldX * camera.k + camera.x,
@@ -252,8 +258,9 @@ function findCyclicWorkIds(
 
 /**
  * Decides the LOD from screen-space collisions instead of a density proxy.
- * Nodes sharing a 48x36px screen cell are colliding; the fraction of colliding
- * nodes maps to the shared Chronology/Lineage LOD scale.
+ * A 48x36px spatial hash finds nodes that can collide; their actual screen
+ * distance determines the collision fraction used by the shared
+ * Chronology/Lineage LOD scale.
  *
  * Cells are indexed relative to the bounding-box origin so a pure pan never
  * changes collision groups (only zoom does).
@@ -264,16 +271,26 @@ export function lodForScreenCollisions(
 	if (screenPositions.length === 0) return "detail";
 	const minX = Math.min(...screenPositions.map((position) => position.x));
 	const minY = Math.min(...screenPositions.map((position) => position.y));
-	const cells = new Map<string, number>();
+	const cells = new Map<string, Array<{ x: number; y: number }>>();
 	for (const position of screenPositions) {
 		const key = cellKey(position.x - minX, position.y - minY);
-		cells.set(key, (cells.get(key) ?? 0) + 1);
+		const bucket = cells.get(key) ?? [];
+		bucket.push(position);
+		cells.set(key, bucket);
 	}
-	let colliding = 0;
-	for (const count of cells.values()) {
-		if (count > 1) colliding += count;
+	const colliding = new Set<{ x: number; y: number }>();
+	for (const [key, bucket] of cells) {
+		forEachNeighboringBucket(cells, key, (neighbor) => {
+			for (const position of bucket) {
+				for (const candidate of neighbor) {
+					if (position === candidate || !positionsCollide(position, candidate)) continue;
+					colliding.add(position);
+					colliding.add(candidate);
+				}
+			}
+		});
 	}
-	const fraction = colliding / screenPositions.length;
+	const fraction = colliding.size / screenPositions.length;
 	if (fraction >= .5) return "overview";
 	if (fraction > 0) return "context";
 	return "detail";
@@ -414,6 +431,7 @@ function assignLanes(
 	projected: Array<{ item: OutlineItem; worldX: number }>,
 	snapshot: OutlineSnapshot,
 	height: number,
+	camera: TreeCamera,
 	lineageKnotWorkIds: Set<string> = new Set(),
 ): { nodes: Array<Omit<TreeLayoutNode, "x" | "y">>; contentHeight: number } {
 	const knotIds = new Set(snapshot.stashItemIds);
@@ -431,6 +449,9 @@ function assignLanes(
 		() => Number.NEGATIVE_INFINITY,
 	);
 	const pending: Array<Omit<TreeLayoutNode, "x" | "y" | "worldY">> = [];
+	// Nodes and labels retain their screen-pixel dimensions as the camera zooms,
+	// so reserve their horizontal footprint in layout (world) coordinates.
+	const screenToWorld = 1 / camera.k;
 
 	for (const { item, worldX } of sorted) {
 		const { label, lines } = labelForItem(item.text);
@@ -439,14 +460,14 @@ function assignLanes(
 			Math.max(48, Math.max(...lines.map((line) => splitGraphemes(line).length)) * 13),
 		);
 		const radius = knotIds.has(item.id) ? 10 : 6;
-		const intervalStart = worldX - radius - 5;
+		const intervalStart = worldX - (radius + 5) * screenToWorld;
 		// Labels are rendered to the right of the node. Reserve their full
 		// horizontal extent here, otherwise nearby Chronology nodes can share a
 		// lane even though their text overlaps.
-		const intervalEnd = worldX + radius + 12 + labelWidth;
+		const intervalEnd = worldX + (radius + 12 + labelWidth) * screenToWorld;
 		let lane = -1;
 		for (let candidate = 0; candidate < laneEnds.length; candidate++) {
-			if (laneEnds[candidate] + NODE_GAP <= intervalStart) {
+			if (laneEnds[candidate] + NODE_GAP * screenToWorld <= intervalStart) {
 				lane = candidate;
 				break;
 			}
@@ -498,9 +519,47 @@ function aggregateScreenCells(
 		buckets.set(key, bucket);
 	}
 
+	const collidingNodeIds = new Set<string>();
+	const adjacentNodeIds = new Map<string, Set<string>>();
+	for (const [key, bucket] of buckets) {
+		forEachNeighboringBucket(buckets, key, (neighbor) => {
+			for (const node of bucket) {
+				for (const candidate of neighbor) {
+					if (node === candidate || !positionsCollide(node, candidate)) continue;
+					collidingNodeIds.add(node.id);
+					collidingNodeIds.add(candidate.id);
+					(adjacentNodeIds.get(node.id) ?? adjacentNodeIds.set(node.id, new Set()).get(node.id)!)
+						.add(candidate.id);
+					(adjacentNodeIds.get(candidate.id) ??
+						adjacentNodeIds.set(candidate.id, new Set()).get(candidate.id)!).add(node.id);
+				}
+			}
+		});
+	}
+
+	const components: TreeLayoutNode[][] = [];
+	const visited = new Set<string>();
+	const nodeById = new Map(nodes.map((node) => [node.id, node]));
+	for (const id of [...collidingNodeIds].sort()) {
+		if (visited.has(id)) continue;
+		const component: TreeLayoutNode[] = [];
+		const pending = [id];
+		while (pending.length > 0) {
+			const current = pending.pop()!;
+			if (visited.has(current)) continue;
+			visited.add(current);
+			component.push(nodeById.get(current)!);
+			for (const neighbor of adjacentNodeIds.get(current) ?? []) {
+				if (!visited.has(neighbor)) pending.push(neighbor);
+			}
+		}
+		components.push(component);
+	}
+	components.push(...nodes.filter((node) => !collidingNodeIds.has(node.id)).map((node) => [node]));
+
 	const aggregatedNodes: TreeLayoutNode[] = [];
 	const nodeByItemId = new Map<string, TreeLayoutNode>();
-	for (const bucket of buckets.values()) {
+	for (const bucket of components) {
 		if (bucket.length === 1) {
 			const single = bucket[0];
 			aggregatedNodes.push(single);
@@ -554,6 +613,28 @@ function cellKey(relativeX: number, relativeY: number): string {
 	return `${Math.floor(relativeX / OVERVIEW_CELL_WIDTH)}:${
 		Math.floor(relativeY / OVERVIEW_CELL_HEIGHT)
 	}`;
+}
+
+function forEachNeighboringBucket<T>(
+	buckets: ReadonlyMap<string, T[]>,
+	key: string,
+	callback: (bucket: T[]) => void,
+): void {
+	const [x, y] = key.split(":").map(Number);
+	for (let offsetX = -1; offsetX <= 1; offsetX++) {
+		for (let offsetY = -1; offsetY <= 1; offsetY++) {
+			const bucket = buckets.get(`${x + offsetX}:${y + offsetY}`);
+			if (bucket) callback(bucket);
+		}
+	}
+}
+
+function positionsCollide(
+	left: { x: number; y: number },
+	right: { x: number; y: number },
+): boolean {
+	return Math.abs(left.x - right.x) < OVERVIEW_CELL_WIDTH &&
+		Math.abs(left.y - right.y) < OVERVIEW_CELL_HEIGHT;
 }
 
 function rawEdges(snapshot: OutlineSnapshot): RawEdge[] {
