@@ -325,6 +325,7 @@
 	let treeFilter = $state<GlobalLineageFilter>(loadTreeFilterPreference());
 	let internalReferenceCompletionRequest = 0;
 	let inlineLinkCompletionRequest = 0;
+	let globalLineageRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
 		onStatusChange: (statuses) => workingCopySaveStatuses = statuses,
@@ -702,6 +703,7 @@
 	}
 
 	async function load(focusId?: string): Promise<void> {
+		const request = ++globalLineageRequest;
 		try {
 			error = "";
 			const [next, nextGlobalLineage, nextBookmarks] = await Promise.all([
@@ -721,7 +723,10 @@
 			inlineLinkCompletion = null;
 			browsing = reconcileBrowsingState(browsing, snapshot);
 			selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
-			globalLineage = nextGlobalLineage;
+			if (request === globalLineageRequest) {
+				globalLineage = nextGlobalLineage;
+				lastLoadedGlobalLineageFilterKey = globalLineageFilterKey();
+			}
 			bookmarks = nextBookmarks;
 			if (focusId) {
 				selectOccurrence(focusId);
@@ -745,6 +750,7 @@
 		...treeFilter,
 		includeWorkIds: selectedItem ? [selectedItem.workId] : [],
 	});
+	let lastLoadedGlobalLineageFilterKey = "";
 
 	function releaseEditorFocus(): void {
 		const active = document.activeElement;
@@ -970,12 +976,36 @@
 	}
 
 	async function loadGlobalLineage(): Promise<void> {
+		const request = ++globalLineageRequest;
 		try {
-			globalLineage = await api.listGlobalLineage(activeGlobalLineageFilter);
+			const next = await api.listGlobalLineage(activeGlobalLineageFilter);
+			if (request !== globalLineageRequest) return;
+			globalLineage = next;
+			lastLoadedGlobalLineageFilterKey = globalLineageFilterKey();
 		} catch (cause) {
+			if (request !== globalLineageRequest) return;
 			error = errorMessage(cause);
 		}
 	}
+
+	function globalLineageFilterKey(): string {
+		const filter = activeGlobalLineageFilter;
+		return [
+			filter.includeIsolated,
+			[...filter.linkTypes].sort().join(","),
+			[...filter.includeWorkIds].sort().join(","),
+		].join(":");
+	}
+
+	$effect(() => {
+		// The selected Work is a transient exception to the isolation filter, so
+		// any selection change must refresh the projection while the tree view
+		// is open; otherwise a previously selected Work would stay visible.
+		if (viewMode !== "globalLineage") return;
+		const key = globalLineageFilterKey();
+		if (key === lastLoadedGlobalLineageFilterKey) return;
+		void loadGlobalLineage();
+	});
 
 	function handleGlobalLineageFilterChange(next: GlobalLineageFilter): void {
 		treeFilter = {
@@ -984,7 +1014,6 @@
 			includeWorkIds: [],
 		};
 		saveTreeFilterPreference(treeFilter);
-		void loadGlobalLineage();
 	}
 
 	async function handleKeydown(
@@ -2953,10 +2982,7 @@
 				<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
 					onclick={() => (viewMode = "outline")}>アウトライン</button>
 				<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
-					onclick={() => {
-						viewMode = "globalLineage";
-						void loadGlobalLineage();
-					}}>ツリー</button>
+					onclick={() => (viewMode = "globalLineage")}>ツリー</button>
 			</div>
 			{#if viewMode !== "outline" && viewMode !== "globalLineage"}
 				<small class="current-location__status">表示中: {viewModeLabel}</small>
