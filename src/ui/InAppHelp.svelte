@@ -6,6 +6,7 @@
 
 	let {
 		shortcuts,
+		editorShortcuts,
 		onOpenOutline,
 		onOpenToday,
 		onOpenUnplaced,
@@ -13,6 +14,7 @@
 		onOpenCommandPalette,
 	}: {
 		shortcuts: readonly ShortcutReference[];
+		editorShortcuts?: readonly ShortcutReference[];
 		onOpenOutline: () => void;
 		onOpenToday: () => void | Promise<void>;
 		onOpenUnplaced: () => void | Promise<void>;
@@ -107,6 +109,17 @@
 					</div>
 				{/each}
 			</dl>
+			{#if editorShortcuts?.length}
+				<h3 class="help-shortcuts__subheading">アウトライン編集</h3>
+				<dl class="help-shortcuts">
+					{#each editorShortcuts as shortcut (shortcut.shortcut)}
+						<div class="help-shortcut">
+							<dt>{shortcut.label}</dt>
+							<dd><kbd>{shortcut.shortcut}</kbd></dd>
+						</div>
+					{/each}
+				</dl>
+			{/if}
 			<p class="help-note">コマンドパレットは <kbd>Ctrl</kbd> + <kbd>K</kbd> で開きます。操作名を検索して実行できます。</p>
 		</article>
 	</div>
