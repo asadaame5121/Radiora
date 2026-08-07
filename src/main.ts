@@ -1,7 +1,9 @@
 import { createBindingHandlers } from "./desktop/register_bindings.ts";
 import { SurrealProcess } from "./desktop/surreal_process.ts";
+import { StartupSnapshotCacheFile } from "./desktop/startup_snapshot_cache_file.ts";
 import { OutlineService } from "./services/outline_service.ts";
 import { RevisionService } from "./services/revision_service.ts";
+import { Logger } from "./services/logger.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
 import type { GraphStore } from "./storage/graph_store.ts";
 import { JsonGraphStore } from "./storage/json_store.ts";
@@ -27,9 +29,22 @@ const appData = Deno.env.get("LOCALAPPDATA") ?? Deno.env.get("APPDATA") ?? Deno.
 const dataDir = `${appData}\\RadioraV2`;
 const logDir = `${dataDir}\\logs`;
 const logPath = `${logDir}\\startup.log`;
+const startupSnapshotCachePath = `${dataDir}\\startup-snapshot.json`;
 const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "surreal";
 const surrealPort = Number(Deno.env.get("RADIORA_SURREAL_PORT") ?? "8012");
 await Deno.mkdir(logDir, { recursive: true });
+
+const logger = new Logger({
+	sink: (line) => {
+		try {
+			Deno.writeTextFileSync(logPath, `${line}\n`, { append: true, create: true });
+		} catch {
+			// Diagnostics must not change application behavior.
+		}
+	},
+	stdout: (line) => console.log(line),
+});
+const startupSnapshotCache = new StartupSnapshotCacheFile(startupSnapshotCachePath);
 
 let startupStatus: StartupStatus = {
 	phase: "starting",
@@ -41,37 +56,21 @@ let store: GraphStore | null = null;
 let surrealProcess: SurrealProcess | null = null;
 let bootstrapPromise: Promise<StartupStatus> | null = null;
 
-async function log(message: string, cause?: unknown): Promise<void> {
-	const detail = cause instanceof Error
-		? `${cause.message}\n${cause.stack ?? ""}`
-		: cause == null
-		? ""
-		: typeof cause === "string"
-		? cause
-		: JSON.stringify(cause);
-	const line = `[${new Date().toISOString()}] ${message}${detail ? `\n${detail}` : ""}\n`;
-	try {
-		Deno.writeTextFileSync(logPath, line, { append: true, create: true });
-	} catch {
-		// Diagnostics must not change startup behavior.
-	}
-}
-
 async function stopBackend(): Promise<void> {
 	service = null;
 	const activeStore = store;
 	const activeProcess = surrealProcess;
 	store = null;
 	surrealProcess = null;
-	await activeStore?.close().catch((cause) => log("Failed to close store", cause));
-	await activeProcess?.stop().catch((cause) => log("Failed to stop SurrealDB", cause));
+	await activeStore?.close().catch((cause) => logger.error("store.close.failed", cause));
+	await activeProcess?.stop().catch((cause) => logger.error("surrealdb.stop.failed", cause));
 }
 
 async function bootstrap(): Promise<StartupStatus> {
 	if (bootstrapPromise) return bootstrapPromise;
-	bootstrapPromise = (async () => {
+	bootstrapPromise = logger.timed("backend.bootstrap", async () => {
 		startupStatus = { phase: "starting", message: "データを読み込んでいます…", logPath };
-		await log("Backend startup began");
+		logger.info("backend.startup.begin", { storageMode, surrealPort });
 		await stopBackend();
 		let storageMigrationRecovery: {
 			databasePath: string;
@@ -106,24 +105,24 @@ async function bootstrap(): Promise<StartupStatus> {
 						backupPath: protectedBackup,
 						versionMarkerPath: storageVersionMarker,
 					};
-					await log("Storage migration backup ready", { path: protectedBackup });
+					logger.info("storage.migration_backup.ready", { path: protectedBackup });
 				}
 				const nextProcess = new SurrealProcess(
 					databasePath,
 					"127.0.0.1",
 					surrealPort,
-					(event, detail) => void log(`SurrealDB ${event}`, detail),
+					(event, detail) => logger.info("surrealdb.event", { sourceEvent: event, detail }),
 				);
 				surrealProcess = nextProcess;
 				await nextProcess.start();
-				await log("SurrealDB sdk.import.begin");
+				logger.info("surrealdb.sdk_import.begin");
 				const { SurrealGraphStore } = await import("./storage/surreal_store.ts");
-				await log("SurrealDB sdk.import.ready");
+				logger.info("surrealdb.sdk_import.ready");
 				nextStore = new SurrealGraphStore(
 					nextProcess.endpoint,
 					"root",
 					"root",
-					(event, detail) => void log(`SurrealDB ${event}`, detail),
+					(event, detail) => logger.info("surrealdb.event", { sourceEvent: event, detail }),
 				);
 			} else {
 				throw new Error(`Unknown RADIORA_STORAGE mode: ${storageMode}`);
@@ -135,7 +134,7 @@ async function bootstrap(): Promise<StartupStatus> {
 			}
 			service = new OutlineService(nextStore);
 			startupStatus = { phase: "ready", message: "準備完了", logPath };
-			await log("Backend startup completed");
+			logger.info("backend.startup.ready", { storageMode });
 		} catch (cause) {
 			const detail = cause instanceof Error ? cause.message : String(cause);
 			startupStatus = {
@@ -144,7 +143,7 @@ async function bootstrap(): Promise<StartupStatus> {
 				detail,
 				logPath,
 			};
-			await log("Backend startup failed", cause);
+			logger.error("backend.startup.failed", cause, { storageMode });
 			await stopBackend();
 			if (storageMigrationRecovery) {
 				try {
@@ -153,13 +152,13 @@ async function bootstrap(): Promise<StartupStatus> {
 						storageMigrationRecovery.backupPath,
 						storageMigrationRecovery.versionMarkerPath,
 					);
-					await log("Storage migration backup restored", restored);
+					logger.info("storage.migration_backup.restored", { ...restored });
 					startupStatus = {
 						...startupStatus,
 						message: "移行前のデータを復元しました。再試行できます。",
 					};
 				} catch (restoreCause) {
-					await log("Storage migration backup restore failed", restoreCause);
+					logger.error("storage.migration_backup.restore_failed", restoreCause);
 					startupStatus = {
 						...startupStatus,
 						message: "移行に失敗し、バックアップの自動復元にも失敗しました。",
@@ -171,7 +170,7 @@ async function bootstrap(): Promise<StartupStatus> {
 			}
 		}
 		return startupStatus;
-	})().finally(() => {
+	}, { storageMode }).finally(() => {
 		bootstrapPromise = null;
 	});
 	return bootstrapPromise;
@@ -223,6 +222,15 @@ const handlers = createBindingHandlers({
 	getService: () => service,
 	getStartupStatus: () => startupStatus,
 	retryStartup: bootstrap,
+	loadStartupSnapshotCache: () =>
+		logger.timed("startup_snapshot.load", () => startupSnapshotCache.load()),
+	saveStartupSnapshotCache: async (snapshot, location) => {
+		const saved = await logger.timed(
+			"startup_snapshot.save",
+			() => startupSnapshotCache.save(snapshot, location),
+		);
+		if (!saved) logger.warn("startup_snapshot.save.skipped", { path: startupSnapshotCachePath });
+	},
 	rewriteAsNewBranch: (sourceBranchId, newBranchName, confirmation) => {
 		const currentStore = store;
 		if (!currentStore) {
@@ -237,10 +245,19 @@ const handlers = createBindingHandlers({
 		);
 	},
 });
-await log("Desktop runtime initialized; waiting for the UI server", { storageMode, surrealPort });
+logger.info("desktop.runtime.initialized", { storageMode, surrealPort });
 
-addEventListener("unload", () => {
-	void stopBackend();
+const appWindow = new Deno.BrowserWindow();
+let closingWindow = false;
+appWindow.addEventListener("close", (event) => {
+	if (closingWindow) return;
+	event.preventDefault();
+	closingWindow = true;
+	logger.info("desktop.shutdown.begin");
+	void stopBackend().finally(() => {
+		logger.info("desktop.shutdown.ready");
+		appWindow.close();
+	});
 });
 
 // In desktop mode Deno.serve owns the runtime loop. Keep it as the final
@@ -249,7 +266,7 @@ const server = Deno.serve(async (request) => {
 	const url = new URL(request.url);
 	if (url.pathname === "/api/renderer-log" && request.method === "POST") {
 		const message = await request.text().catch(() => "<unreadable renderer message>");
-		await log(`Renderer: ${message}`);
+		logger.info("renderer.log", { message });
 		return new Response(null, { status: 204 });
 	}
 	if (url.pathname.startsWith("/api/rpc/")) {
@@ -262,12 +279,12 @@ const server = Deno.serve(async (request) => {
 			return Response.json({ message: "Unknown API method." }, { status: 404 });
 		}
 		try {
-			const body = await request.json() as { args?: unknown[] };
-			const result = await handler(...(body.args ?? []));
-			await log(`API ${name} -> 200`);
+			const result = await logger.timed("rpc.request", async () => {
+				const body = await request.json() as { args?: unknown[] };
+				return handler(...(body.args ?? []));
+			}, { method: name });
 			return Response.json({ result: result ?? null });
 		} catch (cause) {
-			await log(`API call failed: ${name}`, cause);
 			return Response.json({ message: cause instanceof Error ? cause.message : String(cause) }, {
 				status: 500,
 			});
@@ -280,18 +297,15 @@ const server = Deno.serve(async (request) => {
 	const safePath = relative.includes("..") ? "index.html" : relative;
 	const assetUrl = new URL(safePath, distRoot);
 	try {
-		const body = await Deno.readFile(assetUrl);
-		await log(
-			`HTTP ${request.method} ${url.pathname} -> 200 ${body.byteLength}B (${assetUrl.href})`,
+		const body = await logger.timed(
+			"http.asset.read",
+			() => Deno.readFile(assetUrl),
+			{ method: request.method, path: safePath },
 		);
 		return new Response(body, {
 			headers: { "content-type": mimeTypes[extension(safePath)] ?? "application/octet-stream" },
 		});
-	} catch (cause) {
-		await log(
-			`HTTP ${request.method} ${url.pathname} -> asset read failed (${assetUrl.href})`,
-			cause,
-		);
+	} catch {
 		if (safePath !== "index.html") return missingAssetResponse(safePath);
 		return missingAssetResponse("dist/index.html");
 	}

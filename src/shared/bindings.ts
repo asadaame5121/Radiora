@@ -58,10 +58,19 @@ import type { WorkMergePreview } from "../services/work_merge_service.ts";
 import type { ManuscriptSection } from "../services/manuscript_projection.ts";
 import type { OpmlImportResult } from "../services/opml_service.ts";
 import type { JsonBackupRestoreResult } from "../services/json_backup.ts";
+import type {
+	StartupSnapshotCache,
+	StartupSnapshotLocation,
+} from "../services/startup_snapshot_cache.ts";
 
 export interface RadioraBindings {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
+	loadStartupSnapshotCache(): Promise<StartupSnapshotCache | null>;
+	saveStartupSnapshotCache(
+		snapshot: OutlineSnapshot,
+		location: StartupSnapshotLocation,
+	): Promise<void>;
 	listOutline(): Promise<OutlineSnapshot>;
 	projectDates(range: DateRange): Promise<DateProjection>;
 	projectManuscript(rootOccurrenceId: string): Promise<ManuscriptSection[]>;

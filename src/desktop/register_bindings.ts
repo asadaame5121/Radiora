@@ -9,6 +9,11 @@ import type {
 	RewriteAsNewBranchResult,
 	RewriteConfirmation,
 } from "../services/revision_service.ts";
+import type {
+	StartupSnapshotCache,
+	StartupSnapshotLocation,
+} from "../services/startup_snapshot_cache.ts";
+import type { OutlineSnapshot } from "../domain/models.ts";
 
 export interface BindingContext {
 	getService(): OutlineService | null;
@@ -19,6 +24,11 @@ export interface BindingContext {
 		newBranchName: string,
 		confirmation: RewriteConfirmation,
 	): Promise<RewriteAsNewBranchResult>;
+	loadStartupSnapshotCache?(): Promise<StartupSnapshotCache | null>;
+	saveStartupSnapshotCache?(
+		snapshot: OutlineSnapshot,
+		location: StartupSnapshotLocation,
+	): Promise<void>;
 }
 
 export function createBindingHandlers(context: BindingContext): RadioraBindings {
@@ -31,6 +41,10 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 	return {
 		getStartupStatus: async () => context.getStartupStatus(),
 		retryStartup: () => context.retryStartup(),
+		loadStartupSnapshotCache: () => context.loadStartupSnapshotCache?.() ?? Promise.resolve(null),
+		saveStartupSnapshotCache: async (snapshot, location) => {
+			await context.saveStartupSnapshotCache?.(snapshot, location);
+		},
 		listOutline: () => service().listOutline(),
 		projectDates: (range) => service().projectDates(range),
 		projectManuscript: (rootOccurrenceId) => service().projectManuscript(rootOccurrenceId),
