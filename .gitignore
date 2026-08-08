@@ -41,6 +41,5 @@ probe/
 probe-/
 
 # Internal docs and agent workspace (not for public release)
-AGENTS.md
 docs/log/
 .codex-remote-attachments/

@@ -9,5 +9,6 @@ export default defineConfig(({ mode }) => ({
 		mode === "mock" ? mockUiPlugin() : null,
 		svelte(),
 	].filter((plugin) => plugin !== null),
+	resolve: mode === "test" ? { conditions: ["browser"] } : undefined,
 	build: { target: "es2022" },
 }));

@@ -14,6 +14,12 @@
 		loadTreeProjectionPreference,
 		saveTreeProjectionPreference,
 	} from "./tree_projection_preference";
+	import { fitTreeBounds, fitTreeNodes, type TreeBounds } from "./tree_camera";
+	import {
+		buildTreeSpatialIndex,
+		nodesNearRectangle,
+		screenRectanglesOverlap,
+	} from "./tree_spatial_index";
 
 	let {
 		snapshot,
@@ -112,15 +118,7 @@
 	const nodeGrid = $derived.by(() => {
 		// Spatial index over screen positions so label collision checks stay
 		// local instead of scanning every node.
-		const cellSize = 96;
-		const grid = new Map<string, TreeLayoutNode[]>();
-		for (const node of layout.nodes) {
-			const key = `${Math.floor(node.x / cellSize)}:${Math.floor(node.y / cellSize)}`;
-			const bucket = grid.get(key) ?? [];
-			bucket.push(node);
-			grid.set(key, bucket);
-		}
-		return { cellSize, grid };
+		return buildTreeSpatialIndex(layout.nodes);
 	});
 	const contextLabelIds = $derived.by(() => {
 		const visible = new Set<string>();
@@ -138,17 +136,17 @@
 				y2: node.y + 10 + Math.max(0, node.labelLines.length - 1) * 14,
 			};
 			if (rect.x1 < 4 || rect.x2 > width - 8 || rect.y1 < 4 || rect.y2 > height - 44) continue;
-			const hitsNode = nearNodes(nodeGrid, rect).some((other) => {
+			const hitsNode = nodesNearRectangle(nodeGrid, rect).some((other) => {
 				if (other.id === node.id) return false;
 				const padding = other.radius + 6;
-				return rectanglesOverlap(rect, {
+				return screenRectanglesOverlap(rect, {
 					x1: other.x - padding,
 					x2: other.x + padding,
 					y1: other.y - padding,
 					y2: other.y + padding,
 				});
 			});
-			if (hitsNode || accepted.some((other) => rectanglesOverlap(rect, other))) continue;
+			if (hitsNode || accepted.some((other) => screenRectanglesOverlap(rect, other))) continue;
 			visible.add(node.id);
 			accepted.push(rect);
 		}
@@ -303,12 +301,7 @@
 	}
 
 	/** Zooms the camera so the given world-space bounds fill the viewport. */
-	export function zoomToBounds(bounds: {
-		minX: number;
-		minY: number;
-		maxX: number;
-		maxY: number;
-	}): void {
+	export function zoomToBounds(bounds: TreeBounds): void {
 		const fit = fitTransformFor(bounds);
 		applyTransform(d3.zoomIdentity
 			.translate(fit.x, fit.y)
@@ -316,48 +309,11 @@
 	}
 
 	function fitCamera(): { k: number; x: number; y: number } {
-		if (layout.nodes.length === 0) {
-			return { k: 1, x: 0, y: 0 };
-		}
-		let minX = Number.POSITIVE_INFINITY;
-		let minY = Number.POSITIVE_INFINITY;
-		let maxX = Number.NEGATIVE_INFINITY;
-		let maxY = Number.NEGATIVE_INFINITY;
-		for (const node of layout.nodes) {
-			const bounds = node.aggregate && node.bounds
-				? node.bounds
-				: {
-					minX: node.worldX,
-					minY: node.worldY,
-					maxX: node.worldX,
-					maxY: node.worldY,
-				};
-			minX = Math.min(minX, bounds.minX);
-			minY = Math.min(minY, bounds.minY);
-			maxX = Math.max(maxX, bounds.maxX);
-			maxY = Math.max(maxY, bounds.maxY);
-		}
-		return fitTransformFor({ minX, minY, maxX, maxY });
+		return fitTreeNodes(layout.nodes, { width, height });
 	}
 
-	function fitTransformFor(bounds: {
-		minX: number;
-		minY: number;
-		maxX: number;
-		maxY: number;
-	}): { k: number; x: number; y: number } {
-		const padding = 60;
-		const spanX = Math.max(1, bounds.maxX - bounds.minX);
-		const spanY = Math.max(1, bounds.maxY - bounds.minY);
-		const k = Math.min((width - padding * 2) / spanX, (height - padding * 2) / spanY);
-		const clamped = Math.max(.05, Math.min(24, k));
-		const centerX = (bounds.minX + bounds.maxX) / 2;
-		const centerY = (bounds.minY + bounds.maxY) / 2;
-		return {
-			k: clamped,
-			x: width / 2 - centerX * clamped,
-			y: height / 2 - centerY * clamped,
-		};
+	function fitTransformFor(bounds: TreeBounds): { k: number; x: number; y: number } {
+		return fitTreeBounds(bounds, { width, height });
 	}
 
 	function selectProjection(next: TreeProjection): void {
@@ -400,31 +356,6 @@
 		return `${node.item.text}\n作成: ${createdAt}${knot}`;
 	}
 
-	function rectanglesOverlap(
-		a: { x1: number; x2: number; y1: number; y2: number },
-		b: { x1: number; x2: number; y1: number; y2: number },
-	): boolean {
-		return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
-	}
-
-	function nearNodes(
-		index: { cellSize: number; grid: Map<string, TreeLayoutNode[]> },
-		rect: { x1: number; x2: number; y1: number; y2: number },
-	): TreeLayoutNode[] {
-		const { cellSize, grid } = index;
-		const minCellX = Math.floor(rect.x1 / cellSize);
-		const maxCellX = Math.floor(rect.x2 / cellSize);
-		const minCellY = Math.floor(rect.y1 / cellSize);
-		const maxCellY = Math.floor(rect.y2 / cellSize);
-		const result: TreeLayoutNode[] = [];
-		for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
-			for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
-				const bucket = grid.get(`${cellX}:${cellY}`);
-				if (bucket) result.push(...bucket);
-			}
-		}
-		return result;
-	}
 </script>
 
 <div class="tree-root">

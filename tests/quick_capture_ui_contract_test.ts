@@ -2,6 +2,10 @@ import { assert } from "jsr:@std/assert@1";
 
 Deno.test("Quick Capture and unplaced inbox remain reachable and expose required actions", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const options = await Deno.readTextFile(new URL("../src/ui/OptionsView.svelte", import.meta.url));
+	const unplaced = await Deno.readTextFile(
+		new URL("../src/ui/UnplacedInboxView.svelte", import.meta.url),
+	);
 	const bindings = await Deno.readTextFile(
 		new URL("../src/shared/bindings.ts", import.meta.url),
 	);
@@ -20,13 +24,13 @@ Deno.test("Quick Capture and unplaced inbox remain reachable and expose required
 	assert(app.includes("vocabulary.quickCapture"));
 	assert(app.includes("loadQuickCapturePreference()"));
 	assert(app.includes("saveQuickCapturePreference"));
-	assert(app.includes("quickCapturePreference.destination"));
+	assert(options.includes("quickCapturePreference.destination"));
 	assert(app.includes("api.createItem({"));
-	assert(app.includes("vocabulary.quickCaptureDestinationRoot"));
-	assert(app.includes("vocabulary.unplacedInbox"));
-	assert(app.includes("#タグ"));
-	assert(app.includes("Rootへ配置"));
-	assert(app.includes("selectedId"));
-	assert(app.includes("unplacedLinkDirections"));
+	assert(options.includes("vocabulary.quickCaptureDestinationRoot"));
+	assert(unplaced.includes("vocabulary.unplacedInbox"));
+	assert(unplaced.includes("#タグ"));
+	assert(unplaced.includes("Rootへ配置"));
+	assert(unplaced.includes("selectedId"));
+	assert(unplaced.includes("unplacedLinkDirections"));
 	assert(app.includes("api.createLink({"));
 });
