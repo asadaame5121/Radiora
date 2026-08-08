@@ -1,11 +1,24 @@
 import { RecordId } from "surrealdb";
 import type {
+	Bookmark,
+	Branch,
+	EmergenceSuggestion,
+	Knot,
+	LinkType,
 	Occurrence,
 	OutlineItem,
+	OutlineLink,
+	PurgeManifest,
+	RecoverySnapshot,
+	ResumePosition,
 	Revision,
+	SavedRuleQuery,
+	SearchAlias,
 	SnapshotProtection,
 	StubCreationKind,
+	SystemRelation,
 	Work,
+	WorkingCopy,
 	WorkStub,
 } from "../domain/models.ts";
 
@@ -125,4 +138,179 @@ export function revisionFromRow(row: SurrealRow): Revision {
 		createdAt: String(row.created_at ?? ""),
 		message: row.message == null ? undefined : String(row.message),
 	};
+}
+
+export function branchFromRow(row: SurrealRow): Branch {
+	return {
+		id: String(row.id),
+		workId: domainId(row.work_id, "work_id"),
+		name: String(row.name ?? ""),
+		headRevisionId: optionalRecordDomainId(row.head_revision),
+		createdAt: String(row.created_at ?? ""),
+		promotedAt: row.promoted_at == null ? undefined : String(row.promoted_at),
+		archivedAt: row.archived_at == null ? undefined : String(row.archived_at),
+	};
+}
+
+export function workingCopyFromRow(row: SurrealRow): WorkingCopy {
+	return {
+		workId: domainId(row.work_id, "work_id"),
+		branchId: domainId(row.branch_id, "branch_id"),
+		text: String(row.text ?? ""),
+		updatedAt: String(row.updated_at ?? ""),
+	};
+}
+
+export function recoverySnapshotFromRow(row: SurrealRow): RecoverySnapshot {
+	return {
+		id: String(row.id),
+		workId: domainId(row.work_id, "work_id"),
+		branchId: domainId(row.branch_id, "branch_id"),
+		text: String(row.text ?? ""),
+		contentHash: String(row.content_hash ?? ""),
+		createdAt: String(row.created_at ?? ""),
+		sourceRevisionId: optionalRecordDomainId(row.source_revision),
+		name: row.name == null ? undefined : String(row.name),
+		protection: snapshotProtectionFromRow(row),
+	};
+}
+
+export function bookmarkFromRow(row: SurrealRow): Bookmark {
+	return {
+		id: String(row.id),
+		workId: domainId(row.work_id, "work_id"),
+		occurrenceId: domainId(row.occurrence_id, "id"),
+		createdAt: String(row.created_at ?? ""),
+	};
+}
+
+export function resumePositionFromRow(row: SurrealRow): ResumePosition {
+	return {
+		workId: domainId(row.work_id, "work_id"),
+		occurrenceId: domainId(row.occurrence_id, "id"),
+		caretOffset: Number(row.caret_offset),
+		updatedAt: String(row.updated_at ?? ""),
+	};
+}
+
+export function purgeManifestFromRow(row: SurrealRow): PurgeManifest {
+	return {
+		id: String(row.id),
+		workId: String(row.work_id),
+		occurrenceIds: Array.isArray(row.occurrence_ids) ? row.occurrence_ids.map(String) : [],
+		branchIds: Array.isArray(row.branch_ids) ? row.branch_ids.map(String) : [],
+		revisionIds: Array.isArray(row.revision_ids) ? row.revision_ids.map(String) : [],
+		linkIds: Array.isArray(row.link_ids) ? row.link_ids.map(String) : [],
+		purgedAt: String(row.purged_at ?? ""),
+	};
+}
+
+export function outlineLinkFromRow(row: SurrealRow): OutlineLink {
+	const fromId = domainId(row.from_id, "work_id");
+	const toId = domainId(row.to_id, "work_id");
+	return {
+		id: String(row.id),
+		fromId,
+		toId,
+		from: row.from_scope === "revision"
+			? {
+				scope: "revision",
+				workId: fromId,
+				revisionId: optionalRecordDomainId(row.from_revision) ?? "",
+			}
+			: { scope: "work", workId: fromId },
+		to: row.to_scope === "revision"
+			? {
+				scope: "revision",
+				workId: toId,
+				revisionId: optionalRecordDomainId(row.to_revision) ?? "",
+			}
+			: { scope: "work", workId: toId },
+		type: String(row.type) as LinkType,
+		status: String(row.status) as OutlineLink["status"],
+		origin: String(row.origin) as OutlineLink["origin"],
+		createdAt: String(row.created_at ?? ""),
+		reason: row.reason == null ? undefined : String(row.reason),
+	};
+}
+
+export function systemRelationFromRow(row: SurrealRow): SystemRelation {
+	return {
+		id: String(row.id),
+		fromWorkId: domainId(row.from_id, "work_id"),
+		toWorkId: domainId(row.to_id, "work_id"),
+		type: "IN",
+		createdAt: String(row.created_at ?? ""),
+	};
+}
+
+export function knotFromRow(row: SurrealRow): Knot {
+	return {
+		id: String(row.id),
+		cycleIds: Array.isArray(row.cycle_ids) ? row.cycle_ids.map(String) : [],
+		createdAt: String(row.created_at ?? ""),
+	};
+}
+
+export function searchAliasFromRow(row: SurrealRow): SearchAlias {
+	return {
+		id: String(row.id),
+		canonical: String(row.canonical ?? ""),
+		variants: Array.isArray(row.variants) ? row.variants.map(String) : [],
+		createdAt: String(row.created_at ?? ""),
+		updatedAt: String(row.updated_at ?? ""),
+	};
+}
+
+export function emergenceSuggestionFromRow(row: SurrealRow): EmergenceSuggestion {
+	const persistenceStatus = String(row.status) as EmergenceSuggestion["persistenceStatus"];
+	return {
+		id: String(row.id),
+		kind: String(row.kind) as EmergenceSuggestion["kind"],
+		contextWorkId: domainId(row.context_work_id, "work_id"),
+		targetWorkId: domainId(row.target_work_id, "work_id"),
+		contextItemId: String(row.context_occurrence_id ?? ""),
+		targetItemId: String(row.target_occurrence_id ?? ""),
+		...(row.proposed_link_type == null
+			? {}
+			: { proposedLinkType: String(row.proposed_link_type) as LinkType }),
+		title: String(row.title ?? ""),
+		explanation: String(row.explanation ?? ""),
+		evidence: Array.isArray(row.evidence)
+			? row.evidence.map((step) => {
+				const value = step as SurrealRow;
+				return {
+					fromId: String(value.fromId ?? value.from_id ?? ""),
+					toId: String(value.toId ?? value.to_id ?? ""),
+					relation: String(
+						value.relation ?? "",
+					) as EmergenceSuggestion["evidence"][number]["relation"],
+				};
+			})
+			: [],
+		score: Number(row.score ?? 0),
+		...(persistenceStatus === "held" ? { status: "pinned" as const } : {}),
+		persistenceStatus,
+		createdAt: String(row.created_at ?? ""),
+		updatedAt: String(row.updated_at ?? ""),
+		...(row.resolved_at == null ? {} : { resolvedAt: String(row.resolved_at) }),
+		...(row.resolution_reason == null ? {} : { resolutionReason: String(row.resolution_reason) }),
+	};
+}
+
+export function savedRuleQueryFromRow(row: SurrealRow): SavedRuleQuery {
+	return {
+		id: String(row.id),
+		name: String(row.name ?? ""),
+		source: String(row.source ?? ""),
+		createdAt: String(row.created_at ?? ""),
+		updatedAt: String(row.updated_at ?? ""),
+	};
+}
+
+export function emergenceFeedbackActionFromRow(
+	row: SurrealRow,
+): "accept" | "dismiss" | "pin" | null {
+	const action = row.action;
+	return action === "accept" || action === "dismiss" || action === "pin" ? action : null;
 }
