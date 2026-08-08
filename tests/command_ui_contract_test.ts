@@ -30,10 +30,13 @@ Deno.test("App routes command buttons and global shortcuts through the command s
 
 Deno.test("command palette projects command service state and guards disabled execution", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const palette = await Deno.readTextFile(
+		new URL("../src/ui/CommandPaletteDialog.svelte", import.meta.url),
+	);
 	assert(app.includes("commandPaletteItems("));
 	assert(app.includes('event.key.toLocaleLowerCase() === "k"'));
 	assert(app.includes("if (!command?.availability.enabled) return;"));
-	assert(app.includes("activeCommandPaletteItem.availability.reason"));
+	assert(palette.includes("activeCommand.availability.reason"));
 	assert(app.includes("commandPaletteRestoreFocus?.focus()"));
 	assert(app.includes("hasSelectedRecoverySnapshot: false"));
 	assert(app.includes("hasSelectedRecoverySnapshot: true"));
@@ -41,9 +44,13 @@ Deno.test("command palette projects command service state and guards disabled ex
 
 Deno.test("command palette is shortcut-only and closes from its backdrop", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
-	assert(app.includes("handleCommandPaletteBackdropClick"));
-	assert(app.includes("event.target !== event.currentTarget"));
-	assert(app.includes("onclick={handleCommandPaletteBackdropClick}"));
+	const palette = await Deno.readTextFile(
+		new URL("../src/ui/CommandPaletteDialog.svelte", import.meta.url),
+	);
+	assert(app.includes("<CommandPaletteDialog"));
+	assert(palette.includes("handleBackdropClick"));
+	assert(palette.includes("event.target !== event.currentTarget"));
+	assert(palette.includes("onclick={handleBackdropClick}"));
 	assert(!app.includes("onclick={() => openCommandPalette()}>{vocabulary.commandPalette}"));
 });
 
@@ -55,15 +62,18 @@ Deno.test("branch rewrite and link commands remain keyboard-first and confirmati
 	const desktop = await Deno.readTextFile(
 		new URL("../src/desktop/register_bindings.ts", import.meta.url),
 	);
+	const confirmation = await Deno.readTextFile(
+		new URL("../src/ui/ConfirmationDialog.svelte", import.meta.url),
+	);
 
 	assert(app.includes('case "createBranch": await requestRewriteAsNewBranch()'));
 	assert(app.includes('action: "rewrite"'));
-	assert(app.includes("rewriteBranchName.trim()"));
+	assert(confirmation.includes("rewriteBranchName.trim()"));
 	assert(app.includes("api.rewriteAsNewBranch("));
 	assert(app.includes('"confirmed"'));
 	assert(app.includes('viewMode = "workLineage"'));
-	assert(app.includes("rewriteBranchNameInput?.focus()"));
-	assert(app.includes('event.key === "Enter" && rewriteBranchName.trim()'));
+	assert(confirmation.includes("rewriteInput?.focus()"));
+	assert(confirmation.includes('event.key === "Enter" && rewriteBranchName.trim()'));
 	assert(app.includes('case "createLink":'));
 	assert(app.includes("else await openLinkEditor()"));
 	assert(app.includes('".link-editor input[type=search]"'));

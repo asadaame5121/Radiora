@@ -11,6 +11,22 @@
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
 	import InAppHelp from "./InAppHelp.svelte";
 	import ContextMenu from "./ContextMenu.svelte";
+	import TodayView from "./TodayView.svelte";
+	import StubListView from "./StubListView.svelte";
+	import UnplacedInboxView from "./UnplacedInboxView.svelte";
+	import TagBrowserView from "./TagBrowserView.svelte";
+	import TrashView from "./TrashView.svelte";
+	import OptionsView from "./OptionsView.svelte";
+	import ConfirmationDialog from "./ConfirmationDialog.svelte";
+	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
+	import LicensesDialog, {
+		type LicenseEntry,
+		type LicenseIndex,
+	} from "./LicensesDialog.svelte";
+	import {
+		createConfirmationController,
+		type PendingConfirmation,
+	} from "./confirmation_controller.svelte.ts";
 	import type { ContextMenuItem } from "./context_menu";
 	import { createRpcAdapter } from "./rpc_adapter";
 	import type {
@@ -104,7 +120,6 @@
 	import { EDITOR_BINDINGS } from "../shared/editor_bindings.ts";
 	import {
 	commandPaletteItems,
-	nextCommandPaletteIndex,
 	type CommandPaletteItem,
 	} from "./command_palette.ts";
 	import {
@@ -129,10 +144,8 @@
 	import { previewDirection } from "../services/advanced_link_resolver";
 	import type { StubListEntry } from "../services/stub_service";
 	import type { DuplicateCandidate } from "../services/duplicate_candidates";
-	import type { WorkMergePreview } from "../services/work_merge_service";
 	import {
 		EMPTY_OUTLINE_FILTER,
-		matchesOutlineFilter,
 		type OutlineFilter,
 	} from "../services/outline_filter";
 	import {
@@ -160,33 +173,11 @@
 		| "help"
 		| "options";
 	type AsideMode = "overview" | "relation" | "history" | "query";
-	type PendingConfirmation =
-		| { action: "trash"; occurrenceId: string; occurrenceCount: number }
-		| { action: "purge"; workId: string; occurrenceCount: number; linkCount: number }
-		| {
-			action: "rewrite";
-			occurrenceId: string;
-			workId: string;
-			sourceBranchId: string;
-		}
-		| { action: "merge-duplicate"; preview: WorkMergePreview }
-		| { action: "cancel-longform"; pendingAction: () => Promise<void> };
 	type InternalReferenceCompletionState = {
 		itemId: string;
 		range: { start: number; end: number };
 		candidates: InternalReferenceCompletion[];
 		activeIndex: number;
-	};
-	type LicenseEntry = {
-		name: string;
-		version: string;
-		license: string;
-		file: string | null;
-		summary: string;
-	};
-	type LicenseIndex = {
-		runtime: LicenseEntry[];
-		npm: LicenseEntry[];
 	};
 	type InlineLinkCompletionPhase = "candidate" | "type" | "direction";
 	type InlineLinkDirection = "forward" | "reverse";
@@ -202,10 +193,6 @@
 		direction: InlineLinkDirection;
 		searching: boolean;
 		creating: boolean;
-	};
-	type TagCloudEntry = {
-		name: string;
-		workIds: readonly string[];
 	};
 	type OccurrenceContextMenuState = {
 		targetId: string;
@@ -290,20 +277,16 @@
 		(WorkComparisonDocuments & { preferredLeftKey?: string; preferredRightKey?: string }) | null
 	>(null);
 	let comparisonRequest = 0;
-	let pendingConfirmation = $state<PendingConfirmation | null>(null);
-	let confirmationSubmitting = $state(false);
-	let confirmationDialog: HTMLDialogElement;
-	let licensesDialog: HTMLDialogElement;
+	const confirmationController = createConfirmationController();
+	let confirmationDialog: ConfirmationDialog;
+	let licensesDialog = $state<HTMLDialogElement>();
 	let licenseIndex = $state<LicenseIndex | null>(null);
 	let licenseDetail = $state<{ name: string; text: string } | null>(null);
 	let licenseError = $state("");
 	let licenseLoading = $state(false);
-	let rewriteBranchName = $state("");
-	let rewriteBranchNameInput = $state<HTMLInputElement | null>(null);
 	let commandPaletteOpen = $state(false);
 	let commandPaletteQuery = $state("");
 	let commandPaletteActiveIndex = $state(-1);
-	let commandPaletteInput = $state<HTMLInputElement | null>(null);
 	let commandPaletteRestoreFocus: HTMLElement | null = null;
 	let inspectorElement = $state<HTMLElement | null>(null);
 	let workingCopySaveStatuses = $state<WorkingCopySaveStatus[]>([]);
@@ -317,8 +300,6 @@
 	let quickCapturePreference = $state(loadQuickCapturePreference());
 	let opmlNotice = $state("");
 	let jsonBackupNotice = $state("");
-	let opmlFileInput = $state<HTMLInputElement>();
-	let jsonBackupFileInput = $state<HTMLInputElement>();
 	const initialUiLayoutPreference = loadUiLayoutPreference();
 	let inspectorWidth = $state(initialUiLayoutPreference.inspectorWidth);
 	let inspectorCollapsed = $state(initialUiLayoutPreference.inspectorCollapsed);
@@ -347,25 +328,6 @@
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
-	const tagCloud = $derived.by(() => {
-		const workIdsByTag = new Map<string, Set<string>>();
-		for (const scope of tagScopes) {
-			for (const tag of scope.tags) {
-				const workIds = workIdsByTag.get(tag) ?? new Set<string>();
-				workIds.add(scope.scope.workId);
-				workIdsByTag.set(tag, workIds);
-			}
-		}
-		return [...workIdsByTag].map(([name, workIds]) => ({
-			name,
-			workIds: [...workIds].sort(),
-		}) satisfies TagCloudEntry).sort((left, right) =>
-			right.workIds.length - left.workIds.length || left.name.localeCompare(right.name)
-		);
-	});
-	const selectedTagNodeIds = $derived(
-		selectedTag ? tagCloud.find((tag) => tag.name === selectedTag)?.workIds ?? [] : [],
-	);
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
 	const markdownExportSelectionRequired = $derived(
 		markdownExportPreference.scope === "selected" && !selectedItem,
@@ -486,20 +448,6 @@
 		if (unsaved) return unsaved;
 		return workingCopySaveStatuses[0];
 	});
-	const filteredTodayCreated = $derived.by(() => filterDateEntries(dateProjection?.created ?? []));
-	const filteredTodayUpdated = $derived.by(() => filterDateEntries(dateProjection?.updated ?? []));
-	const filteredUnplacedWorks = $derived(
-		unplacedWorks.filter((work) =>
-			matchesOutlineFilter(work.text, outlineFilter)
-		),
-	);
-
-	function filterDateEntries<T extends { representative: { text: string } | null }>(entries: T[]): T[] {
-		return entries.filter((entry) => {
-			const text = entry.representative ? entry.representative.text : "";
-			return matchesOutlineFilter(text, outlineFilter);
-		});
-	}
 	const commandContext = $derived<CommandContext>({
 		startupReady: startup.phase === "ready",
 		selectedOccurrenceId: selectedId,
@@ -559,9 +507,6 @@
 		commandContext,
 		vocabulary,
 	));
-	const activeCommandPaletteItem = $derived(
-		commandPaletteActiveIndex < 0 ? null : commandPaletteCommands[commandPaletteActiveIndex] ?? null,
-	);
 	const shortcuts = validateShortcuts(COMMAND_DEFINITIONS.flatMap((command) =>
 		command.shortcut ? [{ commandId: command.id, shortcut: command.shortcut }] : []
 	));
@@ -1734,15 +1679,6 @@
 		}
 	}
 
-	function stubCreatedViaLabel(entry: StubListEntry): string {
-		return entry.createdVia === "stub-list" ? vocabulary.stubList : vocabulary.advancedLinkEditor;
-	}
-
-	function formatStubInstant(value: string): string {
-		const date = new Date(value);
-		return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ja-JP");
-	}
-
 	async function placeUnplaced(workId: string, parentId: string | null): Promise<void> {
 		try {
 			const created = await api.placeUnplacedWork({ workId, parentId });
@@ -2067,13 +2003,12 @@
 			longForm = { active: false, text: "", dirty: false, preview: false };
 			return;
 		}
-		pendingConfirmation = {
+		await requestConfirmation({
 			action: "cancel-longform",
 			pendingAction: async () => {
 				longForm = { active: false, text: "", dirty: false, preview: false };
-				pendingConfirmation = null;
 			},
-		};
+		});
 	}
 
 	function handleLongFormInput(value: string): void {
@@ -2394,14 +2329,6 @@
 		viewMode = "tags";
 	}
 
-	function selectTag(tag: string): void {
-		selectedTag = tag;
-	}
-
-	function tagCloudFontSize(count: number): string {
-		return `${Math.min(22, 12 + Math.max(0, count - 1) * 2)}px`;
-	}
-
 	function openTagNode(workId: string): void {
 		const item = itemByWorkId.get(workId);
 		if (item) {
@@ -2516,8 +2443,6 @@
 		commandPaletteQuery = "";
 		commandPaletteActiveIndex = 0;
 		commandPaletteOpen = true;
-		await tick();
-		commandPaletteInput?.focus();
 	}
 
 	async function closeCommandPalette(): Promise<void> {
@@ -2525,32 +2450,6 @@
 		await tick();
 		commandPaletteRestoreFocus?.focus();
 		commandPaletteRestoreFocus = null;
-	}
-
-	function handleCommandPaletteBackdropClick(event: MouseEvent): void {
-		if (event.target !== event.currentTarget) return;
-		void closeCommandPalette();
-	}
-
-	function handleCommandPaletteKeydown(event: KeyboardEvent): void {
-		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-			event.preventDefault();
-			commandPaletteActiveIndex = nextCommandPaletteIndex(
-				commandPaletteActiveIndex,
-				event.key === "ArrowDown" ? 1 : -1,
-				commandPaletteCommands.length,
-			);
-			return;
-		}
-		if (event.key === "Enter") {
-			event.preventDefault();
-			if (activeCommandPaletteItem) executeCommandPaletteItem(activeCommandPaletteItem);
-			return;
-		}
-		if (event.key === "Escape") {
-			event.preventDefault();
-			void closeCommandPalette();
-		}
 	}
 
 	async function executeCommandPaletteItem(command: CommandPaletteItem): Promise<void> {
@@ -2602,7 +2501,7 @@
 
 	async function requestRewriteAsNewBranch(): Promise<void> {
 		if (!selectedItem || !selectedBranchId) return;
-		rewriteBranchName = "";
+		confirmationController.rewriteBranchName = "";
 		await requestConfirmation({
 			action: "rewrite",
 			occurrenceId: selectedItem.id,
@@ -2693,11 +2592,7 @@
 		}
 	}
 
-	async function importOpmlFile(event: Event): Promise<void> {
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		input.value = "";
-		if (!file) return;
+	async function importOpmlFile(file: File): Promise<void> {
 		opmlNotice = "";
 		try {
 			await autosave.flush();
@@ -2730,11 +2625,7 @@
 		}
 	}
 
-	async function restoreJsonBackupFile(event: Event): Promise<void> {
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		input.value = "";
-		if (!file) return;
+	async function restoreJsonBackupFile(file: File): Promise<void> {
 		jsonBackupNotice = "";
 		try {
 			await autosave.flush();
@@ -2784,36 +2675,14 @@
 
 
 	async function requestConfirmation(confirmation: PendingConfirmation): Promise<void> {
-		if (pendingConfirmation) return;
-		pendingConfirmation = confirmation;
+		if (!confirmationController.request(confirmation)) return;
 		await tick();
-		if (!confirmationDialog.open) confirmationDialog.showModal();
-		if (confirmation.action === "rewrite") {
-			await tick();
-			rewriteBranchNameInput?.focus();
-		}
-	}
-
-	function closeConfirmation(): void {
-		if (!confirmationSubmitting) confirmationDialog.close();
-	}
-
-	function resetConfirmation(): void {
-		if (!confirmationSubmitting) {
-			pendingConfirmation = null;
-			rewriteBranchName = "";
-		}
-	}
-
-	function preventCloseWhileSubmitting(event: Event): void {
-		if (confirmationSubmitting) event.preventDefault();
+		await confirmationDialog.show(confirmation.action === "rewrite");
 	}
 
 	async function confirmPendingAction(): Promise<void> {
-		const confirmation = pendingConfirmation;
-		if (!confirmation || confirmationSubmitting) return;
-		if (confirmation.action === "rewrite" && !rewriteBranchName.trim()) return;
-		confirmationSubmitting = true;
+		const confirmation = confirmationController.beginSubmission();
+		if (!confirmation) return;
 		try {
 			await autosave.flush();
 			if (confirmation.action === "trash") {
@@ -2827,7 +2696,7 @@
 			} else if (confirmation.action === "rewrite") {
 				const result = await api.rewriteAsNewBranch(
 					confirmation.sourceBranchId,
-					rewriteBranchName,
+					confirmationController.rewriteBranchName,
 					"confirmed",
 				);
 				if (result.status === "created") {
@@ -2843,17 +2712,13 @@
 				await Promise.all([load(), loadDuplicates()]);
 			} else if (confirmation.action === "cancel-longform") {
 				await confirmation.pendingAction();
-				pendingConfirmation = null;
-				confirmationDialog.close();
-				return;
 			}
 		} catch (cause) {
 			error = errorMessage(cause);
+			confirmationController.finishSubmission(false);
 			return;
-		} finally {
-			confirmationSubmitting = false;
 		}
-		pendingConfirmation = null;
+		confirmationController.finishSubmission(true);
 		confirmationDialog.close();
 	}
 
@@ -2929,52 +2794,15 @@
 
 <svelte:head><title>Radiora v2 PoC</title></svelte:head>
 
-{#if commandPaletteOpen}
-	<dialog
-		open
-		class="command-palette"
-		aria-modal="true"
-		aria-label={vocabulary.commandPalette}
-		onclick={handleCommandPaletteBackdropClick}
-	>
-		<div class="command-palette__content">
-			<input
-				bind:this={commandPaletteInput}
-				bind:value={commandPaletteQuery}
-				aria-label={`${vocabulary.commandPalette}を検索`}
-				aria-controls="command-palette-results"
-				aria-activedescendant={activeCommandPaletteItem
-					? `command-palette-${activeCommandPaletteItem.id}`
-					: undefined}
-				placeholder={`${vocabulary.commandPalette}を検索…`}
-				onkeydown={handleCommandPaletteKeydown}
-				autocomplete="off"
-			/>
-			<div id="command-palette-results" role="listbox" aria-label={vocabulary.commandPalette}>
-				{#each commandPaletteCommands as command, index (command.id)}
-					<button
-						id={`command-palette-${command.id}`}
-						class:active={index === commandPaletteActiveIndex}
-						role="option"
-						aria-selected={index === commandPaletteActiveIndex}
-						disabled={!command.availability.enabled}
-						title={command.availability.reason}
-						onclick={() => executeCommandPaletteItem(command)}
-					>
-						<span>{command.label}</span>
-						{#if command.shortcut}<small>{command.shortcut}</small>{/if}
-					</button>
-				{/each}
-				{#if commandPaletteCommands.length === 0}<p>一致するコマンドはありません。</p>{/if}
-			</div>
-			{#if activeCommandPaletteItem && !activeCommandPaletteItem.availability.enabled}
-				<p class="command-palette__reason" aria-live="polite">
-					{activeCommandPaletteItem.availability.reason}
-				</p>
-			{/if}
-		</div>
-	</dialog>
-{/if}
+<CommandPaletteDialog
+	open={commandPaletteOpen}
+	commands={commandPaletteCommands}
+	{vocabulary}
+	bind:query={commandPaletteQuery}
+	bind:activeIndex={commandPaletteActiveIndex}
+	onClose={closeCommandPalette}
+	onExecute={executeCommandPaletteItem}
+/>
 
 {#if occurrenceContextMenu}
 	<ContextMenu
@@ -3459,195 +3287,42 @@
 			{/if}
 			</section>
 		{:else if viewMode === "today"}
-			<section class="outline-panel date-projection" aria-label={vocabulary.today}>
-				<div class="section-title"><span>{vocabulary.today}</span></div>
-				<div class="date-controls">
-					<button onclick={() => moveDateRange(-1)}>前日</button>
-					<button onclick={() => moveDateRange(1)}>翌日</button>
-					<button onclick={showWeek}>週</button>
-					<label>開始 <input type="date" bind:value={dateStart} /></label>
-					<label>終了（含まない） <input type="date" bind:value={dateEnd} /></label>
-					<button onclick={loadDateProjection}>表示</button>
-				</div>
-				<p class="filter-hint">自由語は部分一致 · タグはすべて含む（AND） · NOTタグは除外 · この表示だけに適用</p>
-				<div class="filter-bar">
-					<input
-						class="filter-input"
-						aria-label="テキストで絞り込み"
-						placeholder="テキストで絞り込み…"
-						bind:value={outlineFilter.freeText}
-					/>
-					<input
-						class="filter-input"
-						aria-label="タグ AND"
-						placeholder="#タグ AND"
-						bind:value={outlineFilter.tagsAll}
-					/>
-					<input
-						class="filter-input"
-						aria-label="タグ NOT"
-						placeholder="#除外 NOT"
-						bind:value={outlineFilter.tagsNone}
-					/>
-					<button onclick={clearOutlineFilter} disabled={!outlineFilter.freeText && !outlineFilter.tagsAll && !outlineFilter.tagsNone}>解除</button>
-				</div>
-				{#if dateProjectionLoading}
-					<p class="empty">読み込み中…</p>
-				{:else if dateProjection}
-					<section aria-label="この期間に作成">
-						<h2>この期間に作成 <small>{filteredTodayCreated.length}件{#if filteredTodayCreated.length !== dateProjection.created.length} / {dateProjection.created.length}件{/if}</small></h2>
-						{#each filteredTodayCreated as entry (entry.work.id)}
-							<button class="date-entry" onclick={() => openDateEntry(entry)} disabled={!entry.representative}>
-								<strong>{entry.representative ? titleFor(entry.representative) : `(未配置の${vocabulary.work})`}</strong>
-								<small>{formatCreatedAt(entry.work.createdAt)} · {entry.placements.length}件の{vocabulary.occurrence}</small>
-							</button>
-							{#if entry.placements.length > 1}
-								<p class="hint">{entry.placements.map((placement) => placement.breadcrumb.map(titleFor).concat(titleFor(placement.occurrence)).join(" › ")).join(" / ")}</p>
-							{/if}
-						{:else}<p class="empty">この期間に作成した{vocabulary.work}はありません。</p>{/each}
-					</section>
-					<section aria-label="この期間に更新">
-						<h2>この期間に更新 <small>{filteredTodayUpdated.length}件{#if filteredTodayUpdated.length !== dateProjection.updated.length} / {dateProjection.updated.length}件{/if}</small></h2>
-						{#each filteredTodayUpdated as entry (entry.work.id)}
-							<button class="date-entry" onclick={() => openDateEntry(entry)} disabled={!entry.representative}>
-								<strong>{entry.representative ? titleFor(entry.representative) : `(未配置の${vocabulary.work})`}</strong>
-								<small>{formatCreatedAt(entry.work.updatedAt)} · {entry.placements.length}件の{vocabulary.occurrence}</small>
-							</button>
-							{#if entry.placements.length > 1}
-								<p class="hint">{entry.placements.map((placement) => placement.breadcrumb.map(titleFor).concat(titleFor(placement.occurrence)).join(" › ")).join(" / ")}</p>
-							{/if}
-						{:else}<p class="empty">この期間に更新した既存{vocabulary.work}はありません。</p>{/each}
-					</section>
-				{/if}
-			</section>
+			<TodayView
+				bind:dateStart
+				bind:dateEnd
+				bind:outlineFilter
+				projection={dateProjection}
+				loading={dateProjectionLoading}
+				onMoveDateRange={moveDateRange}
+				onShowWeek={showWeek}
+				onLoad={loadDateProjection}
+				onClearFilter={clearOutlineFilter}
+				onOpenEntry={openDateEntry}
+				{titleFor}
+				{formatCreatedAt}
+			/>
 		{:else if viewMode === "unplaced"}
-			<section class="outline-panel unplaced-inbox" aria-label={vocabulary.unplacedInbox}>
-				<div class="section-title">
-					<span>{vocabulary.unplacedInbox}</span><small>{filteredUnplacedWorks.length}件{#if filteredUnplacedWorks.length !== unplacedWorks.length} / {unplacedWorks.length}件{/if}</small>
-				</div>
-				<p class="hint">
-				配置先を決めずに保存した、本文のある{vocabulary.work}です。本文へ #タグ を入力するとタグ付けできます。
-				本文未記入の{vocabulary.stub}は{vocabulary.stubList}で管理します。
-				</p>
-				<p class="filter-hint">自由語は部分一致 · タグはすべて含む（AND） · NOTタグは除外 · この表示だけに適用</p>
-				<div class="filter-bar">
-					<input
-						class="filter-input"
-						aria-label="テキストで絞り込み"
-						placeholder="テキストで絞り込み…"
-						bind:value={outlineFilter.freeText}
-					/>
-					<input
-						class="filter-input"
-						aria-label="タグ AND"
-						placeholder="#タグ AND"
-						bind:value={outlineFilter.tagsAll}
-					/>
-					<input
-						class="filter-input"
-						aria-label="タグ NOT"
-						placeholder="#除外 NOT"
-						bind:value={outlineFilter.tagsNone}
-					/>
-					<button onclick={clearOutlineFilter} disabled={!outlineFilter.freeText && !outlineFilter.tagsAll && !outlineFilter.tagsNone}>解除</button>
-				</div>
-				<div class="unplaced-list">
-					{#each filteredUnplacedWorks as work (work.workId)}
-						<article class="unplaced-entry">
-							<textarea
-								rows="3"
-								aria-label={`${vocabulary.workingCopy}を編集`}
-								value={work.text}
-								onchange={(event) => updateUnplacedText(work, event.currentTarget.value)}
-							></textarea>
-							<small>{formatCreatedAt(work.createdAt)}</small>
-							<div class="unplaced-actions">
-								<button onclick={() => placeUnplaced(work.workId, null)}>Rootへ配置</button>
-								<button
-									onclick={() => placeUnplaced(work.workId, selectedId)}
-									disabled={!selectedId}
-								>選択中の{vocabulary.occurrence}の下へ配置</button>
-							</div>
-							<div class="unplaced-actions">
-								<select
-									aria-label={`${vocabulary.semanticLink}の方向`}
-									value={unplacedLinkDirections[work.workId] ?? "from"}
-									onchange={(event) =>
-										unplacedLinkDirections[work.workId] =
-											event.currentTarget.value as "from" | "to"}
-								>
-									<option value="from">この{vocabulary.work}から</option>
-									<option value="to">この{vocabulary.work}へ</option>
-								</select>
-								<select
-									aria-label={`${vocabulary.semanticLink}相手`}
-									value={unplacedLinkTargets[work.workId] ?? ""}
-									onchange={(event) =>
-										unplacedLinkTargets[work.workId] = event.currentTarget.value}
-								>
-									<option value="">相手を選択…</option>
-									{#each linkableWorks.filter((candidate) => candidate.workId !== work.workId) as target}
-										<option value={target.workId}>{target.text.split("\n")[0] || `(空の${vocabulary.work})`}</option>
-									{/each}
-								</select>
-								<select aria-label={`${vocabulary.semanticLink}種別`} bind:value={unplacedLinkType}>
-									{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}
-								</select>
-								<button onclick={() => linkUnplaced(work.workId)}
-								>{vocabulary.semanticLink}作成</button>
-							</div>
-						</article>
-					{:else}
-						<p class="empty">{vocabulary.unplacedInbox}は空です。</p>
-					{/each}
-				</div>
-			</section>
+			<UnplacedInboxView
+				works={unplacedWorks}
+				{linkableWorks}
+				{selectedId}
+				bind:outlineFilter
+				bind:unplacedLinkTargets
+				bind:unplacedLinkDirections
+				bind:unplacedLinkType
+				onUpdateText={updateUnplacedText}
+				onPlace={placeUnplaced}
+				onLink={linkUnplaced}
+				onClearFilter={clearOutlineFilter}
+				{formatCreatedAt}
+			/>
 		{:else if viewMode === "stubs"}
-			<section class="outline-panel stub-list" aria-label={vocabulary.stubList}>
-				<div class="section-title">
-					<span>{vocabulary.stubList}</span><small>{stubEntries.length}件</small>
-				</div>
-				<p class="hint">
-					{vocabulary.stub}は本文をこれから書くために明示作成された未配置の{vocabulary.work}です。
-					本文を書き足してから明示的に解除してください。
-				</p>
-				<button type="button" onclick={createStubFromList}>新規{vocabulary.stub}を作成</button>
-				<div class="unplaced-list">
-					{#each stubEntries as entry (entry.workId)}
-						<article class="unplaced-entry stub-entry">
-							<small>
-								{formatStubInstant(entry.createdAt)} · {stubCreatedViaLabel(entry)}
-								{#if entry.context} · {vocabulary.stubContext}: {entry.context}{/if}
-							</small>
-							<textarea
-								rows="3"
-								aria-label={`${vocabulary.stub}の${vocabulary.workingCopy}を編集`}
-								placeholder={`${vocabulary.workingCopy}をここに書き足す`}
-								value={entry.text}
-								onchange={(event) => updateStubText(entry, event.currentTarget.value)}
-							></textarea>
-							{#if entry.backlinks.length}
-								<div class="stub-backlinks" aria-label={vocabulary.backlink}>
-									{#each entry.backlinks as backlink, index (index)}
-										<small>
-											{vocabulary.backlink}: {backlink.displayName || `(空の${vocabulary.work})`}
-											× {backlink.count}
-										</small>
-									{/each}
-								</div>
-							{/if}
-							<div class="unplaced-actions">
-								<button
-									onclick={() => resolveStubEntry(entry.workId)}
-									disabled={!entry.hasText}
-								>{vocabulary.stub}を解除</button>
-							</div>
-						</article>
-					{:else}
-						<p class="empty">{vocabulary.stubList}は空です。</p>
-					{/each}
-				</div>
-			</section>
+			<StubListView
+				entries={stubEntries}
+				onCreate={createStubFromList}
+				onUpdateText={updateStubText}
+				onResolve={resolveStubEntry}
+			/>
 		{:else if viewMode === "duplicates"}
 			<DuplicateCandidatesPanel
 				candidates={duplicateCandidates}
@@ -3657,181 +3332,51 @@
 				onDismiss={excludeDuplicateCandidate}
 			/>
 		{:else if viewMode === "tags"}
-			<section class="outline-panel tag-browser" aria-label={vocabulary.tag}>
-				<div class="tag-browser__heading">
-					<div>
-						<p class="eyebrow">知識の入口</p>
-						<h1>{vocabulary.tag}</h1>
-						<p>タグを選ぶと、付いている{vocabulary.work}を表示します。</p>
-					</div>
-				</div>
-				{#if tagError}<p class="query-error">{tagError}</p>{/if}
-				<section class="tag-browser__cloud" aria-label={`${vocabulary.tag}クラウド`}>
-					{#each tagCloud as tag (tag.name)}
-						<button
-							class:active={selectedTag === tag.name}
-							aria-pressed={selectedTag === tag.name}
-							style={`font-size:${tagCloudFontSize(tag.workIds.length)}`}
-							onclick={() => selectTag(tag.name)}
-						>
-							<span>#{tag.name}</span>
-							<small>{tag.workIds.length}{vocabulary.work}</small>
-						</button>
-					{:else}
-						<p class="empty">{vocabulary.tag}はまだありません。</p>
-					{/each}
-				</section>
-				{#if selectedTag}
-					<section class="tag-browser__results" aria-live="polite">
-						<div class="section-title">
-							<span>#{selectedTag}</span>
-							<small>{selectedTagNodeIds.length}{vocabulary.work}</small>
-						</div>
-						<div>
-							{#each selectedTagNodeIds as workId (workId)}
-								<button onclick={() => openTagNode(workId)}>
-									<strong>{titleForWorkId(workId)}</strong>
-									<span>{itemByWorkId.has(workId) ? "アウトラインで開く" : vocabulary.unplacedInbox}</span>
-								</button>
-							{/each}
-						</div>
-					</section>
-				{:else}
-					<p class="tag-browser__prompt">{vocabulary.tag}を選ぶと{vocabulary.work}一覧を表示します。</p>
-				{/if}
-				<details class="tag-browser__maintenance">
-					<summary>{vocabulary.tag}を整理</summary>
-					<datalist id="tag-candidates">
-						{#each tagCloud as tag}<option value={`#${tag.name}`}>{tag.workIds.length}{vocabulary.work}</option>{/each}
-					</datalist>
-					<div class="tag-browser__maintenance-grid">
-						<label>名前変更
-							<input bind:value={tagRenameFrom} list="tag-candidates" placeholder="変更前" />
-							<input bind:value={tagRenameTo} placeholder="変更後" />
-							<button onclick={renameTag}>名前変更</button>
-						</label>
-						<label>統合
-							<input bind:value={tagMergeSources} list="tag-candidates" placeholder="統合元をカンマ区切り" />
-							<input bind:value={tagMergeTarget} placeholder="統合先" />
-							<button onclick={mergeTags}>統合</button>
-						</label>
-					</div>
-					{#if tagAliases.length}
-						<p class="tag-browser__aliases">{tagAliases.map((alias) => `#${alias.variants.join(", #")} → #${alias.canonicalName}`).join(" · ")}</p>
-					{/if}
-				</details>
-			</section>
+			<TagBrowserView
+				{tagScopes}
+				{tagAliases}
+				{tagError}
+				bind:selectedTag
+				bind:tagRenameFrom
+				bind:tagRenameTo
+				bind:tagMergeSources
+				bind:tagMergeTarget
+				workIds={new Set(itemByWorkId.keys())}
+				{titleForWorkId}
+				onOpenTagNode={openTagNode}
+				onRenameTag={renameTag}
+				onMergeTags={mergeTags}
+			/>
 		{:else if viewMode === "trash"}
-			<section class="outline-panel">
-				<div class="section-title"><span>ゴミ箱</span><small>{trashEntries.length}件</small></div>
-				<div class="stash-list">
-					{#each trashEntries as entry}
-						<div>
-							<span>{entry.work.id.slice(0, 8)} · {vocabulary.occurrence}{entry.occurrenceCount}件 · {vocabulary.semanticLink}{entry.linkCount}件</span>
-							<button onclick={() => restoreTrash(entry.work.id)}>復元</button>
-							<button class="delete" onclick={() => purgeTrash(entry)}>完全消去</button>
-						</div>
-					{:else}
-						<p class="empty">ゴミ箱は空です</p>
-					{/each}
-				</div>
-			</section>
+			<TrashView entries={trashEntries} onRestore={restoreTrash} onPurge={purgeTrash} />
 		{:else if viewMode === "options"}
-			<section class="options-panel" aria-labelledby="options-title">
-				<header class="options-heading">
-					<p class="eyebrow">APPLICATION</p>
-					<h1 id="options-title">Option</h1>
-					<p>入力、書き出し、データ交換、バックアップ、表示方法を設定します。</p>
-				</header>
-				<div class="options-grid">
-					<section class="option-card" aria-labelledby="option-export-title">
-						<h2 id="option-export-title">書き出し</h2>
-						<label>
-							<span>{vocabulary.markdownExportScope}</span>
-							<select bind:value={markdownExportPreference.scope} onchange={persistMarkdownExportPreference}>
-								<option value="all">{vocabulary.markdownExportAll}</option>
-								<option value="selected">{vocabulary.markdownExportSelected}</option>
-							</select>
-						</label>
-						<label>
-							<span>{vocabulary.markdownExportMode}</span>
-							<select bind:value={markdownExportPreference.referenceMode} onchange={persistMarkdownExportPreference}>
-								<option value="radiora">{vocabulary.markdownExportRadiora}</option>
-								<option value="portable">{vocabulary.markdownExportPortable}</option>
-								<option value="obsidian">{vocabulary.markdownExportObsidian}</option>
-							</select>
-						</label>
-						<div class="option-checks">
-							<label><input type="checkbox" bind:checked={markdownExportPreference.includeAncestors} onchange={persistMarkdownExportPreference} />{vocabulary.markdownExportAncestors}</label>
-							<label><input type="checkbox" bind:checked={markdownExportPreference.includeDescendants} onchange={persistMarkdownExportPreference} />{vocabulary.markdownExportDescendants}</label>
-							<label><input type="checkbox" bind:checked={markdownExportPreference.includeSemanticNeighbors} onchange={persistMarkdownExportPreference} />{vocabulary.markdownExportSemanticNeighbors}</label>
-						</div>
-						<button onclick={exportMarkdown} disabled={!commands.exportMarkdown.enabled || markdownExportSelectionRequired} title={markdownExportSelectionRequired ? vocabulary.markdownExportSelectionRequired : commands.exportMarkdown.reason}>{vocabulary.markdownExportAction}</button>
-						{#if markdownExportNotice}<small class="markdown-export-notice" role="status">{markdownExportNotice}</small>{/if}
-					</section>
-
-					<section class="option-card" aria-labelledby="option-exchange-title">
-						<h2 id="option-exchange-title">データ交換</h2>
-						<p>アウトラインの階層と本文をOPML形式で交換します。</p>
-						<input class="sr-only" type="file" accept=".opml,.xml,text/x-opml,application/xml,text/xml" aria-label={vocabulary.opmlImport} bind:this={opmlFileInput} onchange={importOpmlFile} />
-						<div class="option-actions">
-							<button onclick={() => opmlFileInput?.click()} disabled={startup.phase !== "ready"}>{vocabulary.opmlImport}</button>
-							<button onclick={performOpmlExport} disabled={startup.phase !== "ready"}>{vocabulary.opmlExport}</button>
-						</div>
-						{#if opmlNotice}<small class="opml-notice" role="status">{opmlNotice}</small>{/if}
-					</section>
-
-					<section class="option-card option-card--danger" aria-labelledby="option-backup-title">
-						<h2 id="option-backup-title">バックアップ</h2>
-						<p>完全バックアップはRadioraの全状態を扱います。復元すると現在の状態が置き換わります。</p>
-						<input class="sr-only" type="file" accept=".json,application/json" aria-label={vocabulary.jsonBackupRestore} bind:this={jsonBackupFileInput} onchange={restoreJsonBackupFile} />
-						<div class="option-actions">
-							<button onclick={performJsonBackupExport} disabled={startup.phase !== "ready"}>{vocabulary.jsonBackupExport}</button>
-							<button class="delete" onclick={() => jsonBackupFileInput?.click()} disabled={startup.phase !== "ready"}>{vocabulary.jsonBackupRestore}</button>
-						</div>
-						{#if jsonBackupNotice}<small class="json-backup-notice" role="status">{jsonBackupNotice}</small>{/if}
-					</section>
-
-					<section class="option-card" aria-labelledby="option-display-title">
-						<h2 id="option-display-title">表示</h2>
-						<label>
-							<span>ツリーの表示方式</span>
-							<select value={treeProjectionPreference} onchange={(event) => setTreeProjectionPreference(event.currentTarget.value as TreeProjection)}>
-								<option value="chronology">Chronology</option>
-								<option value="lineage">Lineage</option>
-							</select>
-						</label>
-						<div class="option-checks">
-							<label><input type="checkbox" checked={navCollapsed} onchange={(event) => setNavigationCollapsed(event.currentTarget.checked)} />ナビゲーションを折りたたむ</label>
-							<label><input type="checkbox" checked={inspectorCollapsed} onchange={(event) => setInspectorCollapsed(event.currentTarget.checked)} />インスペクターを閉じる</label>
-						</div>
-						<label>
-							<span>インスペクター幅: {inspectorWidth}px</span>
-							<input type="range" min="240" max="560" step="8" value={inspectorWidth} oninput={(event) => setInspectorWidth(event.currentTarget.valueAsNumber)} />
-						</label>
-					</section>
-
-					<section class="option-card" aria-labelledby="option-quick-capture-title">
-						<h2 id="option-quick-capture-title">入力</h2>
-						<p>上部の入力欄から新しく作る本文を、どこへ保存するか選びます。検索結果を開く動作には影響しません。</p>
-						<label>
-							<span>{vocabulary.quickCaptureDestination}</span>
-							<select bind:value={quickCapturePreference.destination} onchange={persistQuickCapturePreference}>
-								<option value="root">{vocabulary.quickCaptureDestinationRoot}</option>
-								<option value="unplaced">{vocabulary.quickCaptureDestinationUnplaced}</option>
-							</select>
-						</label>
-					</section>
-
-					<section class="option-card" aria-labelledby="option-licenses-title">
-						<h2 id="option-licenses-title">ライセンス</h2>
-						<p>このアプリが利用しているサードパーティソフトウェアのライセンス情報を表示します。</p>
-						<div class="option-actions">
-							<button onclick={openLicenses}>ライセンス情報を表示</button>
-						</div>
-					</section>
-				</div>
-			</section>
+			<OptionsView
+				bind:markdownExportPreference
+				bind:quickCapturePreference
+				markdownExportEnabled={commands.exportMarkdown.enabled}
+				markdownExportReason={commands.exportMarkdown.reason}
+				{markdownExportSelectionRequired}
+				{markdownExportNotice}
+				startupReady={startup.phase === "ready"}
+				{opmlNotice}
+				{jsonBackupNotice}
+				{treeProjectionPreference}
+				{navCollapsed}
+				{inspectorCollapsed}
+				{inspectorWidth}
+				onPersistMarkdownExportPreference={persistMarkdownExportPreference}
+				onExportMarkdown={exportMarkdown}
+				onImportOpml={importOpmlFile}
+				onExportOpml={performOpmlExport}
+				onExportJsonBackup={performJsonBackupExport}
+				onRestoreJsonBackup={restoreJsonBackupFile}
+				onTreeProjectionChange={setTreeProjectionPreference}
+				onNavigationCollapsedChange={setNavigationCollapsed}
+				onInspectorCollapsedChange={setInspectorCollapsed}
+				onInspectorWidthChange={setInspectorWidth}
+				onPersistQuickCapturePreference={persistQuickCapturePreference}
+				onOpenLicenses={openLicenses}
+			/>
 		{:else if viewMode === "help"}
 			<InAppHelp
 				shortcuts={helpShortcuts}
@@ -4123,128 +3668,20 @@
 	{/if}
 </div>
 
-<dialog
+<ConfirmationDialog
 	bind:this={confirmationDialog}
-	class="confirmation-dialog"
-	aria-labelledby="confirmation-title"
-	aria-describedby="confirmation-description"
-	aria-modal="true"
-	oncancel={preventCloseWhileSubmitting}
-	onclose={resetConfirmation}
->
-	{#if pendingConfirmation}
-		<div class="confirmation-dialog__content">
-			<p class="eyebrow">CONFIRM ACTION</p>
-			<h2 id="confirmation-title">
-				{pendingConfirmation.action === "trash"
-					? `${vocabulary.work}をゴミ箱へ移しますか？`
-					: pendingConfirmation.action === "rewrite"
-					? `新しい${vocabulary.branch}として書き直しますか？`
-				: pendingConfirmation.action === "merge-duplicate"
-					? vocabulary.duplicateMergeConfirm
-					: pendingConfirmation.action === "cancel-longform"
-					? "長文編集をキャンセルしますか？"
-					: "完全消去しますか？"}
-			</h2>
-			<p id="confirmation-description">
-				{#if pendingConfirmation.action === "trash"}
-					{pendingConfirmation.occurrenceCount}件の{vocabulary.occurrence}と{vocabulary.semanticLink}は保持されます。
-				{:else if pendingConfirmation.action === "rewrite"}
-					現在の{vocabulary.workingCopy}を分岐点として保存し、元の{vocabulary.branch}を残したまま
-					独立した{vocabulary.workingCopy}を作ります。
-			{:else if pendingConfirmation.action === "merge-duplicate"}
-					{pendingConfirmation.preview.sourceTitle || `(空の${vocabulary.work})`}
-					→ {pendingConfirmation.preview.survivorTitle || `(空の${vocabulary.work})`}
-					<br />
-					{vocabulary.occurrence}: {pendingConfirmation.preview.occurrenceIds.length} /
-					{vocabulary.semanticLink}: {pendingConfirmation.preview.links.length}
-				{:else if pendingConfirmation.action === "cancel-longform"}
-					保存されていない編集内容は失われます。
-				{:else}
-					{vocabulary.occurrence}{pendingConfirmation.occurrenceCount}件、{vocabulary.semanticLink}{pendingConfirmation.linkCount}件と本文を復元できなくなります。
-				{/if}
-			</p>
-			{#if pendingConfirmation.action === "rewrite"}
-				<label>
-					{vocabulary.branch}名
-					<input
-						bind:this={rewriteBranchNameInput}
-						bind:value={rewriteBranchName}
-						autocomplete="off"
-						onkeydown={(event) => {
-							if (event.key === "Enter" && rewriteBranchName.trim()) {
-								event.preventDefault();
-								void confirmPendingAction();
-							}
-						}}
-					/>
-				</label>
-			{/if}
-			<div class="confirmation-dialog__actions">
-				<button onclick={closeConfirmation} disabled={confirmationSubmitting}>キャンセル</button>
-				<button
-					class:delete={pendingConfirmation.action !== "rewrite"}
-					onclick={confirmPendingAction}
-					disabled={confirmationSubmitting ||
-						(pendingConfirmation.action === "rewrite" && !rewriteBranchName.trim())}
-				>
-					{confirmationSubmitting
-						? "処理中…"
-						: pendingConfirmation.action === "trash"
-						? "ゴミ箱へ移す"
-						: pendingConfirmation.action === "rewrite"
-						? `新しい${vocabulary.branch}を作る`
-						: pendingConfirmation.action === "merge-duplicate"
-						? vocabulary.duplicateMerge
-						: pendingConfirmation.action === "cancel-longform"
-						? "編集を破棄"
-						: "完全消去"}
-				</button>
-			</div>
-		</div>
-	{/if}
-</dialog>
+	pending={confirmationController.pending}
+	submitting={confirmationController.submitting}
+	bind:rewriteBranchName={confirmationController.rewriteBranchName}
+	onConfirm={confirmPendingAction}
+	onReset={() => confirmationController.reset()}
+/>
 
-<dialog
-	bind:this={licensesDialog}
-	class="licenses-dialog"
-	aria-labelledby="licenses-title"
-	aria-modal="true"
->
-	<div class="licenses-dialog__content">
-		<header class="licenses-dialog__header">
-			<p class="eyebrow">THIRD-PARTY NOTICES</p>
-			<h2 id="licenses-title">ライセンス情報</h2>
-			<p>Radioraが利用しているサードパーティソフトウェアのライセンスを表示します。</p>
-		</header>
-		{#if licenseError}
-			<p class="licenses-dialog__error" role="alert">{licenseError}</p>
-		{:else if licenseIndex}
-			<div class="licenses-dialog__layout">
-				<ul class="licenses-dialog__list">
-					{#each [...licenseIndex.runtime, ...licenseIndex.npm] as entry}
-						<li>
-							<button onclick={() => selectLicense(entry)}>
-								<strong>{entry.name}</strong>
-								<small>{entry.license}{entry.version ? ` · ${entry.version}` : ""}</small>
-							</button>
-						</li>
-					{/each}
-				</ul>
-				<div class="licenses-dialog__detail">
-					{#if licenseDetail}
-						<h3>{licenseDetail.name}</h3>
-						<pre>{licenseDetail.text}</pre>
-					{:else}
-						<p class="licenses-dialog__hint">左の一覧からライセンスを選択してください。</p>
-					{/if}
-				</div>
-			</div>
-		{:else if licenseLoading}
-			<p>読み込んでいます…</p>
-		{/if}
-		<div class="licenses-dialog__actions">
-			<button onclick={() => licensesDialog?.close()}>閉じる</button>
-		</div>
-	</div>
-</dialog>
+<LicensesDialog
+	bind:dialog={licensesDialog}
+	{licenseIndex}
+	{licenseDetail}
+	{licenseError}
+	{licenseLoading}
+	onSelectLicense={selectLicense}
+/>
