@@ -31,20 +31,11 @@ import {
 	validateWorkBundleImport,
 	type WorkBundle,
 } from "./graph_store.ts";
-import { buildSurrealRestoreTransaction } from "./surreal_backup_restore.ts";
 import {
-	CURRENT_STORAGE_SCHEMA_VERSION,
-	type MigrationJournalEntry,
-	runStorageMigrations,
-	type SchemaMetadata,
-	type StorageMigration,
-} from "./migrations/mod.ts";
-import { workOccurrenceMigration } from "./migrations/0001_work_occurrence.ts";
-import { revisionSnapshotMigration } from "./migrations/0002_revision_snapshot.ts";
-import { bookmarkResumeMigration } from "./migrations/0003_bookmark_resume.ts";
-import { stubStateMigration } from "./migrations/0004_stub_state.ts";
-import { mergeProvenanceMigration } from "./migrations/0005_merge_provenance.ts";
-import { emergenceSuggestionMigration } from "./migrations/0006_emergence_suggestion.ts";
+	buildSurrealRestoreTransaction,
+	exportSurrealGraphState,
+} from "./surreal_backup_restore.ts";
+import { runSurrealStorageMigrations } from "./surreal_migrations.ts";
 import {
 	emergenceAcceptanceTransactionQuery,
 	emergenceSuggestionUpsertQuery,
@@ -58,14 +49,26 @@ import {
 	resumePositionUpsertQuery,
 } from "./surreal_queries.ts";
 import {
+	bookmarkFromRow,
+	branchFromRow,
 	domainId,
+	emergenceFeedbackActionFromRow,
+	emergenceSuggestionFromRow,
 	itemFromRow,
+	knotFromRow,
 	occurrenceFromRow,
 	optionalRecordDomainId,
+	outlineLinkFromRow,
+	purgeManifestFromRow,
+	recoverySnapshotFromRow,
+	resumePositionFromRow,
 	revisionFromRow,
-	snapshotProtectionFromRow,
+	savedRuleQueryFromRow,
+	searchAliasFromRow,
 	type SurrealRow as Row,
+	systemRelationFromRow,
 	workFromRow,
+	workingCopyFromRow,
 } from "./surreal_row_mapper.ts";
 import {
 	countOccurrences,
@@ -73,16 +76,6 @@ import {
 	searchTerms,
 	titleOf,
 } from "../services/search_text.ts";
-
-const APP_VERSION = "0.1.0";
-const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
-	workOccurrenceMigration,
-	revisionSnapshotMigration,
-	bookmarkResumeMigration,
-	stubStateMigration,
-	mergeProvenanceMigration,
-	emergenceSuggestionMigration,
-];
 
 export type SurrealDiagnosticLogger = (event: string, detail?: unknown) => void;
 
@@ -223,7 +216,7 @@ export class SurrealGraphStore implements GraphStore {
 				DEFINE INDEX IF NOT EXISTS outline_terms_lexical ON outline_item FIELDS search_terms
 					FULLTEXT ANALYZER japanese_terms BM25;
 			`));
-		await this.step("sdk.schema.migrate", () => this.runMigrations());
+		await this.step("sdk.schema.migrate", () => runSurrealStorageMigrations(this.#db));
 		this.trace("sdk.initialize.ready");
 	}
 
@@ -232,89 +225,7 @@ export class SurrealGraphStore implements GraphStore {
 	}
 
 	async exportGraphState(): Promise<GraphStateSnapshot> {
-		const [
-			works,
-			branches,
-			workingCopies,
-			occurrences,
-			links,
-			systemRelations,
-			knots,
-			aliases,
-			emergenceSuggestions,
-			savedRuleQueries,
-			purgeManifests,
-			revisions,
-			recoverySnapshots,
-			bookmarkResult,
-			resumeResult,
-			feedbackResult,
-		] = await Promise.all([
-			this.listWorks(true),
-			this.listBranches(),
-			this.listWorkingCopies(),
-			this.listOccurrences(true),
-			this.listLinks(),
-			this.listSystemRelations(),
-			this.listKnots(),
-			this.listAliases(),
-			this.listEmergenceSuggestions(),
-			this.listSavedRuleQueries(),
-			this.listPurgeManifests(),
-			this.listRevisions(),
-			this.listRecoverySnapshots(),
-			this.#db.query<[Row[]]>(
-				`SELECT record::id(id) AS id, record::id(work) AS work_id,
-					record::id(occurrence) AS occurrence_id, created_at FROM bookmark;`,
-			),
-			this.#db.query<[Row[]]>(
-				`SELECT record::id(work) AS work_id, record::id(occurrence) AS occurrence_id,
-					caret_offset, updated_at FROM resume_position:current;`,
-			),
-			this.#db.query<[Row[]]>(
-				`SELECT record::id(id) AS id, action FROM emergence_feedback;`,
-			),
-		]);
-		const bookmarks = bookmarkResult[0].map((row) => ({
-			id: String(row.id),
-			workId: domainId(row.work_id, "work_id"),
-			occurrenceId: domainId(row.occurrence_id, "id"),
-			createdAt: String(row.created_at ?? ""),
-		}));
-		const resumeRow = resumeResult[0][0];
-		const resumePosition = resumeRow
-			? {
-				workId: domainId(resumeRow.work_id, "work_id"),
-				occurrenceId: domainId(resumeRow.occurrence_id, "id"),
-				caretOffset: Number(resumeRow.caret_offset),
-				updatedAt: String(resumeRow.updated_at ?? ""),
-			}
-			: null;
-		const emergenceFeedback = Object.fromEntries(
-			feedbackResult[0].flatMap((row) =>
-				row.action === "accept" || row.action === "dismiss" || row.action === "pin"
-					? [[String(row.id), row.action]]
-					: []
-			),
-		) as Record<string, "accept" | "dismiss" | "pin">;
-		return {
-			works,
-			branches,
-			workingCopies,
-			occurrences,
-			links,
-			systemRelations,
-			knots,
-			aliases,
-			emergenceFeedback,
-			emergenceSuggestions,
-			savedRuleQueries,
-			purgeManifests,
-			revisions,
-			recoverySnapshots,
-			bookmarks,
-			resumePosition,
-		};
+		return exportSurrealGraphState(this, this.#db);
 	}
 
 	async restoreGraphState(source: GraphStateSnapshot): Promise<void> {
@@ -380,25 +291,12 @@ export class SurrealGraphStore implements GraphStore {
 				FROM branch ${workId ? "WHERE work = $work" : ""};`,
 			variables,
 		);
-		return rows.map((row) => ({
-			id: String(row.id),
-			workId: domainId(row.work_id, "work_id"),
-			name: String(row.name ?? ""),
-			headRevisionId: optionalRecordDomainId(row.head_revision),
-			createdAt: String(row.created_at ?? ""),
-			promotedAt: row.promoted_at == null ? undefined : String(row.promoted_at),
-			archivedAt: row.archived_at == null ? undefined : String(row.archived_at),
-		}));
+		return rows.map(branchFromRow);
 	}
 
 	async listWorkingCopies(workId?: string): Promise<WorkingCopy[]> {
 		const rows = await this.listWorkingCopyRows(workId);
-		return rows.map((row) => ({
-			workId: domainId(row.work_id, "work_id"),
-			branchId: domainId(row.branch_id, "branch_id"),
-			text: String(row.text ?? ""),
-			updatedAt: String(row.updated_at ?? ""),
-		}));
+		return rows.map(workingCopyFromRow);
 	}
 
 	async listRevisions(workId?: string): Promise<Revision[]> {
@@ -425,17 +323,7 @@ export class SurrealGraphStore implements GraphStore {
 				...(branchId ? { branch: new RecordId("branch", branchId) } : {}),
 			},
 		);
-		return rows.map((row) => ({
-			id: String(row.id),
-			workId: domainId(row.work_id, "work_id"),
-			branchId: domainId(row.branch_id, "branch_id"),
-			text: String(row.text ?? ""),
-			contentHash: String(row.content_hash ?? ""),
-			createdAt: String(row.created_at ?? ""),
-			sourceRevisionId: optionalRecordDomainId(row.source_revision),
-			name: row.name == null ? undefined : String(row.name),
-			protection: snapshotProtectionFromRow(row),
-		}));
+		return rows.map(recoverySnapshotFromRow);
 	}
 
 	async listBookmarks(): Promise<Bookmark[]> {
@@ -446,15 +334,8 @@ export class SurrealGraphStore implements GraphStore {
 				FROM bookmark ORDER BY created_at, id;`,
 		);
 		return rows.flatMap((row): Bookmark[] => {
-			const workId = domainId(row.work_id, "work_id");
-			return activeWorkIds.has(workId)
-				? [{
-					id: String(row.id),
-					workId,
-					occurrenceId: domainId(row.occurrence_id, "id"),
-					createdAt: String(row.created_at ?? ""),
-				}]
-				: [];
+			const bookmark = bookmarkFromRow(row);
+			return activeWorkIds.has(bookmark.workId) ? [bookmark] : [];
 		});
 	}
 
@@ -465,14 +346,9 @@ export class SurrealGraphStore implements GraphStore {
 		);
 		const row = rows[0];
 		if (!row) return null;
-		const workId = domainId(row.work_id, "work_id");
-		if (!(await this.listWorks()).some((work) => work.id === workId)) return null;
-		return {
-			workId,
-			occurrenceId: domainId(row.occurrence_id, "id"),
-			caretOffset: Number(row.caret_offset),
-			updatedAt: String(row.updated_at ?? ""),
-		};
+		const position = resumePositionFromRow(row);
+		if (!(await this.listWorks()).some((work) => work.id === position.workId)) return null;
+		return position;
 	}
 
 	async createWorkBundle(
@@ -1029,15 +905,7 @@ export class SurrealGraphStore implements GraphStore {
 			`SELECT record::id(id) AS id, work_id, occurrence_ids, branch_ids,
 				revision_ids, link_ids, purged_at FROM purge_manifest ORDER BY purged_at DESC;`,
 		);
-		return rows.map((row) => ({
-			id: String(row.id),
-			workId: String(row.work_id),
-			occurrenceIds: Array.isArray(row.occurrence_ids) ? row.occurrence_ids.map(String) : [],
-			branchIds: Array.isArray(row.branch_ids) ? row.branch_ids.map(String) : [],
-			revisionIds: Array.isArray(row.revision_ids) ? row.revision_ids.map(String) : [],
-			linkIds: Array.isArray(row.link_ids) ? row.link_ids.map(String) : [],
-			purgedAt: String(row.purged_at ?? ""),
-		}));
+		return rows.map(purgeManifestFromRow);
 	}
 
 	async listLinks(): Promise<OutlineLink[]> {
@@ -1047,34 +915,7 @@ export class SurrealGraphStore implements GraphStore {
 				record::id(to_work) AS to_id, to_revision,
 				type, status, origin, reason, created_at FROM semantic_link;`,
 		);
-		return rows.map((row) => {
-			const fromId = domainId(row.from_id, "work_id");
-			const toId = domainId(row.to_id, "work_id");
-			return {
-				id: String(row.id),
-				fromId,
-				toId,
-				from: row.from_scope === "revision"
-					? {
-						scope: "revision",
-						workId: fromId,
-						revisionId: optionalRecordDomainId(row.from_revision) ?? "",
-					}
-					: { scope: "work", workId: fromId },
-				to: row.to_scope === "revision"
-					? {
-						scope: "revision",
-						workId: toId,
-						revisionId: optionalRecordDomainId(row.to_revision) ?? "",
-					}
-					: { scope: "work", workId: toId },
-				type: String(row.type) as LinkType,
-				status: String(row.status) as OutlineLink["status"],
-				origin: String(row.origin) as OutlineLink["origin"],
-				createdAt: String(row.created_at ?? ""),
-				reason: row.reason == null ? undefined : String(row.reason),
-			};
-		});
+		return rows.map(outlineLinkFromRow);
 	}
 
 	async createLink(link: OutlineLink): Promise<void> {
@@ -1124,24 +965,14 @@ export class SurrealGraphStore implements GraphStore {
 			`SELECT record::id(id) AS id, record::id(from_work) AS from_id,
 				record::id(to_work) AS to_id, type, created_at FROM system_relation;`,
 		);
-		return rows.map((row) => ({
-			id: String(row.id),
-			fromWorkId: domainId(row.from_id, "work_id"),
-			toWorkId: domainId(row.to_id, "work_id"),
-			type: "IN",
-			createdAt: String(row.created_at ?? ""),
-		}));
+		return rows.map(systemRelationFromRow);
 	}
 
 	async listKnots(): Promise<Knot[]> {
 		const [rows] = await this.#db.query<[Row[]]>(
 			`SELECT record::id(id) AS id, cycle_ids, created_at FROM knot;`,
 		);
-		return rows.map((row) => ({
-			id: String(row.id),
-			cycleIds: Array.isArray(row.cycle_ids) ? row.cycle_ids.map(String) : [],
-			createdAt: String(row.created_at ?? ""),
-		}));
+		return rows.map(knotFromRow);
 	}
 
 	async replaceKnots(knots: Knot[]): Promise<void> {
@@ -1189,13 +1020,7 @@ export class SurrealGraphStore implements GraphStore {
 			`SELECT record::id(id) AS id, canonical, variants, created_at, updated_at
 				FROM search_alias ORDER BY canonical;`,
 		);
-		return rows.map((row) => ({
-			id: String(row.id),
-			canonical: String(row.canonical ?? ""),
-			variants: Array.isArray(row.variants) ? row.variants.map(String) : [],
-			createdAt: String(row.created_at ?? ""),
-			updatedAt: String(row.updated_at ?? ""),
-		}));
+		return rows.map(searchAliasFromRow);
 	}
 
 	async upsertAlias(alias: SearchAlias): Promise<void> {
@@ -1217,8 +1042,7 @@ export class SurrealGraphStore implements GraphStore {
 			`SELECT action FROM $record;`,
 			{ record: new RecordId("emergence_feedback", id) },
 		);
-		const action = rows[0]?.action;
-		return action === "accept" || action === "dismiss" || action === "pin" ? action : null;
+		return rows[0] ? emergenceFeedbackActionFromRow(rows[0]) : null;
 	}
 
 	async setEmergenceFeedback(id: string, action: "accept" | "dismiss" | "pin"): Promise<void> {
@@ -1240,43 +1064,7 @@ export class SurrealGraphStore implements GraphStore {
 				score, status, created_at, updated_at, resolved_at, resolution_reason
 				FROM emergence_suggestion ORDER BY updated_at DESC;`,
 		);
-		return rows.map((row) => {
-			const persistenceStatus = String(row.status) as EmergenceSuggestion["persistenceStatus"];
-			return {
-				id: String(row.id),
-				kind: String(row.kind) as EmergenceSuggestion["kind"],
-				contextWorkId: domainId(row.context_work_id, "work_id"),
-				targetWorkId: domainId(row.target_work_id, "work_id"),
-				contextItemId: String(row.context_occurrence_id ?? ""),
-				targetItemId: String(row.target_occurrence_id ?? ""),
-				...(row.proposed_link_type == null
-					? {}
-					: { proposedLinkType: String(row.proposed_link_type) as LinkType }),
-				title: String(row.title ?? ""),
-				explanation: String(row.explanation ?? ""),
-				evidence: Array.isArray(row.evidence)
-					? row.evidence.map((step) => {
-						const value = step as Row;
-						return {
-							fromId: String(value.fromId ?? value.from_id ?? ""),
-							toId: String(value.toId ?? value.to_id ?? ""),
-							relation: String(
-								value.relation ?? "",
-							) as EmergenceSuggestion["evidence"][number]["relation"],
-						};
-					})
-					: [],
-				score: Number(row.score ?? 0),
-				...(persistenceStatus === "held" ? { status: "pinned" as const } : {}),
-				persistenceStatus,
-				createdAt: String(row.created_at ?? ""),
-				updatedAt: String(row.updated_at ?? ""),
-				...(row.resolved_at == null ? {} : { resolvedAt: String(row.resolved_at) }),
-				...(row.resolution_reason == null
-					? {}
-					: { resolutionReason: String(row.resolution_reason) }),
-			};
-		});
+		return rows.map(emergenceSuggestionFromRow);
 	}
 
 	async upsertEmergenceSuggestion(suggestion: EmergenceSuggestion): Promise<void> {
@@ -1348,13 +1136,7 @@ export class SurrealGraphStore implements GraphStore {
 			`SELECT record::id(id) AS id, name, source, created_at, updated_at
 				FROM saved_rule_query ORDER BY updated_at DESC;`,
 		);
-		return rows.map((row) => ({
-			id: String(row.id),
-			name: String(row.name ?? ""),
-			source: String(row.source ?? ""),
-			createdAt: String(row.created_at ?? ""),
-			updatedAt: String(row.updated_at ?? ""),
-		}));
+		return rows.map(savedRuleQueryFromRow);
 	}
 
 	async upsertSavedRuleQuery(query: SavedRuleQuery): Promise<void> {
@@ -1449,65 +1231,6 @@ export class SurrealGraphStore implements GraphStore {
 			if (!byWork.has(item.workId)) byWork.set(item.workId, item);
 		}
 		return [...byWork.values()];
-	}
-
-	private async runMigrations(): Promise<void> {
-		await runStorageMigrations({
-			appVersion: APP_VERSION,
-			targetVersion: CURRENT_STORAGE_SCHEMA_VERSION,
-			migrations: STORAGE_MIGRATIONS,
-			context: {
-				execute: (statement, variables) => this.#db.query(statement, variables),
-			},
-			state: {
-				readMetadata: async () => {
-					const [rows] = await this.#db.query<[Row[]]>(
-						`SELECT version, updated_at, last_migration_id, app_version
-							FROM schema_metadata:radiora;`,
-					);
-					const row = rows[0];
-					if (!row) return null;
-					return {
-						id: "radiora",
-						version: Number(row.version),
-						updatedAt: String(row.updated_at ?? ""),
-						lastMigrationId: String(row.last_migration_id ?? ""),
-						appVersion: String(row.app_version ?? ""),
-					} satisfies SchemaMetadata;
-				},
-				writeMetadata: (metadata) =>
-					this.#db.query(
-						`UPSERT schema_metadata:radiora CONTENT {
-							version: $version,
-							updated_at: $updatedAt,
-							last_migration_id: $lastMigrationId,
-							app_version: $appVersion
-						};`,
-						{ ...metadata },
-					).then(() => undefined),
-				writeJournal: (entry) => this.writeMigrationJournal(entry),
-			},
-		});
-	}
-
-	private async writeMigrationJournal(entry: MigrationJournalEntry): Promise<void> {
-		const completedAt = entry.completedAt ? "$completedAt" : "NONE";
-		const error = entry.error ? "$error" : "NONE";
-		await this.#db.query(
-			`UPSERT $record CONTENT {
-				from_version: $fromVersion,
-				to_version: $toVersion,
-				started_at: $startedAt,
-				completed_at: ${completedAt},
-				app_version: $appVersion,
-				status: $status,
-				error: ${error}
-			};`,
-			{
-				...entry,
-				record: new RecordId("migration_journal", entry.id),
-			},
-		);
 	}
 
 	private async step<T>(event: string, operation: () => Promise<T>): Promise<T> {
