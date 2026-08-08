@@ -1873,6 +1873,32 @@ button:disabled {
 	background: var(--surface-raised);
 	box-shadow: 0 24px 80px #0008;
 }
+.startup-cache-status {
+	position: fixed;
+	z-index: 100;
+	right: 24px;
+	bottom: 24px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	max-width: min(520px, calc(100vw - 48px));
+	padding: 10px 14px;
+	border: 1px solid #4d7a85;
+	border-radius: 8px;
+	background: rgb(10 28 38 / 96%);
+	box-shadow: 0 12px 32px #0008;
+	color: #d5edf0;
+	font-size: 12px;
+}
+.startup-cache-status button {
+	border: 1px solid var(--border-bright);
+	border-radius: 5px;
+	padding: 5px 8px;
+	background: var(--surface-hover);
+	color: inherit;
+	cursor: pointer;
+	white-space: nowrap;
+}
 .startup-card h1 {
 	margin: 8px 0 18px;
 	font-family: Georgia, serif;

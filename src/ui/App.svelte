@@ -218,6 +218,8 @@
 	const vocabulary = useUiVocabulary();
 	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
 	let loading = $state(true);
+	let startupCacheActive = $state(false);
+	let startupDataLoaded = false;
 	let startup = $state<StartupStatus>({ phase: "starting", message: "Radioraを起動しています…" });
 	let error = $state("");
 	let quickCaptureText = $state("");
@@ -329,7 +331,12 @@
 	let globalLineageRequest = 0;
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
-		onStatusChange: (statuses) => workingCopySaveStatuses = statuses,
+		onStatusChange: (statuses) => {
+			workingCopySaveStatuses = statuses;
+			if (statuses.some((status) => status.phase === "saved") && !autosave.hasUnsavedChanges()) {
+				persistStartupSnapshotCache();
+			}
+		},
 	});
 	const resumeAutosave = new ResumePositionAutosaveCoordinator({
 		save: async (occurrenceId, caretOffset) => {
@@ -602,7 +609,21 @@
 
 	onMount(() => {
 		let cancelled = false;
+		async function restoreStartupSnapshotCache(): Promise<void> {
+			try {
+				const cache = await api.loadStartupSnapshotCache();
+				if (cancelled || startupDataLoaded || !cache) return;
+				snapshot = cache.snapshot;
+				browsing = createBrowsingNavigationState("pane-1", cache.location);
+				selectedId = cache.location.selectedOccurrenceId;
+				loading = false;
+				startupCacheActive = true;
+			} catch {
+				// The startup cache is optional; continue with the normal startup screen.
+			}
+		}
 		const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
+			persistStartupSnapshotCache();
 			if (!autosave.hasUnsavedChanges()) return;
 			event.preventDefault();
 			event.returnValue = "";
@@ -680,10 +701,7 @@
 				try {
 					startup = await api.getStartupStatus();
 					if (startup.phase === "ready") {
-						await load();
-						aliases = await api.listSearchAliases();
-						await loadTagBrowser();
-						savedRuleQueries = await api.listSavedRuleQueries();
+						await loadStartupData();
 						return;
 					}
 				} catch (cause) {
@@ -693,9 +711,11 @@
 				await new Promise((resolve) => setTimeout(resolve, 250));
 			}
 		}
+		void restoreStartupSnapshotCache();
 		void monitorStartup();
 		return () => {
 			cancelled = true;
+			persistStartupSnapshotCache();
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
 			document.removeEventListener("visibilitychange", flushWhenHidden);
 			window.removeEventListener("keydown", handleGlobalShortcut, true);
@@ -711,10 +731,25 @@
 	async function retryStartup(): Promise<void> {
 		startup = { phase: "starting", message: "再試行しています…", logPath: startup.logPath };
 		startup = await api.retryStartup();
-		if (startup.phase === "ready") await load();
+		if (startup.phase === "ready") await loadStartupData();
 	}
 
-	async function load(focusId?: string): Promise<void> {
+	async function reloadCachedStartupData(): Promise<void> {
+		await loadStartupData();
+	}
+
+	async function loadStartupData(): Promise<void> {
+		const loaded = await load();
+		if (!loaded) return;
+		startupDataLoaded = true;
+		startupCacheActive = false;
+		persistStartupSnapshotCache();
+		aliases = await api.listSearchAliases();
+		await loadTagBrowser();
+		savedRuleQueries = await api.listSavedRuleQueries();
+	}
+
+	async function load(focusId?: string): Promise<boolean> {
 		const request = ++globalLineageRequest;
 		try {
 			error = "";
@@ -723,6 +758,12 @@
 				api.listGlobalLineage(activeGlobalLineageFilter),
 				api.listBookmarks(),
 			]);
+			const snapshotForStartupCache: OutlineSnapshot = {
+				items: next.items,
+				links: next.links,
+				knots: next.knots,
+				stashItemIds: next.stashItemIds,
+			};
 			const drafts = new Map(autosave.drafts().map((draft) => [draft.workId, draft.text]));
 			next.items = next.items.map((item) => {
 				const draft = drafts.get(item.workId);
@@ -745,11 +786,24 @@
 				await tick();
 				requestFocus(focusId);
 			}
+			persistStartupSnapshotCache(snapshotForStartupCache, currentBrowsingLocation(browsing));
+			return true;
 		} catch (cause) {
 			error = errorMessage(cause);
+			return false;
 		} finally {
 			loading = false;
 		}
+	}
+
+	function persistStartupSnapshotCache(
+		snapshotToCache: OutlineSnapshot = snapshot,
+		location = currentBrowsingLocation(browsing),
+	): void {
+		if (startupCacheActive || startup.phase !== "ready" || autosave.hasUnsavedChanges()) return;
+		void api.saveStartupSnapshotCache(snapshotToCache, location).catch(() => {
+			// Startup acceleration must not interrupt editing when the cache cannot be written.
+		});
 	}
 
 	function selectOccurrence(id: string | null): void {
@@ -2933,7 +2987,21 @@
 	/>
 {/if}
 
-<div class="shell" class:nav-collapsed={navCollapsed}>
+{#if startupCacheActive}
+	<section class="startup-cache-status" role="status" aria-live="polite">
+		{#if startup.phase === "failed"}
+			<span>前回の内容を表示しています。起動に失敗しました。</span>
+			<button onclick={() => void retryStartup()}>再試行</button>
+		{:else if startup.phase === "ready"}
+			<span>前回の内容を表示しています。最新データを読み込めませんでした。</span>
+			<button onclick={() => void reloadCachedStartupData()}>再読み込み</button>
+		{:else}
+			<span>前回の内容を表示しています。最新データを同期中…</span>
+		{/if}
+	</section>
+{/if}
+
+<div class="shell" class:nav-collapsed={navCollapsed} inert={startupCacheActive} aria-busy={startupCacheActive}>
 	<nav class="primary-nav" class:nav-collapsed={navCollapsed} aria-label="主な画面">
 		<button
 			class="nav-collapse-toggle"
@@ -3096,7 +3164,7 @@
 
 	{#if error}<div class="error">{error}<button onclick={() => (error = "")}>×</button></div>{/if}
 
-	{#if startup.phase !== "ready"}
+	{#if startup.phase !== "ready" && !startupCacheActive}
 		<main class="app-main startup-main">
 			<section class="startup-card" aria-live="polite">
 				<div class:failed={startup.phase === "failed"} class="startup-indicator"></div>

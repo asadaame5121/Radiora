@@ -167,7 +167,12 @@ bundleのビルドと検査はWindows PowerShell側で `npm install` した依�
 
 アプリは最初に起動状態を表示し、その後ローカルデータを読み込みます。初期化に失敗した場合は
 ウィンドウ内に原因と再試行ボタンが表示されます。詳しい記録は
-`%LOCALAPPDATA%\RadioraV2\logs\startup.log` に保存されます。
+`%LOCALAPPDATA%\RadioraV2\logs\startup.log` にJSONL形式で保存され、同じ内容が標準出力にも出ます。
+各行には `timestamp`、`level`、`event` が入り、RPCや静的ファイル読み込みには `durationMs`
+が付きます。
+前回正常に読み込めたアウトラインは`%LOCALAPPDATA%\RadioraV2\startup-snapshot.json`へ最大2 MBまで
+保存されます。次回はこれを読み取り専用で先に表示し、データベースの接続後に最新データへ切り替えます。
+未保存の編集はキャッシュへ書き込まず、終了時の保存確認と既存データを優先します。
 
 ## 検証
 

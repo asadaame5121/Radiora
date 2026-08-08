@@ -1,3 +1,10 @@
+import {
+	isWindowsHiddenProcessRunning,
+	recoverWindowsStaleSurrealListener,
+	spawnWindowsHiddenProcess,
+	stopWindowsHiddenProcess,
+} from "./windows_hidden_process.ts";
+
 export type SurrealProcessLogger = (event: string, detail?: unknown) => void;
 
 const pathSeparator = Deno.build.os === "windows" ? "\\" : "/";
@@ -38,6 +45,8 @@ function parentDirectory(path: string): string {
 
 export class SurrealProcess {
 	#process: Deno.ChildProcess | null = null;
+	#hiddenProcessPid: number | null = null;
+	#lastHiddenProcessCheckAt = 0;
 	#statusPromise: Promise<Deno.CommandStatus> | null = null;
 	#exitStatus: Deno.CommandStatus | null = null;
 	#outputTasks: Promise<void>[] = [];
@@ -57,39 +66,52 @@ export class SurrealProcess {
 
 	async start(): Promise<void> {
 		this.trace("process.start.begin", { endpoint: this.endpoint, dataPath: this.dataPath });
-		const command = await this.findCommand();
+		const commandPromise = this.findCommand();
+		const recoveryPromise = this.recoverStaleWindowsListener();
+		const [command] = await Promise.all([commandPromise, recoveryPromise]);
 		await this.assertPortAvailable();
 		this.trace("process.spawn.begin", { command });
 		this.#stopping = false;
 		this.#exitStatus = null;
-		this.#process = new Deno.Command(command, {
-			args: [
-				"start",
-				"--user",
-				"root",
-				"--pass",
-				"root",
-				"--bind",
-				`${this.host}:${this.port}`,
-				`rocksdb:${this.dataPath}`,
-			],
-			stdout: "piped",
-			stderr: "piped",
-		}).spawn();
-		this.trace("process.spawn.ready", { pid: this.#process.pid });
-		this.#outputTasks = [
-			this.relayOutput(this.#process.stdout, "stdout"),
-			this.relayOutput(this.#process.stderr, "stderr"),
+		const args = [
+			"start",
+			"--user",
+			"root",
+			"--pass",
+			"root",
+			"--bind",
+			`${this.host}:${this.port}`,
+			`rocksdb:${this.dataPath}`,
 		];
-		this.#statusPromise = this.#process.status.then((status) => {
-			this.#exitStatus = status;
-			this.trace(this.#stopping ? "process.exit.ready" : "process.exit.unexpected", {
-				code: status.code,
-				success: status.success,
-				signal: status.signal,
+		if (Deno.build.os === "windows") {
+			this.#hiddenProcessPid = await spawnWindowsHiddenProcess(
+				parentDirectory(this.dataPath),
+				command,
+				args,
+			);
+			this.#lastHiddenProcessCheckAt = Date.now();
+			this.trace("process.spawn.ready", { pid: this.#hiddenProcessPid, hidden: true });
+		} else {
+			this.#process = new Deno.Command(command, {
+				args,
+				stdout: "piped",
+				stderr: "piped",
+			}).spawn();
+			this.trace("process.spawn.ready", { pid: this.#process.pid });
+			this.#outputTasks = [
+				this.relayOutput(this.#process.stdout, "stdout"),
+				this.relayOutput(this.#process.stderr, "stderr"),
+			];
+			this.#statusPromise = this.#process.status.then((status) => {
+				this.#exitStatus = status;
+				this.trace(this.#stopping ? "process.exit.ready" : "process.exit.unexpected", {
+					code: status.code,
+					success: status.success,
+					signal: status.signal,
+				});
+				return status;
 			});
-			return status;
-		});
+		}
 		try {
 			await this.waitUntilReady();
 			this.trace("process.start.ready");
@@ -102,18 +124,33 @@ export class SurrealProcess {
 	async stop(): Promise<void> {
 		this.trace("process.stop.begin");
 		const process = this.#process;
+		const hiddenProcessPid = this.#hiddenProcessPid;
 		const statusPromise = this.#statusPromise;
 		this.#process = null;
+		this.#hiddenProcessPid = null;
+		this.#lastHiddenProcessCheckAt = 0;
 		this.#statusPromise = null;
-		if (!process) {
+		if (!process && !hiddenProcessPid) {
 			this.trace("process.stop.ready", { alreadyStopped: true });
 			return;
 		}
 		this.#stopping = true;
-		try {
-			process.kill(Deno.build.os === "windows" ? "SIGKILL" : "SIGTERM");
-		} catch {
-			// It already exited.
+		if (hiddenProcessPid) {
+			try {
+				await stopWindowsHiddenProcess(
+					parentDirectory(this.dataPath),
+					hiddenProcessPid,
+					this.port,
+				);
+			} catch (cause) {
+				this.trace("process.stop.failed", { pid: hiddenProcessPid, cause: String(cause) });
+			}
+		} else if (process) {
+			try {
+				process.kill(Deno.build.os === "windows" ? "SIGKILL" : "SIGTERM");
+			} catch {
+				// It already exited.
+			}
 		}
 		await statusPromise?.catch(() => undefined);
 		await Promise.allSettled(this.#outputTasks);
@@ -157,6 +194,39 @@ export class SurrealProcess {
 		}
 	}
 
+	private async recoverStaleWindowsListener(): Promise<void> {
+		if (Deno.build.os !== "windows" || this.isPortAvailable()) return;
+		const recovered = await recoverWindowsStaleSurrealListener(this.port);
+		if (!recovered) return;
+		this.trace("process.stale-listener.stopped", { port: this.port });
+		await this.waitForPortRelease();
+	}
+
+	private isPortAvailable(): boolean {
+		try {
+			const listener = Deno.listen({ hostname: this.host, port: this.port });
+			listener.close();
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	private async waitForPortRelease(): Promise<void> {
+		this.trace("process.stale-listener.release.begin", { port: this.port });
+		for (let attempt = 1; attempt <= 50; attempt++) {
+			try {
+				const listener = Deno.listen({ hostname: this.host, port: this.port });
+				listener.close();
+				this.trace("process.stale-listener.release.ready", { port: this.port, attempt });
+				return;
+			} catch {
+				await new Promise((resolve) => setTimeout(resolve, 100));
+			}
+		}
+		throw new Error(`残存SurrealDBの停止後もポート ${this.port} が解放されませんでした。`);
+	}
+
 	private async waitUntilReady(): Promise<void> {
 		this.trace("process.health.begin");
 		for (let attempt = 1; attempt <= 150; attempt++) {
@@ -173,6 +243,17 @@ export class SurrealProcess {
 				}
 			} catch {
 				// Still starting.
+			}
+			if (
+				this.#hiddenProcessPid !== null &&
+				Date.now() - this.#lastHiddenProcessCheckAt >= 1000
+			) {
+				this.#lastHiddenProcessCheckAt = Date.now();
+				const running = await isWindowsHiddenProcessRunning(
+					parentDirectory(this.dataPath),
+					this.#hiddenProcessPid,
+				);
+				if (!running) throw new Error("SurrealDBがreadyになる前に終了しました。");
 			}
 			await new Promise((resolve) => setTimeout(resolve, 200));
 		}
