@@ -101,6 +101,7 @@
 		type CommandContext,
 		type CommandId,
 	} from "./command_service";
+	import { EDITOR_BINDINGS } from "../shared/editor_bindings.ts";
 	import {
 	commandPaletteItems,
 	nextCommandPaletteIndex,
@@ -561,6 +562,7 @@
 		label: COMMAND_DEFINITIONS.find((command) => command.id === commandId)?.label(vocabulary) ?? commandId,
 		shortcut,
 	}));
+	const helpEditorShortcuts = EDITOR_BINDINGS.map(({ label, keys }) => ({ label, shortcut: keys }));
 
 	$effect(() => {
 		const id = selectedId;
@@ -616,13 +618,23 @@
 			}
 		};
 		const handleGlobalShortcut = (event: KeyboardEvent) => {
+			const openHelpPanel = () => {
+				event.preventDefault();
+				if (commandPaletteOpen) void closeCommandPalette();
+				openHelp();
+			};
 			if (
 				event.key === "F1" &&
 				!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey
 			) {
-				event.preventDefault();
-				if (commandPaletteOpen) void closeCommandPalette();
-				openHelp();
+				openHelpPanel();
+				return;
+			}
+			if (
+				event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey &&
+				(event.key === "/" || event.key === "?")
+			) {
+				openHelpPanel();
 				return;
 			}
 			if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLocaleLowerCase() === "k") {
@@ -3755,6 +3767,7 @@
 		{:else if viewMode === "help"}
 			<InAppHelp
 				shortcuts={helpShortcuts}
+				editorShortcuts={helpEditorShortcuts}
 				onOpenOutline={() => { viewMode = "outline"; }}
 				onOpenToday={() => void openToday()}
 				onOpenUnplaced={() => void openUnplaced()}

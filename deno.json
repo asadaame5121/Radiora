@@ -44,6 +44,7 @@
 		"desktop:hmr": "deno run -A scripts/desktop_hmr.ts",
 		"desktop:inspect": "deno run -A scripts/desktop_hmr.ts --inspect=127.0.0.1:9230",
 		"desktop:audit": "deno run -A scripts/desktop_cdp_audit.ts",
-		"desktop:msix": "deno task licenses && deno run -A scripts/desktop_msix.ts"
+		"desktop:msix": "deno task licenses && deno run -A scripts/desktop_msix.ts",
+		"docs:shortcuts": "deno run -A scripts/docs_shortcuts.ts"
 	}
 }
