@@ -5,6 +5,9 @@ Deno.test("trash actions use one accessible in-app confirmation dialog", async (
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/confirmation_controller.svelte.ts", import.meta.url),
 	);
+	const workController = await Deno.readTextFile(
+		new URL("../src/ui/work_controller.svelte.ts", import.meta.url),
+	);
 	const dialog = await Deno.readTextFile(
 		new URL("../src/ui/ConfirmationDialog.svelte", import.meta.url),
 	);
@@ -17,6 +20,8 @@ Deno.test("trash actions use one accessible in-app confirmation dialog", async (
 	assert(dialog.includes('aria-labelledby="confirmation-title"'));
 	assert(dialog.includes('aria-describedby="confirmation-description"'));
 	assert(dialog.includes("oncancel={preventCloseWhileSubmitting}"));
-	assert(app.includes("await api.trashWork(confirmation.occurrenceId)"));
-	assert(app.includes("await api.purgeWork(confirmation.workId)"));
+	assert(app.includes("workController.confirmTrash(confirmation.occurrenceId)"));
+	assert(app.includes("workController.confirmPurge(confirmation.workId)"));
+	assert(workController.includes("ports.api.trashWork(occurrenceId)"));
+	assert(workController.includes("ports.api.purgeWork(workId)"));
 });

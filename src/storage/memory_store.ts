@@ -32,6 +32,13 @@ import {
 	type WorkBundle,
 } from "./graph_store.ts";
 import {
+	mergedBranchName,
+	projectOutlineItems,
+	replaceEndpointWork,
+	retractDuplicateActiveLinks,
+	validateMergeInput,
+} from "./memory_store_operations.ts";
+import {
 	countOccurrences,
 	normalizeSearchText,
 	searchTerms,
@@ -767,30 +774,13 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	private projectItems(includeDeleted: boolean): OutlineItem[] {
-		const workById = new Map(
-			this.works.filter((work) => includeDeleted || !work.deletedAt).map((work) => [work.id, work]),
+		return projectOutlineItems(
+			this.works,
+			this.workingCopies,
+			this.revisions,
+			this.occurrences,
+			includeDeleted,
 		);
-		const copyByBranchId = new Map(this.workingCopies.map((copy) => [copy.branchId, copy]));
-		const revisionById = new Map(this.revisions.map((revision) => [revision.id, revision]));
-		return this.occurrences.flatMap((occurrence): OutlineItem[] => {
-			const work = workById.get(occurrence.workId);
-			if (!work) return [];
-			const text = occurrence.revisionSelector.mode === "branch"
-				? copyByBranchId.get(occurrence.revisionSelector.branchId)?.text ?? ""
-				: revisionById.get(occurrence.revisionSelector.revisionId)?.text ?? "";
-			return [{
-				id: occurrence.id,
-				workId: occurrence.workId,
-				text,
-				parentId: occurrence.parentOccurrenceId,
-				orderKey: occurrence.orderKey,
-				collapsed: occurrence.collapsed,
-				revisionSelector: structuredClone(occurrence.revisionSelector),
-				contextualHeading: occurrence.contextualHeading,
-				createdAt: work.createdAt,
-				updatedAt: work.updatedAt,
-			}];
-		});
 	}
 
 	private representativeItems(): OutlineItem[] {
@@ -800,74 +790,4 @@ export class MemoryGraphStore implements GraphStore {
 		}
 		return [...byWork.values()];
 	}
-}
-
-function validateMergeInput(
-	input: MergeWorksInput,
-	source: Work | undefined,
-	survivor: Work | undefined,
-	aliases: readonly SearchAlias[],
-): void {
-	if (input.sourceWorkId === input.survivorWorkId) {
-		throw new Error("Duplicate merge requires two different Works");
-	}
-	if (!source || source.deletedAt || source.mergedIntoWorkId) {
-		throw new Error(`Active source Work not found: ${input.sourceWorkId}`);
-	}
-	if (!survivor || survivor.deletedAt || survivor.mergedIntoWorkId) {
-		throw new Error(`Active survivor Work not found: ${input.survivorWorkId}`);
-	}
-	const parsed = Date.parse(input.mergedAt);
-	if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== input.mergedAt) {
-		throw new Error("Duplicate merge requires a valid ISO instant");
-	}
-	if (input.alias) {
-		if (!input.alias.id || !input.alias.canonical.trim() || input.alias.variants.length === 0) {
-			throw new Error("Duplicate merge alias requires a non-empty old name");
-		}
-		const collidingAlias = aliases.find((alias) =>
-			alias.id === input.alias!.id && alias.canonical !== input.alias!.canonical
-		);
-		if (collidingAlias) throw new Error(`Search Alias ID collision: ${input.alias.id}`);
-	}
-}
-
-function mergedBranchName(
-	sourceWorkId: string,
-	original: string,
-	taken: ReadonlySet<string>,
-): string {
-	const base = `merged/${sourceWorkId}/${original}`;
-	let candidate = base;
-	let suffix = 2;
-	while (taken.has(candidate)) candidate = `${base}/${suffix++}`;
-	return candidate;
-}
-
-function replaceEndpointWork(endpoint: LinkEndpoint, input: MergeWorksInput): LinkEndpoint {
-	return endpoint.workId === input.sourceWorkId
-		? { ...endpoint, workId: input.survivorWorkId }
-		: endpoint;
-}
-
-function retractDuplicateActiveLinks(links: OutlineLink[]): void {
-	const seen = new Set<string>();
-	for (const link of links) {
-		if (link.status === "retracted") continue;
-		const left = endpointKey(link.from);
-		const right = endpointKey(link.to);
-		const self = left === right;
-		const endpoints = isSymmetricLinkType(link.type) && left > right
-			? `${right}|${left}`
-			: `${left}|${right}`;
-		const key = `${link.type}|${endpoints}`;
-		if (self || seen.has(key)) link.status = "retracted";
-		else seen.add(key);
-	}
-}
-
-function endpointKey(endpoint: LinkEndpoint): string {
-	return endpoint.scope === "revision"
-		? `revision:${endpoint.workId}:${endpoint.revisionId}`
-		: `work:${endpoint.workId}`;
 }

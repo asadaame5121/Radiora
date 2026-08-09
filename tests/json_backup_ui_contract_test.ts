@@ -10,7 +10,7 @@ const registration = await Deno.readTextFile(
 Deno.test("complete JSON backup flushes edits and downloads a UTF-8 envelope", () => {
 	assertMatch(
 		app,
-		/async function performJsonBackupExport\(\)[\s\S]*?await autosave\.flush\(\)[\s\S]*?api\.exportJsonBackup\(\)/,
+		/async function performJsonBackupExport\(\)[\s\S]*?await editorController\.flushAutosave\(\)[\s\S]*?api\.exportJsonBackup\(\)/,
 	);
 	assertMatch(app, /new Blob\(\[source\], \{ type: "application\/json;charset=utf-8" \}\)/);
 	assertMatch(
@@ -29,7 +29,7 @@ Deno.test("complete JSON backup is exposed through the desktop binding", () => {
 Deno.test("JSON restore flushes pending edits and reloads only after the binding succeeds", () => {
 	assertMatch(
 		app,
-		/async function restoreJsonBackupFile\(file: File\)[\s\S]*?await autosave\.flush\(\)[\s\S]*?api\.restoreJsonBackup\(await file\.text\(\)\)[\s\S]*?await load\(\)/,
+		/async function restoreJsonBackupFile\(file: File\)[\s\S]*?await editorController\.flushAutosave\(\)[\s\S]*?api\.restoreJsonBackup\(await file\.text\(\)\)[\s\S]*?await load\(\)/,
 	);
 	assertMatch(view, /accept="\.json,application\/json"/);
 	assertMatch(`${app}\n${view}`, /vocabulary\.jsonBackupRestore/);

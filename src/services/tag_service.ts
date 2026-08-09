@@ -6,12 +6,18 @@ import type {
 	TagSearchRequest,
 	TagSummary,
 } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type {
+	DiscoveryStorePort,
+	OutlineStorePort,
+	WorkStorePort,
+} from "../storage/graph_store.ts";
 import { parseMarkdownCandidates } from "./markdown_parser.ts";
 import { normalizeSearchText } from "./search_text.ts";
 
 const TAG_ALIAS_PREFIX = "#";
 const MAX_TAG_RESULTS = 100;
+
+type TagStore = DiscoveryStorePort & OutlineStorePort & WorkStorePort;
 
 /**
  * Projects inline tags from their owning Working Copy or immutable Revision.
@@ -21,7 +27,7 @@ const MAX_TAG_RESULTS = 100;
  */
 export class TagService {
 	constructor(
-		private readonly store: GraphStore,
+		private readonly store: TagStore,
 		private readonly now: () => string = () => new Date().toISOString(),
 		private readonly createId: () => string = () => crypto.randomUUID(),
 	) {}

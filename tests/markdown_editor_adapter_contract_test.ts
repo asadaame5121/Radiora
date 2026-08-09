@@ -42,16 +42,21 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 
 Deno.test("Markdown editor keeps native replacement, autosave, completion, and resolver paths", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const controller = await Deno.readTextFile(
+		new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
+	);
 	const adapter = await Deno.readTextFile(
 		new URL("../src/ui/overtype_markdown_editor_adapter.ts", import.meta.url),
 	);
 
 	assertMatch(app, /<MarkdownEditor/);
-	assertMatch(app, /textarea\.setRangeText\(/);
-	assertMatch(app, /inputType: "insertReplacementText"/);
-	assertMatch(app, /autosave\.queue\(item\.workId, id, text\)/);
-	assertMatch(app, /updateInternalReferenceCompletion\(id, textarea\)/);
-	assertMatch(app, /resolveInternalReferences\(markdown\)/);
+	assertMatch(app, /onChange=.*updateLocalText/);
+	assertMatch(app, /onSelectionChange=.*updateEditorSelection/);
+	assertMatch(controller, /textarea\.setRangeText\(/);
+	assertMatch(controller, /inputType: "insertReplacementText"/);
+	assertMatch(controller, /autosave\.queue\(item\.workId, id, text\)/);
+	assertMatch(controller, /updateInternalReferenceCompletion\(id, textarea\)/);
+	assertMatch(controller, /resolveInternalReferences\(markdown\)/);
 	assertMatch(adapter, /recoverRadioraDestination/);
 	assertMatch(adapter, /\.url-part/);
 	assertMatch(adapter, /event\.stopImmediatePropagation\(\)/);

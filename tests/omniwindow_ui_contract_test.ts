@@ -1,6 +1,9 @@
 import { assert, assertMatch, assertNotMatch } from "jsr:@std/assert@1";
 
 const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+const navigationController = await Deno.readTextFile(
+	new URL("../src/ui/navigation_controller.svelte.ts", import.meta.url),
+);
 const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
 const overtype = await Deno.readTextFile(
 	new URL("../src/ui/overtype_markdown_editor_adapter.ts", import.meta.url),
@@ -8,18 +11,40 @@ const overtype = await Deno.readTextFile(
 
 Deno.test("Omniwindow shares the quick-capture command value with search", () => {
 	assertNotMatch(app, /let searchQuery/);
-	assertMatch(app, /bind:value=\{quickCaptureText\}/);
-	assertMatch(app, /api\.suggestItems\(quickCaptureText, 8\)/);
-	assertMatch(app, /api\.searchItems\(\{ query: quickCaptureText/);
+	assertMatch(app, /bind:value=\{navigationController\.quickCaptureText\}/);
+	assertMatch(app, /oninput=\{\(\) => navigationController\.queueSearch\(\)\}/);
+	assertMatch(app, /suggestItems: \(prefix, limit\) => api\.suggestItems\(prefix, limit\)/);
+	assertMatch(app, /searchItems: \(request\) => api\.searchItems\(request\)/);
+	assertMatch(app, /getSelectedId: \(\) => selectedId/);
+	assertMatch(app, /reportError: \(cause\) => error = errorMessage\(cause\)/);
+	assertMatch(app, /const searchEntries = \$derived\(navigationController\.searchEntries\)/);
+	assertMatch(app, /const omniEntryCount = \$derived\(navigationController\.omniEntryCount\)/);
 	assertMatch(app, /event\.key === "Enter" && event\.shiftKey/);
 	assertMatch(app, /event\.isComposing/);
 	assertMatch(app, /const exactMatchIndex = searchEntries\.findIndex/);
-	assertMatch(app, /searchRequestId\+\+/);
+	assertMatch(app, /navigationController\.moveSearchActiveIndex\(delta\)/);
 	assertMatch(app, /searchActiveIndex === searchEntries\.length/);
 	assertMatch(app, /executeCommand\("quickCapture"\)/);
 	assertMatch(app, /quickCaptureDestinationLabel/);
 	assertMatch(app, /vocabulary\.quickCaptureDestinationRoot/);
 	assertMatch(app, /vocabulary\.quickCaptureDestinationUnplaced/);
+	assertNotMatch(app, /let suggestTimer/);
+	assertNotMatch(app, /let searchTimer/);
+	assertNotMatch(app, /let searchRequestId/);
+
+	assertMatch(navigationController, /let quickCaptureText = \$state\(""\)/);
+	assertMatch(navigationController, /let suggestions = \$state<Suggestion\[\]>\(\[\]\)/);
+	assertMatch(navigationController, /let searchResults = \$state<SearchResult\[\]>\(\[\]\)/);
+	assertMatch(navigationController, /let searchActiveIndex = \$state\(-1\)/);
+	assertMatch(navigationController, /queueSearch\(\): void/);
+	assertMatch(navigationController, /port\.suggestItems\(query, 8\)/);
+	assertMatch(navigationController, /port\.searchItems\(\{/);
+	assertMatch(navigationController, /const requestId = \+\+searchRequestId/);
+	assertMatch(navigationController, /clearOmniwindow\(\): void/);
+	assertMatch(navigationController, /get searchEntries\(\)/);
+	assertMatch(navigationController, /get omniEntryCount\(\)/);
+	assertNotMatch(navigationController, /executeCommand\(/);
+	assertNotMatch(navigationController, /selectItem\(/);
 });
 
 Deno.test("shell keeps global navigation, contextual inspector, and dedicated full-width views separate", () => {

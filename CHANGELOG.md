@@ -5,6 +5,27 @@ bookmark上のchangeを提供済み機能としては扱わない。
 
 ## Unreleased
 
+## 0.4.0 - 2026-08-09
+
+### Added
+
+- 前回正常に読み込めたアウトラインと選択位置を先行表示する起動スナップショットを追加。
+- 起動失敗時の再試行、Windows上のSurrealDBプロセス復旧、起動準備状態の表示を改善。
+- JSONL形式の構造化診断ログを追加し、起動、RPC、静的ファイル、SurrealDBのイベントと処理時間を記録。
+- Help画面でGitHub Releasesの最新版を確認し、更新時は安全なリリースページへのリンクを表示。
+- キーバインド定義をHelpとドキュメント生成で共有し、`Ctrl+Shift+/` からHelpを開けるようにした。
+
+### Changed
+
+- 大型Svelte Viewをfeature ViewとControllerへ分割し、`App.svelte`の責務を縮小。
+- SurrealDBの接続、repository、row mapper、migration、backup、validation境界を分離。
+- Memory Storeとサービス層の責務境界を整理し、構造変更を直接検証するテストを追加。
+- アプリケーションとバックアップ／migration metadataのバージョンを0.4.0へ更新。
+
+### Docs
+
+- リファクタリングの完了範囲と継続候補を `docs/refactoring-candidates.md` に整理。
+
 ## 0.3.0 - 2026-08-06
 
 ### Added

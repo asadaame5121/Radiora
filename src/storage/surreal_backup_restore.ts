@@ -1,5 +1,11 @@
 import { RecordId } from "surrealdb";
-import type { GraphStateSnapshot } from "./graph_store.ts";
+import type { GraphStateSnapshot, GraphStore } from "./graph_store.ts";
+import type { SurrealRow } from "./surreal_row_mapper.ts";
+import {
+	bookmarkFromRow,
+	emergenceFeedbackActionFromRow,
+	resumePositionFromRow,
+} from "./surreal_row_mapper.ts";
 
 export interface SurrealRestoreTransaction {
 	query: string;
@@ -216,6 +222,82 @@ export function buildSurrealRestoreTransaction(
 	return {
 		query: `BEGIN TRANSACTION;\n${statements.join("\n")}\nCOMMIT TRANSACTION;`,
 		variables,
+	};
+}
+
+export async function exportSurrealGraphState(
+	store: GraphStore,
+	db: { query<T>(query: string): Promise<T> },
+): Promise<GraphStateSnapshot> {
+	const [
+		works,
+		branches,
+		workingCopies,
+		occurrences,
+		links,
+		systemRelations,
+		knots,
+		aliases,
+		emergenceSuggestions,
+		savedRuleQueries,
+		purgeManifests,
+		revisions,
+		recoverySnapshots,
+		bookmarkResult,
+		resumeResult,
+		feedbackResult,
+	] = await Promise.all([
+		store.listWorks(true),
+		store.listBranches(),
+		store.listWorkingCopies(),
+		store.listOccurrences(true),
+		store.listLinks(),
+		store.listSystemRelations(),
+		store.listKnots(),
+		store.listAliases(),
+		store.listEmergenceSuggestions(),
+		store.listSavedRuleQueries(),
+		store.listPurgeManifests(),
+		store.listRevisions(),
+		store.listRecoverySnapshots(),
+		db.query<[SurrealRow[]]>(
+			`SELECT record::id(id) AS id, record::id(work) AS work_id,
+				record::id(occurrence) AS occurrence_id, created_at FROM bookmark;`,
+		),
+		db.query<[SurrealRow[]]>(
+			`SELECT record::id(work) AS work_id, record::id(occurrence) AS occurrence_id,
+				caret_offset, updated_at FROM resume_position:current;`,
+		),
+		db.query<[SurrealRow[]]>(
+			`SELECT record::id(id) AS id, action FROM emergence_feedback;`,
+		),
+	]);
+	const bookmarks = bookmarkResult[0].map(bookmarkFromRow);
+	const resumeRow = resumeResult[0][0];
+	const resumePosition = resumeRow ? resumePositionFromRow(resumeRow) : null;
+	const emergenceFeedback = Object.fromEntries(
+		feedbackResult[0].flatMap((row) => {
+			const action = emergenceFeedbackActionFromRow(row);
+			return action ? [[String(row.id), action]] : [];
+		}),
+	) as Record<string, "accept" | "dismiss" | "pin">;
+	return {
+		works,
+		branches,
+		workingCopies,
+		occurrences,
+		links,
+		systemRelations,
+		knots,
+		aliases,
+		emergenceFeedback,
+		emergenceSuggestions,
+		savedRuleQueries,
+		purgeManifests,
+		revisions,
+		recoverySnapshots,
+		bookmarks,
+		resumePosition,
 	};
 }
 

@@ -3,13 +3,16 @@ import { assert, assertFalse, assertMatch } from "jsr:@std/assert@1";
 Deno.test("Stub list view is reachable and acts only through bindings", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const view = await Deno.readTextFile(new URL("../src/ui/StubListView.svelte", import.meta.url));
+	const controller = await Deno.readTextFile(
+		new URL("../src/ui/work_controller.svelte.ts", import.meta.url),
+	);
 	const bindings = await Deno.readTextFile(
 		new URL("../src/shared/bindings.ts", import.meta.url),
 	);
 
 	for (const method of ["listStubs", "createStub", "resolveStub"]) {
 		assert(bindings.includes(`${method}(`));
-		assert(app.includes(`api.${method}(`));
+		assert(controller.includes(`ports.api.${method}(`));
 	}
 	assert(app.includes('"stubs"'));
 	assert(app.includes("openStubs"));
@@ -17,8 +20,8 @@ Deno.test("Stub list view is reachable and acts only through bindings", async ()
 	assert(view.includes("vocabulary.stubList"));
 	assert(view.includes("vocabulary.stubContext"));
 	assert(view.includes("vocabulary.backlink"));
-	assertMatch(app, /api\.createStub\("stub-list"\)/);
-	assertMatch(app, /api\.updateUnplacedWorkText\(entry\.workId, text\)/);
+	assertMatch(controller, /ports\.api\.createStub\("stub-list"\)/);
+	assertMatch(controller, /ports\.api\.updateUnplacedWorkText\(entry\.workId, text\)/);
 	assertMatch(view, /disabled=\{!entry\.hasText\}/);
 	assert(view.includes("entry.backlinks"));
 	assert(view.includes("createdViaLabel"));
@@ -26,11 +29,13 @@ Deno.test("Stub list view is reachable and acts only through bindings", async ()
 });
 
 Deno.test("Stub resolution is never triggered implicitly by text editing", async () => {
-	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const controller = await Deno.readTextFile(
+		new URL("../src/ui/work_controller.svelte.ts", import.meta.url),
+	);
 	const view = await Deno.readTextFile(new URL("../src/ui/StubListView.svelte", import.meta.url));
 
-	const updateStubText = app.match(/async function updateStubText[\s\S]*?\n\t\}/)?.[0] ?? "";
-	assert(updateStubText.includes("api.updateUnplacedWorkText("));
+	const updateStubText = controller.match(/async function updateStubText[\s\S]*?\n\t\}/)?.[0] ?? "";
+	assert(updateStubText.includes("ports.api.updateUnplacedWorkText("));
 	assertFalse(
 		updateStubText.includes("resolveStub"),
 		"Editing the body must not implicitly resolve a Stub",

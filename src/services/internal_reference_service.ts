@@ -1,5 +1,5 @@
 import type { NavigationTarget, Revision } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { OutlineStorePort, WorkStorePort } from "../storage/graph_store.ts";
 import {
 	parseMarkdownCandidates,
 	type RadioraInternalReferenceCandidate,
@@ -13,6 +13,8 @@ export type InternalReferenceStatus =
 	| "missing"
 	| "deleted"
 	| "scope-mismatch";
+
+type InternalReferenceStore = OutlineStorePort & WorkStorePort;
 
 export interface InternalReferenceCompletion {
 	scope: RadioraReferenceScope;
@@ -46,7 +48,7 @@ export interface InternalReferenceBacklink {
 }
 
 export class InternalReferenceService {
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: InternalReferenceStore) {}
 
 	async listCompletions(query = "", limit = 50): Promise<InternalReferenceCompletion[]> {
 		const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
@@ -239,8 +241,8 @@ function matchingReferences(
 
 function activeMainTitle(
 	workId: string,
-	branches: Awaited<ReturnType<GraphStore["listBranches"]>>,
-	copies: Awaited<ReturnType<GraphStore["listWorkingCopies"]>>,
+	branches: Awaited<ReturnType<WorkStorePort["listBranches"]>>,
+	copies: Awaited<ReturnType<WorkStorePort["listWorkingCopies"]>>,
 ): string {
 	const mains = branches.filter((branch) =>
 		branch.workId === workId && branch.name === "main" && !branch.archivedAt
@@ -259,7 +261,7 @@ function activeMainTitle(
 
 function navigationTarget(
 	workId: string,
-	occurrences: Awaited<ReturnType<GraphStore["listOccurrences"]>>,
+	occurrences: Awaited<ReturnType<OutlineStorePort["listOccurrences"]>>,
 ): NavigationTarget {
 	const active = occurrences.filter((occurrence) => occurrence.workId === workId)
 		.sort((left, right) => left.orderKey - right.orderKey || left.id.localeCompare(right.id));

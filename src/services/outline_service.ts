@@ -30,7 +30,13 @@ import type {
 	TrashEntry,
 	UnplacedWork,
 } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type {
+	BackupStorePort,
+	DiscoveryStorePort,
+	OutlineStorePort,
+	RelationStorePort,
+	WorkStorePort,
+} from "../storage/graph_store.ts";
 import {
 	BranchService,
 	type GlobalLineageProjection,
@@ -72,11 +78,18 @@ import { ManuscriptProjectionService, type ManuscriptSection } from "./manuscrip
 import { type OpmlImportResult, OpmlService } from "./opml_service.ts";
 import { type JsonBackupRestoreResult, JsonBackupService } from "./json_backup.ts";
 
+type OutlineServiceStore =
+	& BackupStorePort
+	& OutlineStorePort
+	& WorkStorePort
+	& RelationStorePort
+	& DiscoveryStorePort;
+
 /** Compatibility façade for the desktop binding contract. */
 export class OutlineService {
 	private readonly discovery: DiscoveryOperations;
 
-	constructor(private readonly store: GraphStore) {
+	constructor(private readonly store: OutlineServiceStore) {
 		this.discovery = new DiscoveryOperations(store);
 	}
 

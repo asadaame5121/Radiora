@@ -6,11 +6,11 @@ import type {
 	ResolvedResumePosition,
 	ResumePosition,
 } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { OutlineStorePort, WorkStorePort } from "../storage/graph_store.ts";
 
 export class NavigationService {
 	constructor(
-		private readonly store: GraphStore,
+		private readonly store: OutlineStorePort & WorkStorePort,
 		private readonly newId: () => string = () => crypto.randomUUID(),
 		private readonly now: () => string = () => new Date().toISOString(),
 	) {}

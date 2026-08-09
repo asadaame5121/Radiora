@@ -12,18 +12,24 @@ import type {
 	TransientProjectionNode,
 } from "../domain/models.ts";
 import { isSymmetricLinkType } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type {
+	DiscoveryStorePort,
+	OutlineStorePort,
+	RelationStorePort,
+} from "../storage/graph_store.ts";
 import { runRuleQuery } from "./rule_query.ts";
 import { normalizeSearchText, titleOf } from "./search_text.ts";
 import { buildSparseOutline } from "./sparse_outline.ts";
 
 const MAX_SEARCH_LIMIT = 50;
 
-/** Search, suggestion, and rule-query operations backed by one GraphStore. */
+type DiscoveryOperationsStore = DiscoveryStorePort & OutlineStorePort & RelationStorePort;
+
+/** Search, suggestion, and rule-query operations backed by feature-specific store ports. */
 export class DiscoveryOperations {
 	private readonly suggestionCache = new Map<string, EmergenceSuggestion>();
 
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: DiscoveryOperationsStore) {}
 
 	async suggestItems(prefix: string, limit = 8): Promise<Suggestion[]> {
 		const normalized = normalizeSearchText(prefix);

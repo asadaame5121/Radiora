@@ -1,15 +1,17 @@
 import type { Occurrence } from "../domain/models.ts";
-import type { GraphStore, WorkBundle } from "../storage/graph_store.ts";
+import type { OutlineStorePort, WorkBundle, WorkStorePort } from "../storage/graph_store.ts";
 import { type OpmlNode, parseOpml, renderOutlineSnapshotOpml } from "./opml.ts";
 
 const ORDER_STEP = 1024;
+
+type OpmlStore = OutlineStorePort & WorkStorePort;
 
 export interface OpmlImportResult {
 	importedCount: number;
 }
 
 export class OpmlService {
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: OpmlStore) {}
 
 	async export(): Promise<string> {
 		return renderOutlineSnapshotOpml({

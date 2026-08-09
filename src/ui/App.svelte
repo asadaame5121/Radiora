@@ -27,6 +27,9 @@
 		createConfirmationController,
 		type PendingConfirmation,
 	} from "./confirmation_controller.svelte.ts";
+	import { createEditorController } from "./editor_controller.svelte.ts";
+	import { createNavigationController } from "./navigation_controller.svelte.ts";
+	import { createWorkController } from "./work_controller.svelte.ts";
 	import type { ContextMenuItem } from "./context_menu";
 	import { createRpcAdapter } from "./rpc_adapter";
 	import type {
@@ -47,10 +50,7 @@
 		TagAlias,
 		Revision,
 		RecoverySnapshot,
-		Suggestion,
-		TrashEntry,
 		TransientProjectionNode,
-		UnplacedWork,
 	} from "../domain/models";
 	import { isSymmetricLinkType, LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
@@ -59,11 +59,6 @@
 	WorkLineageProjection,
 	} from "../services/branch_service";
 	import type { DateProjection, DateRange } from "../services/date_projection";
-	import {
-		WorkingCopyAutosaveCoordinator,
-		type WorkingCopySaveStatus,
-	} from "../services/working_copy_autosave";
-	import { ResumePositionAutosaveCoordinator } from "../services/resume_position_autosave";
 	import {
 		renderOutlineSnapshotMarkdown,
 		rewriteMarkdownExportReferences,
@@ -93,16 +88,7 @@
 	import type { GlobalLineageFilter } from "../services/global_lineage_filter";
 	import type { TreeProjection } from "./tree_layout";
 	import {
-		activateBrowsingPane,
-		activeBrowsingPane,
 		ancestorBreadcrumb,
-		browseToOutlineOccurrence,
-		createBrowsingNavigationState,
-		currentBrowsingLocation,
-		openBrowsingPane,
-		projectBrowsingOutline,
-		reconcileBrowsingState,
-		setBrowsingHoist,
 	} from "../services/browsing_navigation_state";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
 	import { navigationUiState } from "./navigation_state";
@@ -123,27 +109,11 @@
 	type CommandPaletteItem,
 	} from "./command_palette.ts";
 	import {
-		findInternalReferenceTrigger,
-	} from "../services/internal_reference";
-	import {
-		findInlineLinkTrigger,
-		replaceInlineLinkTrigger,
-	} from "../services/inline_link";
-	import { canonicalInternalReferenceMarkdown } from "../services/internal_reference";
-	import { parseMarkdownCandidates } from "../services/markdown_parser";
-	import type {
-		InternalReferenceBacklink,
-		InternalReferenceCompletion,
-		InternalReferenceResolution,
-	} from "../services/internal_reference_service";
-	import {
 		comparisonDocumentKey,
 		type LinkComparisonProjection,
 		type WorkComparisonDocuments,
 	} from "../services/comparison_service";
 	import { previewDirection } from "../services/advanced_link_resolver";
-	import type { StubListEntry } from "../services/stub_service";
-	import type { DuplicateCandidate } from "../services/duplicate_candidates";
 	import {
 		EMPTY_OUTLINE_FILTER,
 		type OutlineFilter,
@@ -173,27 +143,6 @@
 		| "help"
 		| "options";
 	type AsideMode = "overview" | "relation" | "history" | "query";
-	type InternalReferenceCompletionState = {
-		itemId: string;
-		range: { start: number; end: number };
-		candidates: InternalReferenceCompletion[];
-		activeIndex: number;
-	};
-	type InlineLinkCompletionPhase = "candidate" | "type" | "direction";
-	type InlineLinkDirection = "forward" | "reverse";
-	type InlineLinkCompletionState = {
-		itemId: string;
-		query: string;
-		range: { start: number; end: number };
-		candidates: InternalReferenceCompletion[];
-		activeIndex: number;
-		phase: InlineLinkCompletionPhase;
-		selectedCandidate?: InternalReferenceCompletion;
-		selectedType?: LinkType;
-		direction: InlineLinkDirection;
-		searching: boolean;
-		creating: boolean;
-	};
 	type OccurrenceContextMenuState = {
 		targetId: string;
 		source: "outline" | "tree";
@@ -209,10 +158,6 @@
 	let startupDataLoaded = false;
 	let startup = $state<StartupStatus>({ phase: "starting", message: "Radioraを起動しています…" });
 	let error = $state("");
-	let quickCaptureText = $state("");
-	let quickCaptureSubmitting = $state(false);
-	let unplacedWorks = $state<UnplacedWork[]>([]);
-	let stubEntries = $state<StubListEntry[]>([]);
 	let outlineFilter = $state<OutlineFilter>({ ...EMPTY_OUTLINE_FILTER });
 	let longForm = $state({
 		active: false,
@@ -220,24 +165,22 @@
 		dirty: false,
 		preview: false,
 	});
-	let duplicateCandidates = $state<DuplicateCandidate[]>([]);
-	let excludedDuplicateCandidateKeys = $state<string[]>([]);
-	let unplacedLinkTargets = $state<Record<string, string>>({});
-	let unplacedLinkDirections = $state<Record<string, "from" | "to">>({});
-	let unplacedLinkType = $state<LinkType>("RELATED");
 	let viewMode = $state<ViewMode>("outline");
 	let dateStart = $state(localDateValue(new Date()));
 	let dateEnd = $state(localDateValue(addDays(new Date(), 1)));
 	let dateProjection = $state<DateProjection | null>(null);
 	let dateProjectionLoading = $state(false);
 	let selectedId = $state<string | null>(null);
-	let browsing = $state(createBrowsingNavigationState());
-	let nextPaneNumber = 2;
+	const navigationController = createNavigationController({
+		searchPort: {
+			suggestItems: (prefix, limit) => api.suggestItems(prefix, limit),
+			searchItems: (request) => api.searchItems(request),
+			getSelectedId: () => selectedId,
+			reportError: (cause) => error = errorMessage(cause),
+		},
+	});
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
-	let suggestions = $state<Suggestion[]>([]);
-	let searchResults = $state<SearchResult[]>([]);
-	let searchActiveIndex = $state(-1);
 	let asideMode = $state<AsideMode>("overview");
 	let emergenceSuggestions = $state<EmergenceSuggestion[]>([]);
 	let emergenceResolutionReasons = $state<Record<string, string>>({});
@@ -262,7 +205,6 @@
 	let sparseOutlineQueryName = $state("");
 	let showSparseOutline = $state(false);
 	let draggedId = $state<string | null>(null);
-	let trashEntries = $state<TrashEntry[]>([]);
 	let revisions = $state<Revision[]>([]);
 	let recoverySnapshots = $state<RecoverySnapshot[]>([]);
 	let revisionsLoading = $state(false);
@@ -284,16 +226,8 @@
 	let licenseDetail = $state<{ name: string; text: string } | null>(null);
 	let licenseError = $state("");
 	let licenseLoading = $state(false);
-	let commandPaletteOpen = $state(false);
-	let commandPaletteQuery = $state("");
-	let commandPaletteActiveIndex = $state(-1);
 	let commandPaletteRestoreFocus: HTMLElement | null = null;
 	let inspectorElement = $state<HTMLElement | null>(null);
-	let workingCopySaveStatuses = $state<WorkingCopySaveStatus[]>([]);
-	let internalReferenceCompletion = $state<InternalReferenceCompletionState | null>(null);
-	let inlineLinkCompletion = $state<InlineLinkCompletionState | null>(null);
-	let internalReferenceBacklinks = $state<InternalReferenceBacklink[]>([]);
-	let internalReferenceNotice = $state("");
 	let inlineSemanticLinkNotice = $state("");
 	let markdownExportNotice = $state("");
 	let markdownExportPreference = $state(loadMarkdownExportPreference());
@@ -307,37 +241,61 @@
 	let occurrenceContextMenu = $state<OccurrenceContextMenuState | null>(null);
 	let treeProjectionPreference = $state<TreeProjection>(loadTreeProjectionPreference());
 	let treeFilter = $state<GlobalLineageFilter>(loadTreeFilterPreference());
-	let internalReferenceCompletionRequest = 0;
-	let inlineLinkCompletionRequest = 0;
 	let globalLineageRequest = 0;
-	const autosave = new WorkingCopyAutosaveCoordinator({
-		save: (occurrenceId, text) => api.updateItemText(occurrenceId, text),
-		onStatusChange: (statuses) => {
-			workingCopySaveStatuses = statuses;
-			if (statuses.some((status) => status.phase === "saved") && !autosave.hasUnsavedChanges()) {
-				persistStartupSnapshotCache();
-			}
+	const workController = createWorkController({
+		api,
+		getSnapshot: () => snapshot,
+		reload: load,
+		openView: (view) => viewMode = view,
+		selectOccurrence,
+		requestConfirmation,
+		reportError: (cause) => error = errorMessage(cause),
+		clearQuickCaptureInput: () => navigationController.clearOmniwindow(),
+		reloadBookmarks: async () => {
+			bookmarks = await api.listBookmarks();
 		},
 	});
-	const resumeAutosave = new ResumePositionAutosaveCoordinator({
-		save: async (occurrenceId, caretOffset) => {
-			await api.saveResumePosition(occurrenceId, caretOffset);
-		},
-		onError: (cause) => error = errorMessage(cause),
+	const editorController = createEditorController({
+		api,
+		getSnapshot: () => snapshot,
+		getSelectedId: () => selectedId,
+		reload: load,
+		loadUnplacedWorks: () => workController.loadUnplacedWorks(),
+		openNavigationTarget,
+		loadRevisions,
+		openRevisionComparison,
+		requestFocus,
+		findTextarea: (itemId) => document.querySelector<HTMLTextAreaElement>(
+			`textarea[data-item-id="${CSS.escape(itemId)}"]`,
+		),
+		reportError: (cause) => error = errorMessage(cause),
+		errorMessage,
+		persistSnapshotCache: persistStartupSnapshotCache,
+		vocabulary,
 	});
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
+	const quickCaptureSubmitting = $derived(workController.quickCaptureSubmitting);
+	const unplacedWorks = $derived(workController.unplacedWorks);
+	const stubEntries = $derived(workController.stubEntries);
+	const duplicateCandidates = $derived(workController.duplicateCandidates);
+	const trashEntries = $derived(workController.trashEntries);
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
 	const markdownExportSelectionRequired = $derived(
 		markdownExportPreference.scope === "selected" && !selectedItem,
 	);
-	const browsingLocation = $derived(currentBrowsingLocation(browsing));
-	const browsingPane = $derived(activeBrowsingPane(browsing));
-	const browsingProjection = $derived(projectBrowsingOutline(
-		snapshot,
-		browsingLocation.hoistOccurrenceId,
-	));
+	const browsing = $derived(navigationController.browsing);
+	const browsingLocation = $derived(navigationController.browsingLocation);
+	const browsingPane = $derived(navigationController.browsingPane);
+	const browsingProjection = $derived(navigationController.projectBrowsing(snapshot));
+	const commandPaletteOpen = $derived(navigationController.commandPaletteOpen);
+	const quickCaptureText = $derived(navigationController.quickCaptureText);
+	const suggestions = $derived(navigationController.suggestions);
+	const searchResults = $derived(navigationController.searchResults);
+	const searchActiveIndex = $derived(navigationController.searchActiveIndex);
+	const searchEntries = $derived(navigationController.searchEntries);
+	const omniEntryCount = $derived(navigationController.omniEntryCount);
 	const selectedBreadcrumb = $derived(ancestorBreadcrumb(snapshot, selectedId));
 	const outlineContextBreadcrumbItems = $derived(
 		browsingLocation.hoistOccurrenceId ? browsingProjection.breadcrumb : selectedBreadcrumb,
@@ -399,11 +357,6 @@
 		transientExpandedIds,
 		!browsingLocation.hoistOccurrenceId,
 	));
-	const searchEntries = $derived([
-		...suggestions.map((suggestion) => ({ kind: "suggestion" as const, value: suggestion })),
-		...searchResults.map((result) => ({ kind: "result" as const, value: result })),
-	]);
-	const omniEntryCount = $derived(searchEntries.length + (quickCaptureText.trim() ? 1 : 0));
 	const dedicatedView = $derived(
 		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison" ||
 			viewMode === "tags" || viewMode === "options" || viewMode === "help",
@@ -439,15 +392,11 @@
 			: vocabulary.quickCaptureDestinationUnplaced,
 	);
 	const inspectorColumn = $derived(inspectorCollapsed ? "0px" : `${inspectorWidth}px`);
-	const workingCopySaveStatus = $derived.by(() => {
-		const failed = workingCopySaveStatuses.find((status) => status.phase === "failed");
-		if (failed) return failed;
-		const saving = workingCopySaveStatuses.find((status) => status.phase === "saving");
-		if (saving) return saving;
-		const unsaved = workingCopySaveStatuses.find((status) => status.phase === "unsaved");
-		if (unsaved) return unsaved;
-		return workingCopySaveStatuses[0];
-	});
+	const workingCopySaveStatus = $derived(editorController.workingCopySaveStatus);
+	const internalReferenceCompletion = $derived(editorController.internalReferenceCompletion);
+	const inlineLinkCompletion = $derived(editorController.inlineLinkCompletion);
+	const internalReferenceBacklinks = $derived(editorController.internalReferenceBacklinks);
+	const internalReferenceNotice = $derived(editorController.internalReferenceNotice);
 	const commandContext = $derived<CommandContext>({
 		startupReady: startup.phase === "ready",
 		selectedOccurrenceId: selectedId,
@@ -503,7 +452,7 @@
 		];
 	});
 	const commandPaletteCommands = $derived(commandPaletteItems(
-		commandPaletteQuery,
+		navigationController.commandPaletteQuery,
 		commandContext,
 		vocabulary,
 	));
@@ -529,11 +478,7 @@
 	});
 
 	$effect(() => {
-		if (commandPaletteCommands.length === 0) {
-			commandPaletteActiveIndex = -1;
-		} else if (commandPaletteActiveIndex < 0 || commandPaletteActiveIndex >= commandPaletteCommands.length) {
-			commandPaletteActiveIndex = 0;
-		}
+		navigationController.reconcileCommandPaletteRange(commandPaletteCommands.length);
 	});
 
 	$effect(() => {
@@ -543,12 +488,12 @@
 			void loadWorkLineage(workId);
 			if (selectedBranchId) void loadRecoverySnapshots(workId, selectedBranchId);
 			else recoverySnapshots = [];
-			void loadInternalReferenceBacklinks(workId);
+			void editorController.loadInternalReferenceBacklinks(workId);
 		} else {
 			revisions = [];
 			recoverySnapshots = [];
 			workLineage = null;
-			internalReferenceBacklinks = [];
+			editorController.clearBacklinks();
 		}
 	});
 
@@ -559,8 +504,8 @@
 				const cache = await api.loadStartupSnapshotCache();
 				if (cancelled || startupDataLoaded || !cache) return;
 				snapshot = cache.snapshot;
-				browsing = createBrowsingNavigationState("pane-1", cache.location);
-				selectedId = cache.location.selectedOccurrenceId;
+				selectedId = navigationController.resetBrowsing("pane-1", cache.location)
+					.selectedOccurrenceId;
 				loading = false;
 				startupCacheActive = true;
 			} catch {
@@ -569,16 +514,16 @@
 		}
 		const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
 			persistStartupSnapshotCache();
-			if (!autosave.hasUnsavedChanges()) return;
+			if (!editorController.hasUnsavedChanges()) return;
 			event.preventDefault();
 			event.returnValue = "";
 		};
 		const flushWhenHidden = () => {
 			if (document.visibilityState === "hidden") {
-				void autosave.flush().catch(() => {
+				void editorController.flushAutosave().catch(() => {
 					// The retained draft and failed status remain visible after returning.
 				});
-				void resumeAutosave.flush().catch(() => {
+				void editorController.flushResume().catch(() => {
 					// The latest position remains queued for a later flush.
 				});
 			}
@@ -664,10 +609,10 @@
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
 			document.removeEventListener("visibilitychange", flushWhenHidden);
 			window.removeEventListener("keydown", handleGlobalShortcut, true);
-			void autosave.flush().catch(() => {
+			void editorController.flushAutosave().catch(() => {
 				// beforeunload already warns while an unsaved draft exists.
 			});
-			void resumeAutosave.flush().catch(() => {
+			void editorController.flushResume().catch(() => {
 				// Resume persistence is best-effort during teardown.
 			});
 		};
@@ -709,18 +654,14 @@
 				knots: next.knots,
 				stashItemIds: next.stashItemIds,
 			};
-			const drafts = new Map(autosave.drafts().map((draft) => [draft.workId, draft.text]));
+			const drafts = new Map(editorController.drafts().map((draft) => [draft.workId, draft.text]));
 			next.items = next.items.map((item) => {
 				const draft = drafts.get(item.workId);
 				return draft === undefined ? item : { ...item, text: draft };
 			});
 			snapshot = next;
-			internalReferenceCompletionRequest++;
-			internalReferenceCompletion = null;
-			inlineLinkCompletionRequest++;
-			inlineLinkCompletion = null;
-			browsing = reconcileBrowsingState(browsing, snapshot);
-			selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
+			editorController.clearCompletions();
+			selectedId = navigationController.reconcileBrowsing(snapshot).selectedOccurrenceId;
 			if (request === globalLineageRequest) {
 				globalLineage = nextGlobalLineage;
 				lastLoadedGlobalLineageFilterKey = globalLineageFilterKey();
@@ -731,7 +672,7 @@
 				await tick();
 				requestFocus(focusId);
 			}
-			persistStartupSnapshotCache(snapshotForStartupCache, currentBrowsingLocation(browsing));
+			persistStartupSnapshotCache(snapshotForStartupCache, navigationController.browsingLocation);
 			return true;
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -743,9 +684,9 @@
 
 	function persistStartupSnapshotCache(
 		snapshotToCache: OutlineSnapshot = snapshot,
-		location = currentBrowsingLocation(browsing),
+		location = navigationController.browsingLocation,
 	): void {
-		if (startupCacheActive || startup.phase !== "ready" || autosave.hasUnsavedChanges()) return;
+		if (startupCacheActive || startup.phase !== "ready" || editorController.hasUnsavedChanges()) return;
 		void api.saveStartupSnapshotCache(snapshotToCache, location).catch(() => {
 			// Startup acceleration must not interrupt editing when the cache cannot be written.
 		});
@@ -753,7 +694,7 @@
 
 	function selectOccurrence(id: string | null): void {
 		selectedId = id;
-		browsing = browseToOutlineOccurrence(browsing, snapshot, id);
+		navigationController.browseToOccurrence(snapshot, id);
 	}
 
 	/** The selected Work joins the filter as a transient, non-persisted exception. */
@@ -818,7 +759,7 @@
 			case "zoom":
 				viewMode = "outline";
 				transientExpandedIds = ancestorBreadcrumb(snapshot, targetId).map((item) => item.id);
-				browsing = setBrowsingHoist(browsing, targetId);
+				navigationController.setHoist(targetId);
 				break;
 			case "long-form":
 				await executeCommand("startLongFormEditing");
@@ -867,7 +808,7 @@
 	function hoistSelected(): void {
 		if (!selectedId) return;
 		transientExpandedIds = [...new Set([...transientExpandedIds, selectedId])];
-		browsing = setBrowsingHoist(browsing, selectedId);
+		navigationController.setHoist(selectedId);
 	}
 
 	function hoistOccurrence(id: string): void {
@@ -876,7 +817,7 @@
 	}
 
 	function clearHoist(): void {
-		browsing = setBrowsingHoist(browsing, null);
+		navigationController.clearHoist();
 	}
 
 	async function revealInspector(): Promise<void> {
@@ -960,19 +901,17 @@
 	}
 
 	function addBrowsingPane(): void {
-		browsing = openBrowsingPane(browsing, `pane-${nextPaneNumber++}`);
+		navigationController.addBrowsingPane();
 	}
 
 	function switchBrowsingPane(paneId: string): void {
-		browsing = activateBrowsingPane(browsing, paneId);
-		browsing = reconcileBrowsingState(browsing, snapshot);
-		selectedId = currentBrowsingLocation(browsing).selectedOccurrenceId;
+		selectedId = navigationController.activateBrowsingPane(paneId, snapshot).selectedOccurrenceId;
 		transientExpandedIds = ancestorBreadcrumb(snapshot, selectedId).map((item) => item.id);
 		if (selectedId) requestFocus(selectedId);
 	}
 
 	function openBreadcrumb(id: string): void {
-		if (browsingLocation.hoistOccurrenceId) browsing = setBrowsingHoist(browsing, null);
+		if (browsingLocation.hoistOccurrenceId) navigationController.clearHoist();
 		selectOccurrence(id);
 	}
 
@@ -1037,80 +976,30 @@
 
 
 		if (inlineLinkCompletion?.itemId === row.item.id) {
-			const completion = inlineLinkCompletion;
-			if (completion.phase === "candidate") {
-				if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-					event.preventDefault();
-					const count = inlineLinkCandidateCount(completion);
-					if (count) {
-						completion.activeIndex =
-							(completion.activeIndex + (event.key === "ArrowDown" ? 1 : -1) + count) % count;
-					}
-					return;
-				}
-				if (event.key === "Enter" && event.shiftKey && completion.query.trim() && !completion.searching) {
-					event.preventDefault();
-					void createInlineLinkTarget(row.item.id);
-					return;
-				}
-				if ((event.key === "Enter" || event.key === "Tab") && inlineLinkCandidateCount(completion)) {
-					event.preventDefault();
-					selectInlineLinkActiveEntry(row.item.id);
-					return;
-				}
-			} else if (completion.phase === "type") {
-				if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-					event.preventDefault();
-					const current = completion.selectedType
-						? LINK_TYPES.indexOf(completion.selectedType)
-						: 0;
-					const next = (current + (event.key === "ArrowDown" ? 1 : -1) + LINK_TYPES.length) %
-						LINK_TYPES.length;
-					completion.selectedType = LINK_TYPES[next];
-					return;
-				}
-				if (event.key === "Enter" || event.key === "Tab") {
-					event.preventDefault();
-					chooseInlineLinkType(row.item.id);
-					return;
-				}
-			} else if (completion.phase === "direction") {
-				if (event.key === "ArrowLeft" || event.key === "ArrowRight" ||
-					event.key === "ArrowUp" || event.key === "ArrowDown") {
-					event.preventDefault();
-					completion.direction = event.key === "ArrowLeft" || event.key === "ArrowUp"
-						? "reverse"
-						: "forward";
-					return;
-				}
-				if (event.key === "Enter" || event.key === "Tab") {
-					event.preventDefault();
-					void commitInlineLink(row.item.id);
-					return;
-				}
-			}
-			if (event.key === "Escape") {
-				event.preventDefault();
-				inlineLinkCompletionRequest++;
-				inlineLinkCompletion = null;
-				return;
+			const handledKeys = new Set([
+				"ArrowDown",
+				"ArrowUp",
+				"ArrowLeft",
+				"ArrowRight",
+				"Enter",
+				"Tab",
+				"Escape",
+			]);
+			if (handledKeys.has(event.key)) {
+				editorController.handleInlineLinkOmniKeydown(event, row.item.id);
+				if (event.defaultPrevented) return;
 			}
 		}
 		if (internalReferenceCompletion?.itemId === row.item.id) {
 			if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 				event.preventDefault();
-				const direction = event.key === "ArrowDown" ? 1 : -1;
-				const count = internalReferenceCompletion.candidates.length;
-				if (count) {
-					internalReferenceCompletion.activeIndex =
-						(internalReferenceCompletion.activeIndex + direction + count) % count;
-				}
+				editorController.moveInternalReferenceActiveIndex(event.key === "ArrowDown" ? 1 : -1);
 				return;
 			}
 			if ((event.key === "Enter" || event.key === "Tab") &&
 				internalReferenceCompletion.candidates.length) {
 				event.preventDefault();
-				await applyInternalReferenceCompletion(
+				editorController.applyInternalReferenceCompletion(
 					row.item.id,
 					internalReferenceCompletion.candidates[internalReferenceCompletion.activeIndex],
 				);
@@ -1118,7 +1007,7 @@
 			}
 			if (event.key === "Escape") {
 				event.preventDefault();
-				internalReferenceCompletion = null;
+				editorController.cancelInternalReferenceCompletion();
 				return;
 			}
 		}
@@ -1129,7 +1018,7 @@
 			}
 			event.preventDefault();
 			try {
-				await autosave.flush(row.item.workId);
+				await editorController.flushAutosave(row.item.workId);
 			} catch (cause) {
 				error = errorMessage(cause);
 				return;
@@ -1158,7 +1047,7 @@
 			if (previous) {
 				event.preventDefault();
 				try {
-					await autosave.flush(row.item.workId);
+					await editorController.flushAutosave(row.item.workId);
 				} catch (cause) {
 					error = errorMessage(cause);
 					return;
@@ -1174,589 +1063,38 @@
 		}
 	}
 
-	function updateLocalText(id: string, textarea: HTMLTextAreaElement): void {
-		const text = textarea.value;
-		const item = snapshot.items.find((candidate) => candidate.id === id);
-		if (!item) return;
-		const updatedAt = new Date().toISOString();
-		for (const placement of snapshot.items) {
-			if (placement.workId === item.workId) {
-				placement.text = text;
-				placement.updatedAt = updatedAt;
-			}
-		}
-		autosave.queue(item.workId, id, text);
-		resumeAutosave.queue(id, textarea.selectionStart);
-		void updateInternalReferenceCompletion(id, textarea);
-		void updateInlineLinkCompletion(id, textarea);
+	const updateLocalText = editorController.updateLocalText;
+	const updateEditorSelection = editorController.updateEditorSelection;
+	const updateInlineLinkSearch = editorController.updateInlineLinkSearch;
+	const handleInlineLinkOmniKeydown = editorController.handleInlineLinkOmniKeydown;
+	const createInlineLinkTarget = editorController.createInlineLinkTarget;
+	const selectInlineLinkCandidate = editorController.selectInlineLinkCandidate;
+	const selectInlineLinkType = editorController.selectInlineLinkType;
+	const setInlineLinkDirection = editorController.setInlineLinkDirection;
+	const commitInlineLink = editorController.commitInlineLink;
+	const applyInternalReferenceCompletion = editorController.applyInternalReferenceCompletion;
+	const referencesIn = editorController.referencesIn;
+	const openInternalReference = editorController.openInternalReference;
+	const openEditorInternalReference = editorController.openEditorInternalReference;
+	const openInternalReferenceBacklink = editorController.openInternalReferenceBacklink;
+	function performQuickCapture(): Promise<void> {
+		return workController.performQuickCapture(quickCaptureText, quickCapturePreference.destination);
 	}
-
-	function updateEditorSelection(id: string, textarea: HTMLTextAreaElement): void {
-		if (selectedId === id) resumeAutosave.queue(id, textarea.selectionStart);
-		void updateInlineLinkCompletion(id, textarea);
-	}
-
-	async function updateInternalReferenceCompletion(
-		itemId: string,
-		textarea: HTMLTextAreaElement,
-	): Promise<void> {
-		const trigger = findInternalReferenceTrigger(
-			textarea.value,
-			textarea.selectionStart,
-			textarea.selectionEnd,
-		);
-		if (!trigger) {
-			internalReferenceCompletion = null;
-			return;
-		}
-		const request = ++internalReferenceCompletionRequest;
-		try {
-			const candidates = await api.listInternalReferenceCompletions(trigger.query, 12);
-			if (request !== internalReferenceCompletionRequest) return;
-			internalReferenceCompletion = {
-				itemId,
-				range: trigger.range,
-				candidates,
-				activeIndex: 0,
-			};
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function updateInlineLinkCompletion(
-		itemId: string,
-		textarea: HTMLTextAreaElement,
-	): Promise<void> {
-		const trigger = findInlineLinkTrigger(
-			textarea.value,
-			textarea.selectionStart,
-			textarea.selectionEnd,
-		);
-		if (!trigger) {
-			inlineLinkCompletionRequest++;
-			inlineLinkCompletion = null;
-			return;
-		}
-		const request = ++inlineLinkCompletionRequest;
-		inlineLinkCompletion = {
-			itemId,
-			query: trigger.query,
-			range: trigger.range,
-			candidates: [],
-			activeIndex: 0,
-			phase: "candidate",
-			direction: "forward",
-			searching: true,
-			creating: false,
-		};
-		try {
-			const candidates = (await api.listInternalReferenceCompletions(trigger.query, 16))
-				.filter((candidate) => candidate.scope === "work")
-				.filter((candidate) => snapshot.items.find((item) => item.id === itemId)?.workId !== candidate.workId);
-			if (request !== inlineLinkCompletionRequest) return;
-			const current = inlineLinkCompletion;
-			if (!current || current.itemId !== itemId || current.phase !== "candidate") return;
-			inlineLinkCompletion = { ...current, candidates, searching: false };
-		} catch (cause) {
-			if (request === inlineLinkCompletionRequest) error = errorMessage(cause);
-		}
-	}
-
-	function inlineLinkCandidateCount(state: InlineLinkCompletionState): number {
-		return state.candidates.length + (state.query.trim() && !state.searching ? 1 : 0);
-	}
-
-	function selectInlineLinkActiveEntry(itemId: string): void {
-		const state = inlineLinkCompletion;
-		if (!state || state.itemId !== itemId || state.phase !== "candidate") return;
-		const candidate = state.candidates[state.activeIndex];
-		if (candidate) {
-			selectInlineLinkCandidate(itemId, candidate);
-			return;
-		}
-		if (state.activeIndex === state.candidates.length && state.query.trim() && !state.searching) {
-			void createInlineLinkTarget(itemId);
-		}
-	}
-
-	function handleInlineLinkOmniKeydown(event: KeyboardEvent, itemId: string): void {
-		if (event.isComposing) return;
-		const state = inlineLinkCompletion;
-		if (!state || state.itemId !== itemId) return;
-		if (event.key === "Escape") {
-			event.preventDefault();
-			inlineLinkCompletionRequest++;
-			inlineLinkCompletion = null;
-			return;
-		}
-		if (state.phase === "candidate" && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-			event.preventDefault();
-			const count = inlineLinkCandidateCount(state);
-			if (count) {
-				state.activeIndex =
-					(state.activeIndex + (event.key === "ArrowDown" ? 1 : -1) + count) % count;
-			}
-			return;
-		}
-		if (state.phase === "candidate" && event.key === "Enter" && event.shiftKey &&
-			state.query.trim() && !state.searching) {
-			event.preventDefault();
-			void createInlineLinkTarget(itemId);
-			return;
-		}
-		if (state.phase === "type" && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-			event.preventDefault();
-			const current = state.selectedType ? LINK_TYPES.indexOf(state.selectedType) : 0;
-			state.selectedType = LINK_TYPES[
-				(current + (event.key === "ArrowDown" ? 1 : -1) + LINK_TYPES.length) % LINK_TYPES.length
-			];
-			return;
-		}
-		if (state.phase === "direction" &&
-			(event.key === "ArrowLeft" || event.key === "ArrowRight" ||
-				event.key === "ArrowUp" || event.key === "ArrowDown")) {
-			event.preventDefault();
-			state.direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? "reverse" : "forward";
-			return;
-		}
-		if (event.key !== "Enter" && event.key !== "Tab") return;
-		event.preventDefault();
-		if (state.phase === "candidate") selectInlineLinkActiveEntry(itemId);
-		else if (state.phase === "type") chooseInlineLinkType(itemId);
-		else void commitInlineLink(itemId);
-	}
-
-	async function updateInlineLinkSearch(itemId: string, query: string): Promise<void> {
-		const state = inlineLinkCompletion;
-		if (!state || state.itemId !== itemId || state.phase !== "candidate") return;
-		const request = ++inlineLinkCompletionRequest;
-		inlineLinkCompletion = { ...state, query, candidates: [], activeIndex: 0, searching: true };
-		try {
-			const candidates = (await api.listInternalReferenceCompletions(query, 16))
-				.filter((candidate) => candidate.scope === "work")
-				.filter((candidate) => snapshot.items.find((item) => item.id === itemId)?.workId !== candidate.workId);
-			if (request !== inlineLinkCompletionRequest) return;
-			const current = inlineLinkCompletion;
-			if (!current || current.itemId !== itemId || current.phase !== "candidate") return;
-			inlineLinkCompletion = { ...current, query, candidates, activeIndex: 0, searching: false };
-		} catch (cause) {
-			if (request === inlineLinkCompletionRequest) {
-				inlineLinkCompletion = { ...inlineLinkCompletion!, searching: false };
-				error = errorMessage(cause);
-			}
-		}
-	}
-
-	function inlineLinkCandidateFromCreated(work: UnplacedWork): InternalReferenceCompletion {
-		const displayName = work.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ??
-			`(空の${vocabulary.work})`;
-		return {
-			scope: "work",
-			id: work.workId,
-			workId: work.workId,
-			displayName,
-			scopeLabel: "未配置",
-			shortId: work.workId.slice(0, 8),
-			canonicalMarkdown: canonicalInternalReferenceMarkdown(displayName, "work", work.workId),
-		};
-	}
-
-	async function createInlineLinkTarget(itemId: string): Promise<void> {
-		const state = inlineLinkCompletion;
-		const query = state?.query.trim() ?? "";
-		if (!state || state.itemId !== itemId || state.phase !== "candidate" || !query || state.creating) return;
-		const request = ++inlineLinkCompletionRequest;
-		inlineLinkCompletion = { ...state, creating: true };
-		try {
-			const created = await api.quickCapture(query);
-			if (request !== inlineLinkCompletionRequest) return;
-			inlineLinkCompletion = {
-				...inlineLinkCompletion!,
-				phase: "type",
-				selectedCandidate: inlineLinkCandidateFromCreated(created),
-				selectedType: "RELATED",
-				direction: "forward",
-				searching: false,
-				creating: false,
-			};
-			await loadUnplacedWorks();
-		} catch (cause) {
-			if (request === inlineLinkCompletionRequest) {
-				inlineLinkCompletion = { ...inlineLinkCompletion!, creating: false };
-				error = errorMessage(cause);
-			}
-		}
-	}
-
-	function selectInlineLinkCandidate(
-		itemId: string,
-		candidate: InternalReferenceCompletion,
-	): void {
-		const state = inlineLinkCompletion;
-		if (!state || state.itemId !== itemId || candidate.scope !== "work") return;
-		inlineLinkCompletion = {
-			...state,
-			phase: "type",
-			selectedCandidate: candidate,
-			selectedType: "RELATED",
-			direction: "forward",
-		};
-	}
-
-	function chooseInlineLinkType(itemId: string): void {
-		const state = inlineLinkCompletion;
-		if (!state || state.itemId !== itemId || !state.selectedCandidate || !state.selectedType) return;
-		if (isSymmetricLinkType(state.selectedType)) {
-			void commitInlineLink(itemId);
-			return;
-		}
-		inlineLinkCompletion = { ...state, phase: "direction" };
-	}
-
-	function selectInlineLinkType(itemId: string, type: LinkType): void {
-		const state = inlineLinkCompletion;
-		if (!state || state.itemId !== itemId || state.phase !== "type") return;
-		state.selectedType = type;
-		chooseInlineLinkType(itemId);
-	}
-
-	function setInlineLinkDirection(itemId: string, direction: InlineLinkDirection): void {
-		const state = inlineLinkCompletion;
-		if (!state || state.itemId !== itemId || state.phase !== "direction") return;
-		state.direction = direction;
-	}
-
-	async function commitInlineLink(itemId: string): Promise<void> {
-		const state = inlineLinkCompletion;
-		const item = snapshot.items.find((entry) => entry.id === itemId);
-		const candidate = state?.selectedCandidate;
-		const type = state?.selectedType;
-		if (!state || state.itemId !== itemId || !item || !candidate || !type || candidate.scope !== "work") return;
-		if (item.workId === candidate.workId) {
-			error = `同じNode自身には${vocabulary.semanticLink}できません。`;
-			return;
-		}
-		const textarea = document.querySelector<HTMLTextAreaElement>(
-			`textarea[data-item-id="${CSS.escape(itemId)}"]`,
-		);
-		const currentTrigger = textarea
-			? findInlineLinkTrigger(textarea.value, state.range.end, state.range.end)
-			: null;
-		if (
-			!textarea || !currentTrigger || currentTrigger.range.start !== state.range.start ||
-			currentTrigger.range.end !== state.range.end
-		) {
-			error = `入力が変更されたため、@${vocabulary.semanticLink}を確定できませんでした。`;
-			inlineLinkCompletionRequest++;
-			inlineLinkCompletion = null;
-			return;
-		}
-
-		const fromId = state.direction === "forward" ? item.workId : candidate.workId;
-		const toId = state.direction === "forward" ? candidate.workId : item.workId;
-		try {
-			await api.createLink({ fromId, toId, type, origin: "human", status: "asserted" });
-			// @ search is an input gesture for creating a Semantic Relation.
-			// It must not implicitly create a Markdown Internal Reference in the body.
-			const replacement = replaceInlineLinkTrigger(textarea.value, state.range, "");
-			inlineLinkCompletionRequest++;
-			inlineLinkCompletion = null;
-			textarea.focus();
-			textarea.setRangeText("", state.range.start, state.range.end, "end");
-			textarea.dispatchEvent(new InputEvent("input", {
-				bubbles: true,
-				inputType: "insertReplacementText",
-				data: "",
-			}));
-			await load(item.id);
-			requestFocus(item.id, replacement.caretOffset);
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function applyInternalReferenceCompletion(
-		itemId: string,
-		candidate: InternalReferenceCompletion,
-	): Promise<void> {
-		const state = internalReferenceCompletion;
-		const item = snapshot.items.find((entry) => entry.id === itemId);
-		if (!state || state.itemId !== itemId || !item) return;
-		const textarea = document.querySelector<HTMLTextAreaElement>(
-			`textarea[data-item-id="${CSS.escape(itemId)}"]`,
-		);
-		if (!textarea) return;
-		internalReferenceCompletion = null;
-		textarea.focus();
-		textarea.setRangeText(
-			candidate.canonicalMarkdown,
-			state.range.start,
-			state.range.end,
-			"end",
-		);
-		textarea.dispatchEvent(new InputEvent("input", {
-			bubbles: true,
-			inputType: "insertReplacementText",
-			data: candidate.canonicalMarkdown,
-		}));
-	}
-
-	function referencesIn(text: string) {
-		return parseMarkdownCandidates(text).internalReferences;
-	}
-
-	async function openInternalReference(
-		markdown: string,
-		scope: "work" | "revision",
-		id: string,
-		start?: number,
-	): Promise<void> {
-		try {
-			const resolutions = await api.resolveInternalReferences(markdown);
-			const resolution = resolutions.find((candidate) =>
-				candidate.reference.scope === scope && candidate.reference.id === id &&
-				(start === undefined || candidate.reference.range.start === start)
-			);
-			if (!resolution) {
-				internalReferenceNotice = "参照を解析できませんでした。";
-				return;
-			}
-			if (resolution.status !== "resolved" || !resolution.navigationTarget) {
-				internalReferenceNotice = resolution.reason ?? "参照先へ移動できません。";
-				return;
-			}
-			internalReferenceNotice = "";
-			if (resolution.reference.scope === "revision" && resolution.revision) {
-				if (resolution.navigationTarget.kind === "work") {
-					internalReferenceNotice =
-						`固定${vocabulary.revision}は存在しますが、所有${vocabulary.work}に表示可能な${vocabulary.occurrence}がありません。`;
-					return;
-				}
-				await openNavigationTarget(resolution.navigationTarget);
-				await loadRevisions(resolution.workId!);
-				openRevisionComparison(resolution.revision.id);
-				return;
-			}
-			await openNavigationTarget(resolution.navigationTarget);
-		} catch (cause) {
-			internalReferenceNotice = errorMessage(cause);
-		}
-	}
-
-	async function openEditorInternalReference(destination: string): Promise<void> {
-		const match = /^radiora:\/\/(work|revision)\/([^/?#\s]+)(?:#[^\s]*)?$/u.exec(destination);
-		if (!match) return;
-		await openInternalReference(
-			`[ref](${destination})`,
-			match[1] as "work" | "revision",
-			match[2],
-		);
-	}
-
-	async function loadInternalReferenceBacklinks(workId: string): Promise<void> {
-		try {
-			internalReferenceBacklinks = await api.listInternalReferenceBacklinks("work", workId);
-		} catch (cause) {
-			internalReferenceNotice = errorMessage(cause);
-		}
-	}
-
-	async function openInternalReferenceBacklink(backlink: InternalReferenceBacklink): Promise<void> {
-		const source = backlink.source;
-		const markdown = source.scope === "work"
-			? `[source](radiora://work/${source.workId})`
-			: `[source](radiora://revision/${source.revisionId})`;
-		await openInternalReference(
-			markdown,
-			source.scope,
-			source.scope === "work" ? source.workId : source.revisionId,
-		);
-	}
-
-	async function performQuickCapture(): Promise<void> {
-		quickCaptureSubmitting = true;
-		try {
-			if (quickCapturePreference.destination === "root") {
-				const roots = snapshot.items
-					.filter((item) => item.parentId === null)
-					.sort((left, right) => left.orderKey - right.orderKey);
-				const created = await api.createItem({
-					text: quickCaptureText,
-					parentId: null,
-					afterId: roots.at(-1)?.id ?? null,
-				});
-				viewMode = "outline";
-				await load(created.id);
-			} else {
-				await api.quickCapture(quickCaptureText);
-				await Promise.all([load(), loadUnplacedWorks()]);
-			}
-			clearOmniwindow();
-		} catch (cause) {
-			error = errorMessage(cause);
-		} finally {
-			quickCaptureSubmitting = false;
-		}
-	}
-
-	async function loadUnplacedWorks(): Promise<void> {
-		unplacedWorks = await api.listUnplacedWorks();
-	}
-
-	async function openUnplaced(): Promise<void> {
-		try {
-			await loadUnplacedWorks();
-			viewMode = "unplaced";
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function updateUnplacedText(work: UnplacedWork, text: string): Promise<void> {
-		try {
-			await api.updateUnplacedWorkText(work.workId, text);
-			await loadUnplacedWorks();
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function loadStubs(): Promise<void> {
-		stubEntries = await api.listStubs();
-	}
-
-	async function openStubs(): Promise<void> {
-		try {
-			await loadStubs();
-			viewMode = "stubs";
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function loadDuplicates(): Promise<void> {
-		const candidates = await api.listDuplicateCandidates();
-		duplicateCandidates = candidates.filter((candidate) =>
-			!excludedDuplicateCandidateKeys.includes(duplicateCandidateKey(candidate))
-		);
-	}
-
-	async function openDuplicates(): Promise<void> {
-		try {
-			await loadDuplicates();
-			viewMode = "duplicates";
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function createStubFromList(): Promise<void> {
-		try {
-			await api.createStub("stub-list");
-			await loadStubs();
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function updateStubText(entry: StubListEntry, text: string): Promise<void> {
-		if (!text.trim() || text === entry.text) return;
-		try {
-			await api.updateUnplacedWorkText(entry.workId, text);
-			await loadStubs();
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function resolveStubEntry(workId: string): Promise<void> {
-		try {
-			await api.resolveStub(workId);
-			await Promise.all([loadStubs(), loadUnplacedWorks()]);
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function placeUnplaced(workId: string, parentId: string | null): Promise<void> {
-		try {
-			const created = await api.placeUnplacedWork({ workId, parentId });
-			await Promise.all([load(created.id), loadUnplacedWorks()]);
-			viewMode = "outline";
-			selectOccurrence(created.id);
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	function duplicateCandidateKey(candidate: DuplicateCandidate): string {
-		return [candidate.workA.workId, candidate.workB.workId].sort().join(":");
-	}
-
-	function excludeDuplicateCandidate(candidate: DuplicateCandidate): void {
-		const key = duplicateCandidateKey(candidate);
-		if (!excludedDuplicateCandidateKeys.includes(key)) {
-			excludedDuplicateCandidateKeys = [...excludedDuplicateCandidateKeys, key];
-		}
-		duplicateCandidates = duplicateCandidates.filter((entry) =>
-			duplicateCandidateKey(entry) !== key
-		);
-	}
-
-	function duplicateCandidateReason(candidate: DuplicateCandidate): string {
-		return candidate.reasons.map((reason) => reason.label).join(" / ");
-	}
-
-	async function createDuplicateCandidateLink(
-		candidate: DuplicateCandidate,
-		type: "LIKE" | "RELATED",
-	): Promise<void> {
-		try {
-			await api.createLink({
-				fromId: candidate.workA.workId,
-				toId: candidate.workB.workId,
-				type,
-				origin: "human",
-				status: "asserted",
-				reason: duplicateCandidateReason(candidate),
-			});
-			excludeDuplicateCandidate(candidate);
-			await load();
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function requestDuplicateMerge(
-		sourceWorkId: string,
-		survivorWorkId: string,
-	): Promise<void> {
-		try {
-			const preview = await api.previewWorkMerge(sourceWorkId, survivorWorkId);
-			await requestConfirmation({ action: "merge-duplicate", preview });
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
-	async function linkUnplaced(workId: string): Promise<void> {
-		const targetId = unplacedLinkTargets[workId]?.trim();
-		if (!targetId) return;
-		try {
-			const unplacedIsTarget = unplacedLinkDirections[workId] === "to";
-			await api.createLink({
-				fromId: unplacedIsTarget ? targetId : workId,
-				toId: unplacedIsTarget ? workId : targetId,
-				type: unplacedLinkType,
-			});
-			unplacedLinkTargets[workId] = "";
-			await load();
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
+	const loadUnplacedWorks = workController.loadUnplacedWorks;
+	const openUnplaced = workController.openUnplaced;
+	const updateUnplacedText = workController.updateUnplacedText;
+	const loadStubs = workController.loadStubs;
+	const openStubs = workController.openStubs;
+	const loadDuplicates = workController.loadDuplicates;
+	const openDuplicates = workController.openDuplicates;
+	const createStubFromList = workController.createStubFromList;
+	const updateStubText = workController.updateStubText;
+	const resolveStubEntry = workController.resolveStubEntry;
+	const placeUnplaced = workController.placeUnplaced;
+	const excludeDuplicateCandidate = workController.excludeDuplicateCandidate;
+	const createDuplicateCandidateLink = workController.createDuplicateCandidateLink;
+	const requestDuplicateMerge = workController.requestDuplicateMerge;
+	const linkUnplaced = workController.linkUnplaced;
 	async function openToday(): Promise<void> {
 		const now = new Date();
 		dateStart = localDateValue(now);
@@ -1868,7 +1206,7 @@
 
 	async function restoreRecoverySnapshot(snapshotId: string): Promise<void> {
 		if (!selectedItem || !selectedBranchId) return;
-		await autosave.flush();
+		await editorController.flushAutosave();
 		await api.restoreRecoverySnapshot(
 			snapshotId,
 			selectedItem.workId,
@@ -1976,7 +1314,7 @@
 
 	async function retryWorkingCopySave(): Promise<void> {
 		try {
-			await autosave.retry();
+			await editorController.retryAutosave();
 		} catch {
 			// The coordinator retains the draft and exposes the failure detail.
 		}
@@ -2067,7 +1405,7 @@
 		const item = itemById.get(id);
 		if (item) {
 			try {
-				await autosave.flush(item.workId);
+				await editorController.flushAutosave(item.workId);
 			} catch (cause) {
 				error = errorMessage(cause);
 				return;
@@ -2086,57 +1424,16 @@
 		await load(moved);
 	}
 
-	let suggestTimer: number | undefined;
-	let searchTimer: number | undefined;
-	let searchRequestId = 0;
-	function queueSearch(): void {
-		clearTimeout(suggestTimer);
-		clearTimeout(searchTimer);
-		const requestId = ++searchRequestId;
-		searchActiveIndex = -1;
-		if (!quickCaptureText.trim()) {
-			suggestions = [];
-			searchResults = [];
-			return;
-		}
-		suggestTimer = window.setTimeout(async () => {
-			try {
-				const next = await api.suggestItems(quickCaptureText, 8);
-				if (requestId === searchRequestId) suggestions = next;
-			} catch (cause) {
-				if (requestId === searchRequestId) error = errorMessage(cause);
-			}
-		}, 100);
-		searchTimer = window.setTimeout(async () => {
-			try {
-				const next = await api.searchItems({ query: quickCaptureText, contextItemId: selectedId, limit: 20 });
-				if (requestId === searchRequestId) searchResults = next;
-			} catch (cause) {
-				if (requestId === searchRequestId) error = errorMessage(cause);
-			}
-		}, 250);
-	}
-
-	function clearOmniwindow(): void {
-		quickCaptureText = "";
-		searchRequestId++;
-		clearTimeout(suggestTimer);
-		clearTimeout(searchTimer);
-		suggestions = [];
-		searchResults = [];
-		searchActiveIndex = -1;
-	}
-
 	function handleSearchKeydown(event: KeyboardEvent): void {
 		if (event.isComposing) return;
 		if (event.key === "Escape") {
-			clearOmniwindow();
+			navigationController.clearOmniwindow();
 			return;
 		}
 		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 			event.preventDefault();
 			const delta = event.key === "ArrowDown" ? 1 : -1;
-			searchActiveIndex = Math.max(-1, Math.min(omniEntryCount - 1, searchActiveIndex + delta));
+			navigationController.moveSearchActiveIndex(delta);
 			return;
 		}
 		if (event.key === "Enter" && event.shiftKey && quickCaptureText.trim()) {
@@ -2167,7 +1464,7 @@
 
 	async function selectItem(item: OutlineItem, ancestorIds: string[]): Promise<void> {
 		transientExpandedIds = ancestorIds;
-		clearOmniwindow();
+		navigationController.clearOmniwindow();
 		selectOccurrence(item.id);
 		await load(item.id);
 	}
@@ -2308,14 +1605,13 @@
 	async function loadTagBrowser(): Promise<void> {
 		tagError = "";
 		try {
-			const [scopes, aliases, unplaced] = await Promise.all([
+			const [scopes, aliases] = await Promise.all([
 				api.listScopedTags(),
 				api.listTagAliases(),
-				api.listUnplacedWorks(),
+				workController.loadUnplacedWorks(),
 			]);
 			tagScopes = scopes;
 			tagAliases = aliases;
-			unplacedWorks = unplaced;
 			if (selectedTag && !scopes.some((scope) => scope.tags.includes(selectedTag!))) {
 				selectedTag = null;
 			}
@@ -2371,7 +1667,7 @@
 	async function duplicateSelectedOccurrence(): Promise<void> {
 		if (!selectedItem) return;
 		try {
-			await autosave.flush(selectedItem.workId);
+			await editorController.flushAutosave(selectedItem.workId);
 		} catch (cause) {
 			error = errorMessage(cause);
 			return;
@@ -2392,20 +1688,11 @@
 
 	async function trashSelectedWork(): Promise<void> {
 		if (!selectedItem) return;
-		const count = snapshot.items.filter((item) => item.workId === selectedItem.workId).length;
-		await requestConfirmation({ action: "trash", occurrenceId: selectedItem.id, occurrenceCount: count });
+		await workController.trashOccurrence(selectedItem.id);
 	}
 
-	async function openTrash(): Promise<void> {
-		trashEntries = await api.listTrash();
-		viewMode = "trash";
-	}
-
-	async function restoreTrash(workId: string): Promise<void> {
-		await api.restoreWork(workId);
-		trashEntries = await api.listTrash();
-		await load();
-	}
+	const openTrash = workController.openTrash;
+	const restoreTrash = workController.restoreTrash;
 
 	async function executeCommand(
 		id: CommandId,
@@ -2440,13 +1727,11 @@
 		commandPaletteRestoreFocus = document.activeElement instanceof HTMLElement
 			? document.activeElement
 			: null;
-		commandPaletteQuery = "";
-		commandPaletteActiveIndex = 0;
-		commandPaletteOpen = true;
+		navigationController.openCommandPalette();
 	}
 
 	async function closeCommandPalette(): Promise<void> {
-		commandPaletteOpen = false;
+		navigationController.closeCommandPalette();
 		await tick();
 		commandPaletteRestoreFocus?.focus();
 		commandPaletteRestoreFocus = null;
@@ -2520,19 +1805,12 @@
 		return executeCommand("saveRevision", snapshotId);
 	}
 
-	async function purgeTrash(entry: TrashEntry): Promise<void> {
-		await requestConfirmation({
-			action: "purge",
-			workId: entry.work.id,
-			occurrenceCount: entry.occurrenceCount,
-			linkCount: entry.linkCount,
-		});
-	}
+	const purgeTrash = workController.purgeTrash;
 
 	async function performMarkdownExport(selectedOccurrenceId?: string): Promise<void> {
 		markdownExportNotice = "";
 		try {
-			await autosave.flush();
+			await editorController.flushAutosave();
 			const exportSnapshot = selectMarkdownExportSnapshot(snapshot, {
 				...markdownExportPreference,
 				scope: selectedOccurrenceId ? "selected" : markdownExportPreference.scope,
@@ -2574,7 +1852,7 @@
 	async function performOpmlExport(): Promise<void> {
 		opmlNotice = "";
 		try {
-			await autosave.flush();
+			await editorController.flushAutosave();
 			const source = await api.exportOpml();
 			const blob = new Blob([source], { type: "text/x-opml;charset=utf-8" });
 			const url = URL.createObjectURL(blob);
@@ -2595,7 +1873,7 @@
 	async function importOpmlFile(file: File): Promise<void> {
 		opmlNotice = "";
 		try {
-			await autosave.flush();
+			await editorController.flushAutosave();
 			const result = await api.importOpml(await file.text());
 			await load();
 			opmlNotice = `${vocabulary.opmlImportSuccess}: ${result.importedCount}件。`;
@@ -2607,7 +1885,7 @@
 	async function performJsonBackupExport(): Promise<void> {
 		jsonBackupNotice = "";
 		try {
-			await autosave.flush();
+			await editorController.flushAutosave();
 			const source = await api.exportJsonBackup();
 			const blob = new Blob([source], { type: "application/json;charset=utf-8" });
 			const url = URL.createObjectURL(blob);
@@ -2628,7 +1906,7 @@
 	async function restoreJsonBackupFile(file: File): Promise<void> {
 		jsonBackupNotice = "";
 		try {
-			await autosave.flush();
+			await editorController.flushAutosave();
 			const result = await api.restoreJsonBackup(await file.text());
 			await load();
 			jsonBackupNotice =
@@ -2684,15 +1962,11 @@
 		const confirmation = confirmationController.beginSubmission();
 		if (!confirmation) return;
 		try {
-			await autosave.flush();
+			await editorController.flushAutosave();
 			if (confirmation.action === "trash") {
-				await api.trashWork(confirmation.occurrenceId);
-				selectOccurrence(null);
-				await load();
+				await workController.confirmTrash(confirmation.occurrenceId);
 			} else if (confirmation.action === "purge") {
-				await api.purgeWork(confirmation.workId);
-				trashEntries = await api.listTrash();
-				bookmarks = await api.listBookmarks();
+				await workController.confirmPurge(confirmation.workId);
 			} else if (confirmation.action === "rewrite") {
 				const result = await api.rewriteAsNewBranch(
 					confirmation.sourceBranchId,
@@ -2708,8 +1982,7 @@
 					viewMode = "workLineage";
 				}
 			} else if (confirmation.action === "merge-duplicate") {
-				await api.mergeWorks(confirmation.preview);
-				await Promise.all([load(), loadDuplicates()]);
+				await workController.confirmDuplicateMerge(confirmation.preview);
 			} else if (confirmation.action === "cancel-longform") {
 				await confirmation.pendingAction();
 			}
@@ -2798,8 +2071,8 @@
 	open={commandPaletteOpen}
 	commands={commandPaletteCommands}
 	{vocabulary}
-	bind:query={commandPaletteQuery}
-	bind:activeIndex={commandPaletteActiveIndex}
+	bind:query={navigationController.commandPaletteQuery}
+	bind:activeIndex={navigationController.commandPaletteActiveIndex}
 	onClose={closeCommandPalette}
 	onExecute={executeCommandPaletteItem}
 />
@@ -2900,8 +2173,8 @@
 			<input
 				aria-label={`検索・${vocabulary.quickCapture}`}
 				placeholder={`思索を検索、Shift+Enterで${quickCaptureDestinationLabel}へ作成…`}
-				bind:value={quickCaptureText}
-				oninput={queueSearch}
+				bind:value={navigationController.quickCaptureText}
+				oninput={() => navigationController.queueSearch()}
 				onkeydown={handleSearchKeydown}
 				autocomplete="off"
 				disabled={startup.phase !== "ready" || quickCaptureSubmitting}
@@ -3307,9 +2580,9 @@
 				{linkableWorks}
 				{selectedId}
 				bind:outlineFilter
-				bind:unplacedLinkTargets
-				bind:unplacedLinkDirections
-				bind:unplacedLinkType
+				bind:unplacedLinkTargets={workController.unplacedLinkTargets}
+				bind:unplacedLinkDirections={workController.unplacedLinkDirections}
+				bind:unplacedLinkType={workController.unplacedLinkType}
 				onUpdateText={updateUnplacedText}
 				onPlace={placeUnplaced}
 				onLink={linkUnplaced}

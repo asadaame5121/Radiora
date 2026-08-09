@@ -1,8 +1,9 @@
 import {
+	type BackupStorePort,
 	type GraphStateSnapshot,
-	type GraphStore,
 	validatedGraphStateSnapshot,
 } from "../storage/graph_store.ts";
+import { APP_VERSION } from "../shared/app_version.ts";
 import {
 	type BackupV0,
 	migrateBackupV0,
@@ -21,7 +22,6 @@ import {
 
 export const CURRENT_BACKUP_SCHEMA_VERSION = 6;
 export const CURRENT_STORAGE_SCHEMA_VERSION = 6;
-const APP_VERSION = "0.1.0";
 
 export interface JsonBackupV6 {
 	format: "radiora-backup";
@@ -40,7 +40,7 @@ export interface JsonBackupRestoreResult {
 }
 
 export class JsonBackupService {
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: BackupStorePort) {}
 
 	async export(now = new Date()): Promise<string> {
 		const exportedAt = now.toISOString();
