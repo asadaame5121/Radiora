@@ -3,7 +3,9 @@ import { assert } from "jsr:@std/assert@1";
 Deno.test("in-app help is a dedicated, reachable and scannable page", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const help = await Deno.readTextFile(new URL("../src/ui/InAppHelp.svelte", import.meta.url));
-	const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
+	const updateController = await Deno.readTextFile(
+		new URL("../src/ui/help_update_controller.svelte.ts", import.meta.url),
+	);
 
 	assert(app.includes('| "help"'));
 	assert(app.includes('viewMode === "help"'));
@@ -16,7 +18,15 @@ Deno.test("in-app help is a dedicated, reachable and scannable page", async () =
 	assert(help.includes("DEF</code>（定義）"));
 	assert(help.includes("保存と持ち出し"));
 	assert(help.includes("キーボードで素早く操作する"));
-	assert(styles.includes(".help-panel"));
-	assert(styles.includes(".help-grid"));
-	assert(styles.includes(".help-card--wide"));
+	assert(help.includes("createHelpUpdateController"));
+	assert(help.includes("void update.check()"));
+	assert(help.includes('rel="noopener noreferrer"'));
+	assert(help.includes("現在版"));
+	assert(help.includes("最新版"));
+	assert(help.includes("更新情報を確認できませんでした"));
+	assert(help.includes(".help-panel"));
+	assert(help.includes(".help-grid"));
+	assert(help.includes(".help-card--wide"));
+	assert(updateController.includes("checkForUpdate"));
+	assert(updateController.includes('status = "unavailable"'));
 });
