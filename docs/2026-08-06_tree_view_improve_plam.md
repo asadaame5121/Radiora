@@ -1,9 +1,7 @@
-ツリービュー再設計：2Dレイアウト、局所切り出し、表示フィルター
-Summary
+ツリービュー再設計：2Dレイアウト、局所切り出し、表示フィルター Summary
 中央キャンバスを全体構造、右サイドバーを局所確認と表示制御に分ける。
 Lineageでは厳密な世代列を保ちつつ、2Dズームで同一世代の密集を解消する。件数ノードの内容は右サイドバーへ切り出す。さらに孤立Workとリンク種別を投影前に絞り込み、レイアウト・描画・IPC転送の対象件数を減らせる構造にする。
-Main Tree Layout
-レイアウトを「ワールド座標 → 2Dカメラ変換 → スクリーン座標」に分離する。
+Main Tree Layout レイアウトを「ワールド座標 → 2Dカメラ変換 → スクリーン座標」に分離する。
 Chronologyは作成時刻、LineageはFROM世代をワールドXに使う。
 同一世代のX座標は一致させ、固定間隔のYレーンへ配置する。
 ズーム倍率をX・Y両方の間隔へ適用し、文字とノード自体の表示サイズは一定に保つ。
@@ -18,16 +16,12 @@ Overview、Context、Detailの判定をChronologyとLineageで共通化する。
 FROM以外のリンクは近接配置にだけ使い、世代を変更しない。
 リンクのない項目にも独立したYレーンを与える。
 
-＋／−、ホイール、ドラッグを共通の2D transformへ統一する。
-「全体を表示」はコンテンツ境界に基づくfit transformを計算する。
-投影切替時も新しい投影をfitする。
+＋／−、ホイール、ドラッグを共通の2D transformへ統一する。 「全体を表示」はコンテンツ境界に基づくfit
+transformを計算する。 投影切替時も新しい投影をfitする。
 最大倍率は24倍、最小倍率は全体fitに必要な値まで動的に下げる。
 
-Right Sidebar
-既存の右サイドバーを3タブにする。
-切り出し: 選択クラスタの局所ツリーと項目一覧。
-表示中: 既存の昇格Branch／Revision一覧。
-フィルター: 全体系統の表示条件。
+Right Sidebar 既存の右サイドバーを3タブにする。 切り出し: 選択クラスタの局所ツリーと項目一覧。
+表示中: 既存の昇格Branch／Revision一覧。 フィルター: 全体系統の表示条件。
 通常時は表示中、クラスタ選択時は切り出しへ自動切替する。
 
 件数ノードのクリック／Enterでは中央カメラを変更せず、クラスタ内容を切り出しへ表示する。
@@ -43,9 +37,7 @@ Right Sidebar
 1000px未満では右側の最大360pxオーバーレイドロワーとして表示する。
 Escape、閉じるボタン、背景クリック、フォーカス復帰に対応する。
 
-Filters and Projection
-初回のフィルターは次の2種類に限定する。
-孤立Workを表示: 既定はオン。
+Filters and Projection 初回のフィルターは次の2種類に限定する。 孤立Workを表示: 既定はオン。
 リンク種別: RELATED、FROM、LIKE、SUPPORT、DEF、VS、FIX、CITEを個別に切替。既定は全種別オン。
 すべて選択とすべて解除を用意する。
 
@@ -60,19 +52,15 @@ Filters and Projection
 promotedBranchesはツリーフィルターの影響を受けない。
 初期実装では既存Storeから読み取った後にサービス層で絞る。IPC転送・レイアウト・描画負荷を削減し、将来のStorageクエリへのpushdownが可能なAPI形状にする。DBクエリ最適化自体は今回含めない。
 
-フィルター設定はローカルUI設定として保存する。
-保存対象はincludeIsolatedと選択リンク種別だけとする。
+フィルター設定はローカルUI設定として保存する。 保存対象はincludeIsolatedと選択リンク種別だけとする。
 選択中Work IDは一時的な例外なので保存しない。
 不正・旧形式の設定は「孤立表示オン・全リンク種別オン」へ戻す。
 
 フィルター適用中は中央ツリーに表示件数 / 全件数と有効条件数を表示する。
 条件変更で現在のクラスタが消えた場合は切り出しを閉じ、フィルタータブを表示する。
-個別選択は例外表示によって維持する。
-ChronologyとLineageは同じフィルター結果を使用する。
+個別選択は例外表示によって維持する。 ChronologyとLineageは同じフィルター結果を使用する。
 
-Interfaces
-GlobalLineageFilterを追加する。includeIsolated: boolean
-linkTypes: LinkType[]
+Interfaces GlobalLineageFilterを追加する。includeIsolated: boolean linkTypes: LinkType[]
 includeWorkIds: string[]。選択中Workなどの一時的例外に使用する。
 
 listGlobalLineage(filter)へ変更し、Desktop bindingでも入力値とリンク種別を検証する。
@@ -80,9 +68,7 @@ Projection結果へフィルター前後のWork件数を追加する。
 TreeLayoutOptionsへD3非依存のカメラ変換とビューポート寸法を追加する。
 TreeLayoutNodeはワールド座標とスクリーン座標を分離する。
 クラスタノードへ安定ID、構成項目ID、ワールド境界を保持する。
-PhylogeneticTreeへonInspectClusterを追加する。
-DBスキーマと保存データには変更を加えない。
-Test Plan
+PhylogeneticTreeへonInspectClusterを追加する。 DBスキーマと保存データには変更を加えない。 Test Plan
 孤立表示オンでは既存どおり全Work、オフでは接続Workと選択中Workだけが返ること。
 リンク種別の変更後に孤立判定をやり直すこと。
 自己リンク、retractedリンク、削除済みWorkへのリンクを孤立判定に使わないこと。
@@ -94,8 +80,7 @@ Test Plan
 ChronologyとLineageで同じフィルター、クラスタ操作、fitが動作すること。
 サイドバーのタブ切替、一覧選択、Enter、Escape、フォーカス復帰を確認すること。
 既存のFROM方向、Knot、複数Occurrence、近傍強調、昇格Branch表示を維持すること。
-高密度mockで目視確認し、最終的にdeno task verifyを成功させる。
-Assumptions
+高密度mockで目視確認し、最終的にdeno task verifyを成功させる。 Assumptions
 孤立Workは既定では表示し、利用者が必要に応じて隠す。
 中央キャンバスは全体文脈、右サイドバーは局所確認と表示制御を担当する。
 クラスタの単クリックでは中央カメラを移動しない。
