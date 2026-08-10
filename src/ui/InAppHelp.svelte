@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
+	import { RELEASE_PAGE_URL } from "../services/update_checker.ts";
 	import { createHelpUpdateController } from "./help_update_controller.svelte.ts";
 
 	type ShortcutReference = {
@@ -142,7 +143,7 @@
 						<strong>v{update.latest.version}</strong>
 					</p>
 				</div>
-				<a href={update.latest.url} target="_blank" rel="noopener noreferrer">
+				<a href={RELEASE_PAGE_URL} target="_blank" rel="noopener noreferrer">
 					リリースページを開く
 				</a>
 			{:else if update.status === "checking"}

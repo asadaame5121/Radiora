@@ -19,6 +19,8 @@ Deno.test("in-app help is a dedicated, reachable and scannable page", async () =
 	assert(help.includes("保存と持ち出し"));
 	assert(help.includes("キーボードで素早く操作する"));
 	assert(help.includes("createHelpUpdateController"));
+	assert(help.includes("RELEASE_PAGE_URL"));
+	assert(help.includes("href={RELEASE_PAGE_URL}"));
 	assert(help.includes("void update.check()"));
 	assert(help.includes('rel="noopener noreferrer"'));
 	assert(help.includes("現在版"));
