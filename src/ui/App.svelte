@@ -1974,12 +1974,20 @@
 					"confirmed",
 				);
 				if (result.status === "created") {
-					await load(confirmation.occurrenceId);
+					const source = snapshot.items.find((item) => item.id === confirmation.occurrenceId);
+					const placement = await api.createOccurrence({
+						workId: confirmation.workId,
+						branchId: result.branch.id,
+						parentId: source?.parentId ?? null,
+						afterId: source?.id ?? null,
+						contextualHeading: result.branch.name,
+					});
+					await load(placement.id);
 					await Promise.all([
 						loadRevisions(confirmation.workId),
 						loadWorkLineage(confirmation.workId),
 					]);
-					viewMode = "workLineage";
+					viewMode = "outline";
 				}
 			} else if (confirmation.action === "merge-duplicate") {
 				await workController.confirmDuplicateMerge(confirmation.preview);

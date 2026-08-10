@@ -58,6 +58,66 @@ Deno.test("occurrence operations places an unplaced Work using its active main B
 	assertEquals(placement.text, "source");
 });
 
+Deno.test("occurrence operations places a specifically selected editable Branch", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new OccurrenceOperations(store);
+	const source = await operations.createItem({ text: "main text", parentId: null });
+	const createdAt = "2026-08-10T00:00:00.000Z";
+	await store.createBranch(
+		{
+			id: "alternate",
+			workId: source.workId,
+			name: "別稿",
+			headRevisionId: null,
+			createdAt,
+		},
+		{
+			branchId: "alternate",
+			workId: source.workId,
+			text: "alternate text",
+			updatedAt: createdAt,
+		},
+	);
+
+	const placement = await operations.createOccurrence({
+		workId: source.workId,
+		branchId: "alternate",
+		parentId: null,
+		afterId: source.id,
+		contextualHeading: "別稿",
+	});
+
+	assertEquals(placement.text, "alternate text");
+	assertEquals(placement.revisionSelector, { mode: "branch", branchId: "alternate" });
+	assertEquals(placement.contextualHeading, "別稿");
+	await operations.updateItemText(placement.id, "edited alternate");
+	assertEquals(
+		(await store.listWorkingCopies(source.workId)).find((copy) => copy.branchId === "alternate")
+			?.text,
+		"edited alternate",
+	);
+});
+
+Deno.test("occurrence operations rejects a Branch from another Work", async () => {
+	const operations = new OccurrenceOperations(new MemoryGraphStore());
+	const source = await operations.createItem({ text: "source", parentId: null });
+	const other = await operations.createItem({ text: "other", parentId: null });
+	const otherBranchId = other.revisionSelector.mode === "branch"
+		? other.revisionSelector.branchId
+		: "";
+
+	await assertRejects(
+		() =>
+			operations.createOccurrence({
+				workId: source.workId,
+				branchId: otherBranchId,
+				parentId: null,
+			}),
+		Error,
+		"Active Branch not found for Work",
+	);
+});
+
 Deno.test("occurrence operations trashes a blank Work when its last placement is removed", async () => {
 	const store = new MemoryGraphStore();
 	const operations = new OccurrenceOperations(store);
