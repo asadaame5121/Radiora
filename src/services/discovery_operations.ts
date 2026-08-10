@@ -257,6 +257,7 @@ export class DiscoveryOperations {
 					context,
 					target,
 					score: 0.65,
+					proposedLinkType: "RELATED",
 					title: "対立・修正の観点",
 					explanation: `類似する思索の先に${second.type}関係があります。`,
 					evidence: [

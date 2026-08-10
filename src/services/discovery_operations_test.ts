@@ -100,6 +100,26 @@ Deno.test("DiscoveryOperations materializes and accepts an emergence suggestion 
 	assertEquals(accepted?.reason, suggestion.explanation);
 });
 
+Deno.test("DiscoveryOperations accepts productive tension as a conservative RELATED link", async () => {
+	const store = new MemoryGraphStore();
+	const context = await addWork(store, "context", "Context");
+	await addWork(store, "middle", "Middle");
+	await addWork(store, "target", "Target");
+	await addLink(store, "context", "middle", "LIKE");
+	await addLink(store, "middle", "target", "VS");
+	const operations = new DiscoveryOperations(store);
+
+	const suggestion = (await operations.listEmergenceSuggestions(context.id)).find((entry) =>
+		entry.kind === "productive-tension" && entry.targetWorkId === "target"
+	);
+	assert(suggestion);
+	assertEquals(suggestion.proposedLinkType, "RELATED");
+
+	await operations.resolveEmergenceSuggestion(suggestion.id, "accept", "関係を確認");
+	const accepted = (await store.listLinks()).find((link) => link.origin === "suggestion");
+	assertEquals(accepted?.type, "RELATED");
+});
+
 Deno.test("DiscoveryOperations validates, saves, and projects rule-query results without persistence", async () => {
 	const store = new MemoryGraphStore();
 	const alpha = await addWork(store, "alpha", "Alpha");
