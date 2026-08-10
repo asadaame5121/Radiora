@@ -1,9 +1,11 @@
 import type { LinkEndpoint, LinkType, OutlineLink, Revision } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
 import { titleFromText } from "./search_text.ts";
 
 export const COMPARABLE_LINK_TYPES = ["FROM", "FIX", "VS"] as const satisfies readonly LinkType[];
 export type ComparableLinkType = (typeof COMPARABLE_LINK_TYPES)[number];
+
+type ComparisonStore = RelationStorePort & WorkStorePort;
 
 export interface ComparisonDocument {
 	scope: "work" | "branch" | "revision";
@@ -40,7 +42,7 @@ export interface LinkComparisonProjection {
  * The stored from -> to endpoint order is retained even for symmetric VS links.
  */
 export class ComparisonService {
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: ComparisonStore) {}
 
 	async resolveLink(linkId: string): Promise<LinkComparisonProjection> {
 		const [works, branches, copies, revisions, links] = await Promise.all([
@@ -130,8 +132,8 @@ function resolveEndpoint(
 	link: OutlineLink,
 	endpoint: LinkEndpoint,
 	activeWorkIds: ReadonlySet<string>,
-	branches: Awaited<ReturnType<GraphStore["listBranches"]>>,
-	copies: Awaited<ReturnType<GraphStore["listWorkingCopies"]>>,
+	branches: Awaited<ReturnType<WorkStorePort["listBranches"]>>,
+	copies: Awaited<ReturnType<WorkStorePort["listWorkingCopies"]>>,
 	revisions: readonly Revision[],
 ): ComparisonDocument {
 	if (!activeWorkIds.has(endpoint.workId)) {

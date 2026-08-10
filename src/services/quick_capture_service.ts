@@ -1,9 +1,11 @@
 import type { Branch, UnplacedWork, Work, WorkingCopy } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { OutlineStorePort, WorkStorePort } from "../storage/graph_store.ts";
+
+type QuickCaptureStore = OutlineStorePort & WorkStorePort;
 
 export class QuickCaptureService {
 	constructor(
-		private readonly store: GraphStore,
+		private readonly store: QuickCaptureStore,
 		private readonly now: () => string = () => new Date().toISOString(),
 		private readonly createId: () => string = () => crypto.randomUUID(),
 	) {}

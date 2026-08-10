@@ -9,17 +9,19 @@ import type {
 	Revision,
 	TrashEntry,
 } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
 
 const ORDER_STEP = 1024;
 
+type OccurrenceStore = OutlineStorePort & RelationStorePort & WorkStorePort;
+
 /**
- * GraphStore-backed operations for persistent Work and Occurrence state.
+ * Store-port-backed operations for persistent Work and Occurrence state.
  * This class deliberately retains outline projection side effects: listing an
  * outline refreshes its persisted knot projection.
  */
 export class OccurrenceOperations {
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: OccurrenceStore) {}
 
 	async listOutline(): Promise<OutlineSnapshot> {
 		const items = await this.store.listItems();

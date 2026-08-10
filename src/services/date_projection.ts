@@ -1,5 +1,7 @@
 import type { OutlineItem, TransientProjectionNode, Work } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { OutlineStorePort, WorkStorePort } from "../storage/graph_store.ts";
+
+type DateProjectionStore = OutlineStorePort & WorkStorePort;
 
 export interface DateRange {
 	startInclusive: string;
@@ -27,11 +29,11 @@ export interface DateProjection {
 
 /**
  * Read-only projection for Today and arbitrary time ranges. It intentionally
- * reads GraphStore directly: generating a view must not create a date parent,
+ * reads its store directly: generating a view must not create a date parent,
  * Occurrence, or any other persisted state.
  */
 export class DateProjectionService {
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: DateProjectionStore) {}
 
 	async project(range: DateRange): Promise<DateProjection> {
 		const { start, end } = validateDateRange(range);

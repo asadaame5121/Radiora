@@ -1,5 +1,5 @@
 import type { Branch, Revision, WorkingCopy } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { WorkStorePort } from "../storage/graph_store.ts";
 
 export interface RevisionServiceOptions {
 	/** Supplies the timestamp so callers can make checkpoint creation deterministic. */
@@ -24,7 +24,7 @@ export type RewriteAsNewBranchResult =
  * Explicit, append-only creation of a Revision from a Branch's current Working Copy.
  *
  * Saving a Working Copy, creating a Recovery Snapshot, and restoring a Snapshot must
- * not call this service. The only persistence mutation here is GraphStore.createRevision,
+ * not call this service. The only persistence mutation here is WorkStorePort.createRevision,
  * whose contract creates the immutable Revision and advances the Branch head atomically.
  */
 export class RevisionService {
@@ -32,7 +32,7 @@ export class RevisionService {
 	readonly #createId: () => string;
 
 	constructor(
-		private readonly store: GraphStore,
+		private readonly store: WorkStorePort,
 		options: RevisionServiceOptions = {},
 	) {
 		this.#now = options.now ?? (() => new Date().toISOString());

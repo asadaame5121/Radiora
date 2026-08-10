@@ -1,6 +1,8 @@
 import type { CreateLinkInput, LinkEndpoint, LinkType, OutlineLink } from "../domain/models.ts";
 import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
+
+type SemanticLinkStore = OutlineStorePort & RelationStorePort & WorkStorePort;
 
 function sameEndpoint(left: LinkEndpoint, right: LinkEndpoint): boolean {
 	if (left.scope !== right.scope || left.workId !== right.workId) return false;
@@ -10,10 +12,10 @@ function sameEndpoint(left: LinkEndpoint, right: LinkEndpoint): boolean {
 
 /**
  * Owns semantic-link validation and endpoint normalization while keeping storage
- * persistence behind the GraphStore boundary.
+ * persistence behind the injected store-port boundary.
  */
 export class SemanticLinkOperations {
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: SemanticLinkStore) {}
 
 	async createLink(input: CreateLinkInput): Promise<void> {
 		if (!LINK_TYPES.includes(input.type)) throw new Error(`Unsupported link type: ${input.type}`);

@@ -8,9 +8,20 @@ import type {
 	WorkingCopy,
 } from "../domain/models.ts";
 import { isSymmetricLinkType } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type {
+	DiscoveryStorePort,
+	OutlineStorePort,
+	RelationStorePort,
+	WorkStorePort,
+} from "../storage/graph_store.ts";
 import { normalizeSearchText, titleFromText } from "./search_text.ts";
 import { TagService } from "./tag_service.ts";
+
+type DuplicateCandidateStore =
+	& DiscoveryStorePort
+	& OutlineStorePort
+	& RelationStorePort
+	& WorkStorePort;
 
 export interface DuplicateWorkRef {
 	workId: string;
@@ -45,7 +56,7 @@ interface WorkContext {
  * 永続化・書き込みは一切行わない。
  */
 export class DuplicateCandidateService {
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: DuplicateCandidateStore) {}
 
 	async listCandidates(limit = 50): Promise<DuplicateCandidate[]> {
 		const [works, branches, copies, links, aliases, scopedTags] = await Promise.all([

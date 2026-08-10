@@ -1,4 +1,8 @@
 <script lang="ts">
+	import { onMount } from "svelte";
+	import { RELEASE_PAGE_URL } from "../services/update_checker.ts";
+	import { createHelpUpdateController } from "./help_update_controller.svelte.ts";
+
 	type ShortcutReference = {
 		label: string;
 		shortcut: string;
@@ -21,6 +25,13 @@
 		onOpenOptions: () => void;
 		onOpenCommandPalette: () => void | Promise<void>;
 	} = $props();
+
+	const update = createHelpUpdateController();
+
+	onMount(() => {
+		void update.check();
+		return () => update.dispose();
+	});
 </script>
 
 <section class="help-panel" aria-labelledby="help-title">
@@ -122,5 +133,218 @@
 			{/if}
 			<p class="help-note">コマンドパレットは <kbd>Ctrl</kbd> + <kbd>K</kbd> で開きます。操作名を検索して実行できます。</p>
 		</article>
+
+		<aside class="help-update" aria-live="polite">
+			{#if update.status === "available" && update.latest}
+				<div>
+					<p class="help-card__label">UPDATE AVAILABLE</p>
+					<p>
+						更新があります。現在版 <strong>v{update.currentVersion}</strong> ／ 最新版
+						<strong>v{update.latest.version}</strong>
+					</p>
+				</div>
+				<a href={RELEASE_PAGE_URL} target="_blank" rel="noopener noreferrer">
+					リリースページを開く
+				</a>
+			{:else if update.status === "checking"}
+				<p class="help-update__quiet">最新版を確認しています…</p>
+			{:else if update.status === "current"}
+				<p class="help-update__quiet">Radiora v{update.currentVersion} は最新版です。</p>
+			{:else if update.status === "unavailable"}
+				<p class="help-update__quiet">更新情報を確認できませんでした。</p>
+			{/if}
+		</aside>
 	</div>
 </section>
+
+<style>
+	.help-panel {
+		height: 100%;
+		overflow: auto;
+		padding: 32px clamp(24px, 5vw, 72px) 56px;
+		background: var(--surface);
+	}
+	.help-heading {
+		max-width: 960px;
+		margin-bottom: 28px;
+	}
+	.help-heading__title,
+	.help-card__split-heading {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 18px;
+	}
+	.help-heading h1 {
+		margin: 4px 0 8px;
+		font-size: 30px;
+	}
+	.help-heading p:last-child,
+	.help-note,
+	.help-update__quiet {
+		color: var(--muted);
+	}
+	.help-key {
+		display: grid;
+		justify-items: center;
+		gap: 5px;
+		flex: none;
+		padding-top: 5px;
+		color: var(--muted);
+		font-size: 10px;
+	}
+	.help-key kbd {
+		min-width: 46px;
+		padding: 8px 12px;
+		border-color: var(--cyan);
+		color: var(--cyan-soft);
+		font-size: 13px;
+		text-align: center;
+	}
+	.help-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(280px, 1fr));
+		gap: 18px;
+		max-width: 1080px;
+	}
+	.help-card {
+		display: grid;
+		align-content: start;
+		gap: 12px;
+		padding: 20px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--surface-raised);
+	}
+	.help-card--accent {
+		border-color: var(--border-bright);
+		box-shadow: inset 2px 0 var(--cyan);
+	}
+	.help-card--wide,
+	.help-update {
+		grid-column: 1 / -1;
+	}
+	.help-card h2,
+	.help-card p,
+	.help-card ol,
+	.help-card ul,
+	.help-card dl,
+	.help-update p {
+		margin: 0;
+	}
+	.help-card h2 {
+		font-family: Georgia, "Noto Serif JP", serif;
+		font-size: 20px;
+		font-weight: normal;
+		color: #edf9fa;
+	}
+	.help-card__label {
+		color: var(--cyan);
+		font-size: 9px;
+		letter-spacing: .16em;
+	}
+	.help-card ol,
+	.help-card ul {
+		display: grid;
+		gap: 8px;
+		padding-left: 20px;
+		color: #afc1c9;
+		font-size: 12px;
+		line-height: 1.65;
+	}
+	.help-card li::marker {
+		color: var(--cyan);
+	}
+	.help-card kbd,
+	.help-shortcut kbd {
+		display: inline-block;
+		padding: 1px 5px;
+		border: 1px solid var(--border-bright);
+		border-radius: 4px;
+		background: #04080d;
+		color: var(--cyan-soft);
+		font-family: inherit;
+		font-size: .9em;
+		white-space: nowrap;
+	}
+	.help-note {
+		padding: 8px 10px;
+		border-left: 2px solid var(--amber);
+		background: var(--surface-hover);
+		font-size: 11px;
+		line-height: 1.6;
+	}
+	.help-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin-top: 2px;
+	}
+	.help-card__split-heading button {
+		flex: none;
+	}
+	.help-shortcuts {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(240px, 1fr));
+		gap: 6px 12px;
+	}
+	.help-shortcuts__subheading {
+		margin: 18px 0 8px;
+		font-size: 12px;
+		color: var(--muted);
+	}
+	.help-shortcut {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 8px 10px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--surface);
+		font-size: 11px;
+	}
+	.help-shortcut dt {
+		color: var(--text);
+	}
+	.help-shortcut dd {
+		margin: 0;
+	}
+	.help-update {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 18px;
+		min-height: 38px;
+		padding: 10px 14px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface-raised);
+		font-size: 11px;
+	}
+	.help-update div {
+		display: grid;
+		gap: 4px;
+	}
+	.help-update a {
+		flex: none;
+		color: var(--cyan-soft);
+	}
+	.help-update__quiet {
+		font-size: 10px;
+	}
+	@media (max-width: 900px) {
+		.help-grid,
+		.help-shortcuts {
+			grid-template-columns: 1fr;
+		}
+		.help-card--wide,
+		.help-update {
+			grid-column: auto;
+		}
+		.help-update {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+	}
+</style>

@@ -1,5 +1,5 @@
 import type { RecoverySnapshot, Revision, WorkingCopy } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { WorkStorePort } from "../storage/graph_store.ts";
 import { diffText, type RevisionDiffNode } from "./revision_diff.ts";
 
 export interface RecoverySnapshotPreview {
@@ -18,7 +18,7 @@ export class RecoverySnapshotService {
 	readonly #createId: () => string;
 
 	constructor(
-		private readonly store: GraphStore,
+		private readonly store: WorkStorePort,
 		options: RecoverySnapshotServiceOptions = {},
 	) {
 		this.#now = options.now ?? (() => new Date().toISOString());

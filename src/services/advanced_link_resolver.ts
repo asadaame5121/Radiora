@@ -1,10 +1,16 @@
 import type { LinkType, OutlineItem, SearchAlias, Work } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type {
+	DiscoveryStorePort,
+	OutlineStorePort,
+	WorkStorePort,
+} from "../storage/graph_store.ts";
 import { parseAdvancedLinkInput } from "./advanced_link_parser.ts";
 import { normalizeSearchText, titleFromText } from "./search_text.ts";
 
 export type AdvancedLinkMatchKind = "exact" | "alias" | "short-id" | "selected";
 export type AdvancedLinkResolutionStatus = "resolved" | "ambiguous" | "unresolved";
+
+type AdvancedLinkStore = OutlineStorePort & WorkStorePort & DiscoveryStorePort;
 
 export interface AdvancedLinkPlacement {
 	occurrenceId: string;
@@ -55,7 +61,7 @@ interface ActiveWorkView {
  * a later Working Copy rename does not redirect that token to another Work.
  */
 export class AdvancedLinkResolverService {
-	constructor(private readonly store: GraphStore) {}
+	constructor(private readonly store: AdvancedLinkStore) {}
 
 	async resolve(
 		input: string,
@@ -93,8 +99,8 @@ export class AdvancedLinkResolverService {
 function activeWorkViews(
 	works: readonly Work[],
 	items: readonly OutlineItem[],
-	branches: Awaited<ReturnType<GraphStore["listBranches"]>>,
-	workingCopies: Awaited<ReturnType<GraphStore["listWorkingCopies"]>>,
+	branches: Awaited<ReturnType<WorkStorePort["listBranches"]>>,
+	workingCopies: Awaited<ReturnType<WorkStorePort["listWorkingCopies"]>>,
 ): ActiveWorkView[] {
 	const itemById = new Map(items.map((item) => [item.id, item]));
 	const itemsByWork = new Map<string, OutlineItem[]>();

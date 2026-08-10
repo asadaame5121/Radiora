@@ -1,5 +1,5 @@
 import type { Branch, StubCreationKind, Work, WorkingCopy } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { OutlineStorePort, WorkStorePort } from "../storage/graph_store.ts";
 import {
 	type InternalReferenceBacklink,
 	InternalReferenceService,
@@ -30,7 +30,7 @@ export interface CreatedStub {
  */
 export class StubService {
 	constructor(
-		private readonly store: GraphStore,
+		private readonly store: OutlineStorePort & WorkStorePort,
 		private readonly now: () => string = () => new Date().toISOString(),
 		private readonly createId: () => string = () => crypto.randomUUID(),
 	) {}

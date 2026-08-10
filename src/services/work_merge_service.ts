@@ -1,7 +1,14 @@
 import type { LinkEndpoint, OutlineLink, SearchAlias, SystemRelation } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type {
+	DiscoveryStorePort,
+	OutlineStorePort,
+	RelationStorePort,
+	WorkStorePort,
+} from "../storage/graph_store.ts";
 import { ComparisonService, type WorkComparisonDocuments } from "./comparison_service.ts";
 import { titleFromText } from "./search_text.ts";
+
+type WorkMergeStore = DiscoveryStorePort & OutlineStorePort & RelationStorePort & WorkStorePort;
 
 export interface BranchRenamePreview {
 	branchId: string;
@@ -48,7 +55,7 @@ export class WorkMergeService {
 	private readonly now: () => string;
 	private readonly createAliasId: () => string;
 
-	constructor(private readonly store: GraphStore, options: WorkMergeServiceOptions = {}) {
+	constructor(private readonly store: WorkMergeStore, options: WorkMergeServiceOptions = {}) {
 		this.now = options.now ?? (() => new Date().toISOString());
 		this.createAliasId = options.createAliasId ?? (() => crypto.randomUUID());
 	}

@@ -2,11 +2,14 @@ import { assertMatch } from "jsr:@std/assert@1";
 
 const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 const view = await Deno.readTextFile(new URL("../src/ui/OptionsView.svelte", import.meta.url));
+const editorController = await Deno.readTextFile(
+	new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
+);
 
 Deno.test("Markdown export flushes edits, renders the active snapshot, and downloads UTF-8 Markdown", () => {
 	assertMatch(
 		app,
-		/async function performMarkdownExport\(selectedOccurrenceId\?: string\): Promise<void> \{[\s\S]*?await autosave\.flush\(\);[\s\S]*?selectMarkdownExportSnapshot\(snapshot,[\s\S]*?renderOutlineSnapshotMarkdown\(exportSnapshot\)[\s\S]*?rewriteMarkdownExportReferences\(/,
+		/async function performMarkdownExport\(selectedOccurrenceId\?: string\): Promise<void> \{[\s\S]*?await editorController\.flushAutosave\(\);[\s\S]*?selectMarkdownExportSnapshot\(snapshot,[\s\S]*?renderOutlineSnapshotMarkdown\(exportSnapshot\)[\s\S]*?rewriteMarkdownExportReferences\(/,
 	);
 	assertMatch(app, /new Blob\(\[markdown\], \{ type: "text\/markdown;charset=utf-8" \}\)/);
 	assertMatch(app, /anchor\.download = `radiora-\$\{localDateValue\(new Date\(\)\)\}\.md`/);
@@ -16,6 +19,10 @@ Deno.test("Markdown export flushes edits, renders the active snapshot, and downl
 	);
 	assertMatch(app, /setTimeout\(\(\) => URL\.revokeObjectURL\(url\), 0\)/);
 	assertMatch(app, /case "exportMarkdown": await performMarkdownExport\(\)/);
+});
+
+Deno.test("Markdown export delegates its pending-edit barrier to the editor controller", () => {
+	assertMatch(editorController, /flushAutosave: \(workId\?: string\) => autosave\.flush\(workId\)/);
 });
 
 Deno.test("Markdown export has a visible command button and success notification", () => {

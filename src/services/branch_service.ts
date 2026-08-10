@@ -8,8 +8,10 @@ import type {
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
-import type { GraphStore } from "../storage/graph_store.ts";
+import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
 import { applyGlobalLineageFilter, type GlobalLineageFilter } from "./global_lineage_filter.ts";
+
+type BranchStore = OutlineStorePort & RelationStorePort & WorkStorePort;
 
 export interface BranchServiceOptions {
 	/** Supplies lifecycle timestamps so callers and tests can make mutations deterministic. */
@@ -74,7 +76,7 @@ export class BranchService {
 	readonly #createId: () => string;
 
 	constructor(
-		private readonly store: GraphStore,
+		private readonly store: BranchStore,
 		options: BranchServiceOptions = {},
 	) {
 		this.#now = options.now ?? (() => new Date().toISOString());
