@@ -75,6 +75,11 @@ backupだけを増やし得る。Workの必須field追加のように両方へ�
 アプリのSemVer、SurrealDB本体のversion、storage schema version、backup schema versionを
 相互に代用しない。
 
+DomainOperation同期では、これらに加えてmaster schema version、operation schema version、sync
+protocol versionが必要になる。同期用tableのownership、backup対象、migration列は
+[[sync-storage-schema]]で定める。特に`operationSchemaVersion`をstorage schema
+versionとして扱わない。
+
 ## 4. Version付与規則
 
 - versionは`0`以上の単調増加整数とする
