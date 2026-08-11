@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import type { EmergenceSuggestion } from "../src/domain/models.ts";
-import { emergenceNotificationContent } from "../src/ui/emergence_notification.ts";
+import { emergenceToastContent } from "../src/ui/emergence_toast.ts";
 
 function suggestion(id: string, targetItemId: string): EmergenceSuggestion {
 	return {
@@ -21,17 +21,16 @@ function suggestion(id: string, targetItemId: string): EmergenceSuggestion {
 	};
 }
 
-Deno.test("emergence notification summarizes unseen suggestions for one context", () => {
+Deno.test("emergence toast summarizes unseen suggestions for one context", () => {
 	assertEquals(
-		emergenceNotificationContent(
+		emergenceToastContent(
 			[suggestion("one", "target-a"), suggestion("two", "target-b")],
 			(id) => ({ "target-a": "Alpha", "target-b": "Beta" })[id] ?? id,
 		),
 		{
 			title: "新しい関係候補",
-			body: "Alpha ほか1件の候補が見つかりました。",
-			tag: "radiora-emergence:context-work",
+			message: "Alpha ほか1件の候補が見つかりました。",
 		},
 	);
-	assertEquals(emergenceNotificationContent([], (id) => id), null);
+	assertEquals(emergenceToastContent([], (id) => id), null);
 });

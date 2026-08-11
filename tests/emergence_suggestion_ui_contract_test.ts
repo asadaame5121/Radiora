@@ -29,7 +29,9 @@ Deno.test("emergence decisions stay explicit and use injected vocabulary", async
 	assert(section.includes("disabled={!emergenceResolutionReasons[suggestion.id]?.trim()}"));
 	assertFalse(/>採用<|>保留<|>ピン<|>却下<|関係を探索中|新しい関係候補はありません/.test(section));
 	assert(app.includes("createEmergenceController"));
-	assert(app.includes("new Notification(content.title"));
+	assert(app.includes("<Toast"));
+	assertFalse(app.includes("new Notification("));
 	assert(controller.includes("notifiedIds"));
+	assert(controller.includes('suggestion.persistenceStatus === "pending"'));
 	assert(controller.includes("request !== loadRequest"));
 });

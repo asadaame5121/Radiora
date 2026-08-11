@@ -18,6 +18,7 @@
 	import TrashView from "./TrashView.svelte";
 	import OptionsView from "./OptionsView.svelte";
 	import ConfirmationDialog from "./ConfirmationDialog.svelte";
+	import Toast from "./Toast.svelte";
 	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
 	import LicensesDialog, {
 		type LicenseEntry,
@@ -29,7 +30,7 @@
 	} from "./confirmation_controller.svelte.ts";
 	import { createEditorController } from "./editor_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
-	import { emergenceNotificationContent } from "./emergence_notification.ts";
+	import { emergenceToastContent } from "./emergence_toast.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
 	import type { ContextMenuItem } from "./context_menu";
@@ -159,6 +160,8 @@
 	let startupDataLoaded = false;
 	let startup = $state<StartupStatus>({ phase: "starting", message: "Radioraを起動しています…" });
 	let error = $state("");
+	let emergenceToast = $state<{ id: number; title: string; message: string } | null>(null);
+	let emergenceToastId = 0;
 	let outlineFilter = $state<OutlineFilter>({ ...EMPTY_OUTLINE_FILTER });
 	let longForm = $state({
 		active: false,
@@ -257,7 +260,7 @@
 		api,
 		getSelectedId: () => selectedId,
 		reloadOutline: load,
-		notifySuggestions: showEmergenceNotification,
+		notifySuggestions: showEmergenceToast,
 		reportError: (cause) => error = errorMessage(cause),
 	});
 	const editorController = createEditorController({
@@ -1486,21 +1489,12 @@
 		viewMode = "help";
 	}
 
-	async function showEmergenceNotification(
+	function showEmergenceToast(
 		suggestions: readonly EmergenceSuggestion[],
-	): Promise<void> {
-		if (typeof Notification === "undefined") return;
-		const content = emergenceNotificationContent(suggestions, titleForId);
+	): void {
+		const content = emergenceToastContent(suggestions, titleForId);
 		if (!content) return;
-		try {
-			const permission = Notification.permission === "default"
-				? await Notification.requestPermission()
-				: Notification.permission;
-			if (permission !== "granted") return;
-			new Notification(content.title, { body: content.body, tag: content.tag });
-		} catch {
-			// Discovery remains available in-app when the host cannot show system notifications.
-		}
+		emergenceToast = { id: ++emergenceToastId, ...content };
 	}
 
 	async function loadEmergence(id: string): Promise<void> {
@@ -2967,6 +2961,16 @@
 	</main>
 	{/if}
 </div>
+
+{#if emergenceToast}
+	{#key emergenceToast.id}
+		<Toast
+			title={emergenceToast.title}
+			message={emergenceToast.message}
+			onDismiss={() => (emergenceToast = null)}
+		/>
+	{/key}
+{/if}
 
 <ConfirmationDialog
 	bind:this={confirmationDialog}
