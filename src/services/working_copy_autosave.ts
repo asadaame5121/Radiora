@@ -2,12 +2,14 @@ export type WorkingCopySavePhase = "saved" | "unsaved" | "saving" | "failed";
 
 export interface WorkingCopySaveStatus {
 	workId: string;
+	branchId: string;
 	phase: WorkingCopySavePhase;
 	error?: string;
 }
 
 export interface WorkingCopyDraft {
 	workId: string;
+	branchId: string;
 	occurrenceId: string;
 	text: string;
 	status: WorkingCopySaveStatus;
@@ -15,6 +17,7 @@ export interface WorkingCopyDraft {
 
 interface PendingWorkingCopy {
 	workId: string;
+	branchId: string;
 	occurrenceId: string;
 	text: string;
 	version: number;
@@ -33,7 +36,7 @@ export interface WorkingCopyAutosaveOptions {
 }
 
 /**
- * Serializes Working Copy writes per Work. A failed or in-flight draft remains
+ * Serializes Working Copy writes per Branch. A failed or in-flight draft remains
  * available to the UI so a subsequent reload cannot silently replace it.
  */
 export class WorkingCopyAutosaveCoordinator {
@@ -53,39 +56,38 @@ export class WorkingCopyAutosaveCoordinator {
 		this.#clearTimer = options.clearTimer ?? ((timer) => globalThis.clearTimeout(timer));
 	}
 
-	queue(workId: string, occurrenceId: string, text: string): void {
-		const existing = this.#entries.get(workId);
+	queue(workId: string, branchId: string, occurrenceId: string, text: string): void {
+		const existing = this.#entries.get(branchId);
 		if (existing?.timer !== undefined) this.#clearTimer(existing.timer);
 		const entry: PendingWorkingCopy = existing ?? {
 			workId,
+			branchId,
 			occurrenceId,
 			text,
 			version: 0,
 			savedVersion: 0,
-			status: { workId, phase: "saved" },
+			status: { workId, branchId, phase: "saved" },
 		};
 		entry.occurrenceId = occurrenceId;
 		entry.text = text;
 		entry.version++;
-		entry.status = { workId, phase: "unsaved" };
+		entry.status = { workId, branchId, phase: "unsaved" };
 		entry.timer = this.#setTimer(() => {
 			entry.timer = undefined;
-			void this.flush(workId).catch(() => {
+			void this.#flushEntry(entry).catch(() => {
 				// Failure is deliberately represented by status and the retained draft.
 			});
 		}, this.#delayMs);
-		this.#entries.set(workId, entry);
+		this.#entries.set(branchId, entry);
 		this.#emit();
 	}
 
 	async flush(workId?: string): Promise<void> {
-		if (workId !== undefined) {
-			const entry = this.#entries.get(workId);
-			if (entry) await this.#flushEntry(entry);
-			return;
-		}
+		const entries = workId === undefined
+			? [...this.#entries.values()]
+			: [...this.#entries.values()].filter((entry) => entry.workId === workId);
 		const results = await Promise.allSettled(
-			[...this.#entries.values()].map((entry) => this.#flushEntry(entry)),
+			entries.map((entry) => this.#flushEntry(entry)),
 		);
 		const rejected = results.find(
 			(result): result is PromiseRejectedResult => result.status === "rejected",
@@ -106,6 +108,7 @@ export class WorkingCopyAutosaveCoordinator {
 			.filter((entry) => entry.savedVersion < entry.version)
 			.map((entry) => ({
 				workId: entry.workId,
+				branchId: entry.branchId,
 				occurrenceId: entry.occurrenceId,
 				text: entry.text,
 				status: { ...entry.status },
@@ -135,13 +138,14 @@ export class WorkingCopyAutosaveCoordinator {
 			const savingVersion = entry.version;
 			const occurrenceId = entry.occurrenceId;
 			const text = entry.text;
-			entry.status = { workId: entry.workId, phase: "saving" };
+			entry.status = { workId: entry.workId, branchId: entry.branchId, phase: "saving" };
 			this.#emit();
 			try {
 				await this.#save(occurrenceId, text);
 			} catch (cause) {
 				entry.status = {
 					workId: entry.workId,
+					branchId: entry.branchId,
 					phase: "failed",
 					error: cause instanceof Error ? cause.message : String(cause),
 				};
@@ -150,7 +154,7 @@ export class WorkingCopyAutosaveCoordinator {
 			}
 			entry.savedVersion = savingVersion;
 		}
-		entry.status = { workId: entry.workId, phase: "saved" };
+		entry.status = { workId: entry.workId, branchId: entry.branchId, phase: "saved" };
 		this.#emit();
 	}
 

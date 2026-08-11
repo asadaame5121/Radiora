@@ -40,6 +40,15 @@ Deno.test("inline link completion keeps its state for an unchanged editor trigge
 	);
 });
 
+Deno.test("inline link trigger identity rejects missing or different items", () => {
+	const trigger = { query: "target", range: { start: 3, end: 10 } };
+	assertEquals(isSameInlineLinkTrigger(null, "item", trigger), false);
+	assertEquals(
+		isSameInlineLinkTrigger({ itemId: "other", ...trigger }, "item", trigger),
+		false,
+	);
+});
+
 Deno.test("inline link completion ignores the source, revisions, and blank Works", () => {
 	assertEquals(
 		filterInlineLinkCandidates([

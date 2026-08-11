@@ -84,63 +84,10 @@ export class OccurrenceOperations {
 		}
 		let source = items.find((item) => item.workId === input.workId);
 		if (input.branchId) {
-			const [branch, copy, work] = await Promise.all([
-				this.store.listBranches(input.workId).then((branches) =>
-					branches.find((candidate) => candidate.id === input.branchId)
-				),
-				this.store.listWorkingCopies(input.workId).then((copies) =>
-					copies.find((candidate) => candidate.branchId === input.branchId)
-				),
-				this.store.listWorks().then((works) =>
-					works.find((candidate) => candidate.id === input.workId)
-				),
-			]);
-			if (!branch || branch.workId !== input.workId || branch.archivedAt) {
-				throw new Error(`Active Branch not found for Work: ${input.branchId}`);
-			}
-			if (!copy || copy.workId !== input.workId) {
-				throw new Error(`Working Copy not found for Branch: ${input.branchId}`);
-			}
-			if (!work) throw new Error(`Work not found: ${input.workId}`);
-			source = {
-				id: "",
-				workId: work.id,
-				text: copy.text,
-				parentId: null,
-				orderKey: 0,
-				collapsed: false,
-				revisionSelector: { mode: "branch", branchId: branch.id },
-				createdAt: work.createdAt,
-				updatedAt: copy.updatedAt,
-			};
+			source = await this.branchWorkingCopySource(input.workId, input.branchId);
 		}
 		if (!source) {
-			const work = (await this.store.listWorks()).find((candidate) =>
-				candidate.id === input.workId
-			);
-			if (!work) throw new Error(`Work not found: ${input.workId}`);
-			const mains = (await this.store.listBranches(input.workId)).filter((branch) =>
-				branch.name === "main" && !branch.archivedAt
-			);
-			if (mains.length !== 1) {
-				throw new Error(`Expected one active main Branch for Work: ${input.workId}`);
-			}
-			const main = mains[0];
-			const copy = (await this.store.listWorkingCopies(input.workId)).find((candidate) =>
-				candidate.branchId === main.id
-			);
-			if (!copy) throw new Error(`Working Copy not found for Branch: ${main.id}`);
-			source = {
-				id: "",
-				workId: work.id,
-				text: copy.text,
-				parentId: null,
-				orderKey: 0,
-				collapsed: false,
-				revisionSelector: { mode: "branch", branchId: main.id },
-				createdAt: work.createdAt,
-				updatedAt: copy.updatedAt,
-			};
+			source = await this.branchWorkingCopySource(input.workId);
 		}
 		const occurrence = {
 			id: crypto.randomUUID(),
@@ -272,6 +219,38 @@ export class OccurrenceOperations {
 
 	private async listActiveLinks() {
 		return (await this.store.listLinks()).filter((link) => link.status !== "retracted");
+	}
+
+	private async branchWorkingCopySource(workId: string, branchId?: string): Promise<OutlineItem> {
+		const [work, branches, copies] = await Promise.all([
+			this.store.listWorks().then((works) => works.find((candidate) => candidate.id === workId)),
+			this.store.listBranches(workId),
+			this.store.listWorkingCopies(workId),
+		]);
+		if (!work) throw new Error(`Work not found: ${workId}`);
+		const active = branchId
+			? branches.filter((branch) => branch.id === branchId && !branch.archivedAt)
+			: branches.filter((branch) => branch.name === "main" && !branch.archivedAt);
+		if (active.length !== 1) {
+			if (branchId) throw new Error(`Active Branch not found for Work: ${branchId}`);
+			throw new Error(`Expected one active main Branch for Work: ${workId}`);
+		}
+		const branch = active[0];
+		const copy = copies.find((candidate) => candidate.branchId === branch.id);
+		if (!copy || copy.workId !== workId) {
+			throw new Error(`Working Copy not found for Branch: ${branch.id}`);
+		}
+		return {
+			id: "",
+			workId: work.id,
+			text: copy.text,
+			parentId: null,
+			orderKey: 0,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: branch.id },
+			createdAt: work.createdAt,
+			updatedAt: copy.updatedAt,
+		};
 	}
 
 	private markRecursivePlacements(items: OutlineItem[]): OutlineItem[] {

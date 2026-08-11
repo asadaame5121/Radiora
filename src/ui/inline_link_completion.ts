@@ -1,4 +1,5 @@
 import type { InternalReferenceCompletion } from "../services/internal_reference_service.ts";
+import { EMPTY_WORK_DISPLAY_NAME } from "../services/internal_reference_display.ts";
 
 export interface InlineLinkTriggerIdentity {
 	itemId: string;
@@ -21,6 +22,6 @@ export function filterInlineLinkCandidates(
 ): InternalReferenceCompletion[] {
 	return candidates.filter((candidate) =>
 		candidate.scope === "work" && candidate.workId !== sourceWorkId &&
-		candidate.displayName.trim() !== "(空の項目)"
+		candidate.displayName.trim() !== EMPTY_WORK_DISPLAY_NAME
 	);
 }

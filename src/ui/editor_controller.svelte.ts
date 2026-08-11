@@ -18,6 +18,7 @@ import type {
 import { parseMarkdownCandidates } from "../services/markdown_parser.ts";
 import type { NavigationTarget } from "../domain/models.ts";
 import { filterInlineLinkCandidates, isSameInlineLinkTrigger } from "./inline_link_completion.ts";
+import { applyBranchWorkingCopyText } from "./editor_working_copy.ts";
 
 export type InternalReferenceCompletionState = {
 	itemId: string;
@@ -119,15 +120,10 @@ export function createEditorController(ports: EditorControllerPorts) {
 		const text = textarea.value;
 		const snapshot = ports.getSnapshot();
 		const item = snapshot.items.find((candidate) => candidate.id === id);
-		if (!item) return;
+		if (!item || item.revisionSelector.mode !== "branch") return;
 		const updatedAt = new Date().toISOString();
-		for (const placement of snapshot.items) {
-			if (placement.workId === item.workId) {
-				placement.text = text;
-				placement.updatedAt = updatedAt;
-			}
-		}
-		autosave.queue(item.workId, id, text);
+		applyBranchWorkingCopyText(snapshot.items, item, text, updatedAt);
+		autosave.queue(item.workId, item.revisionSelector.branchId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
 		void updateInternalReferenceCompletion(id, textarea);
 		void updateInlineLinkCompletion(id, textarea);

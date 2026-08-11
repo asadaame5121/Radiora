@@ -6,6 +6,10 @@ import {
 	type RadioraReferenceScope,
 } from "./markdown_parser.ts";
 import { canonicalInternalReferenceMarkdown } from "./internal_reference.ts";
+import {
+	EMPTY_REVISION_DISPLAY_NAME,
+	EMPTY_WORK_DISPLAY_NAME,
+} from "./internal_reference_display.ts";
 import { normalizeSearchText, titleFromText } from "./search_text.ts";
 
 export type InternalReferenceStatus =
@@ -65,7 +69,7 @@ export class InternalReferenceService {
 		});
 		for (const revision of revisions) {
 			if (!activeWorkIds.has(revision.workId)) continue;
-			const displayName = titleFromText(revision.text) || "(空の版)";
+			const displayName = titleFromText(revision.text) || EMPTY_REVISION_DISPLAY_NAME;
 			completions.push(this.completion(
 				"revision",
 				revision.id,
@@ -149,7 +153,7 @@ export class InternalReferenceService {
 			return {
 				reference,
 				status: "resolved",
-				displayName: titleFromText(revision.text) || "(空の版)",
+				displayName: titleFromText(revision.text) || EMPTY_REVISION_DISPLAY_NAME,
 				workId: revision.workId,
 				revision,
 				navigationTarget: navigationTarget(revision.workId, occurrences),
@@ -183,7 +187,7 @@ export class InternalReferenceService {
 						workId: copy.workId,
 						branchId: copy.branchId,
 					},
-					displayName: titleFromText(copy.text) || "(空の項目)",
+					displayName: titleFromText(copy.text) || EMPTY_WORK_DISPLAY_NAME,
 					count: matches.length,
 					references: matches,
 				});
@@ -199,7 +203,7 @@ export class InternalReferenceService {
 						workId: revision.workId,
 						revisionId: revision.id,
 					},
-					displayName: titleFromText(revision.text) || "(空の版)",
+					displayName: titleFromText(revision.text) || EMPTY_REVISION_DISPLAY_NAME,
 					count: matches.length,
 					references: matches,
 				});
@@ -256,7 +260,7 @@ function activeMainTitle(
 	if (matchingCopies.length !== 1) {
 		throw new Error(`Expected one Working Copy for active main Branch: ${mains[0].id}`);
 	}
-	return titleFromText(matchingCopies[0].text) || "(空の項目)";
+	return titleFromText(matchingCopies[0].text) || EMPTY_WORK_DISPLAY_NAME;
 }
 
 function navigationTarget(

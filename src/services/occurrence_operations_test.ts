@@ -118,6 +118,37 @@ Deno.test("occurrence operations rejects a Branch from another Work", async () =
 	);
 });
 
+Deno.test("occurrence operations rejects an archived Branch", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new OccurrenceOperations(store);
+	const source = await operations.createItem({ text: "source", parentId: null });
+	const branch = {
+		id: "archived",
+		workId: source.workId,
+		name: "archived",
+		headRevisionId: null,
+		createdAt: "2026-08-12T00:00:00.000Z",
+	};
+	await store.createBranch(branch, {
+		branchId: branch.id,
+		workId: source.workId,
+		text: "old draft",
+		updatedAt: branch.createdAt,
+	});
+	await store.updateBranch({ ...branch, archivedAt: "2026-08-12T01:00:00.000Z" });
+
+	await assertRejects(
+		() =>
+			operations.createOccurrence({
+				workId: source.workId,
+				branchId: branch.id,
+				parentId: null,
+			}),
+		Error,
+		"Active Branch not found for Work",
+	);
+});
+
 Deno.test("occurrence operations trashes a blank Work when its last placement is removed", async () => {
 	const store = new MemoryGraphStore();
 	const operations = new OccurrenceOperations(store);

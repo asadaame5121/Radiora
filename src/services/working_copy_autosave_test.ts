@@ -20,14 +20,14 @@ Deno.test("Working Copy autosave debounces edits and saves the latest text", asy
 		clearTimer: (timer) => timers.delete(timer),
 	});
 
-	coordinator.queue("work", "occurrence-a", "first");
-	coordinator.queue("work", "occurrence-b", "latest");
+	coordinator.queue("work", "branch", "occurrence-a", "first");
+	coordinator.queue("work", "branch", "occurrence-b", "latest");
 	assertEquals(timers.size, 1);
 	await coordinator.flush();
 
 	assertEquals(saves, [["occurrence-b", "latest"]]);
 	assertEquals(coordinator.hasUnsavedChanges(), false);
-	assertEquals(coordinator.statuses(), [{ workId: "work", phase: "saved" }]);
+	assertEquals(coordinator.statuses(), [{ workId: "work", branchId: "branch", phase: "saved" }]);
 });
 
 Deno.test("Working Copy autosave serializes edits queued during a save", async () => {
@@ -43,10 +43,10 @@ Deno.test("Working Copy autosave serializes edits queued during a save", async (
 		},
 	});
 
-	coordinator.queue("work", "occurrence", "first");
+	coordinator.queue("work", "branch", "occurrence", "first");
 	const flushing = coordinator.flush();
 	await Promise.resolve();
-	coordinator.queue("work", "occurrence", "second");
+	coordinator.queue("work", "branch", "occurrence", "second");
 	releaseFirst();
 	await flushing;
 
@@ -65,16 +65,33 @@ Deno.test("Working Copy autosave retains a failed draft and reports retry progre
 		onStatusChange: (next) => statuses.push(next),
 	});
 
-	coordinator.queue("work", "occurrence", "do not lose");
+	coordinator.queue("work", "branch", "occurrence", "do not lose");
 	await assertRejects(() => coordinator.flush(), Error, "disk full");
 	assertEquals(coordinator.drafts()[0], {
 		workId: "work",
+		branchId: "branch",
 		occurrenceId: "occurrence",
 		text: "do not lose",
-		status: { workId: "work", phase: "failed", error: "disk full" },
+		status: { workId: "work", branchId: "branch", phase: "failed", error: "disk full" },
 	});
 
 	await coordinator.retry();
 	assertEquals(coordinator.drafts(), []);
-	assertEquals(statuses.at(-1), [{ workId: "work", phase: "saved" }]);
+	assertEquals(statuses.at(-1), [{ workId: "work", branchId: "branch", phase: "saved" }]);
+});
+
+Deno.test("Working Copy autosave keeps Branch drafts independent within one Work", async () => {
+	const saves: Array<[string, string]> = [];
+	const coordinator = new WorkingCopyAutosaveCoordinator({
+		save: (occurrenceId, text) => {
+			saves.push([occurrenceId, text]);
+			return Promise.resolve();
+		},
+	});
+
+	coordinator.queue("work", "branch-main", "main", "main text");
+	coordinator.queue("work", "branch-alternate", "alternate", "alternate text");
+	await coordinator.flush("work");
+
+	assertEquals(saves.sort(), [["alternate", "alternate text"], ["main", "main text"]]);
 });
