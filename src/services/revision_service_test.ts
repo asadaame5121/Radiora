@@ -194,7 +194,7 @@ Deno.test("ordinary saves, autosave, snapshot policy, and snapshot restore do no
 		save: (branchId, text) =>
 			store.updateBranchWorkingCopy(branchId, text, "2026-07-28T12:02:00.000Z"),
 	});
-	autosave.queue("work", "branch", "autosaved");
+	autosave.queue("work", "branch", "branch", "autosaved");
 	await autosave.flush();
 
 	const workingCopy = (await store.listWorkingCopies("work"))[0];

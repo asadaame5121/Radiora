@@ -213,6 +213,8 @@ export interface CreateOccurrenceInput {
 	workId: string;
 	parentId: string | null;
 	afterId?: string | null;
+	/** Selects a specific editable Branch instead of copying an existing placement. */
+	branchId?: string;
 	contextualHeading?: string;
 }
 

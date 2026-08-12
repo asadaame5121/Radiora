@@ -1975,18 +1975,29 @@
 			} else if (confirmation.action === "purge") {
 				await workController.confirmPurge(confirmation.workId);
 			} else if (confirmation.action === "rewrite") {
+				const source = snapshot.items.find((item) => item.id === confirmation.occurrenceId);
+				if (!source) {
+					throw new Error(`別稿の配置元が見つかりません: ${confirmation.occurrenceId}`);
+				}
 				const result = await api.rewriteAsNewBranch(
 					confirmation.sourceBranchId,
 					confirmationController.rewriteBranchName,
 					"confirmed",
 				);
 				if (result.status === "created") {
-					await load(confirmation.occurrenceId);
+					const placement = await api.createOccurrence({
+						workId: confirmation.workId,
+						branchId: result.branch.id,
+						parentId: source.parentId,
+						afterId: source.id,
+						contextualHeading: result.branch.name,
+					});
+					await load(placement.id);
 					await Promise.all([
 						loadRevisions(confirmation.workId),
 						loadWorkLineage(confirmation.workId),
 					]);
-					viewMode = "workLineage";
+					viewMode = "outline";
 				}
 			} else if (confirmation.action === "merge-duplicate") {
 				await workController.confirmDuplicateMerge(confirmation.preview);
