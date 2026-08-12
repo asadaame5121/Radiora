@@ -18,6 +18,7 @@
 	import TrashView from "./TrashView.svelte";
 	import OptionsView from "./OptionsView.svelte";
 	import ConfirmationDialog from "./ConfirmationDialog.svelte";
+	import Toast from "./Toast.svelte";
 	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
 	import LicensesDialog, {
 		type LicenseEntry,
@@ -28,6 +29,7 @@
 		type PendingConfirmation,
 	} from "./confirmation_controller.svelte.ts";
 	import { createEditorController } from "./editor_controller.svelte.ts";
+	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
 	import type { ContextMenuItem } from "./context_menu";
@@ -35,7 +37,6 @@
 	import type {
 		Bookmark,
 		CreateLinkInput,
-		EmergenceAction,
 		EmergenceSuggestion,
 		LinkType,
 		OutlineItem,
@@ -182,9 +183,6 @@
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
 	let asideMode = $state<AsideMode>("overview");
-	let emergenceSuggestions = $state<EmergenceSuggestion[]>([]);
-	let emergenceResolutionReasons = $state<Record<string, string>>({});
-	let emergenceLoading = $state(false);
 	let aliases = $state<SearchAlias[]>([]);
 	let aliasCanonical = $state("");
 	let aliasVariants = $state("");
@@ -255,6 +253,13 @@
 			bookmarks = await api.listBookmarks();
 		},
 	});
+	const emergenceController = createEmergenceController({
+		api,
+		getSelectedId: () => selectedId,
+		titleForId,
+		reloadOutline: load,
+		reportError: (cause) => error = errorMessage(cause),
+	});
 	const editorController = createEditorController({
 		api,
 		getSnapshot: () => snapshot,
@@ -281,6 +286,10 @@
 	const stubEntries = $derived(workController.stubEntries);
 	const duplicateCandidates = $derived(workController.duplicateCandidates);
 	const trashEntries = $derived(workController.trashEntries);
+	const emergenceSuggestions = $derived(emergenceController.suggestions);
+	const emergenceResolutionReasons = $derived(emergenceController.resolutionReasons);
+	const emergenceLoading = $derived(emergenceController.loading);
+	const emergenceToast = $derived(emergenceController.toast);
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
 	const markdownExportSelectionRequired = $derived(
 		markdownExportPreference.scope === "selected" && !selectedItem,
@@ -468,7 +477,7 @@
 	$effect(() => {
 		const id = selectedId;
 		if (id && startup.phase === "ready") void loadEmergence(id);
-		else emergenceSuggestions = [];
+		else emergenceController.clear();
 	});
 
 	$effect(() => {
@@ -1486,23 +1495,14 @@
 	}
 
 	async function loadEmergence(id: string): Promise<void> {
-		emergenceLoading = true;
-		try {
-			emergenceSuggestions = await api.listEmergenceSuggestions(id, 10);
-		} catch (cause) {
-			error = errorMessage(cause);
-		} finally {
-			emergenceLoading = false;
-		}
+		await emergenceController.load(id);
 	}
 
-	async function resolveEmergence(suggestion: EmergenceSuggestion, action: EmergenceAction): Promise<void> {
-		const reason = emergenceResolutionReasons[suggestion.id]?.trim();
-		await api.resolveEmergenceSuggestion(suggestion.id, action, reason || undefined);
-		const { [suggestion.id]: _resolved, ...remainingReasons } = emergenceResolutionReasons;
-		emergenceResolutionReasons = remainingReasons;
-		if (action === "accept") await load();
-		if (selectedId) await loadEmergence(selectedId);
+	async function resolveEmergence(
+		suggestion: EmergenceSuggestion,
+		action: "accept" | "dismiss" | "pin",
+	): Promise<void> {
+		await emergenceController.resolve(suggestion, action);
 	}
 
 	async function saveAlias(): Promise<void> {
@@ -2865,13 +2865,13 @@
 									placeholder={vocabulary.emergenceResolutionReason}
 									value={emergenceResolutionReasons[suggestion.id] ?? ""}
 									oninput={(event) =>
-										(emergenceResolutionReasons = {
-											...emergenceResolutionReasons,
-											[suggestion.id]: event.currentTarget.value,
-										})}
+										emergenceController.setResolutionReason(
+											suggestion.id,
+											event.currentTarget.value,
+										)}
 								/>
 								<div class="discovery-actions">
-									{#if suggestion.proposedLinkType}<button onclick={() => resolveEmergence(suggestion, "accept")}>{vocabulary.emergenceAccept}</button>{/if}
+									<button onclick={() => resolveEmergence(suggestion, "accept")}>{vocabulary.emergenceAccept}</button>
 									<button onclick={() => resolveEmergence(suggestion, "pin")}>{vocabulary.emergenceHold}</button>
 									<button
 										onclick={() => resolveEmergence(suggestion, "dismiss")}
@@ -2958,6 +2958,16 @@
 	</main>
 	{/if}
 </div>
+
+{#if emergenceToast}
+	{#key emergenceToast.id}
+		<Toast
+			title={emergenceToast.title}
+			message={emergenceToast.message}
+			onDismiss={() => emergenceController.dismissToast()}
+		/>
+	{/key}
+{/if}
 
 <ConfirmationDialog
 	bind:this={confirmationDialog}
