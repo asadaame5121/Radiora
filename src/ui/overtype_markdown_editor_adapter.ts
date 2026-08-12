@@ -31,6 +31,7 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 	#compositionDirty = false;
 	#compositionStartValue = "";
 	#compositionTimer?: ReturnType<typeof globalThis.setTimeout>;
+	#readOnly = false;
 
 	constructor(options: MarkdownEditorAdapterOptions) {
 		this.#options = options;
@@ -94,6 +95,12 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 		if (mode === "plain") this.#instance.showPlainTextarea();
 		else if (mode === "preview") this.#instance.showPreviewMode();
 		else this.#instance.showNormalEditMode();
+		this.textarea.readOnly = this.#readOnly;
+	}
+
+	setReadOnly(readOnly: boolean): void {
+		this.#readOnly = readOnly;
+		this.textarea.readOnly = readOnly;
 	}
 
 	getSelection(): MarkdownEditorSelection {
@@ -183,6 +190,8 @@ export class TextareaMarkdownEditorAdapter implements MarkdownEditorAdapter {
 	#compositionStartValue = "";
 	#compositionTimer?: ReturnType<typeof globalThis.setTimeout>;
 	#destroyed = false;
+	#mode: MarkdownEditorMode = "preview";
+	#readOnly = false;
 
 	constructor(options: MarkdownEditorAdapterOptions) {
 		this.#options = options;
@@ -252,8 +261,14 @@ export class TextareaMarkdownEditorAdapter implements MarkdownEditorAdapter {
 	}
 
 	setMode(mode: MarkdownEditorMode): void {
-		this.textarea.readOnly = mode === "preview";
+		this.#mode = mode;
+		this.textarea.readOnly = this.#readOnly || mode === "preview";
 		this.textarea.dataset.mode = mode;
+	}
+
+	setReadOnly(readOnly: boolean): void {
+		this.#readOnly = readOnly;
+		this.textarea.readOnly = readOnly || this.#mode === "preview";
 	}
 
 	getSelection(): MarkdownEditorSelection {

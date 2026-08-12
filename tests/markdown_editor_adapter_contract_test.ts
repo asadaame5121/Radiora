@@ -35,6 +35,11 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 	assertMatch(component, /changeMode\("plain"\)/);
 	assertMatch(component, /changeMode\("preview"\)/);
 	assertMatch(component, /adapter\?\.focus\(\)/);
+	assertMatch(component, /adapter\?\.setReadOnly\(readOnly\)/);
+	assertMatch(component, /固定版・読み取り専用/);
+	assertMatch(app, /readOnly=\{row\.item\.revisionSelector\.mode === "pinned"\}/);
+	assertMatch(adapter, /this\.textarea\.readOnly = this\.#readOnly/);
+	assertMatch(adapter, /this\.textarea\.readOnly = readOnly \|\| this\.#mode === "preview"/);
 	assertMatch(app, /compositionGuard \|\| event\.isComposing \|\| event\.keyCode === 229/);
 	assertMatch(styles, /\.markdown-editor-host \.overtype-container \{/);
 	assertMatch(styles, /--preview-text-default: var\(--text\)/);

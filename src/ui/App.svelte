@@ -2393,6 +2393,7 @@
 									<MarkdownEditor
 										value={row.item.text}
 										itemId={row.item.id}
+										readOnly={row.item.revisionSelector.mode === "pinned"}
 										onFocus={() => selectOccurrence(row.item.id)}
 										onChange={(_value, textarea) => updateLocalText(row.item.id, textarea)}
 										onSelectionChange={(textarea) => updateEditorSelection(row.item.id, textarea)}

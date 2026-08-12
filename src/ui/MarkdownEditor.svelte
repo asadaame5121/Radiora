@@ -12,6 +12,7 @@
 		onSelectionChange,
 		onFocus,
 		onInternalReference,
+		readOnly = false,
 	}: {
 		value: string;
 		itemId: string;
@@ -24,6 +25,7 @@
 		onSelectionChange?: (textarea: HTMLTextAreaElement) => void;
 		onFocus?: (textarea: HTMLTextAreaElement) => void;
 		onInternalReference: (destination: string) => void;
+		readOnly?: boolean;
 	} = $props();
 
 	let host: HTMLDivElement;
@@ -49,6 +51,7 @@
 			onInternalReference,
 			onFallback: () => fallback = true,
 		});
+		adapter.setReadOnly(readOnly);
 		adapter.setMode(mode);
 		const onHostClick = (event: MouseEvent) => focusEditor(event);
 		const onFocusRequest = (event: Event) => {
@@ -79,14 +82,19 @@
 		if (current && current.getValue() !== next) current.setValue(next);
 	});
 
+	$effect(() => {
+		adapter?.setReadOnly(readOnly);
+	});
+
 	function changeMode(next: MarkdownEditorMode): void {
+		if (readOnly) return;
 		if (mode === next) return;
 		mode = next;
 		adapter?.setMode(next);
 	}
 
 	function handleFocus(textarea: HTMLTextAreaElement): void {
-		changeMode("plain");
+		if (!readOnly) changeMode("plain");
 		onFocus?.(textarea);
 	}
 
@@ -97,6 +105,7 @@
 	function focusEditor(event: MouseEvent): void {
 		const target = event.target;
 		if (target instanceof Element && target.closest("a, button, select, option")) return;
+		if (readOnly) return;
 		changeMode("plain");
 		adapter?.focus();
 	}
@@ -107,14 +116,34 @@
 	});
 </script>
 
-<div class="markdown-editor" class:fallback>
+<div class="markdown-editor" class:fallback class:read-only={readOnly}>
 	<div class="markdown-editor-host" data-editor-item-id={itemId} bind:this={host}></div>
-	<label class="markdown-editor-mode">
-		<span>{vocabulary.editorMode}</span>
-		<select value={mode} onchange={(event) => changeMode(event.currentTarget.value as MarkdownEditorMode)}>
-			<option value="normal">{vocabulary.editorNormal}</option>
-			<option value="plain">{vocabulary.editorPlain}</option>
-			<option value="preview">{vocabulary.editorPreview}</option>
-		</select>
-	</label>
+	{#if readOnly}
+		<span class="markdown-editor-read-only">固定版・読み取り専用</span>
+	{:else}
+		<label class="markdown-editor-mode">
+			<span>{vocabulary.editorMode}</span>
+			<select value={mode} onchange={(event) => changeMode(event.currentTarget.value as MarkdownEditorMode)}>
+				<option value="normal">{vocabulary.editorNormal}</option>
+				<option value="plain">{vocabulary.editorPlain}</option>
+				<option value="preview">{vocabulary.editorPreview}</option>
+			</select>
+		</label>
+	{/if}
 </div>
+
+<style>
+	.markdown-editor-read-only {
+		position: absolute;
+		z-index: 5;
+		top: 3px;
+		right: 8px;
+		padding: 1px 5px;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		color: var(--muted);
+		background: var(--surface-raised);
+		font-size: 9px;
+		pointer-events: none;
+	}
+</style>

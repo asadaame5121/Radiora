@@ -33,6 +33,7 @@ export interface MarkdownEditorAdapter {
 	getValue(): string;
 	setValue(value: string): void;
 	setMode(mode: MarkdownEditorMode): void;
+	setReadOnly(readOnly: boolean): void;
 	getSelection(): MarkdownEditorSelection;
 	setSelection(selection: MarkdownEditorSelection): void;
 	focus(): void;
