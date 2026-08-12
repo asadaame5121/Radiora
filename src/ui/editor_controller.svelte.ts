@@ -247,6 +247,7 @@ export function createEditorController(ports: EditorControllerPorts) {
 			id: work.workId,
 			workId: work.workId,
 			displayName,
+			isEmpty: false,
 			scopeLabel: "未配置",
 			shortId: work.workId.slice(0, 8),
 			canonicalMarkdown: canonicalInternalReferenceMarkdown(displayName, "work", work.workId),

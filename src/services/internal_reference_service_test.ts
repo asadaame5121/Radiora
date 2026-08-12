@@ -155,6 +155,35 @@ Deno.test("completion lists active Work and Revision with canonical ID-bearing M
 	);
 });
 
+Deno.test("completion treats a Work as non-empty when an active alternate Branch has text", async () => {
+	const store = new MemoryGraphStore();
+	await createWork(store, {
+		workId: "work-alternate-only",
+		branchId: "branch-main",
+		occurrenceId: "occ-main",
+		text: "",
+	});
+	await store.createBranch(
+		{
+			id: "branch-alternate",
+			workId: "work-alternate-only",
+			name: "別稿",
+			headRevisionId: null,
+			createdAt: NOW,
+		},
+		{
+			branchId: "branch-alternate",
+			workId: "work-alternate-only",
+			text: "別稿の本文",
+			updatedAt: NOW,
+		},
+	);
+
+	const [candidate] = await new InternalReferenceService(store).listCompletions();
+	assertEquals(candidate.displayName, "別稿の本文");
+	assertEquals(candidate.isEmpty, false);
+});
+
 Deno.test("backlinks scan current Working Copies and fixed Revisions without persistent relations", async () => {
 	const store = new MemoryGraphStore();
 	await createWork(store, {

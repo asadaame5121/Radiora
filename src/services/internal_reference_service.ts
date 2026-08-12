@@ -25,6 +25,7 @@ export interface InternalReferenceCompletion {
 	id: string;
 	workId: string;
 	displayName: string;
+	isEmpty: boolean;
 	scopeLabel: string;
 	shortId: string;
 	canonicalMarkdown: string;
@@ -64,8 +65,8 @@ export class InternalReferenceService {
 		]);
 		const activeWorkIds = new Set(works.map((work) => work.id));
 		const completions: InternalReferenceCompletion[] = works.map((work) => {
-			const displayName = activeMainTitle(work.id, branches, copies);
-			return this.completion("work", work.id, work.id, displayName);
+			const display = workCompletionDisplay(work.id, branches, copies);
+			return this.completion("work", work.id, work.id, display.displayName, display.isEmpty);
 		});
 		for (const revision of revisions) {
 			if (!activeWorkIds.has(revision.workId)) continue;
@@ -75,6 +76,7 @@ export class InternalReferenceService {
 				revision.id,
 				revision.workId,
 				displayName,
+				!titleFromText(revision.text),
 			));
 		}
 		const normalizedQuery = normalizeSearchText(query);
@@ -220,17 +222,40 @@ export class InternalReferenceService {
 		id: string,
 		workId: string,
 		displayName: string,
+		isEmpty: boolean,
 	): InternalReferenceCompletion {
 		return {
 			scope,
 			id,
 			workId,
 			displayName,
+			isEmpty,
 			scopeLabel: scope === "work" ? "項目" : "固定版",
 			shortId: id.slice(0, 8),
 			canonicalMarkdown: canonicalInternalReferenceMarkdown(displayName, scope, id),
 		};
 	}
+}
+
+function workCompletionDisplay(
+	workId: string,
+	branches: Awaited<ReturnType<WorkStorePort["listBranches"]>>,
+	copies: Awaited<ReturnType<WorkStorePort["listWorkingCopies"]>>,
+): { displayName: string; isEmpty: boolean } {
+	const mainTitle = activeMainTitle(workId, branches, copies);
+	if (mainTitle !== EMPTY_WORK_DISPLAY_NAME) return { displayName: mainTitle, isEmpty: false };
+	const activeBranchIds = new Set(
+		branches.filter((branch) => branch.workId === workId && !branch.archivedAt).map((branch) =>
+			branch.id
+		),
+	);
+	const alternateTitle = copies
+		.filter((copy) => copy.workId === workId && activeBranchIds.has(copy.branchId))
+		.map((copy) => titleFromText(copy.text))
+		.find(Boolean);
+	return alternateTitle
+		? { displayName: alternateTitle, isEmpty: false }
+		: { displayName: EMPTY_WORK_DISPLAY_NAME, isEmpty: true };
 }
 
 function matchingReferences(

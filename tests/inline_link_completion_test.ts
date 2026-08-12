@@ -9,12 +9,14 @@ function candidate(
 	id: string,
 	displayName: string,
 	scope: "work" | "revision" = "work",
+	isEmpty = false,
 ): InternalReferenceCompletion {
 	return {
 		scope,
 		id,
 		workId: id,
 		displayName,
+		isEmpty,
 		scopeLabel: scope === "work" ? "項目" : "固定版",
 		shortId: id,
 		canonicalMarkdown: "",
@@ -53,10 +55,11 @@ Deno.test("inline link completion ignores the source, revisions, and blank Works
 	assertEquals(
 		filterInlineLinkCandidates([
 			candidate("source", "Source"),
-			candidate("blank", "(空の項目)"),
+			candidate("blank", "(空の項目)", "work", true),
+			candidate("alternate-only", "別稿の本文"),
 			candidate("revision", "Revision", "revision"),
 			candidate("target", "Target"),
 		], "source").map((entry) => entry.id),
-		["target"],
+		["alternate-only", "target"],
 	);
 });
