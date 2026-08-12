@@ -24,6 +24,16 @@ function suggestion(id: string, targetItemId: string): EmergenceSuggestion {
 Deno.test("emergence toast summarizes unseen suggestions for one context", () => {
 	assertEquals(
 		emergenceToastContent(
+			[suggestion("one", "target-a")],
+			(id) => ({ "target-a": "Alpha" })[id] ?? id,
+		),
+		{
+			title: "新しい関係候補",
+			message: "Alphaとの関係候補が見つかりました。",
+		},
+	);
+	assertEquals(
+		emergenceToastContent(
 			[suggestion("one", "target-a"), suggestion("two", "target-b")],
 			(id) => ({ "target-a": "Alpha", "target-b": "Beta" })[id] ?? id,
 		),
