@@ -1,5 +1,7 @@
 export type WorkingCopySavePhase = "saved" | "unsaved" | "saving" | "failed";
 
+type TimerHandle = number | ReturnType<typeof globalThis.setTimeout>;
+
 export interface WorkingCopySaveStatus {
 	workId: string;
 	branchId: string;
@@ -22,7 +24,7 @@ interface PendingWorkingCopy {
 	text: string;
 	version: number;
 	savedVersion: number;
-	timer?: number;
+	timer?: TimerHandle;
 	worker?: Promise<void>;
 	status: WorkingCopySaveStatus;
 }
@@ -31,8 +33,8 @@ export interface WorkingCopyAutosaveOptions {
 	save(occurrenceId: string, text: string): Promise<void>;
 	onStatusChange?(statuses: WorkingCopySaveStatus[]): void;
 	delayMs?: number;
-	setTimer?(callback: () => void, delayMs: number): number;
-	clearTimer?(timer: number): void;
+	setTimer?(callback: () => void, delayMs: number): TimerHandle;
+	clearTimer?(timer: TimerHandle): void;
 }
 
 /**
@@ -52,7 +54,7 @@ export class WorkingCopyAutosaveCoordinator {
 		this.#onStatusChange = options.onStatusChange;
 		this.#delayMs = options.delayMs ?? 250;
 		this.#setTimer = options.setTimer ??
-			((callback, delayMs) => globalThis.setTimeout(callback, delayMs) as unknown as number);
+			((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
 		this.#clearTimer = options.clearTimer ?? ((timer) => globalThis.clearTimeout(timer));
 	}
 
@@ -74,6 +76,7 @@ export class WorkingCopyAutosaveCoordinator {
 		entry.status = { workId, branchId, phase: "unsaved" };
 		entry.timer = this.#setTimer(() => {
 			entry.timer = undefined;
+			// biome-ignore lint/plugin/noSwallowedRejection: The coordinator records the failure status and retains the draft for retry.
 			void this.#flushEntry(entry).catch(() => {
 				// Failure is deliberately represented by status and the retained draft.
 			});

@@ -35,6 +35,7 @@ export function saveQuickCapturePreference(
 ): void {
 	try {
 		storage?.setItem(QUICK_CAPTURE_PREFERENCE_STORAGE_KEY, JSON.stringify(preference));
+		// biome-ignore lint/plugin/noSwallowedRejection: Quick-capture preferences are optional and storage failure must not block input.
 	} catch {
 		// Quick capture preferences are best-effort and must not block input.
 	}

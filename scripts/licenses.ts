@@ -162,6 +162,7 @@ async function main(): Promise<void> {
 	}
 
 	for (const output of outputs) {
+		// biome-ignore lint/plugin/noSwallowedRejection: A missing generated license directory is the expected clean-build state.
 		await Deno.remove(output, { recursive: true }).catch(() => undefined);
 		await Deno.mkdir(new URL("npm/", output), { recursive: true });
 		await Deno.mkdir(new URL("runtime/", output), { recursive: true });

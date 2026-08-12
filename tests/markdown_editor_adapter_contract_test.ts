@@ -24,7 +24,7 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 	assertMatch(adapter, /#compositionGuard/);
 	assertMatch(adapter, /compositionend/);
 	assertMatch(adapter, /onBlur/);
-	assertMatch(adapter, /this\.\#options\.onBlur\?\.\(this\.textarea\)/);
+	assertMatch(adapter, /this\.#options\.onBlur\?\.\(this\.textarea\)/);
 	assertMatch(adapter, /this\.#instance\.linkTooltip\?\.destroy\?\.\(\)/);
 	assertMatch(adapter, /for \(const cleanup of this\.#cleanup\.splice\(0\)\) cleanup\(\)/);
 	assertMatch(adapter, /new TextareaMarkdownEditorAdapter\(options\)/);

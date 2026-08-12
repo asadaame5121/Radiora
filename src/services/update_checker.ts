@@ -16,9 +16,10 @@ export interface UpdateCheckResult {
 	error: string | null;
 }
 
-export interface UpdateFetcher {
-	(url: string, init?: RequestInit): Promise<Pick<Response, "ok" | "json">>;
-}
+export type UpdateFetcher = (
+	url: string,
+	init?: RequestInit,
+) => Promise<Pick<Response, "ok" | "json">>;
 
 export async function checkForUpdate(
 	currentVersion: string,

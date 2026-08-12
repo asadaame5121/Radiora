@@ -1,0 +1,15 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+	JsCatchClause(body = JsBlockStatement(statements = [])),
+	`$promise.catch(() => {})`,
+	`$promise.catch(() => undefined)`,
+	`$promise.then($success, () => {})`,
+	`$promise.then($success, () => undefined)`
+} as $handler where {
+	register_diagnostic(
+		span = $handler,
+		message = "Do not silently swallow an error or rejected promise. Handle it explicitly, or suppress this diagnostic with a concrete reason."
+	)
+}

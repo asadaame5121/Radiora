@@ -1,0 +1,14 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+or {
+	`$value as unknown as $target`,
+	TsAsExpression() as $any_assertion where {
+		$any_assertion <: contains TsAnyType()
+	}
+} as $assertion where {
+	register_diagnostic(
+		span = $assertion,
+		message = "Do not bypass type safety with 'as any' or a double assertion. Validate the value or add a narrow type guard."
+	)
+}

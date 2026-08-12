@@ -38,6 +38,7 @@ const logger = new Logger({
 	sink: (line) => {
 		try {
 			Deno.writeTextFileSync(logPath, `${line}\n`, { append: true, create: true });
+			// biome-ignore lint/plugin/noSwallowedRejection: Logging falls back to stdout and must not prevent application startup.
 		} catch {
 			// Diagnostics must not change application behavior.
 		}

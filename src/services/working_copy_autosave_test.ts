@@ -17,7 +17,7 @@ Deno.test("Working Copy autosave debounces edits and saves the latest text", asy
 			timers.set(++nextTimer, callback);
 			return nextTimer;
 		},
-		clearTimer: (timer) => timers.delete(timer),
+		clearTimer: (timer) => typeof timer === "number" && timers.delete(timer),
 	});
 
 	coordinator.queue("work", "branch", "occurrence-a", "first");

@@ -53,6 +53,7 @@ export function saveMarkdownExportPreference(
 ): void {
 	try {
 		storage?.setItem(MARKDOWN_EXPORT_PREFERENCE_STORAGE_KEY, JSON.stringify(preference));
+		// biome-ignore lint/plugin/noSwallowedRejection: Export preferences are optional and storage failure must not block an export.
 	} catch {
 		// Export preferences are best-effort and must never prevent an export.
 	}

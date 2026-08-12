@@ -24,7 +24,7 @@ Deno.test("inline link trigger starts at @ and preserves the caret range", () =>
 Deno.test("inline link trigger accepts an empty query and rejects embedded word mentions", () => {
 	assertEquals(findInlineLinkTrigger("@", 1), { query: "", range: { start: 0, end: 1 } });
 	assertEquals(findInlineLinkTrigger("email@example.com", 13), null);
-	assertEquals(findInlineLinkTrigger("\@literal", 9), null);
+	assertEquals(findInlineLinkTrigger("@literal", 9), null);
 });
 
 Deno.test("inline link trigger ignores code, URLs, Markdown destinations, and fenced blocks", () => {

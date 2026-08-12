@@ -69,11 +69,13 @@ export class Logger {
 		const line = stringifyLogEntry(entry);
 		try {
 			this.#sink?.(line);
+			// biome-ignore lint/plugin/noSwallowedRejection: A diagnostic sink is isolated so it cannot change application behavior.
 		} catch {
 			// Diagnostics must not change application behavior.
 		}
 		try {
 			this.#stdout?.(line);
+			// biome-ignore lint/plugin/noSwallowedRejection: Optional diagnostic stdout is isolated from application behavior.
 		} catch {
 			// Diagnostics must not change application behavior.
 		}

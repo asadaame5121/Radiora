@@ -63,6 +63,7 @@ export class SurrealConnection implements SurrealQueryClient {
 	private trace(event: string, detail?: unknown): void {
 		try {
 			this.diagnosticLogger?.(event, detail);
+			// biome-ignore lint/plugin/noSwallowedRejection: Optional diagnostics must never change database behavior.
 		} catch {
 			// Diagnostics must never change database behavior.
 		}

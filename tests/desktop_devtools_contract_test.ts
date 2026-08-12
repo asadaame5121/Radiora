@@ -14,7 +14,7 @@ Deno.test("desktop DevTools inspection stays opt-in and exposes a CDP audit task
 		"deno run -A scripts/desktop_hmr.ts --inspect=127.0.0.1:9230",
 	);
 	assertEquals(config.tasks["desktop:audit"], "deno run -A scripts/desktop_cdp_audit.ts");
-	assertMatch(launcher, /\"desktop\", \"-A\", \"--hmr\", \.\.\.inspectorArgs\(\)/);
+	assertMatch(launcher, /"desktop", "-A", "--hmr", \.\.\.inspectorArgs\(\)/);
 	assert(launcher.includes("--inspect-renderer="));
 	assert(audit.includes("/json/version"));
 	assert(audit.includes("/json/list"));

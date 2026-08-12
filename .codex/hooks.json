@@ -1,0 +1,19 @@
+{
+	"description": "Run deno fmt and safe Biome lint autofixes on files changed by Codex.",
+	"hooks": {
+		"PostToolUse": [
+			{
+				"matcher": "apply_patch|Edit|Write",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "deno run --allow-read --allow-write --allow-run \"$(git rev-parse --show-toplevel)/scripts/codex_quality_hook.ts\"",
+						"commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& deno run --allow-read --allow-write --allow-run (Join-Path ((git rev-parse --show-toplevel).Trim()) 'scripts/codex_quality_hook.ts')\"",
+						"timeout": 30,
+						"statusMessage": "Formatting and linting changed files"
+					}
+				]
+			}
+		]
+	}
+}

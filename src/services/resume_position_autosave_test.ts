@@ -14,7 +14,7 @@ Deno.test("resume autosave debounces to the latest caret", async () => {
 			timers.set(++nextTimer, callback);
 			return nextTimer;
 		},
-		clearTimer: (timer) => timers.delete(timer),
+		clearTimer: (timer) => typeof timer === "number" && timers.delete(timer),
 	});
 
 	coordinator.queue("first", 1);

@@ -41,6 +41,7 @@ export function saveTreeFilterPreference(
 			linkTypes: [...filter.linkTypes],
 		};
 		storage.setItem(TREE_FILTER_STORAGE_KEY, JSON.stringify(stored));
+		// biome-ignore lint/plugin/noSwallowedRejection: Tree filter persistence is optional and must not make the tree unusable.
 	} catch {
 		// This UI preference is best-effort and must not make the tree unusable.
 	}

@@ -1,4 +1,5 @@
 import type { EmergenceAction, EmergenceSuggestion } from "../domain/models.ts";
+import { emergenceToastContent } from "./emergence_toast.ts";
 
 export interface EmergenceApiPort {
 	listEmergenceSuggestions(contextItemId: string, limit?: number): Promise<EmergenceSuggestion[]>;
@@ -8,17 +9,56 @@ export interface EmergenceApiPort {
 export interface EmergenceControllerPorts {
 	api: EmergenceApiPort;
 	getSelectedId(): string | null;
+	titleForId(id: string): string;
 	reloadOutline(): Promise<unknown>;
-	notifySuggestions(suggestions: readonly EmergenceSuggestion[]): void;
 	reportError(cause: unknown): void;
+}
+
+function createEmergenceToastController(titleForId: (id: string) => string) {
+	let content = $state<{ id: number; title: string; message: string } | null>(null);
+	let nextId = 0;
+
+	function notify(suggestions: readonly EmergenceSuggestion[]): void {
+		const toast = emergenceToastContent(suggestions, titleForId);
+		if (toast) content = { id: ++nextId, ...toast };
+	}
+
+	return {
+		get content() {
+			return content;
+		},
+		notify,
+		dismiss: () => content = null,
+	};
+}
+
+function createEmergenceResolutionState() {
+	let reasons = $state<Record<string, string>>({});
+
+	return {
+		get content() {
+			return reasons;
+		},
+		get(id: string): string | undefined {
+			return reasons[id]?.trim();
+		},
+		set(id: string, reason: string): void {
+			reasons = { ...reasons, [id]: reason };
+		},
+		remove(id: string): void {
+			const { [id]: _resolved, ...remaining } = reasons;
+			reasons = remaining;
+		},
+	};
 }
 
 export function createEmergenceController(ports: EmergenceControllerPorts) {
 	let suggestions = $state<EmergenceSuggestion[]>([]);
-	let resolutionReasons = $state<Record<string, string>>({});
 	let loading = $state(false);
 	let loadRequest = 0;
 	const notifiedIds = new Set<string>();
+	const toastController = createEmergenceToastController(ports.titleForId);
+	const resolutionState = createEmergenceResolutionState();
 
 	function clear(): void {
 		loadRequest++;
@@ -37,7 +77,7 @@ export function createEmergenceController(ports: EmergenceControllerPorts) {
 				suggestion.persistenceStatus === "pending" && !notifiedIds.has(suggestion.id)
 			);
 			for (const suggestion of next) notifiedIds.add(suggestion.id);
-			if (unseen.length) ports.notifySuggestions(unseen);
+			if (unseen.length) toastController.notify(unseen);
 		} catch (cause) {
 			if (request === loadRequest) ports.reportError(cause);
 		} finally {
@@ -45,16 +85,11 @@ export function createEmergenceController(ports: EmergenceControllerPorts) {
 		}
 	}
 
-	function setResolutionReason(id: string, reason: string): void {
-		resolutionReasons = { ...resolutionReasons, [id]: reason };
-	}
-
 	async function resolve(suggestion: EmergenceSuggestion, action: EmergenceAction): Promise<void> {
 		try {
-			const reason = resolutionReasons[suggestion.id]?.trim();
+			const reason = resolutionState.get(suggestion.id);
 			await ports.api.resolveEmergenceSuggestion(suggestion.id, action, reason || undefined);
-			const { [suggestion.id]: _resolved, ...remainingReasons } = resolutionReasons;
-			resolutionReasons = remainingReasons;
+			resolutionState.remove(suggestion.id);
 			if (action === "accept") await ports.reloadOutline();
 			const selectedId = ports.getSelectedId();
 			if (selectedId) await load(selectedId);
@@ -69,14 +104,18 @@ export function createEmergenceController(ports: EmergenceControllerPorts) {
 			return suggestions;
 		},
 		get resolutionReasons() {
-			return resolutionReasons;
+			return resolutionState.content;
 		},
 		get loading() {
 			return loading;
 		},
+		get toast() {
+			return toastController.content;
+		},
 		load,
 		clear,
-		setResolutionReason,
+		dismissToast: toastController.dismiss,
+		setResolutionReason: resolutionState.set,
 		resolve,
 	};
 }
