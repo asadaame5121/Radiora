@@ -224,6 +224,7 @@ async function discoverInspector(options: AuditOptions): Promise<InspectorState>
 	let targets: CdpTarget[] = [];
 	try {
 		targets = await fetchJson<CdpTarget[]>(`${baseUrl}/json/list`);
+		// biome-ignore lint/plugin/noSwallowedRejection: /json/list is optional on older inspector builds; /json/version is the fallback.
 	} catch {
 		// Older inspector builds may expose /json/version without /json/list.
 	}
@@ -266,6 +267,7 @@ async function connectToFirst(
 async function sendOptional(client: CdpClient, method: string): Promise<void> {
 	try {
 		await client.send(method);
+		// biome-ignore lint/plugin/noSwallowedRejection: Optional CDP domains differ by target, and absence is an expected capability check.
 	} catch {
 		// The Deno and renderer targets expose different subsets of CDP domains.
 	}

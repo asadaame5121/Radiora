@@ -176,6 +176,7 @@ async function main(): Promise<void> {
 	})();
 	const [major, minor, build, revision] = packageVersionParts(version);
 
+	// biome-ignore lint/plugin/noSwallowedRejection: A missing staging directory is the expected first-build state.
 	await Deno.remove(stagingDir, { recursive: true }).catch(() => undefined);
 	await Deno.mkdir(stagingDir, { recursive: true });
 	await copyDirRecursive(bundleDir, stagingDir);

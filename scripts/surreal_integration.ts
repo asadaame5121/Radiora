@@ -95,6 +95,7 @@ async function waitUntilReady(): Promise<void> {
 				trace("process.health.ready", { attempt: attempt + 1 });
 				return;
 			}
+			// biome-ignore lint/plugin/noSwallowedRejection: Connection failures are expected while the bounded readiness poll is starting.
 		} catch { /* still starting */ }
 		await new Promise((resolve) => setTimeout(resolve, 200));
 	}
@@ -255,9 +256,11 @@ try {
 	trace("integration.cleanup.begin");
 	try {
 		process.kill("SIGTERM");
+		// biome-ignore lint/plugin/noSwallowedRejection: The integration process may already have exited during cleanup.
 	} catch { /* already stopped */ }
 	await process.status;
 	await Promise.allSettled(cliOutputTasks);
+	// biome-ignore lint/plugin/noSwallowedRejection: The temporary database directory may already have been removed by process cleanup.
 	await Deno.remove(tempDir, { recursive: true }).catch(() => undefined);
 	trace("integration.cleanup.ready");
 }

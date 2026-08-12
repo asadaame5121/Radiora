@@ -27,7 +27,7 @@ export function findInlineLinkTrigger(
 	if (isInsideIgnoredMarkdown(source, at)) return null;
 
 	const query = source.slice(at + 1, selectionStart);
-	if (/[\r\n\[\]`]/u.test(query)) return null;
+	if (/[\r\n[\]`]/u.test(query)) return null;
 	return { query: query.trimStart(), range: { start: at, end: selectionEnd } };
 }
 

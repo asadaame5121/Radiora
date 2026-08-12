@@ -1,0 +1,17 @@
+{
+	"minLines": 5,
+	"minTokens": 50,
+	"mode": "mild",
+	"format": ["typescript", "svelte"],
+	"ignore": [
+		"**/*_test.ts",
+		"**/*.test.ts",
+		"**/*.spec.ts",
+		"**/fixtures/**",
+		"**/generated/**"
+	],
+	"gitignore": true,
+	"exitCode": 0,
+	"reporters": ["console"],
+	"output": "reports/jscpd"
+}

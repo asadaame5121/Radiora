@@ -30,7 +30,7 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 	#compositionGuard = false;
 	#compositionDirty = false;
 	#compositionStartValue = "";
-	#compositionTimer?: number;
+	#compositionTimer?: ReturnType<typeof globalThis.setTimeout>;
 
 	constructor(options: MarkdownEditorAdapterOptions) {
 		this.#options = options;
@@ -149,7 +149,7 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 					this.#compositionDirty = false;
 					this.#options.onChange(this.textarea.value, this.textarea);
 				}
-			}, 0) as unknown as number;
+			}, 0);
 		});
 		this.#listen(this.textarea, "keydown", (rawEvent) => {
 			const event = rawEvent as KeyboardEvent;
@@ -181,7 +181,7 @@ export class TextareaMarkdownEditorAdapter implements MarkdownEditorAdapter {
 	#compositionGuard = false;
 	#compositionDirty = false;
 	#compositionStartValue = "";
-	#compositionTimer?: number;
+	#compositionTimer?: ReturnType<typeof globalThis.setTimeout>;
 	#destroyed = false;
 
 	constructor(options: MarkdownEditorAdapterOptions) {
@@ -215,7 +215,7 @@ export class TextareaMarkdownEditorAdapter implements MarkdownEditorAdapter {
 					this.#compositionDirty = false;
 					options.onChange(this.textarea.value, this.textarea);
 				}
-			}, 0) as unknown as number;
+			}, 0);
 		});
 		this.#listen("keydown", (rawEvent) => {
 			const event = rawEvent as KeyboardEvent;

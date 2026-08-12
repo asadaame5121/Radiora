@@ -1,9 +1,11 @@
+type TimerHandle = number | ReturnType<typeof globalThis.setTimeout>;
+
 interface PendingResumePosition {
 	occurrenceId: string;
 	caretOffset: number;
 	version: number;
 	savedVersion: number;
-	timer?: number;
+	timer?: TimerHandle;
 	worker?: Promise<void>;
 }
 
@@ -11,8 +13,8 @@ export interface ResumePositionAutosaveOptions {
 	save(occurrenceId: string, caretOffset: number): Promise<void>;
 	onError?(cause: unknown): void;
 	delayMs?: number;
-	setTimer?(callback: () => void, delayMs: number): number;
-	clearTimer?(timer: number): void;
+	setTimer?(callback: () => void, delayMs: number): TimerHandle;
+	clearTimer?(timer: TimerHandle): void;
 }
 
 /** Debounces resume writes and keeps one serial worker so the latest input always wins. */
@@ -29,7 +31,7 @@ export class ResumePositionAutosaveCoordinator {
 		this.#onError = options.onError;
 		this.#delayMs = options.delayMs ?? 250;
 		this.#setTimer = options.setTimer ??
-			((callback, delayMs) => globalThis.setTimeout(callback, delayMs) as unknown as number);
+			((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
 		this.#clearTimer = options.clearTimer ?? ((timer) => globalThis.clearTimeout(timer));
 	}
 

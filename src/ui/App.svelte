@@ -508,6 +508,7 @@
 					.selectedOccurrenceId;
 				loading = false;
 				startupCacheActive = true;
+			// biome-ignore lint/plugin/noSwallowedRejection: The startup cache is optional and normal startup remains available.
 			} catch {
 				// The startup cache is optional; continue with the normal startup screen.
 			}
@@ -520,9 +521,11 @@
 		};
 		const flushWhenHidden = () => {
 			if (document.visibilityState === "hidden") {
+				// biome-ignore lint/plugin/noSwallowedRejection: The retained draft and failed status provide the retry path after visibility changes.
 				void editorController.flushAutosave().catch(() => {
 					// The retained draft and failed status remain visible after returning.
 				});
+				// biome-ignore lint/plugin/noSwallowedRejection: Resume position remains queued and will retry on the next flush.
 				void editorController.flushResume().catch(() => {
 					// The latest position remains queued for a later flush.
 				});
@@ -609,9 +612,11 @@
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
 			document.removeEventListener("visibilitychange", flushWhenHidden);
 			window.removeEventListener("keydown", handleGlobalShortcut, true);
+			// biome-ignore lint/plugin/noSwallowedRejection: Teardown cannot await; the retained draft and unload warning preserve recovery.
 			void editorController.flushAutosave().catch(() => {
 				// beforeunload already warns while an unsaved draft exists.
 			});
+			// biome-ignore lint/plugin/noSwallowedRejection: Resume persistence is best-effort during synchronous teardown.
 			void editorController.flushResume().catch(() => {
 				// Resume persistence is best-effort during teardown.
 			});
@@ -687,6 +692,7 @@
 		location = navigationController.browsingLocation,
 	): void {
 		if (startupCacheActive || startup.phase !== "ready" || editorController.hasUnsavedChanges()) return;
+		// biome-ignore lint/plugin/noSwallowedRejection: Startup acceleration is optional and must not interrupt editing.
 		void api.saveStartupSnapshotCache(snapshotToCache, location).catch(() => {
 			// Startup acceleration must not interrupt editing when the cache cannot be written.
 		});
@@ -1315,6 +1321,7 @@
 	async function retryWorkingCopySave(): Promise<void> {
 		try {
 			await editorController.retryAutosave();
+		// biome-ignore lint/plugin/noSwallowedRejection: The coordinator retains the draft and exposes the failed status for another retry.
 		} catch {
 			// The coordinator retains the draft and exposes the failure detail.
 		}
@@ -1771,7 +1778,7 @@
 		const quote = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 		const reason = candidate.reason === undefined
 			? ""
-			: `(\"${candidate.reason.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}\")`;
+			: `("${candidate.reason.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}")`;
 		const advancedInput = `${quote(candidate.source)} :: ${candidate.type}${reason} :: ${quote(candidate.target)}`;
 		try {
 			const resolution = await api.resolveAdvancedLink(advancedInput);

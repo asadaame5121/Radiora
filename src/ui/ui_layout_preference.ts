@@ -45,6 +45,7 @@ export function saveUiLayoutPreference(
 				inspectorWidth: clampInspectorWidth(preference.inspectorWidth),
 			}),
 		);
+		// biome-ignore lint/plugin/noSwallowedRejection: Layout persistence is optional and must not make the UI unusable.
 	} catch {
 		// Layout preferences are best-effort and must not make the UI unusable.
 	}

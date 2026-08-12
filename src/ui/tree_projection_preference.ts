@@ -24,6 +24,7 @@ export function saveTreeProjectionPreference(
 ): void {
 	try {
 		storage?.setItem(TREE_PROJECTION_STORAGE_KEY, projection);
+		// biome-ignore lint/plugin/noSwallowedRejection: Tree projection persistence is optional and must not make the tree unusable.
 	} catch {
 		// This UI preference is best-effort and must not make the tree unusable.
 	}

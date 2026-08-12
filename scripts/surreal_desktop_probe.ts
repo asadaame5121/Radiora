@@ -49,6 +49,7 @@ function trace(stage: string, detail?: unknown): void {
 	}\n`;
 	try {
 		Deno.writeTextFileSync(logPath, line, { append: true, create: true });
+		// biome-ignore lint/plugin/noSwallowedRejection: Probe diagnostics must continue to stderr when the optional log file is unavailable.
 	} catch {
 		// A failed diagnostic write must not hide the stage being tested.
 	}
@@ -115,6 +116,7 @@ async function findSurrealCommand(): Promise<string> {
 				});
 				return command;
 			}
+			// biome-ignore lint/plugin/noSwallowedRejection: A failed executable probe means this candidate is unavailable; the next candidate is tried.
 		} catch {
 			// Try the next known installation location.
 		}
@@ -130,6 +132,7 @@ async function waitUntilHealthy(): Promise<void> {
 				trace("cli.health.ready", { attempt });
 				return;
 			}
+			// biome-ignore lint/plugin/noSwallowedRejection: Connection failures are expected while the bounded readiness poll is starting.
 		} catch {
 			// The server is still starting.
 		}
@@ -145,9 +148,11 @@ async function stopChild(): Promise<void> {
 	trace("cli.stop.begin");
 	try {
 		active.kill(Deno.build.os === "windows" ? "SIGKILL" : "SIGTERM");
+		// biome-ignore lint/plugin/noSwallowedRejection: The child may already have exited before teardown sends the signal.
 	} catch {
 		// The process already exited.
 	}
+	// biome-ignore lint/plugin/noSwallowedRejection: Exit status rejection during forced teardown has no remaining recovery action.
 	await active.status.catch(() => undefined);
 	await Promise.allSettled(cliOutputTasks);
 	cliOutputTasks = [];
