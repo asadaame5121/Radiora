@@ -106,7 +106,7 @@ interface ParsedField {
 }
 
 function readTypeField(input: string, start: number): ParsedField {
-	let cursor = skipOuterWhitespace(input, start);
+	const cursor = skipOuterWhitespace(input, start);
 	const valueStart = cursor;
 	if (input[cursor] === '"') {
 		const quoted = readQuotedField(input, cursor, "type");
@@ -159,7 +159,7 @@ function readTypeField(input: string, start: number): ParsedField {
 }
 
 function readField(input: string, start: number, field: AdvancedLinkField): ParsedField {
-	let cursor = skipOuterWhitespace(input, start);
+	const cursor = skipOuterWhitespace(input, start);
 	const valueStart = cursor;
 	if (input[cursor] === '"') return readQuotedField(input, cursor, field);
 

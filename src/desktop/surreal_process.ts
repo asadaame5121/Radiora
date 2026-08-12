@@ -29,6 +29,7 @@ export async function findSurrealCommand(
 	for (const command of candidates) {
 		try {
 			if (await probe(command)) return command;
+			// biome-ignore lint/plugin/noSwallowedRejection: A failed executable probe means this candidate is unavailable; the next candidate is tried.
 		} catch {
 			// Try the next known installation location.
 		}
@@ -148,6 +149,7 @@ export class SurrealProcess {
 		} else if (process) {
 			try {
 				process.kill(Deno.build.os === "windows" ? "SIGKILL" : "SIGTERM");
+				// biome-ignore lint/plugin/noSwallowedRejection: The managed process may already have exited before stop sends the signal.
 			} catch {
 				// It already exited.
 			}
@@ -241,6 +243,7 @@ export class SurrealProcess {
 					this.trace("process.health.ready", { attempt });
 					return;
 				}
+				// biome-ignore lint/plugin/noSwallowedRejection: Connection failures are expected while the bounded readiness poll is starting.
 			} catch {
 				// Still starting.
 			}
@@ -290,6 +293,7 @@ export class SurrealProcess {
 	private trace(event: string, detail?: unknown): void {
 		try {
 			this.diagnosticLogger?.(event, detail);
+			// biome-ignore lint/plugin/noSwallowedRejection: Optional diagnostics must never change managed-process behavior.
 		} catch {
 			// Diagnostics must never change process behavior.
 		}

@@ -1,6 +1,5 @@
 import { assertEquals, assertNotEquals } from "jsr:@std/assert@1";
-// commonmark 0.31.2 intentionally ships without TypeScript declarations.
-// @ts-ignore exact dev dependency verified through package-lock.json
+// commonmark 0.31.2 is an exact dev dependency verified through package-lock.json.
 import * as commonmark from "commonmark";
 import OverType from "overtype";
 

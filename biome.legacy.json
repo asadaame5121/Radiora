@@ -1,0 +1,327 @@
+{
+	"overrides": [
+		{
+			"includes": [
+				"src/ui/ComparisonPane.svelte",
+				"src/ui/GlobalLineage.svelte",
+				"src/ui/MarkdownEditor.svelte",
+				"src/ui/OptionsView.svelte"
+			],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"noLabelWithoutControl": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/ui/App.svelte"
+			],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"noStaticElementInteractions": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/ui/ContextMenu.svelte"
+			],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useAriaPropsForRole": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/ui/App.svelte",
+				"src/ui/ComparisonPane.svelte",
+				"src/ui/DuplicateCandidatesPanel.svelte",
+				"src/ui/GlobalLineage.svelte",
+				"src/ui/InAppHelp.svelte",
+				"src/ui/LinkEditor.svelte",
+				"src/ui/PhylogeneticTree.svelte",
+				"src/ui/RecoverySnapshots.svelte",
+				"src/ui/StubListView.svelte",
+				"src/ui/WorkLineage.svelte"
+			],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useAriaPropsSupportedByRole": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/ui/App.svelte",
+				"src/ui/CommandPaletteDialog.svelte",
+				"src/ui/ConfirmationDialog.svelte",
+				"src/ui/DuplicateCandidatesPanel.svelte",
+				"src/ui/GlobalLineage.svelte",
+				"src/ui/LicensesDialog.svelte",
+				"src/ui/OptionsView.svelte",
+				"src/ui/PhylogeneticTree.svelte",
+				"src/ui/RecoverySnapshots.svelte",
+				"src/ui/SparseOutlineView.svelte",
+				"src/ui/StubListView.svelte",
+				"src/ui/TagBrowserView.svelte",
+				"src/ui/TodayView.svelte",
+				"src/ui/TrashView.svelte",
+				"src/ui/UnplacedInboxView.svelte",
+				"src/ui/WorkLineage.svelte"
+			],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useButtonType": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/ui/ContextMenu.svelte"
+			],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useFocusableInteractive": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/ui/CommandPaletteDialog.svelte"
+			],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useKeyWithClickEvents": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/ui/App.svelte",
+				"src/ui/ComparisonPane.svelte",
+				"src/ui/ContextMenu.svelte",
+				"src/ui/GlobalLineage.svelte",
+				"src/ui/PhylogeneticTree.svelte"
+			],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useSemanticElements": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"scripts/desktop_msix.ts",
+				"scripts/mock_ui_plugin.ts",
+				"src/main.ts",
+				"src/services/advanced_link_parser.ts",
+				"src/services/date_projection.ts",
+				"src/services/discovery_operations.ts",
+				"src/services/inline_semantic_link.ts",
+				"src/services/internal_reference_service.ts",
+				"src/services/markdown_export.ts",
+				"src/services/markdown_parser.ts",
+				"src/services/occurrence_operations.ts",
+				"src/services/opml.ts",
+				"src/services/quick_capture_service.ts",
+				"src/services/revision_service.ts",
+				"src/services/rule_query.ts",
+				"src/services/semantic_link_annotations.ts",
+				"src/services/sparse_outline.ts",
+				"src/storage/graph_mutation_validation.ts",
+				"src/storage/graph_state_validation.ts",
+				"src/storage/json_store.ts",
+				"src/storage/memory_store.ts",
+				"src/storage/migrations/0001_work_occurrence.ts",
+				"src/storage/surreal_backup_restore.ts",
+				"src/storage/surreal_discovery_repository.ts",
+				"src/ui/App.svelte",
+				"src/ui/editor_controller.svelte.ts",
+				"src/ui/tree_layout.ts"
+			],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noExcessiveCognitiveComplexity": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"scripts/desktop_msix.ts",
+				"scripts/licenses.ts",
+				"scripts/mock_ui_plugin.ts",
+				"scripts/surreal_desktop_probe.ts",
+				"src/desktop/register_bindings.ts",
+				"src/main.ts",
+				"src/services/branch_service.ts",
+				"src/services/discovery_operations.ts",
+				"src/services/inline_semantic_link.ts",
+				"src/services/internal_reference_service.ts",
+				"src/services/json_backup.ts",
+				"src/services/markdown_export.ts",
+				"src/services/occurrence_operations.ts",
+				"src/services/opml.ts",
+				"src/services/revision_service.ts",
+				"src/services/semantic_link_operations.ts",
+				"src/services/sparse_outline.ts",
+				"src/services/work_merge_service.ts",
+				"src/storage/backup_migrations.ts",
+				"src/storage/graph_state_validation.ts",
+				"src/storage/memory_store.ts",
+				"src/storage/migrations/0001_work_occurrence.ts",
+				"src/storage/surreal_backup_restore.ts",
+				"src/storage/surreal_store.ts",
+				"src/ui/App.svelte",
+				"src/ui/editor_controller.svelte.ts",
+				"src/ui/navigation_controller.svelte.ts",
+				"src/ui/tree_layout.ts",
+				"src/ui/work_controller.svelte.ts"
+			],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noExcessiveLinesPerFunction": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/services/branch_service.ts",
+				"src/services/semantic_link_annotations.ts",
+				"src/ui/context_menu.ts"
+			],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"useMaxParams": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"scripts/desktop_hmr_proxy_plugin.ts",
+				"scripts/licenses.ts",
+				"scripts/mock_ui_plugin.ts",
+				"src/services/advanced_link_resolver_test.ts",
+				"src/services/discovery_operations.ts",
+				"src/services/inline_link_test.ts",
+				"src/services/internal_reference_test.ts",
+				"src/services/markdown_export.ts",
+				"src/services/occurrence_operations.ts",
+				"src/services/opml.ts",
+				"src/services/opml_service_test.ts",
+				"src/services/quick_capture_service_test.ts",
+				"src/services/revision_diff.ts",
+				"src/services/revision_service_test.ts",
+				"src/services/sparse_outline.ts",
+				"src/services/sparse_outline_test.ts",
+				"src/services/transient_projection_test.ts",
+				"src/storage/memory_store.ts",
+				"src/storage/memory_store_operations.ts",
+				"src/storage/migration_backup_test.ts",
+				"src/storage/migrations/mod_test.ts",
+				"src/storage/surreal_work_repository.ts",
+				"src/ui/App.svelte",
+				"src/ui/GlobalLineage.svelte",
+				"src/ui/WorkLineage.svelte",
+				"src/ui/command_service.ts",
+				"src/ui/editor_controller.svelte.ts",
+				"src/ui/tree_filter_preference_test.ts",
+				"src/ui/tree_layout.ts"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noNonNullAssertion": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/desktop/surreal_process.ts",
+				"src/services/branch_service.ts",
+				"src/services/opml.ts"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"useErrorCause": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/services/search_text.ts"
+			],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noAssignInExpressions": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/services/logger_test.ts",
+				"src/storage/json_backup_restore_test.ts",
+				"vitest/work_controller.svelte.test.ts"
+			],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noEmptyBlockStatements": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/ui/GlobalLineage.svelte"
+			],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noGlobalAssign": "warn"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"src/ui/outline_view_model.ts"
+			],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"useIterableCallbackReturn": "warn"
+					}
+				}
+			}
+		}
+	]
+}

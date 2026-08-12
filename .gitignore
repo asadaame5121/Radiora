@@ -35,6 +35,7 @@ test_result.txt
 test_*.surql
 .playwright-cli/
 output/
+reports/
 probe/
 # Generated tooling artifacts
 *.timestamp-*.mjs

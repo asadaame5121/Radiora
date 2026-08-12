@@ -3,9 +3,7 @@ import { APP_VERSION } from "../shared/app_version.ts";
 
 export type HelpUpdateStatus = "idle" | "checking" | "current" | "available" | "unavailable";
 
-export interface HelpUpdateChecker {
-	(currentVersion: string): Promise<UpdateCheckResult>;
-}
+export type HelpUpdateChecker = (currentVersion: string) => Promise<UpdateCheckResult>;
 
 export function createHelpUpdateController(options: {
 	currentVersion?: string;

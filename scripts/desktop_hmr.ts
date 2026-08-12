@@ -35,9 +35,11 @@ try {
 } finally {
 	try {
 		vite.kill();
+		// biome-ignore lint/plugin/noSwallowedRejection: The Vite process may already have exited during teardown.
 	} catch {
 		// Vite already exited.
 	}
+	// biome-ignore lint/plugin/noSwallowedRejection: The temporary bridge can already be absent after an interrupted HMR session.
 	await Deno.remove(bridgeFile).catch(() => undefined);
 }
 

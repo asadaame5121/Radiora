@@ -59,8 +59,8 @@ export class JsonBackupService {
 		let parsed: unknown;
 		try {
 			parsed = JSON.parse(source);
-		} catch {
-			throw new Error("バックアップJSONを解析できません。");
+		} catch (cause) {
+			throw new Error("バックアップJSONを解析できません。", { cause });
 		}
 		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
 			throw new Error("バックアップenvelopeが必要です。");
@@ -79,11 +79,14 @@ export class JsonBackupService {
 
 export function decodeBackupState(envelope: Record<string, unknown>): GraphStateSnapshot {
 	if (!Object.hasOwn(envelope, "schemaVersion")) {
+		if (!isLegacyBackupV0(envelope)) {
+			throw new Error("旧形式のバックアップ構造が不正です。");
+		}
 		return validatedGraphStateSnapshot(migrateBackupV5(
 			migrateBackupV4(
 				migrateBackupV3(
 					migrateBackupV2(
-						migrateBackupV1(migrateBackupV0(envelope as unknown as BackupV0)),
+						migrateBackupV1(migrateBackupV0(envelope)),
 					),
 				),
 			),
@@ -136,4 +139,17 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 			throw new Error(`未対応のbackup schema versionです: ${version}`);
 	}
 	return validatedGraphStateSnapshot(migrated);
+}
+
+function isLegacyBackupV0(
+	value: Record<string, unknown>,
+): value is Record<string, unknown> & BackupV0 {
+	return Array.isArray(value.items) && Array.isArray(value.links) && Array.isArray(value.knots) &&
+		(value.aliases === undefined || Array.isArray(value.aliases)) &&
+		(value.emergenceFeedback === undefined || isRecord(value.emergenceFeedback)) &&
+		(value.savedRuleQueries === undefined || Array.isArray(value.savedRuleQueries));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
