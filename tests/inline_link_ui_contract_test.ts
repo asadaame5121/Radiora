@@ -12,7 +12,8 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 
 	assertMatch(controller, /findInlineLinkTrigger/);
 	assertMatch(controller, /ports\.api\.listInternalReferenceCompletions\(trigger\.query, 16\)/);
-	assertMatch(controller, /\.filter\(\(candidate\) => candidate\.scope === "work"\)/);
+	assertMatch(controller, /filterInlineLinkCandidates/);
+	assertMatch(controller, /isSameInlineLinkTrigger/);
 	assertMatch(controller, /phase: "candidate"/);
 	assertMatch(controller, /phase: "type"/);
 	assertMatch(controller, /phase: "direction"/);
@@ -47,7 +48,7 @@ Deno.test("@ semantic relation search offers OmniWindow creation for unresolved 
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
 	);
-	assertMatch(controller, /\.filter\(\(candidate\) => candidate\.scope === "work"\)/);
+	assertMatch(controller, /filterInlineLinkCandidates/);
 	assertMatch(controller, /function createInlineLinkTarget/);
 	assertMatch(controller, /ports\.api\.quickCapture\(query\)/);
 	assertMatch(controller, /scopeLabel: "未配置"/);

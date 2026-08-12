@@ -54,7 +54,10 @@ Deno.test("Markdown editor keeps native replacement, autosave, completion, and r
 	assertMatch(app, /onSelectionChange=.*updateEditorSelection/);
 	assertMatch(controller, /textarea\.setRangeText\(/);
 	assertMatch(controller, /inputType: "insertReplacementText"/);
-	assertMatch(controller, /autosave\.queue\(item\.workId, id, text\)/);
+	assertMatch(
+		controller,
+		/autosave\.queue\(item\.workId, item\.revisionSelector\.branchId, id, text\)/,
+	);
 	assertMatch(controller, /updateInternalReferenceCompletion\(id, textarea\)/);
 	assertMatch(controller, /resolveInternalReferences\(markdown\)/);
 	assertMatch(adapter, /recoverRadioraDestination/);

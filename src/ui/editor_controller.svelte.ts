@@ -17,6 +17,8 @@ import type {
 } from "../services/internal_reference_service.ts";
 import { parseMarkdownCandidates } from "../services/markdown_parser.ts";
 import type { NavigationTarget } from "../domain/models.ts";
+import { filterInlineLinkCandidates, isSameInlineLinkTrigger } from "./inline_link_completion.ts";
+import { applyBranchWorkingCopyText } from "./editor_working_copy.ts";
 
 export type InternalReferenceCompletionState = {
 	itemId: string;
@@ -118,15 +120,10 @@ export function createEditorController(ports: EditorControllerPorts) {
 		const text = textarea.value;
 		const snapshot = ports.getSnapshot();
 		const item = snapshot.items.find((candidate) => candidate.id === id);
-		if (!item) return;
+		if (!item || item.revisionSelector.mode !== "branch") return;
 		const updatedAt = new Date().toISOString();
-		for (const placement of snapshot.items) {
-			if (placement.workId === item.workId) {
-				placement.text = text;
-				placement.updatedAt = updatedAt;
-			}
-		}
-		autosave.queue(item.workId, id, text);
+		applyBranchWorkingCopyText(snapshot.items, item, text, updatedAt);
+		autosave.queue(item.workId, item.revisionSelector.branchId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
 		void updateInternalReferenceCompletion(id, textarea);
 		void updateInlineLinkCompletion(id, textarea);
@@ -173,6 +170,7 @@ export function createEditorController(ports: EditorControllerPorts) {
 			cancelInlineLinkCompletion();
 			return;
 		}
+		if (isSameInlineLinkTrigger(inlineLinkCompletion, itemId, trigger)) return;
 		const request = ++inlineLinkCompletionRequest;
 		inlineLinkCompletion = {
 			itemId,
@@ -186,11 +184,11 @@ export function createEditorController(ports: EditorControllerPorts) {
 			creating: false,
 		};
 		try {
-			const candidates = (await ports.api.listInternalReferenceCompletions(trigger.query, 16))
-				.filter((candidate) => candidate.scope === "work")
-				.filter((candidate) =>
-					ports.getSnapshot().items.find((item) => item.id === itemId)?.workId !== candidate.workId
-				);
+			const sourceWorkId = ports.getSnapshot().items.find((item) => item.id === itemId)?.workId;
+			const candidates = filterInlineLinkCandidates(
+				await ports.api.listInternalReferenceCompletions(trigger.query, 16),
+				sourceWorkId,
+			);
 			if (request !== inlineLinkCompletionRequest) return;
 			const current = inlineLinkCompletion;
 			if (!current || current.itemId !== itemId || current.phase !== "candidate") return;
@@ -224,11 +222,11 @@ export function createEditorController(ports: EditorControllerPorts) {
 		const request = ++inlineLinkCompletionRequest;
 		inlineLinkCompletion = { ...state, query, candidates: [], activeIndex: 0, searching: true };
 		try {
-			const candidates = (await ports.api.listInternalReferenceCompletions(query, 16))
-				.filter((candidate) => candidate.scope === "work")
-				.filter((candidate) =>
-					ports.getSnapshot().items.find((item) => item.id === itemId)?.workId !== candidate.workId
-				);
+			const sourceWorkId = ports.getSnapshot().items.find((item) => item.id === itemId)?.workId;
+			const candidates = filterInlineLinkCandidates(
+				await ports.api.listInternalReferenceCompletions(query, 16),
+				sourceWorkId,
+			);
 			if (request !== inlineLinkCompletionRequest) return;
 			const current = inlineLinkCompletion;
 			if (!current || current.itemId !== itemId || current.phase !== "candidate") return;

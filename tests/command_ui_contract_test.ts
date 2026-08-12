@@ -70,8 +70,10 @@ Deno.test("branch rewrite and link commands remain keyboard-first and confirmati
 	assert(app.includes('action: "rewrite"'));
 	assert(confirmation.includes("rewriteBranchName.trim()"));
 	assert(app.includes("api.rewriteAsNewBranch("));
+	assert(app.includes("branchId: result.branch.id"));
+	assert(app.includes("await load(placement.id)"));
 	assert(app.includes('"confirmed"'));
-	assert(app.includes('viewMode = "workLineage"'));
+	assert(app.includes('viewMode = "outline"'));
 	assert(confirmation.includes("rewriteInput?.focus()"));
 	assert(confirmation.includes('event.key === "Enter" && rewriteBranchName.trim()'));
 	assert(app.includes('case "createLink":'));
