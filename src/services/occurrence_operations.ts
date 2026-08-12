@@ -243,7 +243,7 @@ export class OccurrenceOperations {
 			? branches.filter((branch) => branch.id === branchId && !branch.archivedAt)
 			: branches.filter((branch) => branch.name === "main" && !branch.archivedAt);
 		if (active.length !== 1) {
-			if (branchId) throw new Error(`Active Branch not found for Work: ${branchId}`);
+			if (branchId) throw new Error(`Active Branch not found: ${branchId}`);
 			throw new Error(`Expected one active main Branch for Work: ${workId}`);
 		}
 		const branch = active[0];

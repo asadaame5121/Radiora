@@ -131,7 +131,7 @@ Deno.test("occurrence operations rejects a Branch from another Work", async () =
 				parentId: null,
 			}),
 		Error,
-		"Active Branch not found for Work",
+		`Active Branch not found: ${otherBranchId}`,
 	);
 });
 
@@ -162,7 +162,7 @@ Deno.test("occurrence operations rejects an archived Branch", async () => {
 				parentId: null,
 			}),
 		Error,
-		"Active Branch not found for Work",
+		`Active Branch not found: ${branch.id}`,
 	);
 });
 

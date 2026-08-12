@@ -51,6 +51,8 @@ Deno.test("@ semantic relation search offers OmniWindow creation for unresolved 
 	assertMatch(controller, /filterInlineLinkCandidates/);
 	assertMatch(controller, /function createInlineLinkTarget/);
 	assertMatch(controller, /ports\.api\.quickCapture\(query\)/);
+	assertMatch(controller, /title \|\| EMPTY_WORK_DISPLAY_NAME/);
+	assert(!controller.includes("`(空の${ports.vocabulary.work})`"));
 	assertMatch(controller, /scopeLabel: "未配置"/);
 	assert(!/ports\.api\.(createItem|createOccurrence|createStub)\(query/.test(controller));
 	assertMatch(app, /editorController\.createInlineLinkTarget/);

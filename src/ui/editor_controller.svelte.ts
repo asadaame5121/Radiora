@@ -16,6 +16,8 @@ import type {
 	InternalReferenceCompletion,
 } from "../services/internal_reference_service.ts";
 import { parseMarkdownCandidates } from "../services/markdown_parser.ts";
+import { EMPTY_WORK_DISPLAY_NAME } from "../services/internal_reference_display.ts";
+import { titleFromText } from "../services/search_text.ts";
 import type { NavigationTarget } from "../domain/models.ts";
 import { filterInlineLinkCandidates, isSameInlineLinkTrigger } from "./inline_link_completion.ts";
 import { applyBranchWorkingCopyText } from "./editor_working_copy.ts";
@@ -240,14 +242,14 @@ export function createEditorController(ports: EditorControllerPorts) {
 	}
 
 	function inlineLinkCandidateFromCreated(work: UnplacedWork): InternalReferenceCompletion {
-		const displayName = work.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ??
-			`(空の${ports.vocabulary.work})`;
+		const title = titleFromText(work.text);
+		const displayName = title || EMPTY_WORK_DISPLAY_NAME;
 		return {
 			scope: "work",
 			id: work.workId,
 			workId: work.workId,
 			displayName,
-			isEmpty: false,
+			isEmpty: !title,
 			scopeLabel: "未配置",
 			shortId: work.workId.slice(0, 8),
 			canonicalMarkdown: canonicalInternalReferenceMarkdown(displayName, "work", work.workId),
