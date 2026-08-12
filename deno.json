@@ -1,6 +1,6 @@
 {
 	"nodeModulesDir": "manual",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"compilerOptions": {
 		"lib": ["deno.window", "deno.desktop", "dom", "dom.iterable"],
 		"strict": true
