@@ -1972,10 +1972,6 @@
 			} else if (confirmation.action === "purge") {
 				await workController.confirmPurge(confirmation.workId);
 			} else if (confirmation.action === "rewrite") {
-				const source = snapshot.items.find((item) => item.id === confirmation.occurrenceId);
-				if (!source) {
-					throw new Error(`別稿の配置元が見つかりません: ${confirmation.occurrenceId}`);
-				}
 				const result = await api.rewriteAsNewBranch(
 					confirmation.sourceBranchId,
 					confirmationController.rewriteBranchName,
@@ -1985,8 +1981,7 @@
 					const placement = await api.createOccurrence({
 						workId: confirmation.workId,
 						branchId: result.branch.id,
-						parentId: source.parentId,
-						afterId: source.id,
+						sourceOccurrenceId: confirmation.occurrenceId,
 						contextualHeading: result.branch.name,
 					});
 					await load(placement.id);

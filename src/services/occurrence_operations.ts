@@ -79,8 +79,19 @@ export class OccurrenceOperations {
 
 	async createOccurrence(input: CreateOccurrenceInput): Promise<OutlineItem> {
 		const items = await this.store.listItems();
-		if (input.parentId && !items.some((item) => item.id === input.parentId)) {
-			throw new Error(`Parent Occurrence not found: ${input.parentId}`);
+		const placementSource = input.sourceOccurrenceId
+			? items.find((item) => item.id === input.sourceOccurrenceId)
+			: undefined;
+		if (input.sourceOccurrenceId && !placementSource) {
+			throw new Error(`Source Occurrence not found: ${input.sourceOccurrenceId}`);
+		}
+		if (placementSource && placementSource.workId !== input.workId) {
+			throw new Error(`Source Occurrence does not belong to Work: ${input.sourceOccurrenceId}`);
+		}
+		const parentId = placementSource?.parentId ?? input.parentId ?? null;
+		const afterId = placementSource?.id ?? input.afterId ?? null;
+		if (parentId && !items.some((item) => item.id === parentId)) {
+			throw new Error(`Parent Occurrence not found: ${parentId}`);
 		}
 		let source = items.find((item) => item.workId === input.workId);
 		if (input.branchId) {
@@ -92,8 +103,8 @@ export class OccurrenceOperations {
 		const occurrence = {
 			id: crypto.randomUUID(),
 			workId: input.workId,
-			parentOccurrenceId: input.parentId,
-			orderKey: this.orderAfter(items, input.parentId, input.afterId ?? null),
+			parentOccurrenceId: parentId,
+			orderKey: this.orderAfter(items, parentId, afterId),
 			collapsed: false,
 			revisionSelector: structuredClone(source.revisionSelector),
 			contextualHeading: input.contextualHeading?.trim() || undefined,

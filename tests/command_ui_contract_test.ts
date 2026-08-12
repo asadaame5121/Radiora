@@ -71,6 +71,8 @@ Deno.test("branch rewrite and link commands remain keyboard-first and confirmati
 	assert(confirmation.includes("rewriteBranchName.trim()"));
 	assert(app.includes("api.rewriteAsNewBranch("));
 	assert(app.includes("branchId: result.branch.id"));
+	assert(app.includes("sourceOccurrenceId: confirmation.occurrenceId"));
+	assert(!app.includes("別稿の配置元が見つかりません"));
 	assert(app.includes("await load(placement.id)"));
 	assert(app.includes('"confirmed"'));
 	assert(app.includes('viewMode = "outline"'));

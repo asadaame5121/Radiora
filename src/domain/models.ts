@@ -209,14 +209,26 @@ export interface CreateItemInput {
 	afterId?: string | null;
 }
 
-export interface CreateOccurrenceInput {
-	workId: string;
-	parentId: string | null;
-	afterId?: string | null;
-	/** Selects a specific editable Branch instead of copying an existing placement. */
-	branchId?: string;
-	contextualHeading?: string;
-}
+export type CreateOccurrenceInput =
+	& {
+		workId: string;
+		/** Selects a specific editable Branch instead of copying an existing placement. */
+		branchId?: string;
+		contextualHeading?: string;
+	}
+	& (
+		| {
+			/** Places the new occurrence beside this persisted occurrence. */
+			sourceOccurrenceId: string;
+			parentId?: never;
+			afterId?: never;
+		}
+		| {
+			sourceOccurrenceId?: never;
+			parentId: string | null;
+			afterId?: string | null;
+		}
+	);
 
 export interface MoveItemInput {
 	id: string;

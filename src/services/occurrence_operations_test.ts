@@ -82,12 +82,13 @@ Deno.test("occurrence operations places a specifically selected editable Branch"
 	const placement = await operations.createOccurrence({
 		workId: source.workId,
 		branchId: "alternate",
-		parentId: null,
-		afterId: source.id,
+		sourceOccurrenceId: source.id,
 		contextualHeading: "別稿",
 	});
 
 	assertEquals(placement.text, "alternate text");
+	assertEquals(placement.parentId, source.parentId);
+	assertEquals(placement.orderKey > source.orderKey, true);
 	assertEquals(placement.revisionSelector, { mode: "branch", branchId: "alternate" });
 	assertEquals(placement.contextualHeading, "別稿");
 	await operations.updateItemText(placement.id, "edited alternate");
@@ -95,6 +96,22 @@ Deno.test("occurrence operations places a specifically selected editable Branch"
 		(await store.listWorkingCopies(source.workId)).find((copy) => copy.branchId === "alternate")
 			?.text,
 		"edited alternate",
+	);
+});
+
+Deno.test("occurrence operations rejects an adjacent source from another Work", async () => {
+	const operations = new OccurrenceOperations(new MemoryGraphStore());
+	const source = await operations.createItem({ text: "source", parentId: null });
+	const other = await operations.createItem({ text: "other", parentId: null });
+
+	await assertRejects(
+		() =>
+			operations.createOccurrence({
+				workId: other.workId,
+				sourceOccurrenceId: source.id,
+			}),
+		Error,
+		"Source Occurrence does not belong to Work",
 	);
 });
 
