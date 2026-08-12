@@ -29,6 +29,7 @@
 		type PendingConfirmation,
 	} from "./confirmation_controller.svelte.ts";
 	import { createEditorController } from "./editor_controller.svelte.ts";
+	import { rehydrateBranchWorkingCopyDrafts } from "./editor_working_copy.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
@@ -668,11 +669,7 @@
 				knots: next.knots,
 				stashItemIds: next.stashItemIds,
 			};
-			const drafts = new Map(editorController.drafts().map((draft) => [draft.workId, draft.text]));
-			next.items = next.items.map((item) => {
-				const draft = drafts.get(item.workId);
-				return draft === undefined ? item : { ...item, text: draft };
-			});
+			next.items = rehydrateBranchWorkingCopyDrafts(next.items, editorController.drafts());
 			snapshot = next;
 			editorController.clearCompletions();
 			selectedId = navigationController.reconcileBrowsing(snapshot).selectedOccurrenceId;
