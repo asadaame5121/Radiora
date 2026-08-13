@@ -4,17 +4,19 @@
     "jsr:@std/assert@*": "1.0.15",
     "jsr:@std/assert@1": "1.0.15",
     "jsr:@std/internal@^1.0.12": "1.0.14",
-    "npm:@sveltejs/vite-plugin-svelte@^6.2.1": "6.2.4_svelte@5.56.8_vite@7.3.6",
+    "npm:@biomejs/biome@2.5.2": "2.5.2",
+    "npm:@sveltejs/vite-plugin-svelte@^6.2.4": "6.2.4_svelte@5.56.8_vite@7.3.6",
     "npm:@types/d3@^7.4.3": "7.4.3",
     "npm:commonmark@0.31.2": "0.31.2",
     "npm:d3@^7.9.0": "7.9.0",
     "npm:eslint-plugin-sonarjs@4.2.0": "4.2.0_eslint@10.8.1",
+    "npm:jscpd@5.0.12": "5.0.12",
     "npm:overtype@2.4.0": "2.4.0",
-    "npm:surrealdb@^2.0.4": "2.0.8_tslib@2.8.1_typescript@5.9.3",
-    "npm:svelte-check@^4.3.4": "4.7.5_svelte@5.56.8_typescript@5.9.3",
-    "npm:svelte@^5.45.6": "5.56.8",
+    "npm:surrealdb@^2.0.8": "2.0.8_tslib@2.8.1_typescript@5.9.3",
+    "npm:svelte-check@^4.7.5": "4.7.5_svelte@5.56.8_typescript@5.9.3",
+    "npm:svelte@^5.56.8": "5.56.8",
     "npm:typescript@^5.9.3": "5.9.3",
-    "npm:vite@^7.2.6": "7.3.6",
+    "npm:vite@^7.3.6": "7.3.6",
     "npm:vitest@^4.1.10": "4.1.10_vite@7.3.6"
   },
   "jsr": {
@@ -29,6 +31,60 @@
     }
   },
   "npm": {
+    "@biomejs/biome@2.5.2": {
+      "integrity": "sha512-VQ3RCqr7JmDIX+w6stWYl+g/3bYofN3q2wDBHUKKc/c7i5QWrFKFBZYCYPWTE6agsUPMIZZe6/CMmVUfUAhkKA==",
+      "optionalDependencies": [
+        "@biomejs/cli-darwin-arm64",
+        "@biomejs/cli-darwin-x64",
+        "@biomejs/cli-linux-arm64",
+        "@biomejs/cli-linux-arm64-musl",
+        "@biomejs/cli-linux-x64",
+        "@biomejs/cli-linux-x64-musl",
+        "@biomejs/cli-win32-arm64",
+        "@biomejs/cli-win32-x64"
+      ],
+      "bin": true
+    },
+    "@biomejs/cli-darwin-arm64@2.5.2": {
+      "integrity": "sha512-e7P3P7EkwFc/KiX2AHw4YDLIBOMfG9CPCAwy52k5Bp0dfhkozx9hf6wCmIr2QeXy2XeccJ3V/Sg+hDmzYEqxSg==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@biomejs/cli-darwin-x64@2.5.2": {
+      "integrity": "sha512-ymzMvjC1Jg0b9K0D26ZdARqFQXs7MocfLC5FOCGfkC0Ss+ACUJkX5364ZM5nT4NLZanHRZNVrZEy+Ibwcvux/g==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@biomejs/cli-linux-arm64-musl@2.5.2": {
+      "integrity": "sha512-w+ANG0ZvTu9IeEg9QnstoOnk6L0fpwJifW6aHR18+cb5Z39bkANItYjAfMrnvce5tmMK+IQ6nPX7/kQFdam5iw==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@biomejs/cli-linux-arm64@2.5.2": {
+      "integrity": "sha512-t7sseOmqND57uUWTwlawU6BYj+J06T/9EkydzBhkrgw/FK3QVhjU2wsJR0frljrKZ0/I8A/rYw7284QgqjQfIQ==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@biomejs/cli-linux-x64-musl@2.5.2": {
+      "integrity": "sha512-VArNLAzND063tF+XY0yPyM+DyahpzOMzOAvb7qs259nhjJWRjvjZdssuA+Rfl+l07+NOesKZ0Xu2yFrXyBMtzw==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@biomejs/cli-linux-x64@2.5.2": {
+      "integrity": "sha512-M/lOZrewzTCRDINbjhQ1gYYru37KlD3kJBQwwKCG0ckz5E9IZwIoJ3X0wBwRXA+yBDIwWUuPBHS67HzJY4dTfA==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@biomejs/cli-win32-arm64@2.5.2": {
+      "integrity": "sha512-kbjFFKyZlzYnAuw7sRy5qDoFG6zrP40UK08oPQsWK0ct3NMnGSt+Bs1iviEEyEIP57N5MrykGXdO/wRiaR4lww==",
+      "os": ["win32"],
+      "cpu": ["arm64"]
+    },
+    "@biomejs/cli-win32-x64@2.5.2": {
+      "integrity": "sha512-4InchVpdVmdkkkgjQqKpgvyu+VPnoF/7RPSw5YATgEVpt2j72wcCAeV5TwaE9ZGJUZWZn7v2CwSAj6CrMJEx8A==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
     "@esbuild/aix-ppc64@0.28.2": {
       "integrity": "sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==",
       "os": ["aix"],
@@ -1230,6 +1286,48 @@
     "isexe@2.0.0": {
       "integrity": "sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw=="
     },
+    "jscpd-darwin-arm64@5.0.12": {
+      "integrity": "sha512-CQCDYhQY9yOGGeauzkRGYW/QtXurPCjfDkEhUoM/M5UdmpzxfG3i9mnNsaheJ0RdFRf73mL7JaLVRP8U2l5/kA==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "jscpd-darwin-x64@5.0.12": {
+      "integrity": "sha512-7XNCDfChP9fPkIWLepd0zGnTov7/5mR7rJ5Utc1MdWFdgkN//qz6FAJ1FhQA0E/qjFedy9XTucfUCgLybSBsjw==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "jscpd-linux-arm64-gnu@5.0.12": {
+      "integrity": "sha512-i/usHD0/8twzb2Qo4vFWcnuAD4IDLS6K/mTXwYy1CiJZDw4gmjfH45jtjdKUyoutTAiNs+ZWZgx1gIRljUbFuA==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "jscpd-linux-x64-gnu@5.0.12": {
+      "integrity": "sha512-TqaeSTaGawcqyXSrQvYJFtLRn4aQeHgphGGsq2ZtVAg+lPeuMmh81c3bl0yi2dL3gDX1RGBQKBVul1XQknOuoA==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "jscpd-linux-x64-musl@5.0.12": {
+      "integrity": "sha512-WelugY1/rdoo0Y0sqJ2XQOIvyIZTfRe+vP3MJe4XvEUwPF0v+9SQoS34FnfblRhsddVixyNkgl7x/sHid9UMJw==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "jscpd-windows-x64-msvc@5.0.12": {
+      "integrity": "sha512-01x1klKjvfzI6Of5tI9u72x7TIQZQLLG6kMdsEPJKl/BXbskdknrfCepeTXRBbdFPKs25jfcd0klZ4OdDvww5w==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "jscpd@5.0.12": {
+      "integrity": "sha512-87dC+akj2mCywlt8p3xnRlDg0B55u4GDbfE9cuwOOeIxbEuWuIoNqGoYi65A0516aJ4EzAjGwBj1Qb/Ahc8WAQ==",
+      "optionalDependencies": [
+        "jscpd-darwin-arm64",
+        "jscpd-darwin-x64",
+        "jscpd-linux-arm64-gnu",
+        "jscpd-linux-x64-gnu",
+        "jscpd-linux-x64-musl",
+        "jscpd-windows-x64-msvc"
+      ],
+      "bin": true
+    },
     "json-buffer@3.0.1": {
       "integrity": "sha512-4bV5BfR2mqfQTJm+V5tPPdf+ZpuhiIvTuAB5g8kcrXOZpTT/QwwVRWBywX1ozr6lEuPdbHxwaJlm9G6mI2sfSQ=="
     },
@@ -1634,17 +1732,17 @@
     "packageJson": {
       "dependencies": [
         "npm:@biomejs/biome@2.5.2",
-        "npm:@sveltejs/vite-plugin-svelte@^6.2.1",
+        "npm:@sveltejs/vite-plugin-svelte@^6.2.4",
         "npm:@types/d3@^7.4.3",
         "npm:commonmark@0.31.2",
         "npm:d3@^7.9.0",
         "npm:jscpd@5.0.12",
         "npm:overtype@2.4.0",
-        "npm:surrealdb@^2.0.4",
-        "npm:svelte-check@^4.3.4",
-        "npm:svelte@^5.45.6",
+        "npm:surrealdb@^2.0.8",
+        "npm:svelte-check@^4.7.5",
+        "npm:svelte@^5.56.8",
         "npm:typescript@^5.9.3",
-        "npm:vite@^7.2.6",
+        "npm:vite@^7.3.6",
         "npm:vitest@^4.1.10"
       ]
     }
