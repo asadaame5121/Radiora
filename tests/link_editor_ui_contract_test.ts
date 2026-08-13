@@ -9,7 +9,8 @@ Deno.test("Link Editor exposes GUI search, type selection, and direction selecti
 	assertMatch(app, /<LinkEditor/);
 	assertMatch(app, /selectedWorkId=\{selectedItem\.workId\}/);
 	assertMatch(app, /links=\{selectedLinks\}/);
-	assertMatch(editor, /api\.searchItems\(\{/);
+	assertMatch(editor, /await onSearch\(\{ query, contextItemId: selectedWorkId, limit: 16 \}\)/);
+	assertFalse(/createRpcAdapter/.test(editor));
 	assertMatch(editor, /selectedType = \$state<LinkType>\("LIKE"\)/);
 	assertMatch(editor, /option value="outgoing"/);
 	assertMatch(editor, /option value="incoming"/);

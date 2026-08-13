@@ -6,7 +6,9 @@
 			"src/**/*.{ts,tsx,js,jsx,svelte,css}",
 			"scripts/**/*.{ts,tsx,js,jsx}",
 			"tests/**/*.{ts,tsx,js,jsx}",
-			"vitest/**/*.{ts,tsx,js,jsx}"
+			"vitest/**/*.{ts,tsx,js,jsx}",
+			"stories/**/*.{ts,tsx,js,jsx,svelte}",
+			".storybook/**/*.{ts,tsx,js,jsx}"
 		]
 	},
 	"formatter": {
@@ -27,6 +29,8 @@
 				"!**/*.test.{ts,tsx,js,jsx}",
 				"!tests/**",
 				"!vitest/**",
+				"!stories/**",
+				"!.storybook/**",
 				"!**/fixtures/**"
 			]
 		},
@@ -75,7 +79,9 @@
 				"**/*_test.{ts,tsx,js,jsx}",
 				"**/*.test.{ts,tsx,js,jsx}",
 				"tests/**",
-				"vitest/**"
+				"vitest/**",
+				"stories/**",
+				".storybook/**"
 			],
 			"linter": {
 				"rules": {

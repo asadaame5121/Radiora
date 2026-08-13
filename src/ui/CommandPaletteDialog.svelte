@@ -78,23 +78,28 @@
 				onkeydown={handleKeydown}
 				autocomplete="off"
 			/>
-			<div id="command-palette-results" role="listbox" aria-label={vocabulary.commandPalette}>
-				{#each commands as command, index (command.id)}
-					<button
-						id={`command-palette-${command.id}`}
-						class:active={index === activeIndex}
-						role="option"
-						aria-selected={index === activeIndex}
-						disabled={!command.availability.enabled}
-						title={command.availability.reason}
-						onclick={() => onExecute(command)}
-					>
-						<span>{command.label}</span>
-						{#if command.shortcut}<small>{command.shortcut}</small>{/if}
-					</button>
-				{/each}
-				{#if commands.length === 0}<p>一致するコマンドはありません。</p>{/if}
-			</div>
+			{#if commands.length > 0}
+				<div id="command-palette-results" role="listbox" aria-label={vocabulary.commandPalette}>
+					{#each commands as command, index (command.id)}
+						<button
+							id={`command-palette-${command.id}`}
+							class:active={index === activeIndex}
+							role="option"
+							aria-selected={index === activeIndex}
+							disabled={!command.availability.enabled}
+							title={command.availability.reason}
+							onclick={() => onExecute(command)}
+						>
+							<span>{command.label}</span>
+							{#if command.shortcut}<small>{command.shortcut}</small>{/if}
+						</button>
+					{/each}
+				</div>
+			{:else}
+				<div id="command-palette-results" class="command-palette__empty" role="status">
+					<p>一致するコマンドはありません。</p>
+				</div>
+			{/if}
 			{#if activeCommand && !activeCommand.availability.enabled}
 				<p class="command-palette__reason" aria-live="polite">
 					{activeCommand.availability.reason}
@@ -103,3 +108,9 @@
 		</div>
 	</dialog>
 {/if}
+
+<style>
+	.command-palette__empty {
+		color: var(--muted);
+	}
+</style>
