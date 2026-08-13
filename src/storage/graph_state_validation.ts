@@ -9,7 +9,7 @@ import type {
 	WorkingCopy,
 	WorkStub,
 } from "../domain/models.ts";
-import { LINK_TYPES } from "../domain/models.ts";
+import { LINK_TYPES, RELATION_TYPE_NAME_PATTERN } from "../domain/models.ts";
 import type { GraphStateSnapshot, WorkBundle } from "./graph_store.ts";
 import { isValidWorkStub } from "./graph_mutation_validation.ts";
 
@@ -20,6 +20,7 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 	const source = value as Record<string, unknown>;
 	for (
 		const key of [
+			"relationTypeDefinitions",
 			"works",
 			"branches",
 			"workingCopies",
@@ -53,6 +54,23 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 	}
 
 	const state = structuredClone(value) as GraphStateSnapshot;
+	const relationTypeNames = new Set<string>();
+	for (const definition of state.relationTypeDefinitions) {
+		if (
+			!RELATION_TYPE_NAME_PATTERN.test(definition.name) ||
+			(definition.direction !== "directed" && definition.direction !== "symmetric") ||
+			typeof definition.builtIn !== "boolean" || !isIsoInstant(definition.createdAt)
+		) {
+			throw new Error(`Invalid Relation Type Definition: ${definition.name}`);
+		}
+		if (relationTypeNames.has(definition.name)) {
+			throw new Error(`Duplicate Relation Type Definition: ${definition.name}`);
+		}
+		relationTypeNames.add(definition.name);
+	}
+	for (const name of LINK_TYPES) {
+		if (!relationTypeNames.has(name)) throw new Error(`Built-in Relation Type missing: ${name}`);
+	}
 	const workById = uniqueById(state.works, "Work");
 	const branchById = uniqueById(state.branches, "Branch");
 	const occurrenceById = uniqueById(state.occurrences, "Occurrence");
@@ -196,7 +214,7 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 			throw new Error(`Invalid Link endpoint IDs: ${link.id}`);
 		}
 		if (
-			!(LINK_TYPES as readonly string[]).includes(link.type) ||
+			!relationTypeNames.has(link.type) ||
 			!["provisional", "asserted", "retracted"].includes(link.status) ||
 			!["human", "suggestion", "import"].includes(link.origin) ||
 			!isIsoInstant(link.createdAt)

@@ -1,3 +1,5 @@
+export type RelationTypeDirection = "directed" | "symmetric";
+
 export const LINK_TYPES = [
 	"RELATED",
 	"FROM",
@@ -8,15 +10,50 @@ export const LINK_TYPES = [
 	"FIX",
 	"CITE",
 ] as const;
-export type LinkType = (typeof LINK_TYPES)[number];
-export const SYMMETRIC_LINK_TYPES = [
-	"RELATED",
-	"LIKE",
-	"VS",
-] as const satisfies readonly LinkType[];
+export type BuiltInRelationTypeName = (typeof LINK_TYPES)[number];
 
-export function isSymmetricLinkType(type: LinkType): boolean {
-	return (SYMMETRIC_LINK_TYPES as readonly LinkType[]).includes(type);
+/**
+ * Runtime identifier of a semantic relation. Values crossing an I/O boundary
+ * must be checked with `normalizeRelationTypeName` and a loaded definition catalog.
+ */
+export type RelationTypeName = BuiltInRelationTypeName | (string & {});
+
+export interface RelationTypeDefinition {
+	name: RelationTypeName;
+	direction: RelationTypeDirection;
+	builtIn: boolean;
+	createdAt: string;
+}
+
+export const RELATION_TYPE_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
+
+export function normalizeRelationTypeName(value: string): RelationTypeName {
+	const normalized = value.trim().toUpperCase();
+	if (!RELATION_TYPE_NAME_PATTERN.test(normalized)) {
+		throw new Error(
+			"Relation type name must start with A-Z and contain only A-Z, 0-9, or _ (maximum 64 characters)",
+		);
+	}
+	return normalized;
+}
+
+/** @deprecated Prefer RelationTypeName. Retained while callers migrate to the runtime catalog. */
+export type LinkType = RelationTypeName;
+
+const BUILT_IN_CREATED_AT = "1970-01-01T00:00:00.000Z";
+export const SYMMETRIC_LINK_TYPES = ["RELATED", "LIKE", "VS"] as const;
+
+export const DEFAULT_RELATION_TYPE_DEFINITIONS = LINK_TYPES.map((name) => ({
+	name,
+	direction: (SYMMETRIC_LINK_TYPES as readonly string[]).includes(name)
+		? "symmetric" as const
+		: "directed" as const,
+	builtIn: true,
+	createdAt: BUILT_IN_CREATED_AT,
+})) satisfies readonly RelationTypeDefinition[];
+
+export function isSymmetricLinkType(type: RelationTypeName): boolean {
+	return (SYMMETRIC_LINK_TYPES as readonly RelationTypeName[]).includes(type);
 }
 
 export type LinkStatus = "provisional" | "asserted" | "retracted";
@@ -175,7 +212,7 @@ export interface OutlineLink {
 	toId: string;
 	from: LinkEndpoint;
 	to: LinkEndpoint;
-	type: LinkType;
+	type: RelationTypeName;
 	status: LinkStatus;
 	origin: LinkOrigin;
 	createdAt: string;
@@ -227,7 +264,7 @@ export interface MoveItemInput {
 export interface CreateLinkInput {
 	fromId: string;
 	toId: string;
-	type: LinkType;
+	type: RelationTypeName;
 	status?: LinkStatus;
 	origin?: LinkOrigin;
 	reason?: string;

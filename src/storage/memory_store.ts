@@ -12,6 +12,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
 	ResumePosition,
 	Revision,
 	SavedRuleQuery,
@@ -38,12 +39,8 @@ import {
 	retractDuplicateActiveLinks,
 	validateMergeInput,
 } from "./memory_store_operations.ts";
-import {
-	countOccurrences,
-	normalizeSearchText,
-	searchTerms,
-	titleOf,
-} from "../services/search_text.ts";
+import { MemoryRelationTypeCatalog } from "./memory_relation_type_catalog.ts";
+import { searchMemoryItems, suggestMemoryItems } from "./memory_search.ts";
 
 export class MemoryGraphStore implements GraphStore {
 	protected works: Work[] = [];
@@ -62,6 +59,7 @@ export class MemoryGraphStore implements GraphStore {
 	protected emergenceSuggestions: EmergenceSuggestion[] = [];
 	protected savedRuleQueries: SavedRuleQuery[] = [];
 	protected purgeManifests: PurgeManifest[] = [];
+	protected relationTypeCatalog = new MemoryRelationTypeCatalog();
 
 	initialize(): Promise<void> {
 		return Promise.resolve();
@@ -73,6 +71,7 @@ export class MemoryGraphStore implements GraphStore {
 
 	exportGraphState(): Promise<GraphStateSnapshot> {
 		return Promise.resolve(structuredClone({
+			relationTypeDefinitions: this.relationTypeCatalog.snapshot(),
 			works: this.works,
 			branches: this.branches,
 			workingCopies: this.workingCopies,
@@ -115,7 +114,21 @@ export class MemoryGraphStore implements GraphStore {
 		this.recoverySnapshots = state.recoverySnapshots;
 		this.bookmarks = state.bookmarks;
 		this.resumePosition = state.resumePosition;
+		this.relationTypeCatalog.replace(state.relationTypeDefinitions);
 		return Promise.resolve();
+	}
+
+	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]> {
+		return Promise.resolve(this.relationTypeCatalog.snapshot());
+	}
+
+	createRelationTypeDefinition(definition: RelationTypeDefinition): Promise<void> {
+		try {
+			this.relationTypeCatalog.create(definition);
+			return Promise.resolve();
+		} catch (error) {
+			return Promise.reject(error);
+		}
 	}
 
 	listItems(): Promise<OutlineItem[]> {
@@ -626,38 +639,18 @@ export class MemoryGraphStore implements GraphStore {
 		return Promise.resolve();
 	}
 	suggestItems(prefix: string, limit: number): Promise<OutlineItem[]> {
-		const normalized = normalizeSearchText(prefix);
-		if (!normalized) return Promise.resolve([]);
-		const items = this.representativeItems();
-		return Promise.resolve(structuredClone(
-			items
-				.filter((item) => normalizeSearchText(titleOf(item)).startsWith(normalized))
-				.sort((a, b) =>
-					titleOf(a).length - titleOf(b).length || b.updatedAt.localeCompare(a.updatedAt)
-				)
-				.slice(0, limit),
-		));
+		return Promise.resolve(structuredClone(suggestMemoryItems(
+			this.representativeItems(),
+			prefix,
+			limit,
+		)));
 	}
 	searchLexical(query: string, limit: number): Promise<LexicalHit[]> {
-		const normalized = normalizeSearchText(query);
-		const tokenized = searchTerms(query).split(" ").filter(Boolean);
-		if (!normalized) return Promise.resolve([]);
-		const hits = this.representativeItems().map((item) => {
-			const title = normalizeSearchText(titleOf(item));
-			const body = normalizeSearchText(item.text);
-			const titleCount = countOccurrences(title, normalized) +
-				tokenized.reduce((score, token) => score + countOccurrences(title, token), 0);
-			const bodyCount = countOccurrences(body, normalized) +
-				tokenized.reduce((score, token) => score + countOccurrences(body, token), 0);
-			return {
-				item,
-				titleScore: title === normalized ? 3 : title.startsWith(normalized) ? 2 : titleCount,
-				bodyScore: bodyCount,
-			};
-		}).filter((hit) => hit.titleScore > 0 || hit.bodyScore > 0)
-			.sort((a, b) => (b.titleScore * 2 + b.bodyScore) - (a.titleScore * 2 + a.bodyScore))
-			.slice(0, limit);
-		return Promise.resolve(structuredClone(hits));
+		return Promise.resolve(structuredClone(searchMemoryItems(
+			this.representativeItems(),
+			query,
+			limit,
+		)));
 	}
 	listAliases(): Promise<SearchAlias[]> {
 		return Promise.resolve(structuredClone(this.aliases));

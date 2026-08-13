@@ -13,6 +13,7 @@ export interface SurrealRestoreTransaction {
 }
 
 const DATA_TABLES = [
+	"relation_type_definition",
 	"semantic_link",
 	"system_relation",
 	"bookmark",
@@ -44,6 +45,15 @@ export function buildSurrealRestoreTransaction(
 		variables[`restoreContent${suffix}`] = compact(content);
 	};
 	const record = (table: string, id: string): RecordId => new RecordId(table, id);
+
+	for (const definition of state.relationTypeDefinitions) {
+		create("relation_type_definition", definition.name, {
+			name: definition.name,
+			direction: definition.direction,
+			built_in: definition.builtIn,
+			created_at: definition.createdAt,
+		});
+	}
 
 	for (const work of state.works) {
 		create("work", work.id, {
@@ -230,6 +240,7 @@ export async function exportSurrealGraphState(
 	db: { query<T>(query: string): Promise<T> },
 ): Promise<GraphStateSnapshot> {
 	const [
+		relationTypeDefinitions,
 		works,
 		branches,
 		workingCopies,
@@ -247,6 +258,7 @@ export async function exportSurrealGraphState(
 		resumeResult,
 		feedbackResult,
 	] = await Promise.all([
+		store.listRelationTypeDefinitions(),
 		store.listWorks(true),
 		store.listBranches(),
 		store.listWorkingCopies(),
@@ -282,6 +294,7 @@ export async function exportSurrealGraphState(
 		}),
 	) as Record<string, "accept" | "dismiss" | "pin">;
 	return {
+		relationTypeDefinitions,
 		works,
 		branches,
 		workingCopies,

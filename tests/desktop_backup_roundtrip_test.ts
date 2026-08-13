@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import { createBindingHandlers } from "../src/desktop/register_bindings.ts";
-import type { JsonBackupV6 } from "../src/services/json_backup.ts";
+import type { JsonBackupV7 } from "../src/services/json_backup.ts";
 import { OutlineService } from "../src/services/outline_service.ts";
 import { MemoryGraphStore } from "../src/storage/memory_store.ts";
 
@@ -20,7 +20,7 @@ async function sha256(value: string): Promise<string> {
 }
 
 async function backupSummary(source: string) {
-	const backup = JSON.parse(source) as JsonBackupV6;
+	const backup = JSON.parse(source) as JsonBackupV7;
 	const data = backup.data;
 	return {
 		counts: Object.fromEntries(

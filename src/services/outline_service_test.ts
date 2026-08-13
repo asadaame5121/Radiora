@@ -2,6 +2,28 @@ import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { OutlineService } from "./outline_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 
+Deno.test("creates and lists normalized user relation type definitions", async () => {
+	const service = new OutlineService(new MemoryGraphStore());
+	const created = await service.createRelationTypeDefinition({
+		name: "  causes_2 ",
+		direction: "directed",
+	});
+
+	assertEquals(created.name, "CAUSES_2");
+	assertEquals(created.direction, "directed");
+	assertEquals(created.builtIn, false);
+	assert(
+		(await service.listRelationTypeDefinitions()).some((definition) =>
+			definition.name === "CAUSES_2"
+		),
+	);
+	await assertRejects(
+		() => service.createRelationTypeDefinition({ name: "因果", direction: "symmetric" }),
+		Error,
+		"Relation type name",
+	);
+});
+
 Deno.test("lists only the selected Work's immutable versions in a stable order", async () => {
 	const store = new MemoryGraphStore();
 	const service = new OutlineService(store);

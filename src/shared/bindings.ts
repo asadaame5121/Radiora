@@ -11,6 +11,8 @@ import type {
 	OutlineSnapshot,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
+	RelationTypeDirection,
 	ResolvedBookmark,
 	ResolvedResumePosition,
 	ResumePosition,
@@ -72,6 +74,11 @@ export interface RadioraBindings {
 		location: StartupSnapshotLocation,
 	): Promise<void>;
 	listOutline(): Promise<OutlineSnapshot>;
+	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]>;
+	createRelationTypeDefinition(input: {
+		name: string;
+		direction: RelationTypeDirection;
+	}): Promise<RelationTypeDefinition>;
 	projectDates(range: DateRange): Promise<DateProjection>;
 	projectManuscript(rootOccurrenceId: string): Promise<ManuscriptSection[]>;
 	exportOpml(): Promise<string>;

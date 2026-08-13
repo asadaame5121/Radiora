@@ -32,6 +32,8 @@
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
+	import { createRelationTypeController as relationTypesController } from "./relation_type_controller.svelte.ts";
+	import { prepareLoadedOutline } from "./startup_outline.ts";
 	import type { ContextMenuItem } from "./context_menu";
 	import { createRpcAdapter } from "./rpc_adapter";
 	import type {
@@ -53,7 +55,6 @@
 		RecoverySnapshot,
 		TransientProjectionNode,
 	} from "../domain/models";
-	import { isSymmetricLinkType, LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
 	import type {
 		GlobalLineageProjection,
@@ -239,6 +240,7 @@
 	let occurrenceContextMenu = $state<OccurrenceContextMenuState | null>(null);
 	let treeProjectionPreference = $state<TreeProjection>(loadTreeProjectionPreference());
 	let treeFilter = $state<GlobalLineageFilter>(loadTreeFilterPreference());
+	const relationTypes = relationTypesController(api, () => treeFilter, handleGlobalLineageFilterChange);
 	let globalLineageRequest = 0;
 	const workController = createWorkController({
 		api,
@@ -264,6 +266,8 @@
 		api,
 		getSnapshot: () => snapshot,
 		getSelectedId: () => selectedId,
+		relationTypeNames: relationTypes.names,
+		isSymmetricRelationType: relationTypes.isSymmetric,
 		reload: load,
 		loadUnplacedWorks: () => workController.loadUnplacedWorks(),
 		openNavigationTarget,
@@ -661,19 +665,10 @@
 				api.listOutline(),
 				api.listGlobalLineage(activeGlobalLineageFilter),
 				api.listBookmarks(),
+				relationTypes.load(),
 			]);
-			const snapshotForStartupCache: OutlineSnapshot = {
-				items: next.items,
-				links: next.links,
-				knots: next.knots,
-				stashItemIds: next.stashItemIds,
-			};
-			const drafts = new Map(editorController.drafts().map((draft) => [draft.workId, draft.text]));
-			next.items = next.items.map((item) => {
-				const draft = drafts.get(item.workId);
-				return draft === undefined ? item : { ...item, text: draft };
-			});
-			snapshot = next;
+			const { displaySnapshot, cacheSnapshot } = prepareLoadedOutline(next, editorController.drafts());
+			snapshot = displaySnapshot;
 			editorController.clearCompletions();
 			selectedId = navigationController.reconcileBrowsing(snapshot).selectedOccurrenceId;
 			if (request === globalLineageRequest) {
@@ -686,7 +681,7 @@
 				await tick();
 				requestFocus(focusId);
 			}
-			persistStartupSnapshotCache(snapshotForStartupCache, navigationController.browsingLocation);
+			persistStartupSnapshotCache(cacheSnapshot, navigationController.browsingLocation);
 			return true;
 		} catch (cause) {
 			error = errorMessage(cause);
@@ -1591,7 +1586,7 @@
 	}
 
 	async function reverseLink(link: OutlineLink): Promise<void> {
-		if (isSymmetricLinkType(link.type)) return;
+		if (relationTypes.isSymmetric(link.type)) return;
 		await api.deleteLink(link.fromId, link.toId, link.type);
 		await api.createLink({
 			fromId: link.toId,
@@ -2468,7 +2463,8 @@
 									</div>
 									{#if inlineLinkCompletion.phase === "type"}
 										<div class="inline-link-types" aria-label={vocabulary.linkType}>
-											{#each LINK_TYPES as type}
+											{#each relationTypes.definitions as definition (definition.name)}
+												{@const type = definition.name}
 												<button
 													class:active={inlineLinkCompletion.selectedType === type}
 													onmousedown={(event) => event.preventDefault()}
@@ -2595,6 +2591,7 @@
 		{:else if viewMode === "unplaced"}
 			<UnplacedInboxView
 				works={unplacedWorks}
+				relationTypeDefinitions={relationTypes.definitions}
 				{linkableWorks}
 				{selectedId}
 				bind:outlineFilter
@@ -2655,6 +2652,8 @@
 				{navCollapsed}
 				{inspectorCollapsed}
 				{inspectorWidth}
+				relationTypeDefinitions={relationTypes.definitions}
+				onCreateRelationTypeDefinition={relationTypes.create}
 				onPersistMarkdownExportPreference={persistMarkdownExportPreference}
 				onExportMarkdown={exportMarkdown}
 				onImportOpml={importOpmlFile}
@@ -2749,6 +2748,7 @@
 		{:else if globalLineage}
 			<GlobalLineage
 				projection={globalLineage}
+				relationTypeDefinitions={relationTypes.definitions}
 				filter={activeGlobalLineageFilter}
 				onFilterChange={handleGlobalLineageFilterChange}
 				{selectedId}
@@ -2823,6 +2823,7 @@
 					{/if}
 				{:else if asideMode === "relation"}
 					<LinkEditor
+						relationTypeDefinitions={relationTypes.definitions}
 						selectedWorkId={selectedItem.workId}
 						selectedDisplayName={titleFor(selectedItem)}
 						links={selectedLinks}

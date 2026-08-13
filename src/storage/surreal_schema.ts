@@ -1,4 +1,10 @@
 export const SURREAL_SCHEMA_DDL = `
+	DEFINE TABLE IF NOT EXISTS relation_type_definition SCHEMAFULL;
+	DEFINE FIELD IF NOT EXISTS name ON relation_type_definition TYPE string;
+	DEFINE FIELD IF NOT EXISTS direction ON relation_type_definition TYPE string;
+	DEFINE FIELD IF NOT EXISTS built_in ON relation_type_definition TYPE bool DEFAULT false;
+	DEFINE FIELD IF NOT EXISTS created_at ON relation_type_definition TYPE string;
+	DEFINE INDEX IF NOT EXISTS relation_type_definition_name ON relation_type_definition FIELDS name UNIQUE;
 	DEFINE TABLE IF NOT EXISTS outline_item SCHEMAFULL;
 	DEFINE FIELD IF NOT EXISTS text ON outline_item TYPE string;
 	DEFINE FIELD IF NOT EXISTS order_key ON outline_item TYPE number;

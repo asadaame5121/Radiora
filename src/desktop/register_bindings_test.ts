@@ -5,6 +5,31 @@ import { MemoryGraphStore } from "../storage/memory_store.ts";
 import type { StartupStatus } from "../shared/bindings.ts";
 import { createBindingHandlers } from "./register_bindings.ts";
 
+Deno.test("desktop bindings expose user relation type definition management", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const ready: StartupStatus = { phase: "ready", message: "ready" };
+	const handlers = createBindingHandlers({
+		getService: () => service,
+		getStartupStatus: () => ready,
+		retryStartup: () => Promise.resolve(ready),
+		rewriteAsNewBranch: (sourceBranchId, name, confirmation) =>
+			new RevisionService(store).rewriteAsNewBranch(sourceBranchId, name, confirmation),
+	});
+
+	const created = await handlers.createRelationTypeDefinition({
+		name: "causes",
+		direction: "directed",
+	});
+	assertEquals(created.name, "CAUSES");
+	assertEquals(
+		(await handlers.listRelationTypeDefinitions()).find((definition) =>
+			definition.name === "CAUSES"
+		),
+		created,
+	);
+});
+
 Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end to end", async () => {
 	const store = new MemoryGraphStore();
 	const service = new OutlineService(store);
@@ -159,7 +184,7 @@ Deno.test("desktop bindings validate the global lineage filter at the IPC bounda
 			handlers.listGlobalLineage(
 				{
 					includeIsolated: true,
-					linkTypes: ["NONSENSE"],
+					linkTypes: ["not-valid!"],
 					includeWorkIds: [],
 				} as unknown as Parameters<typeof handlers.listGlobalLineage>[0],
 			),

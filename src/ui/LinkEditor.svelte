@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from "svelte";
-	import type { CreateLinkInput, LinkType, OutlineItem, OutlineLink, SearchResult } from "../domain/models";
-	import { isSymmetricLinkType, LINK_TYPES } from "../domain/models";
+	import type { CreateLinkInput, LinkType, OutlineItem, OutlineLink, RelationTypeDefinition, SearchResult } from "../domain/models";
 import type { RadioraBindings } from "../shared/bindings";
 import { isComparableLinkType } from "../services/comparison_service";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
@@ -18,6 +17,7 @@ import { isComparableLinkType } from "../services/comparison_service";
 		onDelete,
 		onReverse,
 		onCompare,
+		relationTypeDefinitions,
 	}: {
 		selectedWorkId: string;
 		selectedDisplayName?: string;
@@ -27,6 +27,7 @@ import { isComparableLinkType } from "../services/comparison_service";
 		onDelete: (link: OutlineLink) => void | Promise<void>;
 		onReverse: (link: OutlineLink) => void | Promise<void>;
 		onCompare?: (link: OutlineLink) => void | Promise<void>;
+		relationTypeDefinitions: readonly RelationTypeDefinition[];
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
@@ -48,6 +49,10 @@ import { isComparableLinkType } from "../services/comparison_service";
 	const currentLinks = $derived(
 		links.filter((link) => link.fromId === selectedWorkId || link.toId === selectedWorkId),
 	);
+	const definitionByName = $derived(new Map(relationTypeDefinitions.map((entry) => [entry.name, entry])));
+	function isSymmetric(type: LinkType): boolean {
+		return definitionByName.get(type)?.direction === "symmetric";
+	}
 
 	$effect(() => {
 		const workId = selectedWorkId;
@@ -138,7 +143,7 @@ import { isComparableLinkType } from "../services/comparison_service";
 	}
 
 	async function reverseLink(link: OutlineLink): Promise<void> {
-		if (activeLinkId || submitting || isSymmetricLinkType(link.type)) return;
+		if (activeLinkId || submitting || isSymmetric(link.type)) return;
 		try {
 			activeLinkId = link.id;
 			searchError = "";
@@ -178,7 +183,7 @@ import { isComparableLinkType } from "../services/comparison_service";
 	}
 
 	function linkDirection(link: OutlineLink): string {
-		if (isSymmetricLinkType(link.type)) return "↔";
+		if (isSymmetric(link.type)) return "↔";
 		return link.fromId === selectedWorkId ? "→" : "←";
 	}
 
@@ -218,8 +223,8 @@ import { isComparableLinkType } from "../services/comparison_service";
 							{/if}
 							<button
 								type="button"
-								disabled={Boolean(activeLinkId) || submitting || isSymmetricLinkType(link.type)}
-								title={isSymmetricLinkType(link.type) ? "対称な関係には向きがありません" : "向きを反転"}
+								disabled={Boolean(activeLinkId) || submitting || isSymmetric(link.type)}
+								title={isSymmetric(link.type) ? "対称な関係には向きがありません" : "向きを反転"}
 								onclick={() => void reverseLink(link)}
 							>反転</button>
 							<button
@@ -242,8 +247,8 @@ import { isComparableLinkType } from "../services/comparison_service";
 			<label>
 				<span>{vocabulary.linkType}</span>
 				<select bind:value={selectedType} disabled={submitting} aria-label={`${vocabulary.semanticLink}種別`}>
-					{#each LINK_TYPES as type}
-						<option value={type}>{type}</option>
+					{#each relationTypeDefinitions as definition (definition.name)}
+						<option value={definition.name}>{definition.name}</option>
 					{/each}
 				</select>
 			</label>
@@ -255,7 +260,7 @@ import { isComparableLinkType } from "../services/comparison_service";
 				</select>
 			</label>
 		</div>
-		{#if isSymmetricLinkType(selectedType)}
+		{#if isSymmetric(selectedType)}
 			<p class="link-editor-hint">{selectedType}は対称な関係のため、保存時に向きは正規化されます。</p>
 		{/if}
 		<label>

@@ -16,7 +16,9 @@ Deno.test("Link Editor exposes GUI search, type selection, and direction selecti
 	assertMatch(editor, /await onConfirm\(\{/);
 	assertMatch(editor, /await onDelete\(link\)/);
 	assertMatch(editor, /await onReverse\(link\)/);
-	assertMatch(editor, /isSymmetricLinkType\(link\.type\)/);
+	assertMatch(editor, /relationTypeDefinitions: readonly RelationTypeDefinition\[\]/);
+	assertMatch(editor, /definitionByName\.get\(type\)\?\.direction === "symmetric"/);
+	assertMatch(editor, /isSymmetric\(link\.type\)/);
 	assertMatch(editor, /currentLinks/);
 	assertMatch(app, /executeCommand\("createLink", undefined, input\)/);
 	assertMatch(app, /else await openLinkEditor\(\)/);

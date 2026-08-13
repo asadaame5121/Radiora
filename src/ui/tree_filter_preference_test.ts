@@ -38,6 +38,15 @@ Deno.test("tree filter preference round-trips includeIsolated and linkTypes only
 	);
 });
 
+Deno.test("tree filter preference preserves user-defined relation names", () => {
+	const storage = new MemoryStorage();
+	saveTreeFilterPreference(
+		{ includeIsolated: true, linkTypes: ["FROM", "CAUSES_2"], includeWorkIds: [] },
+		storage,
+	);
+	assertEquals(loadTreeFilterPreference(storage).linkTypes, ["FROM", "CAUSES_2"]);
+});
+
 Deno.test("an empty storage returns the defaults with every link type enabled", () => {
 	const loaded = loadTreeFilterPreference(new MemoryStorage());
 	assertEquals(loaded.includeIsolated, true);
@@ -50,7 +59,7 @@ Deno.test("invalid stored settings fall back to the defaults", () => {
 		"not json",
 		JSON.stringify({ includeIsolated: "yes", linkTypes: ["FROM"] }),
 		JSON.stringify({ includeIsolated: true }),
-		JSON.stringify({ includeIsolated: true, linkTypes: ["NONSENSE"] }),
+		JSON.stringify({ includeIsolated: true, linkTypes: ["not-valid!"] }),
 		JSON.stringify({ includeIsolated: false, linkTypes: ["FROM", 42] }),
 		JSON.stringify([]),
 	];

@@ -1,9 +1,11 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
 import type { GraphStateSnapshot, GraphStore } from "./graph_store.ts";
 import { SurrealBackupRepository } from "./surreal_backup_repository.ts";
+import { DEFAULT_RELATION_TYPE_DEFINITIONS } from "../domain/models.ts";
 import type { SurrealQueryClient } from "./surreal_connection.ts";
 
 const EMPTY_STATE: GraphStateSnapshot = {
+	relationTypeDefinitions: structuredClone(DEFAULT_RELATION_TYPE_DEFINITIONS),
 	works: [],
 	branches: [],
 	workingCopies: [],

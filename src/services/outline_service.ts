@@ -11,6 +11,8 @@ import type {
 	OutlineSnapshot,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
+	RelationTypeDirection,
 	ResolvedBookmark,
 	ResolvedResumePosition,
 	ResumePosition,
@@ -30,11 +32,13 @@ import type {
 	TrashEntry,
 	UnplacedWork,
 } from "../domain/models.ts";
+import { normalizeRelationTypeName } from "../domain/models.ts";
 import type {
 	BackupStorePort,
 	DiscoveryStorePort,
 	OutlineStorePort,
 	RelationStorePort,
+	RelationTypeDefinitionStorePort,
 	WorkStorePort,
 } from "../storage/graph_store.ts";
 import {
@@ -83,6 +87,7 @@ type OutlineServiceStore =
 	& OutlineStorePort
 	& WorkStorePort
 	& RelationStorePort
+	& RelationTypeDefinitionStorePort
 	& DiscoveryStorePort;
 
 /** Compatibility façade for the desktop binding contract. */
@@ -156,6 +161,25 @@ export class OutlineService {
 
 	listOutline(): Promise<OutlineSnapshot> {
 		return new OccurrenceOperations(this.store).listOutline();
+	}
+	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]> {
+		return this.store.listRelationTypeDefinitions();
+	}
+	async createRelationTypeDefinition(input: {
+		name: string;
+		direction: RelationTypeDirection;
+	}): Promise<RelationTypeDefinition> {
+		if (input.direction !== "directed" && input.direction !== "symmetric") {
+			throw new Error("Relation type direction must be directed or symmetric");
+		}
+		const definition: RelationTypeDefinition = {
+			name: normalizeRelationTypeName(input.name),
+			direction: input.direction,
+			builtIn: false,
+			createdAt: new Date().toISOString(),
+		};
+		await this.store.createRelationTypeDefinition(definition);
+		return definition;
 	}
 	listRevisions(workId: string): Promise<Revision[]> {
 		return new OccurrenceOperations(this.store).listRevisions(workId);
@@ -241,7 +265,7 @@ export class OutlineService {
 	}
 
 	createLink(input: CreateLinkInput): Promise<void> {
-		return new SemanticLinkOperations(this.store).createLink(input);
+		return new SemanticLinkOperations(this.store, this.store).createLink(input);
 	}
 	resolveAdvancedLink(
 		input: string,
@@ -289,7 +313,7 @@ export class OutlineService {
 		return new ComparisonService(this.store).listWorkDocuments(workId);
 	}
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
-		return new SemanticLinkOperations(this.store).deleteLink(fromId, toId, type);
+		return new SemanticLinkOperations(this.store, this.store).deleteLink(fromId, toId, type);
 	}
 
 	suggestItems(prefix: string, limit = 8): Promise<Suggestion[]> {

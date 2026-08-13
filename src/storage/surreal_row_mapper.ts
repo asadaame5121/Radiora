@@ -10,6 +10,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
 	ResumePosition,
 	Revision,
 	SavedRuleQuery,
@@ -23,6 +24,19 @@ import type {
 } from "../domain/models.ts";
 
 export type SurrealRow = Record<string, unknown>;
+
+export function relationTypeDefinitionFromRow(row: SurrealRow): RelationTypeDefinition {
+	const direction = String(row.direction);
+	if (direction !== "directed" && direction !== "symmetric") {
+		throw new TypeError(`Invalid relation type direction: ${direction}`);
+	}
+	return {
+		name: String(row.name),
+		direction,
+		builtIn: Boolean(row.built_in),
+		createdAt: String(row.created_at),
+	};
+}
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

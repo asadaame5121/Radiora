@@ -1,4 +1,10 @@
-import type { LinkType, OutlineItem, SearchAlias, Work } from "../domain/models.ts";
+import type {
+	LinkType,
+	OutlineItem,
+	RelationTypeDirection,
+	SearchAlias,
+	Work,
+} from "../domain/models.ts";
 import type {
 	DiscoveryStorePort,
 	OutlineStorePort,
@@ -226,7 +232,12 @@ function toCandidate(
 	};
 }
 
-export function previewDirection(source: string, type: LinkType, target: string): string {
+export function previewDirection(
+	source: string,
+	type: LinkType,
+	target: string,
+	direction: RelationTypeDirection = "directed",
+): string {
 	switch (type) {
 		case "FROM":
 			return `「${source}」は「${target}」から派生します。`;
@@ -244,5 +255,9 @@ export function previewDirection(source: string, type: LinkType, target: string)
 			return `「${source}」と「${target}」は類似します。`;
 		case "VS":
 			return `「${source}」と「${target}」は対立します。`;
+		default:
+			return direction === "symmetric"
+				? `「${source}」と「${target}」は ${type} 関係です。`
+				: `「${source}」は「${target}」と ${type} 関係です。`;
 	}
 }

@@ -4,6 +4,7 @@ import { bookmarkResumeMigration } from "./0003_bookmark_resume.ts";
 import { stubStateMigration } from "./0004_stub_state.ts";
 import { mergeProvenanceMigration } from "./0005_merge_provenance.ts";
 import { emergenceSuggestionMigration } from "./0006_emergence_suggestion.ts";
+import { relationTypeDefinitionMigration } from "./0007_relation_type_definition.ts";
 import {
 	type MigrationContext,
 	type MigrationJournalEntry,
@@ -338,4 +339,28 @@ Deno.test("version 5 storage cleanses invalid emergence suggestions during migra
 	assertStringIncludes(statements[0], "UPDATE emergence_suggestion SET status =");
 	assertStringIncludes(statements[0], "UPDATE emergence_suggestion SET score =");
 	assertStringIncludes(statements[0], "UPDATE emergence_suggestion SET resolution_reason =");
+});
+
+Deno.test("version 6 storage seeds the built-in relation type catalog for version 7", async () => {
+	const statements: string[] = [];
+	const variables: Array<Record<string, unknown> | undefined> = [];
+	await relationTypeDefinitionMigration.up({
+		execute(statement, input) {
+			statements.push(statement);
+			variables.push(input);
+			return Promise.resolve(undefined);
+		},
+	});
+	assertEquals(statements[0].includes("relation_type_definition_name"), true);
+	assertEquals(variables.slice(1).map((value) => value?.name), [
+		"RELATED",
+		"FROM",
+		"LIKE",
+		"SUPPORT",
+		"DEF",
+		"VS",
+		"FIX",
+		"CITE",
+	]);
+	assertEquals(statements.slice(1).every((statement) => statement.includes("UPSERT")), true);
 });

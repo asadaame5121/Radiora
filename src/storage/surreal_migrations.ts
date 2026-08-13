@@ -13,6 +13,7 @@ import { bookmarkResumeMigration } from "./migrations/0003_bookmark_resume.ts";
 import { stubStateMigration } from "./migrations/0004_stub_state.ts";
 import { mergeProvenanceMigration } from "./migrations/0005_merge_provenance.ts";
 import { emergenceSuggestionMigration } from "./migrations/0006_emergence_suggestion.ts";
+import { relationTypeDefinitionMigration } from "./migrations/0007_relation_type_definition.ts";
 import type { SurrealRow as Row } from "./surreal_row_mapper.ts";
 import { APP_VERSION } from "../shared/app_version.ts";
 
@@ -23,6 +24,7 @@ const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
 	stubStateMigration,
 	mergeProvenanceMigration,
 	emergenceSuggestionMigration,
+	relationTypeDefinitionMigration,
 ];
 
 export async function runSurrealStorageMigrations(db: SurrealQueryClient): Promise<void> {

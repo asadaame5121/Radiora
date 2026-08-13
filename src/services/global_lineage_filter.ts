@@ -1,5 +1,5 @@
 import type { LinkType, OutlineItem, OutlineLink } from "../domain/models.ts";
-import { LINK_TYPES } from "../domain/models.ts";
+import { LINK_TYPES, RELATION_TYPE_NAME_PATTERN } from "../domain/models.ts";
 
 /**
  * Display conditions applied when a GlobalLineageProjection is built.
@@ -35,8 +35,11 @@ export function isValidGlobalLineageFilter(value: unknown): value is GlobalLinea
 	const candidate = value as Partial<GlobalLineageFilter>;
 	if (typeof candidate.includeIsolated !== "boolean") return false;
 	if (!Array.isArray(candidate.linkTypes)) return false;
-	const validTypes = new Set<string>(LINK_TYPES);
-	if (!candidate.linkTypes.every((type) => typeof type === "string" && validTypes.has(type))) {
+	if (
+		!candidate.linkTypes.every((type) =>
+			typeof type === "string" && RELATION_TYPE_NAME_PATTERN.test(type)
+		)
+	) {
 		return false;
 	}
 	if (!Array.isArray(candidate.includeWorkIds)) return false;

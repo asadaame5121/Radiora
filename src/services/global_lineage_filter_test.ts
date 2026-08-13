@@ -140,6 +140,14 @@ Deno.test("filter validation rejects malformed input and accepts valid input", (
 		isValidGlobalLineageFilter({ includeIsolated: true, linkTypes: ["FROM"], includeWorkIds: [] }),
 		true,
 	);
+	assertEquals(
+		isValidGlobalLineageFilter({
+			includeIsolated: true,
+			linkTypes: ["CUSTOM"],
+			includeWorkIds: [],
+		}),
+		true,
+	);
 	assertEquals(isValidGlobalLineageFilter({ includeIsolated: true, linkTypes: [] }), false);
 	assertEquals(
 		isValidGlobalLineageFilter({ includeIsolated: "yes", linkTypes: ["FROM"], includeWorkIds: [] }),
@@ -148,7 +156,7 @@ Deno.test("filter validation rejects malformed input and accepts valid input", (
 	assertEquals(
 		isValidGlobalLineageFilter({
 			includeIsolated: true,
-			linkTypes: ["NOT_A_TYPE"],
+			linkTypes: ["not-a-type"],
 			includeWorkIds: [],
 		}),
 		false,

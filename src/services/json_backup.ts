@@ -12,23 +12,24 @@ import {
 	migrateBackupV3,
 	migrateBackupV4,
 	migrateBackupV5,
+	migrateBackupV6,
+	migrateVersionedBackup,
 	type StoredGraphV1,
 	type StoredGraphV2,
 	type StoredGraphV3,
 	type StoredGraphV4,
 	type StoredGraphV5,
-	type StoredGraphV6,
 } from "../storage/backup_migrations.ts";
 
-export const CURRENT_BACKUP_SCHEMA_VERSION = 6;
-export const CURRENT_STORAGE_SCHEMA_VERSION = 6;
+export const CURRENT_BACKUP_SCHEMA_VERSION = 7;
+export const CURRENT_STORAGE_SCHEMA_VERSION = 7;
 
-export interface JsonBackupV6 {
+export interface JsonBackupV7 {
 	format: "radiora-backup";
-	schemaVersion: 6;
+	schemaVersion: 7;
 	exportedAt: string;
 	appVersion: string;
-	source: { storageSchemaVersion: 6 };
+	source: { storageSchemaVersion: 7 };
 	data: GraphStateSnapshot;
 }
 
@@ -44,7 +45,7 @@ export class JsonBackupService {
 
 	async export(now = new Date()): Promise<string> {
 		const exportedAt = now.toISOString();
-		const backup: JsonBackupV6 = {
+		const backup: JsonBackupV7 = {
 			format: "radiora-backup",
 			schemaVersion: CURRENT_BACKUP_SCHEMA_VERSION,
 			exportedAt,
@@ -82,7 +83,7 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 		if (!isLegacyBackupV0(envelope)) {
 			throw new Error("旧形式のバックアップ構造が不正です。");
 		}
-		return validatedGraphStateSnapshot(migrateBackupV5(
+		return validatedGraphStateSnapshot(migrateBackupV6(migrateBackupV5(
 			migrateBackupV4(
 				migrateBackupV3(
 					migrateBackupV2(
@@ -90,7 +91,7 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 					),
 				),
 			),
-		));
+		)));
 	}
 	if (envelope.format !== "radiora-backup") {
 		throw new Error("Radioraバックアップ形式ではありません。");
@@ -104,40 +105,11 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 			`backup schema version ${version} はこのアプリより新しいため復元できません。`,
 		);
 	}
-	const data = envelope.data;
-	let migrated: StoredGraphV6;
-	switch (version) {
-		case 1:
-			migrated = migrateBackupV5(
-				migrateBackupV4(
-					migrateBackupV3(
-						migrateBackupV2(migrateBackupV1(data as StoredGraphV1)),
-					),
-				),
-			);
-			break;
-		case 2:
-			migrated = migrateBackupV5(
-				migrateBackupV4(migrateBackupV3(migrateBackupV2(data as StoredGraphV2))),
-			);
-			break;
-		case 3:
-			migrated = migrateBackupV5(
-				migrateBackupV4(migrateBackupV3(data as StoredGraphV3)),
-			);
-			break;
-		case 4:
-			migrated = migrateBackupV5(migrateBackupV4(data as StoredGraphV4));
-			break;
-		case 5:
-			migrated = migrateBackupV5(data as StoredGraphV5);
-			break;
-		case 6:
-			migrated = data as StoredGraphV6;
-			break;
-		default:
-			throw new Error(`未対応のbackup schema versionです: ${version}`);
-	}
+	const migrated = migrateVersionedBackup({
+		format: envelope.format,
+		schemaVersion: envelope.schemaVersion,
+		data: envelope.data,
+	});
 	return validatedGraphStateSnapshot(migrated);
 }
 

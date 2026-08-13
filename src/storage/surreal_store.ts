@@ -4,6 +4,7 @@ import type {
 	GraphStore,
 	OutlineStorePort,
 	RelationStorePort,
+	RelationTypeDefinitionStorePort,
 	WorkStorePort,
 } from "./graph_store.ts";
 import { SurrealConnection, type SurrealDiagnosticLogger } from "./surreal_connection.ts";
@@ -11,6 +12,7 @@ import { SurrealBackupRepository } from "./surreal_backup_repository.ts";
 import { SurrealDiscoveryRepository } from "./surreal_discovery_repository.ts";
 import { SurrealOutlineRepository } from "./surreal_outline_repository.ts";
 import { SurrealRelationRepository } from "./surreal_relation_repository.ts";
+import { SurrealRelationTypeDefinitionRepository } from "./surreal_relation_type_definition_repository.ts";
 import { SurrealRevisionRepository } from "./surreal_revision_repository.ts";
 import { SurrealWorkRepository } from "./surreal_work_repository.ts";
 
@@ -30,6 +32,7 @@ export class SurrealGraphStore implements GraphStore {
 	readonly #work: SurrealWorkRepository;
 	readonly #revision: SurrealRevisionRepository;
 	readonly #relation: SurrealRelationRepository;
+	readonly #relationTypes: SurrealRelationTypeDefinitionRepository;
 	readonly #discovery: SurrealDiscoveryRepository;
 
 	readonly exportGraphState: BackupStorePort["exportGraphState"];
@@ -77,6 +80,10 @@ export class SurrealGraphStore implements GraphStore {
 	readonly listSystemRelations: RelationStorePort["listSystemRelations"];
 	readonly listKnots: RelationStorePort["listKnots"];
 	readonly replaceKnots: RelationStorePort["replaceKnots"];
+	readonly listRelationTypeDefinitions:
+		RelationTypeDefinitionStorePort["listRelationTypeDefinitions"];
+	readonly createRelationTypeDefinition:
+		RelationTypeDefinitionStorePort["createRelationTypeDefinition"];
 
 	readonly suggestItems: DiscoveryStorePort["suggestItems"];
 	readonly searchLexical: DiscoveryStorePort["searchLexical"];
@@ -105,6 +112,7 @@ export class SurrealGraphStore implements GraphStore {
 			diagnosticLogger,
 		);
 		this.#relation = new SurrealRelationRepository(this.#connection);
+		this.#relationTypes = new SurrealRelationTypeDefinitionRepository(this.#connection);
 		this.#revision = new SurrealRevisionRepository(this.#connection);
 		this.#discovery = new SurrealDiscoveryRepository(
 			this.#connection,
@@ -172,6 +180,12 @@ export class SurrealGraphStore implements GraphStore {
 		this.listSystemRelations = this.#relation.listSystemRelations.bind(this.#relation);
 		this.listKnots = this.#relation.listKnots.bind(this.#relation);
 		this.replaceKnots = this.#relation.replaceKnots.bind(this.#relation);
+		this.listRelationTypeDefinitions = this.#relationTypes.listRelationTypeDefinitions.bind(
+			this.#relationTypes,
+		);
+		this.createRelationTypeDefinition = this.#relationTypes.createRelationTypeDefinition.bind(
+			this.#relationTypes,
+		);
 
 		this.suggestItems = this.#discovery.suggestItems.bind(this.#discovery);
 		this.searchLexical = this.#discovery.searchLexical.bind(this.#discovery);
