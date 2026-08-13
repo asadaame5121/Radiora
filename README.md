@@ -177,11 +177,25 @@ bundleのビルドと検査はWindows PowerShell側で `npm install` した依�
 ## 検証
 
 ```powershell
-deno task test
-npm run check
-npm run build
-deno check src/main.ts
+deno task verify
 ```
+
+`verify`はBiome、実装行数・マジックナンバー・重複コードのbaseline ratchet、型検査、
+Deno/Vitestテスト、frontend buildを実行します。追加の品質検査は次を使用します。
+
+```powershell
+npm run storybook                # UI状態カタログ
+npm run test:storybook           # render・interaction・a11y
+npm run test:visual              # 代表storyの画像差分
+npm run test:mutation:parsers    # Strykerの日次batch例
+npm run coverage:unit
+deno task coverage:deno
+deno task coverage:ratchet
+```
+
+OpengrepとGitleaksはSHA-256で検証した固定binaryをCIで実行します。Strykerは
+`parsers`、`projections`、`domain`、`storage`、`controllers`の5 batchに分け、
+全mutationとcoverage・画像差分は週次workflowで実行します。
 
 現在の対象はWork／Occurrenceによる実身・化身、配置ごとに独立した階層・順序・折りたたみ、
 化身削除、実身のゴミ箱と復元、本文部分一致検索、標準7種の意味リンク、

@@ -1,11 +1,16 @@
 <script lang="ts">
 	import { onDestroy } from "svelte";
-	import type { CreateLinkInput, LinkType, OutlineItem, OutlineLink, SearchResult } from "../domain/models";
+	import type {
+		CreateLinkInput,
+		LinkType,
+		OutlineItem,
+		OutlineLink,
+		SearchRequest,
+		SearchResult,
+	} from "../domain/models";
 	import { isSymmetricLinkType, LINK_TYPES } from "../domain/models";
-import type { RadioraBindings } from "../shared/bindings";
-import { isComparableLinkType } from "../services/comparison_service";
+	import { isComparableLinkType } from "../services/comparison_service";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
-	import { createRpcAdapter } from "./rpc_adapter";
 
 	type LinkDirection = "outgoing" | "incoming";
 
@@ -18,6 +23,7 @@ import { isComparableLinkType } from "../services/comparison_service";
 		onDelete,
 		onReverse,
 		onCompare,
+		onSearch,
 	}: {
 		selectedWorkId: string;
 		selectedDisplayName?: string;
@@ -27,10 +33,10 @@ import { isComparableLinkType } from "../services/comparison_service";
 		onDelete: (link: OutlineLink) => void | Promise<void>;
 		onReverse: (link: OutlineLink) => void | Promise<void>;
 		onCompare?: (link: OutlineLink) => void | Promise<void>;
+		onSearch: (request: SearchRequest | string) => Promise<SearchResult[]>;
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
-	const api = createRpcAdapter<RadioraBindings>();
 
 	let searchQuery = $state("");
 	let searchResults = $state<SearchResult[]>([]);
@@ -74,11 +80,7 @@ import { isComparableLinkType } from "../services/comparison_service";
 
 	async function search(query: string, requestId: number): Promise<void> {
 		try {
-			const results = await api.searchItems({
-				query,
-				contextItemId: selectedWorkId,
-				limit: 16,
-			});
+			const results = await onSearch({ query, contextItemId: selectedWorkId, limit: 16 });
 			if (requestId !== searchRequestId) return;
 			const seenWorkIds = new Set<string>();
 			searchResults = results.filter((result) => {
