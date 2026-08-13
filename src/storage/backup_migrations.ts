@@ -7,6 +7,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
 	ResumePosition,
 	Revision,
 	SavedRuleQuery,
@@ -15,6 +16,7 @@ import type {
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
+import { DEFAULT_RELATION_TYPE_DEFINITIONS } from "../domain/models.ts";
 
 interface LegacyItem {
 	id: string;
@@ -128,6 +130,81 @@ export interface BackupV6 {
 	appVersion: string;
 	source: { storageSchemaVersion: 6 };
 	data: StoredGraphV6;
+}
+
+export interface StoredGraphV7 extends StoredGraphV6 {
+	relationTypeDefinitions: RelationTypeDefinition[];
+}
+
+export interface BackupV7 {
+	format: "radiora-backup";
+	schemaVersion: 7;
+	exportedAt: string;
+	appVersion: string;
+	source: { storageSchemaVersion: 7 };
+	data: StoredGraphV7;
+}
+
+export type VersionedBackup =
+	| BackupV1
+	| BackupV2
+	| BackupV3
+	| BackupV4
+	| BackupV5
+	| BackupV6
+	| BackupV7;
+
+export interface VersionedBackupInput {
+	format: unknown;
+	schemaVersion: unknown;
+	data: unknown;
+}
+
+export function migrateVersionedBackup(parsed: VersionedBackupInput): StoredGraphV7 {
+	if (parsed.format !== "radiora-backup") {
+		throw new Error(`Unsupported backup format: ${String(parsed.format)}`);
+	}
+	if (parsed.schemaVersion === 1) {
+		return migrateBackupV6(migrateBackupV5(
+			migrateBackupV4(
+				migrateBackupV3(migrateBackupV2(migrateBackupV1(parsed.data as StoredGraphV1))),
+			),
+		));
+	}
+	if (parsed.schemaVersion === 2) {
+		return migrateBackupV6(
+			migrateBackupV5(
+				migrateBackupV4(migrateBackupV3(migrateBackupV2(parsed.data as StoredGraphV2))),
+			),
+		);
+	}
+	if (parsed.schemaVersion === 3) {
+		return migrateBackupV6(
+			migrateBackupV5(migrateBackupV4(migrateBackupV3(parsed.data as StoredGraphV3))),
+		);
+	}
+	if (parsed.schemaVersion === 4) {
+		return migrateBackupV6(migrateBackupV5(migrateBackupV4(parsed.data as StoredGraphV4)));
+	}
+	if (parsed.schemaVersion === 5) {
+		return migrateBackupV6(migrateBackupV5(parsed.data as StoredGraphV5));
+	}
+	if (parsed.schemaVersion === 6) return migrateBackupV6(parsed.data as StoredGraphV6);
+	if (parsed.schemaVersion !== 7) {
+		throw new Error(
+			`Unsupported backup schema version: ${
+				String((parsed as { schemaVersion: unknown }).schemaVersion)
+			}`,
+		);
+	}
+	return parsed.data as StoredGraphV7;
+}
+
+export function migrateBackupV6(data: StoredGraphV6): StoredGraphV7 {
+	return {
+		...data,
+		relationTypeDefinitions: structuredClone(DEFAULT_RELATION_TYPE_DEFINITIONS),
+	};
 }
 
 export function migrateBackupV5(data: StoredGraphV5): StoredGraphV6 {

@@ -1,5 +1,4 @@
 import type { LinkType, OutlineSnapshot, UnplacedWork } from "../domain/models.ts";
-import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
 import type { RadioraBindings } from "../shared/bindings.ts";
 import { ResumePositionAutosaveCoordinator } from "../services/resume_position_autosave.ts";
 import {
@@ -19,6 +18,7 @@ import { parseMarkdownCandidates } from "../services/markdown_parser.ts";
 import type { NavigationTarget } from "../domain/models.ts";
 import { filterInlineLinkCandidates, isSameInlineLinkTrigger } from "./inline_link_completion.ts";
 import { applyBranchWorkingCopyText } from "./editor_working_copy.ts";
+import { cycleRelationType } from "./relation_type_catalog.ts";
 
 export type InternalReferenceCompletionState = {
 	itemId: string;
@@ -58,6 +58,8 @@ export type EditorControllerPorts = {
 	api: EditorApi;
 	getSnapshot(): OutlineSnapshot;
 	getSelectedId(): string | null;
+	relationTypeNames(): readonly LinkType[];
+	isSymmetricRelationType(type: LinkType): boolean;
 	reload(focusId?: string): Promise<unknown>;
 	loadUnplacedWorks(): Promise<void>;
 	openNavigationTarget(target: NavigationTarget): Promise<void>;
@@ -84,7 +86,6 @@ export function createEditorController(ports: EditorControllerPorts) {
 	let internalReferenceNotice = $state("");
 	let internalReferenceCompletionRequest = 0;
 	let inlineLinkCompletionRequest = 0;
-
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => ports.api.updateItemText(occurrenceId, text),
 		onStatusChange: (statuses) => {
@@ -299,7 +300,7 @@ export function createEditorController(ports: EditorControllerPorts) {
 		if (!state || state.itemId !== itemId || !state.selectedCandidate || !state.selectedType) {
 			return;
 		}
-		if (isSymmetricLinkType(state.selectedType)) {
+		if (ports.isSymmetricRelationType(state.selectedType)) {
 			void commitInlineLink(itemId);
 			return;
 		}
@@ -355,10 +356,11 @@ export function createEditorController(ports: EditorControllerPorts) {
 		}
 		if (state.phase === "type" && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
 			event.preventDefault();
-			const current = state.selectedType ? LINK_TYPES.indexOf(state.selectedType) : 0;
-			state.selectedType = LINK_TYPES[
-				(current + (event.key === "ArrowDown" ? 1 : -1) + LINK_TYPES.length) % LINK_TYPES.length
-			];
+			state.selectedType = cycleRelationType(
+				ports.relationTypeNames(),
+				state.selectedType,
+				event.key === "ArrowDown" ? 1 : -1,
+			);
 			return;
 		}
 		if (

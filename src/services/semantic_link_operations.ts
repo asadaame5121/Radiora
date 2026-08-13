@@ -1,8 +1,23 @@
-import type { CreateLinkInput, LinkEndpoint, LinkType, OutlineLink } from "../domain/models.ts";
-import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
+import type {
+	CreateLinkInput,
+	LinkEndpoint,
+	OutlineLink,
+	RelationTypeDefinition,
+	RelationTypeName,
+} from "../domain/models.ts";
+import { DEFAULT_RELATION_TYPE_DEFINITIONS, normalizeRelationTypeName } from "../domain/models.ts";
 import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
 
 type SemanticLinkStore = OutlineStorePort & RelationStorePort & WorkStorePort;
+
+/** Small catalog port kept separate from the graph store's persistence responsibilities. */
+export interface RelationTypeCatalogPort {
+	listRelationTypeDefinitions(): Promise<readonly RelationTypeDefinition[]>;
+}
+
+const builtInRelationTypeCatalog: RelationTypeCatalogPort = {
+	listRelationTypeDefinitions: () => Promise.resolve(DEFAULT_RELATION_TYPE_DEFINITIONS),
+};
 
 function sameEndpoint(left: LinkEndpoint, right: LinkEndpoint): boolean {
 	if (left.scope !== right.scope || left.workId !== right.workId) return false;
@@ -15,10 +30,28 @@ function sameEndpoint(left: LinkEndpoint, right: LinkEndpoint): boolean {
  * persistence behind the injected store-port boundary.
  */
 export class SemanticLinkOperations {
-	constructor(private readonly store: SemanticLinkStore) {}
+	constructor(
+		private readonly store: SemanticLinkStore,
+		private readonly relationTypes: RelationTypeCatalogPort = builtInRelationTypeCatalog,
+	) {}
+
+	private async requireDefinition(type: RelationTypeName): Promise<RelationTypeDefinition> {
+		let normalized: RelationTypeName;
+		try {
+			normalized = normalizeRelationTypeName(type);
+		} catch (cause) {
+			throw new Error(`Unsupported link type: ${type}`, { cause });
+		}
+		const definition = (await this.relationTypes.listRelationTypeDefinitions()).find(
+			(candidate) => candidate.name === normalized,
+		);
+		if (!definition) throw new Error(`Unsupported link type: ${type}`);
+		return definition;
+	}
 
 	async createLink(input: CreateLinkInput): Promise<void> {
-		if (!LINK_TYPES.includes(input.type)) throw new Error(`Unsupported link type: ${input.type}`);
+		const definition = await this.requireDefinition(input.type);
+		const type = definition.name;
 		const [works, occurrences, revisions] = await Promise.all([
 			this.store.listWorks(),
 			this.store.listOccurrences(),
@@ -60,13 +93,13 @@ export class SemanticLinkOperations {
 		let toId = to.workId;
 		let fromEndpoint = from;
 		let toEndpoint = to;
-		if (isSymmetricLinkType(input.type) && fromId.localeCompare(toId) > 0) {
+		if (definition.direction === "symmetric" && fromId.localeCompare(toId) > 0) {
 			[fromId, toId] = [toId, fromId];
 			[fromEndpoint, toEndpoint] = [toEndpoint, fromEndpoint];
 		}
-		if (isSymmetricLinkType(input.type)) {
+		if (definition.direction === "symmetric") {
 			const duplicate = (await this.listActiveLinks()).some((link) =>
-				link.type === input.type && sameEndpoint(link.from, fromEndpoint) &&
+				link.type === type && sameEndpoint(link.from, fromEndpoint) &&
 				sameEndpoint(link.to, toEndpoint)
 			);
 			if (duplicate) return;
@@ -77,7 +110,7 @@ export class SemanticLinkOperations {
 			toId,
 			from: fromEndpoint,
 			to: toEndpoint,
-			type: input.type,
+			type,
 			status: input.status ?? "asserted",
 			origin: input.origin ?? "human",
 			createdAt: new Date().toISOString(),
@@ -85,14 +118,15 @@ export class SemanticLinkOperations {
 		});
 	}
 
-	async deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
+	async deleteLink(fromId: string, toId: string, type: RelationTypeName): Promise<void> {
+		const definition = await this.requireDefinition(type);
 		const items = await this.store.listItems();
 		let fromWorkId = items.find((item) => item.id === fromId)?.workId ?? fromId;
 		let toWorkId = items.find((item) => item.id === toId)?.workId ?? toId;
-		if (isSymmetricLinkType(type) && fromWorkId.localeCompare(toWorkId) > 0) {
+		if (definition.direction === "symmetric" && fromWorkId.localeCompare(toWorkId) > 0) {
 			[fromWorkId, toWorkId] = [toWorkId, fromWorkId];
 		}
-		return this.store.deleteLink(fromWorkId, toWorkId, type);
+		return this.store.deleteLink(fromWorkId, toWorkId, definition.name);
 	}
 
 	private async listActiveLinks(): Promise<OutlineLink[]> {

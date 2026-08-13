@@ -25,3 +25,14 @@ Deno.test("Option groups export, exchange, backup, and live display settings", (
 	assertMatch(app, /setInspectorCollapsed/);
 	assertMatch(app, /setInspectorWidth/);
 });
+
+Deno.test("Option manages runtime semantic relation definitions", () => {
+	assertMatch(view, /relationTypeDefinitions: readonly RelationTypeDefinition\[\]/);
+	assertMatch(view, /<h2[^>]*>意味関係<\/h2>/);
+	assertMatch(view, /bind:value=\{relationTypeName\}/);
+	assertMatch(view, /type="radio" bind:group=\{relationTypeDirection\} value="directed"/);
+	assertMatch(view, /type="radio" bind:group=\{relationTypeDirection\} value="symmetric"/);
+	assertMatch(view, /await onCreateRelationTypeDefinition\(\{/);
+	assertMatch(app, /relationTypeDefinitions=\{relationTypes\.definitions\}/);
+	assertMatch(app, /onCreateRelationTypeDefinition=\{relationTypes\.create\}/);
+});

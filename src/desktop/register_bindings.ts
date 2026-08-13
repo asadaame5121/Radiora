@@ -46,6 +46,8 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 			await context.saveStartupSnapshotCache?.(snapshot, location);
 		},
 		listOutline: () => service().listOutline(),
+		listRelationTypeDefinitions: () => service().listRelationTypeDefinitions(),
+		createRelationTypeDefinition: (input) => service().createRelationTypeDefinition(input),
 		projectDates: (range) => service().projectDates(range),
 		projectManuscript: (rootOccurrenceId) => service().projectManuscript(rootOccurrenceId),
 		exportOpml: () => service().exportOpml(),

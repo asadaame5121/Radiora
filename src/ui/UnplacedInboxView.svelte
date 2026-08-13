@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { LINK_TYPES, type LinkType, type UnplacedWork } from "../domain/models.ts";
+	import type { LinkType, RelationTypeDefinition, UnplacedWork } from "../domain/models.ts";
 	import {
 		matchesOutlineFilter,
 		type OutlineFilter,
@@ -24,6 +24,7 @@
 		onLink,
 		onClearFilter,
 		formatCreatedAt,
+		relationTypeDefinitions,
 	}: {
 		works: UnplacedWork[];
 		linkableWorks: LinkableWork[];
@@ -37,6 +38,7 @@
 		onLink: (workId: string) => void | Promise<void>;
 		onClearFilter: () => void;
 		formatCreatedAt: (value: string) => string;
+		relationTypeDefinitions: readonly RelationTypeDefinition[];
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
@@ -113,7 +115,7 @@
 						{/each}
 					</select>
 					<select aria-label={`${vocabulary.semanticLink}種別`} bind:value={unplacedLinkType}>
-						{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}
+						{#each relationTypeDefinitions as definition (definition.name)}<option value={definition.name}>{definition.name}</option>{/each}
 					</select>
 					<button onclick={() => onLink(work.workId)}>{vocabulary.semanticLink}作成</button>
 				</div>

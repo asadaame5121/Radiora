@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { LINK_TYPES, type LinkType } from "../domain/models";
+	import type { LinkType, RelationTypeDefinition } from "../domain/models";
 	import type { GlobalLineageProjection } from "../services/branch_service";
 	import type { GlobalLineageFilter } from "../services/global_lineage_filter";
 	import type { TreeLayoutNode } from "./tree_layout";
@@ -17,6 +17,7 @@
 		onOpen,
 		onContextMenu,
 		onProjectionChange,
+		relationTypeDefinitions,
 	}: {
 		projection: GlobalLineageProjection;
 		selectedId?: string | null;
@@ -26,6 +27,7 @@
 		onOpen: (id: string) => void;
 		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
 		onProjectionChange?: (projection: import("./tree_layout").TreeProjection) => void;
+		relationTypeDefinitions: readonly RelationTypeDefinition[];
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
@@ -55,7 +57,7 @@
 			);
 	});
 	const activeConditionCount = $derived(
-		(LINK_TYPES.length - filter.linkTypes.length) + (filter.includeIsolated ? 0 : 1),
+		(relationTypeDefinitions.length - filter.linkTypes.length) + (filter.includeIsolated ? 0 : 1),
 	);
 	const isFilterActive = $derived(
 		projection.filteredWorkCount < projection.totalWorkCount || activeConditionCount > 0,
@@ -104,11 +106,7 @@
 	}
 
 	function selectAllLinkTypes(): void {
-		onFilterChange({ ...filter, linkTypes: [...LINK_TYPES] });
-	}
-
-	function clearLinkTypes(): void {
-		onFilterChange({ ...filter, linkTypes: [] });
+		onFilterChange({ ...filter, linkTypes: relationTypeDefinitions.map((definition) => definition.name) });
 	}
 
 	function zoomToCluster(): void {
@@ -313,7 +311,8 @@
 					孤立{vocabulary.work}を表示
 				</label>
 				<div class="filter-types">
-					{#each [...LINK_TYPES] as type (type)}
+					{#each relationTypeDefinitions as definition (definition.name)}
+						{@const type = definition.name}
 						<label class="filter-toggle">
 							<input
 								type="checkbox"
@@ -326,7 +325,7 @@
 				</div>
 				<div class="filter-actions">
 					<button onclick={selectAllLinkTypes}>すべて選択</button>
-					<button onclick={clearLinkTypes}>すべて解除</button>
+					<button onclick={() => onFilterChange({ ...filter, linkTypes: [] })}>すべて解除</button>
 				</div>
 			</div>
 		{/if}

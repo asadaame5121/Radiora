@@ -1,4 +1,8 @@
 <script lang="ts">
+	import type {
+		RelationTypeDefinition,
+		RelationTypeDirection,
+	} from "../domain/models.ts";
 	import type { MarkdownExportPreference } from "./markdown_export_preference.ts";
 	import type { QuickCapturePreference } from "./quick_capture_preference.ts";
 	import type { TreeProjection } from "./tree_layout.ts";
@@ -30,6 +34,8 @@
 		onInspectorWidthChange,
 		onPersistQuickCapturePreference,
 		onOpenLicenses,
+		relationTypeDefinitions,
+		onCreateRelationTypeDefinition,
 	}: {
 		markdownExportPreference: MarkdownExportPreference;
 		quickCapturePreference: QuickCapturePreference;
@@ -56,11 +62,41 @@
 		onInspectorWidthChange: (width: number) => void;
 		onPersistQuickCapturePreference: () => void;
 		onOpenLicenses: () => void | Promise<void>;
+		relationTypeDefinitions: readonly RelationTypeDefinition[];
+		onCreateRelationTypeDefinition: (input: {
+			name: string;
+			direction: RelationTypeDirection;
+		}) => Promise<void>;
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
 	let opmlFileInput = $state<HTMLInputElement>();
 	let jsonBackupFileInput = $state<HTMLInputElement>();
+	let relationTypeName = $state("");
+	let relationTypeDirection = $state<RelationTypeDirection>("directed");
+	let relationTypeSubmitting = $state(false);
+	let relationTypeNotice = $state("");
+	let relationTypeError = $state("");
+
+	async function createRelationType(): Promise<void> {
+		if (relationTypeSubmitting) return;
+		try {
+			relationTypeSubmitting = true;
+			relationTypeError = "";
+			relationTypeNotice = "";
+			await onCreateRelationTypeDefinition({
+				name: relationTypeName,
+				direction: relationTypeDirection,
+			});
+			relationTypeName = "";
+			relationTypeDirection = "directed";
+			relationTypeNotice = "意味関係を追加しました。";
+		} catch (cause) {
+			relationTypeError = cause instanceof Error ? cause.message : String(cause);
+		} finally {
+			relationTypeSubmitting = false;
+		}
+	}
 
 	function importOpmlFile(event: Event): void {
 		const input = event.currentTarget as HTMLInputElement;
@@ -84,6 +120,42 @@
 		<p>入力、書き出し、データ交換、バックアップ、表示方法を設定します。</p>
 	</header>
 	<div class="options-grid">
+		<section class="option-card relation-type-card" aria-labelledby="option-relation-types-title">
+			<h2 id="option-relation-types-title">意味関係</h2>
+			<p>リンクに使う関係名と、関係の向きを追加します。既存の定義は変更されません。</p>
+			<ul class="relation-type-list" aria-label="意味関係の定義一覧">
+				{#each relationTypeDefinitions as definition (definition.name)}
+					<li>
+						<strong>{definition.name}</strong>
+						<span>{definition.direction === "symmetric" ? "無向（双方向）" : "有向"}</span>
+						{#if definition.builtIn}<small>既定</small>{:else}<small>ユーザー定義</small>{/if}
+					</li>
+				{/each}
+			</ul>
+			<form onsubmit={(event) => { event.preventDefault(); void createRelationType(); }}>
+				<label>
+					<span>名前</span>
+					<input
+						bind:value={relationTypeName}
+						disabled={!startupReady || relationTypeSubmitting}
+						placeholder="例: CAUSES"
+						maxlength="64"
+						autocomplete="off"
+					/>
+				</label>
+				<fieldset disabled={!startupReady || relationTypeSubmitting}>
+					<legend>方向</legend>
+					<label><input type="radio" bind:group={relationTypeDirection} value="directed" />有向</label>
+					<label><input type="radio" bind:group={relationTypeDirection} value="symmetric" />無向（双方向）</label>
+				</fieldset>
+				<button disabled={!startupReady || relationTypeSubmitting || !relationTypeName.trim()}>
+					{relationTypeSubmitting ? "追加中…" : "意味関係を追加"}
+				</button>
+			</form>
+			<small class="relation-type-help">英字で始まる半角英大文字・数字・_（最大64文字）。小文字は大文字として保存されます。</small>
+			{#if relationTypeNotice}<small role="status">{relationTypeNotice}</small>{/if}
+			{#if relationTypeError}<small class="relation-type-error" role="alert">{relationTypeError}</small>{/if}
+		</section>
 		<section class="option-card" aria-labelledby="option-export-title">
 			<h2 id="option-export-title">書き出し</h2>
 			<label>
@@ -172,3 +244,39 @@
 		</section>
 	</div>
 </section>
+
+<style>
+	.relation-type-list {
+		display: grid;
+		gap: 6px;
+		max-height: 220px;
+		margin: 0;
+		padding: 0;
+		overflow: auto;
+		list-style: none;
+	}
+	.relation-type-list li {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		align-items: center;
+		gap: 8px;
+		padding: 7px 9px;
+		border: 1px solid #17313e;
+		border-radius: 5px;
+		background: #07121a;
+	}
+	.relation-type-list strong { overflow-wrap: anywhere; }
+	.relation-type-list span,
+	.relation-type-list small,
+	.relation-type-help { color: #7f949e; }
+	.relation-type-card form { display: grid; gap: 10px; }
+	.relation-type-card fieldset {
+		display: flex;
+		gap: 16px;
+		margin: 0;
+		padding: 8px 0;
+		border: 0;
+	}
+	.relation-type-card fieldset label { display: flex; align-items: center; gap: 6px; }
+	.relation-type-error { color: #ef8f8f; }
+</style>

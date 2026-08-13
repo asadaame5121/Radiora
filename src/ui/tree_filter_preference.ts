@@ -1,4 +1,4 @@
-import { LINK_TYPES } from "../domain/models.ts";
+import { RELATION_TYPE_NAME_PATTERN } from "../domain/models.ts";
 import type { GlobalLineageFilter } from "../services/global_lineage_filter.ts";
 import { defaultGlobalLineageFilter } from "../services/global_lineage_filter.ts";
 
@@ -65,8 +65,11 @@ function readStoredFilter(storage: TreeFilterStorage | null): StoredTreeFilter |
 	const candidate = parsed as Partial<StoredTreeFilter>;
 	if (typeof candidate.includeIsolated !== "boolean") return null;
 	if (!Array.isArray(candidate.linkTypes)) return null;
-	const validTypes = new Set<string>(LINK_TYPES);
-	if (!candidate.linkTypes.every((type) => typeof type === "string" && validTypes.has(type))) {
+	if (
+		!candidate.linkTypes.every((type) =>
+			typeof type === "string" && RELATION_TYPE_NAME_PATTERN.test(type)
+		)
+	) {
 		return null;
 	}
 	return { includeIsolated: candidate.includeIsolated, linkTypes: candidate.linkTypes };

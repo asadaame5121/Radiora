@@ -1,6 +1,7 @@
 import { assertEquals, assertMatch } from "jsr:@std/assert@1";
 import { OutlineService } from "./outline_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
+import { previewDirection } from "./advanced_link_resolver.ts";
 
 Deno.test("Advanced Link resolves exact names, search aliases, short IDs, and unplaced Works", async () => {
 	const store = new MemoryGraphStore();
@@ -113,5 +114,16 @@ Deno.test("Advanced Link preview follows canonical directed and symmetric semant
 	assertEquals(
 		(await service.resolveAdvancedLink("Source :: RELATED :: Target")).preview,
 		"「Source」と「Target」は関連します。",
+	);
+});
+
+Deno.test("Advanced Link preview supports runtime relation definitions", () => {
+	assertEquals(
+		previewDirection("Source", "CUSTOM", "Target"),
+		"「Source」は「Target」と CUSTOM 関係です。",
+	);
+	assertEquals(
+		previewDirection("Source", "CUSTOM", "Target", "symmetric"),
+		"「Source」と「Target」は CUSTOM 関係です。",
 	);
 });

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { LinkType } from "../domain/models";
 	import type { DuplicateCandidate } from "../services/duplicate_candidates";
 	import type { UiVocabulary } from "../shared/ui_vocabulary";
 
@@ -13,7 +12,7 @@
 		candidates: DuplicateCandidate[];
 		vocabulary: UiVocabulary;
 		onRequestMerge: (sourceWorkId: string, survivorWorkId: string) => void;
-		onCreateLink: (candidate: DuplicateCandidate, type: Extract<LinkType, "LIKE" | "RELATED">) => void;
+		onCreateLink: (candidate: DuplicateCandidate, type: "LIKE" | "RELATED") => void;
 		onDismiss: (candidate: DuplicateCandidate) => void;
 	} = $props();
 </script>

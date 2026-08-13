@@ -1,9 +1,29 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
-import type { Branch, Occurrence, Revision, Work, WorkingCopy } from "../domain/models.ts";
+import type {
+	Branch,
+	Occurrence,
+	RelationTypeDefinition,
+	Revision,
+	Work,
+	WorkingCopy,
+} from "../domain/models.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { SemanticLinkOperations } from "./semantic_link_operations.ts";
 
 const NOW = "2026-07-30T12:00:00.000Z";
+
+function relationCatalog(
+	...definitions: Array<Pick<RelationTypeDefinition, "name" | "direction">>
+) {
+	return {
+		listRelationTypeDefinitions: () =>
+			Promise.resolve(definitions.map((definition) => ({
+				...definition,
+				builtIn: false,
+				createdAt: NOW,
+			}))),
+	};
+}
 
 async function addWork(store: MemoryGraphStore, id: string) {
 	const work: Work = { id, createdAt: NOW, updatedAt: NOW };
@@ -118,4 +138,30 @@ Deno.test("SemanticLinkOperations retracts symmetric links when deleting through
 
 	await operations.deleteLink(beta.occurrence.id, alpha.occurrence.id, "RELATED");
 	assertEquals((await store.listLinks())[0].status, "retracted");
+});
+
+Deno.test("SemanticLinkOperations uses user-defined catalog direction and rejects unknown types", async () => {
+	const store = new MemoryGraphStore();
+	await addWork(store, "alpha");
+	await addWork(store, "beta");
+	const operations = new SemanticLinkOperations(
+		store,
+		relationCatalog(
+			{ name: "CUSTOM_PAIR", direction: "symmetric" },
+			{ name: "CUSTOM_FLOW", direction: "directed" },
+		),
+	);
+
+	await operations.createLink({ fromId: "beta", toId: "alpha", type: " custom_pair " });
+	await operations.createLink({ fromId: "beta", toId: "alpha", type: "CUSTOM_FLOW" });
+
+	const [pair, flow] = await store.listLinks();
+	assertEquals([pair.fromId, pair.toId], ["alpha", "beta"]);
+	assertEquals(pair.type, "CUSTOM_PAIR");
+	assertEquals([flow.fromId, flow.toId], ["beta", "alpha"]);
+	await assertRejects(
+		() => operations.createLink({ fromId: "alpha", toId: "beta", type: "UNKNOWN" }),
+		Error,
+		"Unsupported link type: UNKNOWN",
+	);
 });

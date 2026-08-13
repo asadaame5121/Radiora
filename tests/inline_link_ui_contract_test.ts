@@ -23,7 +23,9 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 	assertMatch(controller, /event\.key === "Enter" && event\.shiftKey/);
 	assertMatch(app, /activeIndex === inlineLinkCompletion\.candidates\.length/);
 	assertMatch(controller, /ports\.api\.quickCapture\(query\)/);
-	assertMatch(controller, /isSymmetricLinkType\(state\.selectedType\)/);
+	assertMatch(controller, /ports\.isSymmetricRelationType\(state\.selectedType\)/);
+	assertMatch(controller, /ports\.relationTypeNames\(\)/);
+	assertMatch(app, /relationTypes\.definitions as definition/);
 	assertMatch(app, /previewDirection\(/);
 	assertMatch(controller, /ports\.api\.createLink\(\{ fromId, toId, type/);
 	const commit = controller.slice(

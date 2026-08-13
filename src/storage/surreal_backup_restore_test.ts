@@ -6,6 +6,7 @@ import {
 } from "./surreal_backup_restore.ts";
 
 const emptyState = (): GraphStateSnapshot => ({
+	relationTypeDefinitions: [],
 	works: [],
 	branches: [],
 	workingCopies: [],
@@ -66,6 +67,10 @@ Deno.test("exportSurrealGraphState delegates list calls to store and maps auxili
 	});
 	const listCalls: string[] = [];
 	const mockStore = {
+		listRelationTypeDefinitions: () => {
+			listCalls.push("listRelationTypeDefinitions");
+			return Promise.resolve(state.relationTypeDefinitions);
+		},
 		listWorks: () => {
 			listCalls.push("listWorks");
 			return Promise.resolve(state.works);
@@ -154,6 +159,7 @@ Deno.test("exportSurrealGraphState delegates list calls to store and maps auxili
 	const result = await exportSurrealGraphState(mockStore, mockDb);
 
 	assertEquals(listCalls, [
+		"listRelationTypeDefinitions",
 		"listWorks",
 		"listBranches",
 		"listWorkingCopies",

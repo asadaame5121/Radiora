@@ -11,6 +11,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
 	ResumePosition,
 	Revision,
 	SavedRuleQuery,
@@ -37,6 +38,7 @@ export interface WorkBundle {
 }
 
 export interface GraphStateSnapshot {
+	relationTypeDefinitions: RelationTypeDefinition[];
 	works: Work[];
 	branches: Branch[];
 	workingCopies: WorkingCopy[];
@@ -53,6 +55,11 @@ export interface GraphStateSnapshot {
 	recoverySnapshots: RecoverySnapshot[];
 	bookmarks: Bookmark[];
 	resumePosition: ResumePosition | null;
+}
+
+export interface RelationTypeDefinitionStorePort {
+	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]>;
+	createRelationTypeDefinition(definition: RelationTypeDefinition): Promise<void>;
 }
 
 export interface BackupStorePort {
@@ -145,7 +152,13 @@ export interface DiscoveryStorePort {
 }
 
 export interface GraphStore
-	extends BackupStorePort, OutlineStorePort, WorkStorePort, RelationStorePort, DiscoveryStorePort {
+	extends
+		BackupStorePort,
+		OutlineStorePort,
+		WorkStorePort,
+		RelationStorePort,
+		RelationTypeDefinitionStorePort,
+		DiscoveryStorePort {
 	initialize(): Promise<void>;
 	close(): Promise<void>;
 }
