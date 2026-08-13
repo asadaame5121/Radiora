@@ -1,0 +1,92 @@
+name: Weekly quality audit
+
+on:
+  schedule:
+    - cron: "17 18 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    name: Mutation ${{ matrix.batch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: [parsers, projections, domain, storage, controllers]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.9.3"
+          cache: true
+      - run: npm ci
+      - name: Restore incremental mutation results
+        uses: actions/cache@v4
+        with:
+          path: reports/mutation/${{ matrix.batch }}-incremental.json
+          key: mutation-${{ matrix.batch }}-${{ runner.os }}-${{ hashFiles('package-lock.json', 'deno.lock') }}-${{ github.run_id }}
+          restore-keys: |
+            mutation-${{ matrix.batch }}-${{ runner.os }}-${{ hashFiles('package-lock.json', 'deno.lock') }}-
+      - name: Run mutation batch
+        run: npm run test:mutation:${{ matrix.batch }}
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-${{ matrix.batch }}
+          path: reports/mutation/
+          if-no-files-found: warn
+
+  coverage:
+    name: Coverage ratchet
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.9.3"
+          cache: true
+      - run: npm ci
+      - run: npm run coverage:unit
+      - run: deno task coverage:deno
+      - run: deno task coverage:ratchet
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            coverage/
+            reports/coverage/
+
+  visual:
+    name: Visual regression
+    # Baselines are intentionally captured on Windows to match the desktop target.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: npm run test:visual
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-test-results
+          path: test-results/

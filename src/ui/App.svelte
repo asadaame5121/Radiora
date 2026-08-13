@@ -2325,7 +2325,8 @@
 								>プレビュー</button>
 							</div>
 							{#if longForm.preview}
-								<div class="long-form-preview">{@html renderMarkdownPreview(longForm.text)}</div>
+			<!-- nosemgrep: radiora.no-dangerous-html -- renderMarkdownPreview escapes raw HTML before adding controlled markup. -->
+			<div class="long-form-preview">{@html renderMarkdownPreview(longForm.text)}</div>
 							{:else}
 								<textarea
 									class="long-form-textarea"
@@ -2831,6 +2832,7 @@
 						onDelete={removeLink}
 						onReverse={reverseLink}
 						onCompare={(link) => openLinkComparison(link.id)}
+						onSearch={api.searchItems}
 					/>
 					{#if inlineSemanticLinkNotice}
 						<p class="inline-semantic-link-notice" role="status">{inlineSemanticLinkNotice}</p>

@@ -19,13 +19,13 @@
 	});
 </script>
 
-<aside class="toast" role="status" aria-live="polite">
+<div class="toast" role="status" aria-live="polite">
 	<div>
 		<strong>{title}</strong>
 		<p>{message}</p>
 	</div>
 	<button type="button" aria-label="閉じる" onclick={onDismiss}>×</button>
-</aside>
+</div>
 
 <style>
 	.toast {

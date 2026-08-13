@@ -1,0 +1,53 @@
+rules:
+  - id: radiora.ui-no-storage-or-desktop-import
+    message: UI modules must depend on feature ports, not storage or desktop adapters.
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      include: [src/ui/**/*.ts]
+      exclude: [src/ui/**/*test.ts]
+    pattern-regex: 'from\s+["'']\.\./(?:storage|desktop)/'
+
+  - id: radiora.non-ui-no-ui-import
+    message: Domain, service, and storage modules must not depend on UI modules.
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      include: [src/domain/**/*.ts, src/services/**/*.ts, src/storage/**/*.ts]
+      exclude: [src/**/*test.ts]
+    pattern-regex: 'from\s+["''](?:\.\./)+ui/'
+
+  - id: radiora.ui-no-deno-io
+    message: UI modules must not call Deno APIs directly; inject an adapter or port.
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      include: [src/ui/**/*.ts]
+      exclude: [src/ui/**/*test.ts]
+    pattern: Deno.$METHOD(...)
+
+  - id: radiora.view-no-rpc-adapter
+    message: Svelte Views must receive feature ports instead of constructing an RPC adapter.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: [src/ui/*.svelte]
+      exclude: [src/ui/App.svelte]
+    pattern-regex: 'createRpcAdapter\s*[(<]'
+
+  - id: radiora.no-dangerous-html
+    message: Do not render untrusted HTML directly.
+    severity: ERROR
+    languages: [generic]
+    paths:
+      include: [src/**/*.svelte, src/**/*.ts]
+    pattern-regex: '(?:@html\s+|innerHTML\s*=)'
+
+  - id: radiora.no-hardcoded-network-origin
+    message: Network origins belong in a named configuration boundary.
+    severity: ERROR
+    languages: [typescript]
+    paths:
+      include: [src/**/*.ts]
+      exclude: [src/**/*test.ts, src/main.ts]
+    pattern-regex: '(?:fetch|WebSocket)\s*\(\s*["''](?:https?|wss?)://(?!127\.0\.0\.1|localhost)[^"'']+["'']'
