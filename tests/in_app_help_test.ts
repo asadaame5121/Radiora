@@ -1,13 +1,19 @@
-import { assert } from "jsr:@std/assert@1";
+import { assert, assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("in-app help is a dedicated, reachable and scannable page", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const viewMode = await Deno.readTextFile(new URL("../src/ui/app_view_mode.ts", import.meta.url));
+	const navigation = await Deno.readTextFile(
+		new URL("../src/ui/PrimaryNavigation.svelte", import.meta.url),
+	);
 	const help = await Deno.readTextFile(new URL("../src/ui/InAppHelp.svelte", import.meta.url));
 	const updateController = await Deno.readTextFile(
 		new URL("../src/ui/help_update_controller.svelte.ts", import.meta.url),
 	);
 
-	assert(app.includes('| "help"'));
+	assert(viewMode.includes('| "help"'));
+	assert(navigation.includes('activeView === "help"'));
+	assertMatch(navigation, /onclick=\{onOpenHelp\}[^>]*>ヘルプ<\/button>/);
 	assert(app.includes('viewMode === "help"'));
 	assert(app.includes("InAppHelp"));
 	assert(app.includes("function openHelp()"));

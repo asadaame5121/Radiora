@@ -17,6 +17,12 @@
 	import TagBrowserView from "./TagBrowserView.svelte";
 	import TrashView from "./TrashView.svelte";
 	import OptionsView from "./OptionsView.svelte";
+	import WorkingCopySaveStatus from "./WorkingCopySaveStatus.svelte";
+	import StartupCacheStatus from "./StartupCacheStatus.svelte";
+	import StartupView from "./StartupView.svelte";
+	import PrimaryNavigation, {
+		type RecentNavigationItem,
+	} from "./PrimaryNavigation.svelte";
 	import ConfirmationDialog from "./ConfirmationDialog.svelte";
 	import Toast from "./Toast.svelte";
 	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
@@ -127,22 +133,10 @@
 		projectSemanticLinkAnnotations,
 		type SemanticLinkAnnotation,
 	} from "../services/semantic_link_annotations";
+	import type { ViewMode } from "./app_view_mode.ts";
 
 	const api = createRpcAdapter<RadioraBindings>();
 
-	type ViewMode =
-		| "outline"
-		| "today"
-		| "unplaced"
-		| "stubs"
-		| "duplicates"
-		| "tags"
-		| "globalLineage"
-		| "workLineage"
-		| "comparison"
-		| "trash"
-		| "help"
-		| "options";
 	type AsideMode = "overview" | "relation" | "history" | "query";
 	type OccurrenceContextMenuState = {
 		targetId: string;
@@ -336,6 +330,15 @@
 			})
 			.slice(0, 6);
 	});
+	const primaryNavigationRecentItems = $derived<RecentNavigationItem[]>(
+		recentEditedItems.map((item) => ({
+			workId: item.workId,
+			id: item.id,
+			title: titleFor(item),
+			parentLabel: item.parentId ? titleForId(item.parentId) : "ルート",
+			editedAtLabel: formatRecentEditAt(item.updatedAt),
+		})),
+	);
 	const selectedBranchId = $derived(
 		selectedItem?.revisionSelector.mode === "branch"
 			? selectedItem.revisionSelector.branchId
@@ -1490,6 +1493,11 @@
 		await selectItem(item, ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id));
 	}
 
+	function openRecentNavigationItem(item: RecentNavigationItem): void {
+		const outlineItem = itemById.get(item.id);
+		if (outlineItem) void openRecentItem(outlineItem);
+	}
+
 	function openHelp(): void {
 		viewMode = "help";
 	}
@@ -2107,74 +2115,33 @@
 {/if}
 
 {#if startupCacheActive}
-	<section class="startup-cache-status" role="status" aria-live="polite">
-		{#if startup.phase === "failed"}
-			<span>前回の内容を表示しています。起動に失敗しました。</span>
-			<button onclick={() => void retryStartup()}>再試行</button>
-		{:else if startup.phase === "ready"}
-			<span>前回の内容を表示しています。最新データを読み込めませんでした。</span>
-			<button onclick={() => void reloadCachedStartupData()}>再読み込み</button>
-		{:else}
-			<span>前回の内容を表示しています。最新データを同期中…</span>
-		{/if}
-	</section>
+	<StartupCacheStatus
+		startup={startup}
+		onRetry={() => void retryStartup()}
+		onReload={() => void reloadCachedStartupData()}
+	/>
 {/if}
 
 <div class="shell" class:nav-collapsed={navCollapsed} inert={startupCacheActive} aria-busy={startupCacheActive}>
-	<nav class="primary-nav" class:nav-collapsed={navCollapsed} aria-label="主な画面">
-		<button
-			class="nav-collapse-toggle"
-			type="button"
-			aria-label={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
-			aria-expanded={!navCollapsed}
-			title={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
-			onclick={toggleNavigation}
-		>{navCollapsed ? "»" : "«"}</button>
-		<div class="brand"><strong>Radiora</strong><span>v2</span></div>
-		<section>
-			<p>作業</p>
-			<button class:active={viewMode === "today"} aria-pressed={viewMode === "today"}
-				onclick={openToday}>{vocabulary.today}</button>
-			<button class:active={viewMode === "unplaced"} aria-pressed={viewMode === "unplaced"}
-				onclick={openUnplaced}>{vocabulary.unplacedInbox}</button>
-			<button class:active={viewMode === "stubs"} aria-pressed={viewMode === "stubs"}
-				onclick={openStubs}>{vocabulary.stubList}</button>
-		</section>
-		<section class="recent-edits" aria-labelledby="recent-edits-heading">
-			<p id="recent-edits-heading">最近編集した{vocabulary.work}</p>
-			{#each recentEditedItems as item (item.workId)}
-				<button
-					class:active={viewMode === "outline" && selectedId === item.id}
-					onclick={() => void openRecentItem(item)}
-				>
-					<strong>{titleFor(item)}</strong>
-					<small>{item.parentId ? titleForId(item.parentId) : "ルート"} · {formatRecentEditAt(item.updatedAt)}</small>
-				</button>
-			{:else}
-				<span class="nav-empty">編集した{vocabulary.work}はありません</span>
-			{/each}
-		</section>
-		<section>
-			<p>探索</p>
-			<button class:active={viewMode === "duplicates"} aria-pressed={viewMode === "duplicates"}
-				onclick={openDuplicates}>{vocabulary.duplicateCandidates}</button>
-		</section>
-		<section>
-			<p>管理</p>
-			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
-				onclick={openTrash}>ゴミ箱</button>
-			<button class:active={viewMode === "options"} aria-pressed={viewMode === "options"}
-				onclick={() => (viewMode = "options")}>Option</button>
-		</section>
-		<section class="nav-tools">
-			<p>ツール</p>
-			<button class:active={viewMode === "tags"} onclick={openTags}>{vocabulary.tag}管理</button>
-			<button class:active={asideMode === "query"} onclick={() => openInspectorTool("query")}
-				disabled={!selectedItem}>Query・検索別名</button>
-			<button class:active={viewMode === "help"} onclick={openHelp} title="F1">ヘルプ</button>
-		</section>
-	</nav>
-
+	<PrimaryNavigation
+		collapsed={navCollapsed}
+		activeView={viewMode}
+		queryActive={asideMode === "query"}
+		queryAvailable={Boolean(selectedItem)}
+		recentItems={primaryNavigationRecentItems}
+		selectedId={selectedId}
+		onToggleCollapse={toggleNavigation}
+		onOpenToday={() => void openToday()}
+		onOpenUnplaced={() => void openUnplaced()}
+		onOpenStubs={() => void openStubs()}
+		onOpenDuplicates={() => void openDuplicates()}
+		onOpenTrash={() => void openTrash()}
+		onOpenOptions={() => (viewMode = "options")}
+		onOpenTags={() => void openTags()}
+		onOpenQuery={() => void openInspectorTool("query")}
+		onOpenHelp={openHelp}
+		onOpenRecentItem={(item) => void openRecentNavigationItem(item)}
+	/>
 	<header class="top-bar">
 		<div class="current-location">
 			<div class="view-switcher" role="group" aria-label="アウトラインとツリー">
@@ -2257,43 +2224,14 @@
 			>詳細</button>
 		</div>
 		{#if workingCopySaveStatus}
-			<div
-				class="working-copy-save-status"
-				class:failed={workingCopySaveStatus.phase === "failed"}
-				class:pending={workingCopySaveStatus.phase === "unsaved" ||
-					workingCopySaveStatus.phase === "saving"}
-				aria-live="polite"
-				title={workingCopySaveStatus.error}
-			>
-				<span>
-					{workingCopySaveStatus.phase === "failed"
-						? `${vocabulary.workingCopy}を保存できませんでした`
-						: workingCopySaveStatus.phase === "saving"
-						? `${vocabulary.workingCopy}を保存中…`
-						: workingCopySaveStatus.phase === "unsaved"
-						? `未保存の${vocabulary.workingCopy}があります`
-						: `${vocabulary.workingCopy}を保存しました`}
-				</span>
-				{#if workingCopySaveStatus.phase === "failed"}
-					<button onclick={retryWorkingCopySave}>再試行</button>
-				{/if}
-			</div>
+			<WorkingCopySaveStatus status={workingCopySaveStatus} onRetry={retryWorkingCopySave} />
 		{/if}
 	</header>
 
 	{#if error}<div class="error">{error}<button onclick={() => (error = "")}>×</button></div>{/if}
 
 	{#if startup.phase !== "ready" && !startupCacheActive}
-		<main class="app-main startup-main">
-			<section class="startup-card" aria-live="polite">
-				<div class:failed={startup.phase === "failed"} class="startup-indicator"></div>
-				<p class="eyebrow">{startup.phase === "failed" ? "STARTUP FAILED" : "STARTING"}</p>
-				<h1>{startup.message}</h1>
-				{#if startup.detail}<p class="startup-detail">{startup.detail}</p>{/if}
-				{#if startup.logPath}<p class="startup-log">診断ログ: <code>{startup.logPath}</code></p>{/if}
-				{#if startup.phase === "failed"}<button class="retry" onclick={retryStartup}>再試行</button>{/if}
-			</section>
-		</main>
+		<StartupView startup={startup} onRetry={retryStartup} />
 	{:else}
 	<main
 		class="app-main"
