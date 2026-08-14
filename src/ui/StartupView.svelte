@@ -17,7 +17,7 @@
 		<h1>{startup.message}</h1>
 		{#if startup.detail}<p class="startup-detail">{startup.detail}</p>{/if}
 		{#if startup.logPath}<p class="startup-log">診断ログ: <code>{startup.logPath}</code></p>{/if}
-		{#if startup.phase === "failed"}<button class="retry" onclick={onRetry}>再試行</button>{/if}
+		{#if startup.phase === "failed"}<button type="button" class="retry" onclick={onRetry}>再試行</button>{/if}
 	</section>
 </main>
 

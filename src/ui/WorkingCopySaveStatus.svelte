@@ -30,7 +30,7 @@
 					: `${vocabulary.workingCopy}を保存しました`}
 	</span>
 	{#if status.phase === "failed"}
-		<button onclick={onRetry}>再試行</button>
+		<button type="button" onclick={onRetry}>再試行</button>
 	{/if}
 </div>
 

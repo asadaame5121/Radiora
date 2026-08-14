@@ -63,17 +63,18 @@
 	<div class="brand"><strong>Radiora</strong><span>v2</span></div>
 	<section>
 		<p>作業</p>
-		<button class:active={activeView === "today"} aria-pressed={activeView === "today"}
+		<button type="button" class:active={activeView === "today"} aria-pressed={activeView === "today"}
 			onclick={onOpenToday}>{vocabulary.today}</button>
-		<button class:active={activeView === "unplaced"} aria-pressed={activeView === "unplaced"}
+		<button type="button" class:active={activeView === "unplaced"} aria-pressed={activeView === "unplaced"}
 			onclick={onOpenUnplaced}>{vocabulary.unplacedInbox}</button>
-		<button class:active={activeView === "stubs"} aria-pressed={activeView === "stubs"}
+		<button type="button" class:active={activeView === "stubs"} aria-pressed={activeView === "stubs"}
 			onclick={onOpenStubs}>{vocabulary.stubList}</button>
 	</section>
 	<section class="recent-edits" aria-labelledby="recent-edits-heading">
 		<p id="recent-edits-heading">最近編集した{vocabulary.work}</p>
 		{#each recentItems as item (item.workId)}
 			<button
+				type="button"
 				class:active={activeView === "outline" && selectedId === item.id}
 				onclick={() => void onOpenRecentItem(item)}
 			>
@@ -86,22 +87,22 @@
 	</section>
 	<section>
 		<p>探索</p>
-		<button class:active={activeView === "duplicates"} aria-pressed={activeView === "duplicates"}
+		<button type="button" class:active={activeView === "duplicates"} aria-pressed={activeView === "duplicates"}
 			onclick={onOpenDuplicates}>{vocabulary.duplicateCandidates}</button>
 	</section>
 	<section>
 		<p>管理</p>
-		<button class:active={activeView === "trash"} aria-pressed={activeView === "trash"}
+		<button type="button" class:active={activeView === "trash"} aria-pressed={activeView === "trash"}
 			onclick={onOpenTrash}>ゴミ箱</button>
-		<button class:active={activeView === "options"} aria-pressed={activeView === "options"}
+		<button type="button" class:active={activeView === "options"} aria-pressed={activeView === "options"}
 			onclick={onOpenOptions}>Option</button>
 	</section>
 	<section class="nav-tools">
 		<p>ツール</p>
-		<button class:active={activeView === "tags"} onclick={onOpenTags}>{vocabulary.tag}管理</button>
-		<button class:active={queryActive} onclick={onOpenQuery}
+		<button type="button" class:active={activeView === "tags"} onclick={onOpenTags}>{vocabulary.tag}管理</button>
+		<button type="button" class:active={queryActive} onclick={onOpenQuery}
 			disabled={!queryAvailable}>Query・検索別名</button>
-		<button class:active={activeView === "help"} onclick={onOpenHelp} title="F1">ヘルプ</button>
+		<button type="button" class:active={activeView === "help"} onclick={onOpenHelp} title="F1">ヘルプ</button>
 	</section>
 </nav>
 

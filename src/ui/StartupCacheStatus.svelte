@@ -15,10 +15,10 @@
 <section class="startup-cache-status" role="status" aria-live="polite">
 	{#if startup.phase === "failed"}
 		<span>前回の内容を表示しています。起動に失敗しました。</span>
-		<button onclick={onRetry}>再試行</button>
+		<button type="button" onclick={onRetry}>再試行</button>
 	{:else if startup.phase === "ready"}
 		<span>前回の内容を表示しています。最新データを読み込めませんでした。</span>
-		<button onclick={onReload}>再読み込み</button>
+		<button type="button" onclick={onReload}>再読み込み</button>
 	{:else}
 		<span>前回の内容を表示しています。最新データを同期中…</span>
 	{/if}
