@@ -33,6 +33,25 @@ function createPorts(apiOverrides: Partial<WorkApiPort>): WorkControllerPorts {
 }
 
 describe("work controller", () => {
+	test("exposes empty feature state before loading", () => {
+		const controller = createWorkController(createPorts({}));
+
+		expect(controller.quickCaptureSubmitting).toBe(false);
+		expect(controller.unplacedWorks).toEqual([]);
+		expect(controller.stubEntries).toEqual([]);
+		expect(controller.duplicateCandidates).toEqual([]);
+		expect(controller.excludedDuplicateCandidateKeys).toEqual([]);
+		expect(controller.unplacedLinkType).toBe("RELATED");
+		expect(controller.trashEntries).toEqual([]);
+	});
+
+	test("joins every duplicate reason in display order", () => {
+		const duplicate = candidate("work-a", "work-b", "same title");
+		duplicate.reasons.push({ kind: "tag", label: "same tag", score: 1 });
+
+		expect(duplicateCandidateReason(duplicate)).toBe("same title / same tag");
+	});
+
 	test("excluded duplicate candidates stay excluded after reloading", async () => {
 		const excluded = candidate("work-b", "work-a", "タイトルが一致");
 		const remaining = candidate("work-c", "work-d", "共通タグ");
@@ -49,6 +68,8 @@ describe("work controller", () => {
 		controller.excludeDuplicateCandidate(excluded);
 		expect(controller.excludedDuplicateCandidateKeys).toEqual(["work-a:work-b"]);
 		expect(controller.duplicateCandidates).toEqual([remaining]);
+		controller.excludeDuplicateCandidate(excluded);
+		expect(controller.excludedDuplicateCandidateKeys).toEqual(["work-a:work-b"]);
 
 		await controller.loadDuplicates();
 		expect(listDuplicateCandidates).toHaveBeenCalledTimes(2);
