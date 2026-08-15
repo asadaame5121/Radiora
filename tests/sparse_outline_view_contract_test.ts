@@ -95,29 +95,28 @@ Deno.test("Sparse Outline computeDepth handles cycles with visited set", async (
 });
 
 Deno.test("App.svelte integrates SparseOutlineView in query mode", async () => {
-	const app = await Deno.readTextFile(
-		new URL("../src/ui/App.svelte", import.meta.url),
+	const inspector = await Deno.readTextFile(
+		new URL("../src/ui/InspectorView.svelte", import.meta.url),
 	);
-	assert(app.includes("SparseOutlineView"), "imports SparseOutlineView");
-	assertMatch(app, /<SparseOutlineView/, "renders SparseOutlineView component");
-	assert(app.includes("loadSparseOutlineForQuery"), "has query loading function");
-	assert(app.includes("handleSparseOutlineSelect"), "has node selection handler");
-	assert(app.includes("sparseOutlineNodes"), "has sparse outline state");
+	assert(inspector.includes("SparseOutlineView"), "imports SparseOutlineView");
+	assertMatch(inspector, /<SparseOutlineView/, "renders SparseOutlineView component");
+	assert(inspector.includes("onSelectSparseNode"), "has node selection callback");
+	assert(inspector.includes("sparseOutlineNodes"), "has sparse outline state");
 });
 
 Deno.test("App.svelte passes onSelectNode to SparseOutlineView", async () => {
-	const app = await Deno.readTextFile(
-		new URL("../src/ui/App.svelte", import.meta.url),
+	const inspector = await Deno.readTextFile(
+		new URL("../src/ui/InspectorView.svelte", import.meta.url),
 	);
-	assertMatch(app, /onSelectNode=\{handleSparseOutlineSelect\}/, "binds selection handler");
+	assertMatch(inspector, /onSelectNode=\{query\.onSelectSparseNode\}/, "binds selection handler");
 });
 
 Deno.test("App.svelte toggle button switches between table and sparse outline", async () => {
-	const app = await Deno.readTextFile(
-		new URL("../src/ui/App.svelte", import.meta.url),
+	const inspector = await Deno.readTextFile(
+		new URL("../src/ui/InspectorView.svelte", import.meta.url),
 	);
-	assert(app.includes("showSparseOutline"), "has toggle state");
-	assert(app.includes("sparse-toggle"), "has toggle button CSS class");
+	assert(inspector.includes("showSparseOutline"), "has toggle state");
+	assert(inspector.includes("sparse-toggle"), "has toggle button CSS class");
 });
 
 Deno.test("outline service delegates query projection to discovery operations", async () => {

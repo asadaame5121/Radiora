@@ -1,22 +1,22 @@
 import { assert, assertMatch, assertNotMatch } from "jsr:@std/assert@1";
 
 const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+const inspector = await Deno.readTextFile(
+	new URL("../src/ui/InspectorView.svelte", import.meta.url),
+);
 const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
 
 Deno.test("inspector modes are mutually exclusive and selection can be cleared", () => {
-	const inspector = app.slice(
-		app.indexOf('<aside bind:this={inspectorElement} class="inspector">'),
-		app.indexOf('{:else}\n\t\t\t\t<div class="aside-empty">'),
-	);
-	assertMatch(inspector, /\{#if asideMode === "overview"\}/);
-	assertMatch(inspector, /\{:else if asideMode === "relation"\}/);
-	assertMatch(inspector, /\{:else if asideMode === "history"\}/);
+	assertMatch(inspector, /<Tabs\.Root[\s\S]*?value=\{tabValue\}/);
+	assertMatch(inspector, /<Tabs\.Content value="overview">/);
+	assertMatch(inspector, /<Tabs\.Content value="relation">/);
+	assertMatch(inspector, /<Tabs\.Content value="history">/);
 	assertNotMatch(inspector, /asideMode === "tags"/);
 	assertMatch(
 		inspector,
-		/<button class="clear-selection" onclick=\{\(\) => selectOccurrence\(null\)\}>選択解除<\/button>/,
+		/<button class="clear-selection" type="button" onclick=\{\(\) => onSelectOccurrence\(null\)\}>選択解除<\/button>/,
 	);
-	assertNotMatch(inspector, /\{#if asideMode === "overview" && bodyFor/);
+	assertNotMatch(inspector, /\{#if asideMode === "overview" &&/);
 });
 
 Deno.test("outline provides non-button Zoom and preserves an explicit return path", () => {
@@ -26,8 +26,8 @@ Deno.test("outline provides non-button Zoom and preserves an explicit return pat
 	assertMatch(app, /requestClearHoist/);
 	assertNotMatch(app, /onclick=\{requestHoist\}/);
 	assertMatch(
-		app,
-		/<button class="clear-selection" onclick=\{\(\) => selectOccurrence\(null\)\}>選択解除<\/button>/,
+		inspector,
+		/<button class="clear-selection" type="button" onclick=\{\(\) => onSelectOccurrence\(null\)\}>選択解除<\/button>/,
 	);
 });
 

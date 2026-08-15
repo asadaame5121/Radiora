@@ -5,6 +5,9 @@ const navigation = await Deno.readTextFile(
 	new URL("../src/ui/PrimaryNavigation.svelte", import.meta.url),
 );
 const navigationStyles = navigation.slice(navigation.indexOf("<style>"));
+const inspector = await Deno.readTextFile(
+	new URL("../src/ui/InspectorView.svelte", import.meta.url),
+);
 const navigationController = await Deno.readTextFile(
 	new URL("../src/ui/navigation_controller.svelte.ts", import.meta.url),
 );
@@ -59,12 +62,13 @@ Deno.test("shell keeps global navigation, contextual inspector, and dedicated fu
 		assert(app.includes(label));
 	}
 	for (const tab of [">概要</button>", ">関係</button>", ">履歴</button>"]) {
-		assert(app.includes(tab));
+		assert(inspector.includes(tab));
 	}
 	assertMatch(navigation, /<nav class="primary-nav"/);
 	assertMatch(navigation, /<button type="button"[^>]*>\{vocabulary\.today\}<\/button>/);
 	assertMatch(app, /class:full-workspace=\{dedicatedView\}/);
-	assertMatch(app, /\{#if !dedicatedView\}\s*<aside[^>]*class="inspector">/);
+	assertMatch(app, /\{#if !dedicatedView\}\s*<InspectorView/);
+	assertMatch(inspector, /<aside bind:this=\{inspectorElement\} class="inspector">/);
 	assertMatch(app, /<div class="work-lineage-workspace">/);
 	assertMatch(styles, /\.shell > \.top-bar/);
 	assertMatch(styles, /\.app-main > \.inspector/);
@@ -90,7 +94,7 @@ Deno.test("left and right sidebars are collapsible", () => {
 		navigationStyles,
 		/\.primary-nav\.nav-collapsed \.brand,\s*\.primary-nav\.nav-collapsed section \{\s*display: none;/,
 	);
-	assertMatch(app, /inspector-close/);
+	assertMatch(inspector, /inspector-close/);
 	assertMatch(app, /inspectorCollapsed = true/);
 	assertMatch(app, /async function toggleInspector/);
 	assertMatch(app, /class="inspector-jump"/);

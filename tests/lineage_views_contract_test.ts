@@ -1,10 +1,13 @@
 import { assert, assertFalse, assertMatch } from "jsr:@std/assert@1";
 
+async function readUi(name: string): Promise<string> {
+	return await Deno.readTextFile(new URL(`../src/ui/${name}`, import.meta.url));
+}
+
 Deno.test("global and selected Work lineage have separate UI responsibilities", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
-	const global = await Deno.readTextFile(
-		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
-	);
+	const global = await readUi("GlobalLineage.svelte");
+	const displayed = await readUi("GlobalLineageDisplayedPane.svelte");
 	const work = await Deno.readTextFile(
 		new URL("../src/ui/WorkLineage.svelte", import.meta.url),
 	);
@@ -16,7 +19,7 @@ Deno.test("global and selected Work lineage have separate UI responsibilities", 
 	assert(app.includes("<WorkLineage"));
 	assert(global.includes("<PhylogeneticTree"));
 	assert(global.includes("{onOpen}"));
-	assert(global.includes("projection.promotedBranches"));
+	assert(displayed.includes("projection.promotedBranches"));
 	assert(work.includes("projection.revisions"));
 	assert(work.includes("projection.branches"));
 	assert(work.includes("revision.parentRevisionIds"));
@@ -26,9 +29,7 @@ Deno.test("global and selected Work lineage have separate UI responsibilities", 
 
 Deno.test("global tree clears selection, opens real nodes, and restores its projection", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
-	const global = await Deno.readTextFile(
-		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
-	);
+	const global = await readUi("GlobalLineage.svelte");
 	const tree = await Deno.readTextFile(
 		new URL("../src/ui/PhylogeneticTree.svelte", import.meta.url),
 	);
@@ -52,6 +53,7 @@ Deno.test("cluster inspection opens the sidebar without moving the central camer
 	const global = await Deno.readTextFile(
 		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
 	);
+	const sidebar = await readUi("GlobalLineageSidebar.svelte");
 
 	assert(tree.includes("onInspectCluster?.(node)"));
 	assertMatch(
@@ -60,42 +62,40 @@ Deno.test("cluster inspection opens the sidebar without moving the central camer
 	);
 	assert(global.includes("onInspectCluster={handleInspectCluster}"));
 	assert(global.includes('activeTab = "inspect"'));
-	assert(global.includes("切り出し"));
-	assert(global.includes("表示中"));
-	assert(global.includes("フィルター"));
+	assert(sidebar.includes("切り出し"));
+	assert(sidebar.includes("表示中"));
+	assert(sidebar.includes("フィルター"));
 });
 
 Deno.test("the inspection pane lists members, internal links, stubs, and a zoom-out action", async () => {
-	const global = await Deno.readTextFile(
-		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
-	);
+	const global = await readUi("GlobalLineage.svelte");
+	const inspect = await readUi("GlobalLineageInspectPane.svelte");
 	const tree = await Deno.readTextFile(
 		new URL("../src/ui/PhylogeneticTree.svelte", import.meta.url),
 	);
 
-	assert(global.includes("clusterMembers"));
-	assert(global.includes("buildLaneOrder"));
-	assert(global.includes("internalLinks"));
-	assert(global.includes("externalStubs"));
-	assert(global.includes("中央で拡大"));
-	assert(global.includes("treeElement?.zoomToBounds(inspectCluster.bounds)"));
+	assert(inspect.includes("clusterMembers"));
+	assert(inspect.includes("buildLaneOrder"));
+	assert(inspect.includes("internalLinks"));
+	assert(inspect.includes("externalStubs"));
+	assert(inspect.includes("中央で拡大"));
+	assert(inspect.includes("onZoomToCluster(inspectCluster?.bounds)"));
+	assert(global.includes("treeElement?.zoomToBounds(bounds)"));
 	assert(tree.includes("export function zoomToBounds"));
-	assert(global.includes("→ 外部"));
-	assert(global.includes("member.id === selectedId"));
-	assert(global.includes("onOpen(member.id)"));
+	assert(inspect.includes("→ 外部"));
+	assert(inspect.includes("member.id === selectedId"));
+	assert(inspect.includes("onOpen(member.id)"));
 });
 
 Deno.test("filter changes reload the projection and preserve only persisted settings", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
-	const global = await Deno.readTextFile(
-		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
-	);
+	const filter = await readUi("GlobalLineageFilterPane.svelte");
 
-	assert(global.includes("孤立"));
-	assert(global.includes("すべて選択"));
-	assert(global.includes("すべて解除"));
-	assert(global.includes("onFilterChange({ ...filter, includeIsolated })"));
-	assert(global.includes("onFilterChange({ ...filter, linkTypes })"));
+	assert(filter.includes("孤立"));
+	assert(filter.includes("すべて選択"));
+	assert(filter.includes("すべて解除"));
+	assert(filter.includes("onFilterChange({ ...filter, includeIsolated:"));
+	assert(filter.includes("onFilterChange({ ...filter, linkTypes })"));
 	assert(app.includes("loadTreeFilterPreference()"));
 	assert(app.includes("saveTreeFilterPreference(treeFilter)"));
 	assert(app.includes("api.listGlobalLineage(activeGlobalLineageFilter)"));
@@ -122,27 +122,24 @@ Deno.test("global lineage requests are generation-guarded against out-of-order r
 });
 
 Deno.test("filter state closes a vanished cluster and shows the filter tab", async () => {
-	const global = await Deno.readTextFile(
-		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
-	);
+	const global = await readUi("GlobalLineage.svelte");
 
-	assert(global.includes("inspectCluster.itemIds.every((id) => itemById.get(id) !== undefined)"));
+	assert(global.includes("inspectCluster.itemIds.every((id) =>"));
+	assert(global.includes("projection.snapshot.items.some((item) => item.id === id)"));
 	assert(global.includes("inspectCluster = null"));
 	assert(global.includes('activeTab = "filter"'));
 });
 
 Deno.test("the sidebar drawer supports Escape, close, backdrop, and focus return", async () => {
-	const global = await Deno.readTextFile(
-		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
-	);
+	const sidebar = await readUi("GlobalLineageSidebar.svelte");
 
-	assert(global.includes('event.key === "Escape" && drawerOpen'));
-	assert(global.includes("closeDrawer()"));
-	assert(global.includes("sidebar-backdrop"));
-	assert(global.includes("sidebar-close"));
-	assert(global.includes("lastFocused.focus"));
-	assert(global.includes("max-width: 1000px"));
-	assert(global.includes("min(360px, 85vw)"));
+	assert(sidebar.includes('event.key === "Escape" && drawerOpen'));
+	assert(sidebar.includes("closeDrawer()"));
+	assert(sidebar.includes("sidebar-backdrop"));
+	assert(sidebar.includes("sidebar-close"));
+	assert(sidebar.includes("lastFocused.focus"));
+	assert(sidebar.includes("max-width: 1000px"));
+	assert(sidebar.includes("min(360px, 85vw)"));
 });
 
 Deno.test("filter results show the displayed and total Work counts in the tree", async () => {

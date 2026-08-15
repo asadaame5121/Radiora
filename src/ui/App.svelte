@@ -5,9 +5,8 @@
 	import ComparisonPane from "./ComparisonPane.svelte";
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
-	import LinkEditor from "./LinkEditor.svelte";
 	import MarkdownEditor from "./MarkdownEditor.svelte";
-	import SparseOutlineView from "./SparseOutlineView.svelte";
+	import InspectorView, { type InspectorAsideMode } from "./InspectorView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
 	import InAppHelp from "./InAppHelp.svelte";
 	import ContextMenu from "./ContextMenu.svelte";
@@ -138,7 +137,6 @@
 
 	const api = createRpcAdapter<RadioraBindings>();
 
-	type AsideMode = "overview" | "relation" | "history" | "query";
 	type OccurrenceContextMenuState = {
 		targetId: string;
 		source: "outline" | "tree";
@@ -177,7 +175,7 @@
 	});
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
-	let asideMode = $state<AsideMode>("overview");
+	let asideMode = $state<InspectorAsideMode>("overview");
 	let aliases = $state<SearchAlias[]>([]);
 	let aliasCanonical = $state("");
 	let aliasVariants = $state("");
@@ -892,11 +890,21 @@
 		window.addEventListener("pointerup", stop, { once: true });
 	}
 
-	async function openInspectorTool(mode: Extract<AsideMode, "query">): Promise<void> {
+	async function openInspectorTool(mode: Extract<InspectorAsideMode, "query">): Promise<void> {
 		asideMode = mode;
 		if (dedicatedView) viewMode = "outline";
 		await tick();
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
+	}
+
+	function selectInspectorPlacement(id: string): void {
+		viewMode = "outline";
+		selectOccurrence(id);
+		requestFocus(id);
+	}
+
+	function toggleSparseOutline(): void {
+		showSparseOutline = !showSparseOutline;
 	}
 
 	function requestFocus(id: string, caretOffset?: number): void {
@@ -2311,7 +2319,7 @@
 					<button class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
 				{:else}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div class="rows" role="tree" aria-label="アウトライン" tabindex="0"
+					<div class="rows" role="tree" aria-label={`${vocabulary.work}のアウトライン`} tabindex="0"
 						onmousedown={(event) => {
 							if (event.target === event.currentTarget) deselectFromBlank(event);
 						}}>
@@ -2706,199 +2714,72 @@
 		{/if}
 
 		{#if !dedicatedView}
-			<aside bind:this={inspectorElement} class="inspector">
-			<button
-				class="inspector-resize-handle"
-				type="button"
-				aria-label="右ペインの幅を変更"
-				onpointerdown={startInspectorResize}
-				title="ドラッグして幅を変更"
-			></button>
-			{#if selectedItem}
-				<nav class="aside-tabs" aria-label="詳細表示">
-					<button class:active={asideMode === "overview"} onclick={() => (asideMode = "overview")}>概要</button>
-					<button class:active={asideMode === "relation"} onclick={() => (asideMode = "relation")}>関係</button>
-					<button class:active={asideMode === "history"} onclick={() => (asideMode = "history")}>履歴</button>
-				</nav>
-				<p class="eyebrow">選択中</p>
-				<div class="inspector-heading">
-					<h2>{titleFor(selectedItem)}</h2>
-					<div class="inspector-heading-actions">
-						<button class="inspector-action" onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
-						<button class="clear-selection" onclick={() => selectOccurrence(null)}>選択解除</button>
-						<button class="clear-selection" onclick={() => setInspectorCollapsed(true)}>閉じる</button>
-					</div>
-				</div>
-				{#if asideMode === "overview"}
-					<label>
-						{vocabulary.occurrence}固有の見出し
-						<input value={selectedItem.contextualHeading ?? ""}
-							onchange={(event) => updateSelectedHeading(event.currentTarget.value)}
-							placeholder="未設定時は本文の先頭行" />
-					</label>
-					<section class="placements">
-						<h3>すべての{vocabulary.occurrence}<small>{selectedPlacements.length}件</small></h3>
-						<div>
-							{#each selectedPlacements as placement (placement.id)}
-								<button class:active={placement.id === selectedItem.id}
-									onclick={() => {
-										viewMode = "outline";
-										selectOccurrence(placement.id);
-										requestFocus(placement.id);
-									}}>
-									<strong>{titleFor(placement)}</strong>
-									<span>{placement.parentId ? `親: ${titleForId(placement.parentId)}` : "ルート"}</span>
-								</button>
-							{/each}
-						</div>
-					</section>
-				<div class="discovery-actions">
-						<button onclick={startLongFormEditing} disabled={!commands.startLongFormEditing.enabled} title={commands.startLongFormEditing.reason}>長文編集</button>
-					</div>
-					<div class="thought-meta">
-						<div><span class="meta-label">作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
-						<div><span class="meta-label">更新日</span><time datetime={selectedItem.updatedAt}>{formatCreatedAt(selectedItem.updatedAt)}</time></div>
-						{#if selectedItem.parentId}
-							<div><span class="meta-label">親</span><span>{titleForId(selectedItem.parentId)}</span></div>
-						{/if}
-					</div>
-					{#if viewMode === "outline"}
-						<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
-					{/if}
-				{:else if asideMode === "relation"}
-					<LinkEditor
-						selectedWorkId={selectedItem.workId}
-						selectedDisplayName={titleFor(selectedItem)}
-						links={selectedLinks}
-						titleForWork={titleForWorkId}
-						onConfirm={(input) => executeCommand("createLink", undefined, input)}
-						onDelete={removeLink}
-						onReverse={reverseLink}
-						onCompare={(link) => openLinkComparison(link.id)}
-						onSearch={api.searchItems}
-					/>
-					{#if inlineSemanticLinkNotice}
-						<p class="inline-semantic-link-notice" role="status">{inlineSemanticLinkNotice}</p>
-					{/if}
-					<section class="internal-reference-backlinks">
-						<h3>{vocabulary.backlink}<small>{internalReferenceBacklinks.length}件</small></h3>
-						{#each internalReferenceBacklinks as backlink (JSON.stringify(backlink.source))}
-							<button onclick={() => openInternalReferenceBacklink(backlink)}>
-								<strong>{backlink.displayName}</strong>
-								<span>
-									{backlink.source.scope === "work" ? vocabulary.workingCopy : `固定${vocabulary.revision}`}
-									· {backlink.count}箇所
-								</span>
-							</button>
-						{:else}
-							<p class="empty">{vocabulary.backlink}はありません</p>
-						{/each}
-					</section>
-					{#if internalReferenceNotice}
-						<p class="internal-reference-notice" role="status">{internalReferenceNotice}</p>
-					{/if}
-					<div class="discoveries">
-						{#if emergenceLoading}<p class="empty">{vocabulary.emergenceLoading}</p>{/if}
-						{#each emergenceSuggestions as suggestion}
-							<article class:pinned={suggestion.status === "pinned"}>
-								<div class="discovery-title"><span>{suggestion.title}</span><small>{Math.round(suggestion.score * 100)}%</small></div>
-								<strong>{titleForId(suggestion.targetItemId)}</strong>
-								<p>{suggestion.explanation}</p>
-								<ol>{#each suggestion.evidence as step}<li>{step.relation}: {titleForId(step.fromId)} → {titleForId(step.toId)}</li>{/each}</ol>
-								<input
-									aria-label={vocabulary.emergenceResolutionReason}
-									placeholder={vocabulary.emergenceResolutionReason}
-									value={emergenceResolutionReasons[suggestion.id] ?? ""}
-									oninput={(event) =>
-										emergenceController.setResolutionReason(
-											suggestion.id,
-											event.currentTarget.value,
-										)}
-								/>
-								<div class="discovery-actions">
-									<button onclick={() => resolveEmergence(suggestion, "accept")}>{vocabulary.emergenceAccept}</button>
-									<button onclick={() => resolveEmergence(suggestion, "pin")}>{vocabulary.emergenceHold}</button>
-									<button
-										onclick={() => resolveEmergence(suggestion, "dismiss")}
-										disabled={!emergenceResolutionReasons[suggestion.id]?.trim()}
-									>{vocabulary.emergenceDismiss}</button>
-								</div>
-							</article>
-						{:else}
-							{#if !emergenceLoading}<p class="empty">{vocabulary.noEmergenceSuggestion}</p>{/if}
-						{/each}
-					</div>
-				{:else if asideMode === "history"}
-					<div class="history-panel">
-						<p class="hint">選択中の{vocabulary.work}に従属する履歴です。</p>
-						<button onclick={() => void executeCommand("createBranch")} disabled={!commands.createBranch.enabled} title={commands.createBranch.reason}>
-							新しい{vocabulary.branch}を作る
-						</button>
-						<button onclick={() => (viewMode = "workLineage")} disabled={!selectedItem}>
-							{vocabulary.workLineage}を開く
-						</button>
-						<button onclick={openSelectedRevisionComparison} disabled={!selectedItem}>
-							{vocabulary.revision}{vocabulary.comparisonPane}を開く
-						</button>
-						{#if selectedBranchId}
-							<button onclick={() => (viewMode = "workLineage")}>
-								Recovery snapshotsを開く
-							</button>
-							<small>{recoverySnapshots.length}件のRecovery snapshot</small>
-						{:else}
-							<small>Recoveryは{vocabulary.branch}を選択すると利用できます。</small>
-						{/if}
-					</div>
-				{:else}
-					<div class="query-panel">
-						<label for="rule-source">読み取り専用Datalog</label>
-						<textarea id="rule-source" rows="6" bind:value={ruleSource} spellcheck="false"></textarea>
-						<div class="query-actions"><button onclick={executeRule} disabled={!commands.runQuery.enabled} title={commands.runQuery.reason}>実行</button><input placeholder="保存名" bind:value={ruleName} /><button onclick={saveRule} disabled={!commands.saveQuery.enabled} title={commands.saveQuery.reason}>保存</button></div>
-						{#if ruleError}<p class="query-error">{ruleError}</p>{/if}
-						{#if ruleResult}
-							<p class="query-meta">{ruleResult.rows.length}件・{ruleResult.elapsedMs.toFixed(1)}ms</p>
-							{#if sparseOutlineNodes.length}
-								<div class="sparse-outline-section">
-									<div class="sparse-outline-header">
-										<h3>{vocabulary.sparseOutline}<small>{sparseOutlineQueryName}</small></h3>
-										<button class="sparse-toggle" onclick={() => (showSparseOutline = !showSparseOutline)}>
-											{showSparseOutline ? "テーブル表示" : "投影表示"}
-										</button>
-									</div>
-									{#if showSparseOutline}
-										<SparseOutlineView nodes={sparseOutlineNodes} onSelectNode={handleSparseOutlineSelect} />
-									{:else}
-										<div class="query-table"><table><thead><tr>{#each ruleResult.columns as column}<th>{column}</th>{/each}</tr></thead>
-											<tbody>{#each ruleResult.rows as row}<tr>{#each row as value}<td>{titleForId(value)}</td>{/each}</tr>{/each}</tbody>
-										</table></div>
-									{/if}
-								</div>
-							{:else}
-								<div class="query-table"><table><thead><tr>{#each ruleResult.columns as column}<th>{column}</th>{/each}</tr></thead>
-									<tbody>{#each ruleResult.rows as row}<tr>{#each row as value}<td>{titleForId(value)}</td>{/each}</tr>{/each}</tbody>
-								</table></div>
-							{/if}
-						{/if}
-						<div class="saved-queries">
-							{#each savedRuleQueries as saved}
-								<button onclick={() => void loadSparseOutlineForQuery(saved)}>{saved.name}</button>
-								<IconButton class="remove-saved" label={`${saved.name}を削除`} onclick={() => removeRule(saved.id)}>×</IconButton>
-							{/each}
-						</div>
-						<h3>検索別名</h3>
-						<input placeholder="基準語" bind:value={aliasCanonical} />
-						<textarea rows="2" placeholder="別名（カンマ区切り）" bind:value={aliasVariants}></textarea>
-						<button onclick={saveAlias}>別名を追加</button>
-						<div class="alias-list">{#each aliases as alias}<div><span>{alias.canonical} ↔ {alias.variants.join(", ")}</span><IconButton label={`「${alias.canonical}」の検索別名を削除`} onclick={() => removeAlias(alias.id)}>×</IconButton></div>{/each}</div>
-					</div>
-				{/if}
-			{:else}
-				<div class="aside-empty">
-					<button class="inspector-close" type="button" onclick={() => setInspectorCollapsed(true)}>閉じる</button>
-					<span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p>
-				</div>
-			{/if}
-		</aside>
+			<InspectorView
+				{asideMode}
+				{selectedItem}
+				{selectedPlacements}
+				{selectedLinks}
+				{selectedBranchId}
+				{recoverySnapshots}
+				{commands}
+				{vocabulary}
+				inlineSemanticLinkNotice={inlineSemanticLinkNotice}
+				internalReferenceBacklinks={internalReferenceBacklinks}
+				internalReferenceNotice={internalReferenceNotice}
+				{emergenceSuggestions}
+				emergenceResolutionReasons={emergenceResolutionReasons}
+				{emergenceLoading}
+				query={{
+					ruleSource,
+					ruleResult,
+					ruleName,
+					ruleError,
+					savedRuleQueries,
+					sparseOutlineNodes,
+					sparseOutlineQueryName,
+					showSparseOutline,
+					aliases,
+					aliasCanonical,
+					aliasVariants,
+					onRuleSourceChange: (value) => ruleSource = value,
+					onRuleNameChange: (value) => ruleName = value,
+					onAliasCanonicalChange: (value) => aliasCanonical = value,
+					onAliasVariantsChange: (value) => aliasVariants = value,
+					onExecuteRule: executeRule,
+					onSaveRule: saveRule,
+					onLoadSavedQuery: loadSparseOutlineForQuery,
+					onRemoveRule: removeRule,
+					onSaveAlias: saveAlias,
+					onRemoveAlias: removeAlias,
+					onSelectSparseNode: handleSparseOutlineSelect,
+					onToggleSparseOutline: toggleSparseOutline,
+				}}
+				onAsideModeChange={(mode) => asideMode = mode}
+				onElement={(element) => inspectorElement = element}
+				onStartResize={startInspectorResize}
+				onAddBookmark={addBookmark}
+				onSelectOccurrence={selectOccurrence}
+				onSetInspectorCollapsed={setInspectorCollapsed}
+				onUpdateSelectedHeading={updateSelectedHeading}
+				onSelectPlacement={selectInspectorPlacement}
+				showOutlineHint={viewMode === "outline"}
+				onStartLongFormEditing={startLongFormEditing}
+				onConfirmLink={(input) => executeCommand("createLink", undefined, input)}
+				onDeleteLink={removeLink}
+				onReverseLink={reverseLink}
+				onCompareLink={(link) => openLinkComparison(link.id)}
+				onSearch={api.searchItems}
+				{titleFor}
+				titleForId={titleForId}
+				titleForWork={titleForWorkId}
+				{formatCreatedAt}
+				onOpenBacklink={openInternalReferenceBacklink}
+				onSetEmergenceReason={(id, value) => emergenceController.setResolutionReason(id, value)}
+				onResolveEmergence={resolveEmergence}
+				onOpenWorkLineage={() => viewMode = "workLineage"}
+				onOpenRevisionComparison={openSelectedRevisionComparison}
+				onCreateBranch={() => executeCommand("createBranch")}
+			/>
 		{/if}
 	</main>
 	{/if}

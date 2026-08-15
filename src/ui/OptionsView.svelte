@@ -75,6 +75,45 @@
 		input.value = "";
 		if (file) void onRestoreJsonBackup(file);
 	}
+
+	function updateMarkdownExportScope(event: Event & { currentTarget: HTMLSelectElement }): void {
+		markdownExportPreference = {
+			...markdownExportPreference,
+			scope: event.currentTarget.value === "selected" ? "selected" : "all",
+		};
+		onPersistMarkdownExportPreference();
+	}
+
+	function updateMarkdownExportReferenceMode(event: Event & { currentTarget: HTMLSelectElement }): void {
+		const referenceMode = event.currentTarget.value;
+		if (referenceMode !== "radiora" && referenceMode !== "portable" && referenceMode !== "obsidian") return;
+		markdownExportPreference = { ...markdownExportPreference, referenceMode };
+		onPersistMarkdownExportPreference();
+	}
+
+	function updateMarkdownExportIncludeAncestors(event: Event & { currentTarget: HTMLInputElement }): void {
+		markdownExportPreference = { ...markdownExportPreference, includeAncestors: event.currentTarget.checked };
+		onPersistMarkdownExportPreference();
+	}
+
+	function updateMarkdownExportIncludeDescendants(event: Event & { currentTarget: HTMLInputElement }): void {
+		markdownExportPreference = { ...markdownExportPreference, includeDescendants: event.currentTarget.checked };
+		onPersistMarkdownExportPreference();
+	}
+
+	function updateMarkdownExportIncludeSemanticNeighbors(event: Event & { currentTarget: HTMLInputElement }): void {
+		markdownExportPreference = {
+			...markdownExportPreference,
+			includeSemanticNeighbors: event.currentTarget.checked,
+		};
+		onPersistMarkdownExportPreference();
+	}
+
+	function updateQuickCaptureDestination(event: Event & { currentTarget: HTMLSelectElement }): void {
+		const destination = event.currentTarget.value === "unplaced" ? "unplaced" : "root";
+		quickCapturePreference = { ...quickCapturePreference, destination };
+		onPersistQuickCapturePreference();
+	}
 </script>
 
 <section class="options-panel" aria-labelledby="options-title">
@@ -88,23 +127,23 @@
 			<h2 id="option-export-title">書き出し</h2>
 			<label>
 				<span>{vocabulary.markdownExportScope}</span>
-				<select bind:value={markdownExportPreference.scope} onchange={onPersistMarkdownExportPreference}>
+				<select value={markdownExportPreference.scope} onchange={updateMarkdownExportScope}>
 					<option value="all">{vocabulary.markdownExportAll}</option>
 					<option value="selected">{vocabulary.markdownExportSelected}</option>
 				</select>
 			</label>
 			<label>
 				<span>{vocabulary.markdownExportMode}</span>
-				<select bind:value={markdownExportPreference.referenceMode} onchange={onPersistMarkdownExportPreference}>
+				<select value={markdownExportPreference.referenceMode} onchange={updateMarkdownExportReferenceMode}>
 					<option value="radiora">{vocabulary.markdownExportRadiora}</option>
 					<option value="portable">{vocabulary.markdownExportPortable}</option>
 					<option value="obsidian">{vocabulary.markdownExportObsidian}</option>
 				</select>
 			</label>
 			<div class="option-checks">
-				<label><input type="checkbox" bind:checked={markdownExportPreference.includeAncestors} onchange={onPersistMarkdownExportPreference} />{vocabulary.markdownExportAncestors}</label>
-				<label><input type="checkbox" bind:checked={markdownExportPreference.includeDescendants} onchange={onPersistMarkdownExportPreference} />{vocabulary.markdownExportDescendants}</label>
-				<label><input type="checkbox" bind:checked={markdownExportPreference.includeSemanticNeighbors} onchange={onPersistMarkdownExportPreference} />{vocabulary.markdownExportSemanticNeighbors}</label>
+				<label><input type="checkbox" checked={markdownExportPreference.includeAncestors} onchange={updateMarkdownExportIncludeAncestors} />{vocabulary.markdownExportAncestors}</label>
+				<label><input type="checkbox" checked={markdownExportPreference.includeDescendants} onchange={updateMarkdownExportIncludeDescendants} />{vocabulary.markdownExportDescendants}</label>
+				<label><input type="checkbox" checked={markdownExportPreference.includeSemanticNeighbors} onchange={updateMarkdownExportIncludeSemanticNeighbors} />{vocabulary.markdownExportSemanticNeighbors}</label>
 			</div>
 			<button onclick={onExportMarkdown} disabled={!markdownExportEnabled || markdownExportSelectionRequired} title={markdownExportSelectionRequired ? vocabulary.markdownExportSelectionRequired : markdownExportReason}>{vocabulary.markdownExportAction}</button>
 			{#if markdownExportNotice}<small class="markdown-export-notice" role="status">{markdownExportNotice}</small>{/if}
@@ -156,7 +195,7 @@
 			<p>上部の入力欄から新しく作る本文を、どこへ保存するか選びます。検索結果を開く動作には影響しません。</p>
 			<label>
 				<span>{vocabulary.quickCaptureDestination}</span>
-				<select bind:value={quickCapturePreference.destination} onchange={onPersistQuickCapturePreference}>
+				<select value={quickCapturePreference.destination} onchange={updateQuickCaptureDestination}>
 					<option value="root">{vocabulary.quickCaptureDestinationRoot}</option>
 					<option value="unplaced">{vocabulary.quickCaptureDestinationUnplaced}</option>
 				</select>
