@@ -1,12 +1,8 @@
 <script lang="ts">
-	import { onMount, tick } from "svelte";
-	import {
-		contextMenuPosition,
-		firstEnabledContextMenuIndex,
-		lastEnabledContextMenuIndex,
-		nextEnabledContextMenuIndex,
-		type ContextMenuItem,
-	} from "./context_menu";
+	import { ContextMenu as BitsContextMenu } from "bits-ui";
+	import type { ContextMenuItem } from "./context_menu";
+
+	const COLLISION_PADDING = 8;
 
 	let {
 		items,
@@ -25,140 +21,103 @@
 		onClose: () => void;
 	} = $props();
 
-	let menuElement: HTMLDivElement | undefined;
-	let position = $state({ left: 0, top: 0 });
-	let closed = false;
+	let open = $state(true);
+	let anchorElement = $state<HTMLDivElement | null>(null);
+	let contentElement = $state<HTMLDivElement | null>(null);
+	let closeNotified = false;
 
-	function close(): void {
-		if (closed) return;
-		closed = true;
-		triggerElement?.focus();
-		onClose();
+	function handleOpenChange(nextOpen: boolean): void {
+		open = nextOpen;
+		if (nextOpen) closeNotified = false;
 	}
 
-	function select(item: ContextMenuItem): void {
-		if (item.disabled) return;
-		onSelect(item.id);
-		close();
-	}
-
-	function focusItem(index: number): void {
-		if (index < 0) {
-			menuElement?.focus();
-			return;
+	function handleOpenChangeComplete(nextOpen: boolean): void {
+		if (!nextOpen && !closeNotified) {
+			closeNotified = true;
+			onClose();
 		}
-		const id = items[index]?.id;
-		if (!id) return;
-		menuElement?.querySelector<HTMLButtonElement>(`button[data-menu-id="${CSS.escape(id)}"]`)?.focus();
 	}
 
-	function currentIndex(): number {
-		const active = document.activeElement as HTMLElement | null;
-		const id = active?.dataset.menuId;
-		return id ? items.findIndex((item) => item.id === id) : -1;
+	export function close(): void {
+		open = false;
 	}
 
-	function handleKeydown(event: KeyboardEvent): void {
-		const current = currentIndex();
-		let next = -1;
-		switch (event.key) {
-			case "ArrowDown":
-				next = nextEnabledContextMenuIndex(items, current, 1);
-				break;
-			case "ArrowUp":
-				next = nextEnabledContextMenuIndex(items, current, -1);
-				break;
-			case "Home":
-				next = firstEnabledContextMenuIndex(items);
-				break;
-			case "End":
-				next = lastEnabledContextMenuIndex(items);
-				break;
-			case "Enter":
-			case " ": {
-				const item = items[current];
-				if (!item) return;
-				event.preventDefault();
-				select(item);
-				return;
-			}
-			case "Escape":
-				event.preventDefault();
-				close();
-				return;
-			default:
-				return;
-		}
+	function handleCloseAutoFocus(event: Event): void {
 		event.preventDefault();
-		focusItem(next);
+		triggerElement?.focus();
 	}
 
-	async function reposition(): Promise<void> {
-		await tick();
-		if (!menuElement) return;
-		const rect = menuElement.getBoundingClientRect();
-		position = contextMenuPosition(x, y, rect.width, rect.height, window.innerWidth, window.innerHeight);
+	function handleOpenAutoFocus(event: Event): void {
+		if (!contentElement) return;
+		event.preventDefault();
+		contentElement.focus();
 	}
-
-	function handleOutsidePointerDown(event: PointerEvent): void {
-		if (menuElement?.contains(event.target as Node)) return;
-		close();
-	}
-
-	function handleViewportChange(): void {
-		close();
-	}
-
-	$effect(() => {
-		void x;
-		void y;
-		void items;
-		void reposition();
-	});
-
-	onMount(() => {
-		const initialIndex = firstEnabledContextMenuIndex(items);
-		focusItem(initialIndex);
-		window.addEventListener("pointerdown", handleOutsidePointerDown, true);
-		window.addEventListener("scroll", handleViewportChange, true);
-		window.addEventListener("resize", handleViewportChange);
-		return () => {
-			window.removeEventListener("pointerdown", handleOutsidePointerDown, true);
-			window.removeEventListener("scroll", handleViewportChange, true);
-			window.removeEventListener("resize", handleViewportChange);
-		};
-	});
 </script>
 
-<div
-	bind:this={menuElement}
-	class="context-menu"
-	role="menu"
-	tabindex="-1"
-	style:left={`${position.left}px`}
-	style:top={`${position.top}px`}
-	onkeydown={handleKeydown}
+<BitsContextMenu.Root
+	bind:open
+	onOpenChange={handleOpenChange}
+	onOpenChangeComplete={handleOpenChangeComplete}
 >
-	{#each items as item (item.id)}
-		{#if item.separatorBefore}
-			<div class="context-menu-separator" role="separator"></div>
-		{/if}
-		<button
-			class:danger={item.danger}
-			class="context-menu-item"
-			data-menu-id={item.id}
-			disabled={item.disabled}
-			role="menuitem"
-			title={item.disabled && item.reason ? item.reason : undefined}
-			type="button"
-			onclick={() => select(item)}
-		>
-			{item.label}
-		</button>
-	{/each}
-</div>
+	<div
+		bind:this={anchorElement}
+		class="context-menu-anchor"
+		aria-hidden="true"
+		style:left={`${x}px`}
+		style:top={`${y}px`}
+	></div>
+	<BitsContextMenu.Content
+		customAnchor={anchorElement}
+		strategy="fixed"
+		avoidCollisions={true}
+		collisionPadding={COLLISION_PADDING}
+		side="right"
+		sideOffset={0}
+		align="start"
+		onOpenAutoFocus={handleOpenAutoFocus}
+		onCloseAutoFocus={handleCloseAutoFocus}
+	>
+		{#snippet child({ props })}
+			<div bind:this={contentElement} {...props} class="context-menu">
+				{#each items as item (item.id)}
+					{#if item.separatorBefore}
+						<BitsContextMenu.Separator>
+							{#snippet child({ props: separatorProps })}
+								<div {...separatorProps} class="context-menu-separator"></div>
+							{/snippet}
+						</BitsContextMenu.Separator>
+					{/if}
+					<BitsContextMenu.Item
+						disabled={item.disabled}
+						onSelect={() => onSelect(item.id)}
+					>
+						{#snippet child({ props: itemProps })}
+							<button
+								{...itemProps}
+								class:danger={item.danger}
+								class="context-menu-item"
+								disabled={item.disabled}
+								title={item.disabled && item.reason ? item.reason : undefined}
+								type="button"
+							>
+								{item.label}
+							</button>
+						{/snippet}
+					</BitsContextMenu.Item>
+				{/each}
+			</div>
+		{/snippet}
+	</BitsContextMenu.Content>
+</BitsContextMenu.Root>
 
 <style>
+	.context-menu-anchor {
+		position: fixed;
+		width: 0;
+		height: 0;
+		pointer-events: none;
+	}
+
 	.context-menu {
 		position: fixed;
 		z-index: 1000;
