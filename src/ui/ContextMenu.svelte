@@ -42,6 +42,15 @@
 		open = false;
 	}
 
+	function handleItemSelect(id: string): void {
+		onSelect(id);
+		if (!closeNotified) {
+			closeNotified = true;
+			onClose();
+		}
+		open = false;
+	}
+
 	function handleCloseAutoFocus(event: Event): void {
 		event.preventDefault();
 		triggerElement?.focus();
@@ -89,7 +98,7 @@
 					{/if}
 					<BitsContextMenu.Item
 						disabled={item.disabled}
-						onSelect={() => onSelect(item.id)}
+						onSelect={() => handleItemSelect(item.id)}
 					>
 						{#snippet child({ props: itemProps })}
 							<button
