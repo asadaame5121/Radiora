@@ -25,6 +25,7 @@
 	} from "./PrimaryNavigation.svelte";
 	import ConfirmationDialog from "./ConfirmationDialog.svelte";
 	import Toast from "./Toast.svelte";
+	import IconButton from "./primitives/IconButton.svelte";
 	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
 	import LicensesDialog, {
 		type LicenseEntry,
@@ -213,7 +214,7 @@
 	let comparisonRequest = 0;
 	const confirmationController = createConfirmationController();
 	let confirmationDialog: ConfirmationDialog;
-	let licensesDialog = $state<HTMLDialogElement>();
+	let licensesDialogOpen = $state(false);
 	let licenseIndex = $state<LicenseIndex | null>(null);
 	let licenseDetail = $state<{ name: string; text: string } | null>(null);
 	let licenseError = $state("");
@@ -1947,7 +1948,7 @@
 		} finally {
 			licenseLoading = false;
 		}
-		licensesDialog?.showModal();
+		licensesDialogOpen = true;
 	}
 
 	async function selectLicense(entry: LicenseEntry): Promise<void> {
@@ -2164,15 +2165,17 @@
 				onkeydown={handleSearchKeydown}
 				autocomplete="off"
 				disabled={startup.phase !== "ready" || quickCaptureSubmitting}
+				aria-autocomplete="list"
+				aria-haspopup="listbox"
 				aria-expanded={Boolean(quickCaptureText.trim())}
-				aria-controls="omniwindow-results"
-				aria-activedescendant={searchActiveIndex >= 0 ? `omniwindow-option-${searchActiveIndex}` : undefined}
+				aria-controls={quickCaptureText.trim() ? "omniwindow-search-results" : undefined}
+				aria-activedescendant={searchActiveIndex >= 0 ? `omni-option-${searchActiveIndex}` : undefined}
 			/>
 			{#if quickCaptureText.trim()}
-				<div class="search-results" role="listbox" id="omniwindow-results" aria-label="検索と新規作成の候補">
+				<div id="omniwindow-search-results" class="search-results" role="listbox" aria-label="検索と新規作成の候補">
 					{#if suggestions.length}<p class="search-section">タイトル</p>{/if}
 					{#each suggestions as suggestion, index}
-						<button type="button" role="option" id={`omniwindow-option-${index}`}
+						<button id={`omni-option-${index}`} type="button" role="option"
 							aria-selected={searchActiveIndex === index}
 							class:active={searchActiveIndex === index}
 							onclick={() => selectItem(suggestion.item, suggestion.ancestorIds)}>
@@ -2182,7 +2185,7 @@
 					{/each}
 					{#if searchResults.length}<p class="search-section">本文・関連</p>{/if}
 					{#each searchResults as result, index}
-						<button type="button" role="option" id={`omniwindow-option-${suggestions.length + index}`}
+						<button id={`omni-option-${suggestions.length + index}`} type="button" role="option"
 							aria-selected={searchActiveIndex === suggestions.length + index}
 							class:active={searchActiveIndex === suggestions.length + index}
 							onclick={() => selectSearch(result)}>
@@ -2191,8 +2194,7 @@
 						</button>
 					{/each}
 					<p class="search-section">新規作成</p>
-					<button type="button" role="option" class="create-candidate"
-						id={`omniwindow-option-${searchEntries.length}`}
+					<button id={`omni-option-${searchEntries.length}`} type="button" role="option" class="create-candidate"
 						aria-selected={searchActiveIndex === searchEntries.length}
 						class:active={searchActiveIndex === searchEntries.length}
 						disabled={!commands.quickCapture.enabled}
@@ -2237,7 +2239,7 @@
 		{/if}
 	</header>
 
-	{#if error}<div class="error">{error}<button onclick={() => (error = "")}>×</button></div>{/if}
+	{#if error}<div class="error">{error}<IconButton label="エラーメッセージを閉じる" onclick={() => (error = "")}>×</IconButton></div>{/if}
 
 	{#if startup.phase !== "ready" && !startupCacheActive}
 		<StartupView startup={startup} onRetry={retryStartup} />
@@ -2336,7 +2338,11 @@
 									if (event.target === event.currentTarget) deselectFromBlank(event);
 								}}
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
-								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
+								<IconButton
+									class={`disclosure${row.hasChildren ? "" : " hidden"}`}
+									label={row.item.collapsed ? `${titleFor(row.item)}を展開` : `${titleFor(row.item)}を折りたたむ`}
+									onclick={() => toggle(row)}
+								>{row.item.collapsed ? "›" : "⌄"}</IconButton>
 								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
 								<button class="bullet" aria-label={`${vocabulary.work}を選択`} title={`ダブルクリックでこの${vocabulary.work}へZoom`}
 									onclick={() => selectOccurrence(row.item.id)} ondblclick={() => hoistOccurrence(row.item.id)}>•</button>
@@ -2886,14 +2892,14 @@
 						<div class="saved-queries">
 							{#each savedRuleQueries as saved}
 								<button onclick={() => void loadSparseOutlineForQuery(saved)}>{saved.name}</button>
-								<button class="remove-saved" onclick={() => removeRule(saved.id)}>×</button>
+								<IconButton class="remove-saved" label={`${saved.name}を削除`} onclick={() => removeRule(saved.id)}>×</IconButton>
 							{/each}
 						</div>
 						<h3>検索別名</h3>
 						<input placeholder="基準語" bind:value={aliasCanonical} />
 						<textarea rows="2" placeholder="別名（カンマ区切り）" bind:value={aliasVariants}></textarea>
 						<button onclick={saveAlias}>別名を追加</button>
-						<div class="alias-list">{#each aliases as alias}<div><span>{alias.canonical} ↔ {alias.variants.join(", ")}</span><button onclick={() => removeAlias(alias.id)}>×</button></div>{/each}</div>
+						<div class="alias-list">{#each aliases as alias}<div><span>{alias.canonical} ↔ {alias.variants.join(", ")}</span><IconButton label={`「${alias.canonical}」の検索別名を削除`} onclick={() => removeAlias(alias.id)}>×</IconButton></div>{/each}</div>
 					</div>
 				{/if}
 			{:else}
@@ -2928,7 +2934,7 @@
 />
 
 <LicensesDialog
-	bind:dialog={licensesDialog}
+	bind:open={licensesDialogOpen}
 	{licenseIndex}
 	{licenseDetail}
 	{licenseError}

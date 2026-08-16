@@ -25,6 +25,7 @@
 		"test:mutation:controllers": "stryker run stryker.config.mjs"
 	},
 	"dependencies": {
+		"bits-ui": "2.18.1",
 		"d3": "^7.9.0",
 		"overtype": "2.4.0",
 		"surrealdb": "^2.0.8",

@@ -3538,6 +3538,7 @@
         "npm:@vitest/browser-playwright@4.1.10",
         "npm:@vitest/browser@4.1.10",
         "npm:@vitest/coverage-v8@4.1.10",
+        "npm:bits-ui@2.18.1",
         "npm:commonmark@0.31.2",
         "npm:d3@^7.9.0",
         "npm:jscpd@5.0.12",
