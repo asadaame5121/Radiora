@@ -37,7 +37,7 @@
 	}
 	.startup-card h1 {
 		margin: 8px 0 18px;
-		font-family: Georgia, serif;
+		font-family: var(--font-serif);
 		font-size: 25px;
 		font-weight: normal;
 		color: #edf9fa;

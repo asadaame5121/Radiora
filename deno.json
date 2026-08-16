@@ -10,12 +10,14 @@
 			"name": "Radiora v2 PoC",
 			"identifier": "dev.radiora.v2",
 			"icons": {
-				"windows": "src/Radiora_icon.ico"
+				"windows": "src/Radiora_icon.ico",
+				"linux": "src/Radiora_icon.png"
 			}
 		},
 		"backend": "cef",
 		"output": {
-			"windows": "./dist-desktop/radiora-v2-windows"
+			"windows": "./dist-desktop/radiora-v2-windows",
+			"linux": "./dist-desktop/radiora-v2-linux"
 		}
 	},
 	"fmt": {

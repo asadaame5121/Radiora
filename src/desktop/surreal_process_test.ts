@@ -7,6 +7,7 @@ import {
 } from "./windows_hidden_process.ts";
 
 const sep = Deno.build.os === "windows" ? "\\" : "/";
+const surrealCliName = Deno.build.os === "windows" ? "surreal.exe" : "surreal";
 
 Deno.test("surrealCommandCandidates: bundle directory is searched first", () => {
 	const candidates = surrealCommandCandidates(
@@ -14,21 +15,21 @@ Deno.test("surrealCommandCandidates: bundle directory is searched first", () => 
 		`C:${sep}Users${sep}taro`,
 	);
 	assertEquals(candidates, [
-		`C:${sep}apps${sep}radiora${sep}surreal.exe`,
+		`C:${sep}apps${sep}radiora${sep}${surrealCliName}`,
 		"surreal",
-		`C:${sep}Users${sep}taro${sep}.surrealdb${sep}surreal.exe`,
+		`C:${sep}Users${sep}taro${sep}.surrealdb${sep}${surrealCliName}`,
 	]);
 });
 
 Deno.test("surrealCommandCandidates: omits empty locations", () => {
 	assertEquals(surrealCommandCandidates(null, null), ["surreal"]);
 	assertEquals(surrealCommandCandidates(`C:${sep}apps${sep}radiora`, null), [
-		`C:${sep}apps${sep}radiora${sep}surreal.exe`,
+		`C:${sep}apps${sep}radiora${sep}${surrealCliName}`,
 		"surreal",
 	]);
 	assertEquals(surrealCommandCandidates(null, `C:${sep}Users${sep}taro`), [
 		"surreal",
-		`C:${sep}Users${sep}taro${sep}.surrealdb${sep}surreal.exe`,
+		`C:${sep}Users${sep}taro${sep}.surrealdb${sep}${surrealCliName}`,
 	]);
 });
 

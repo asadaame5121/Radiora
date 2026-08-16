@@ -12,9 +12,14 @@ desktop版の既定ストレージはSurrealDBです。JSONストアは障害調
 
 ## 実行
 
-前提はWindows版Deno 2.9以上とNode.js/npmです。
+前提はDeno 2.9以上とNode.js/npmです。WindowsとLinux（x86_64）で動作します。
 
 ```powershell
+npm install
+deno task desktop
+```
+
+```sh
 npm install
 deno task desktop
 ```
@@ -23,8 +28,12 @@ deno task desktop
 アプリを起動します。 再ビルドせず生成済みbundleだけを起動する場合は `deno task desktop:run`
 を使用します。
 アプリが起動したまま再ビルドすると生成先がロックされるため、先にウィンドウを閉じてください。
-`desktop:build` はDeno Desktopが再ビルドを拒否しないよう、前回のWindows bundleとその配下の
-WebView2ランタイムキャッシュを削除してから新しいbundleを生成します。
+`desktop:build` はDeno Desktopが再ビルドを拒否しないよう、前回のbundleとその配下の
+ランタイムキャッシュ（WindowsはWebView2、LinuxはCEF）を削除してから新しいbundleを生成します。
+bundle生成先は `dist-desktop/radiora-v2-windows`（Windows）または
+`dist-desktop/radiora-v2-linux`（Linux）で、SurrealDB CLIは
+`%USERPROFILE%\.surrealdb\surreal.exe`（Windows）または`~/.surrealdb/surreal`（Linux）から
+自動的にbundleへコピーされます。
 
 ### DevTools/CDP監査
 
@@ -160,8 +169,8 @@ deno task desktop:preflight
 ```
 
 `Deno Desktop requires Deno 2.9.0 or newer` が出る場合は Deno を更新してください。 このPoCの
-`desktop:run` はWindows bundle内のlauncher（Deno 2.9.1では`.bat`、2.9.3では`.exe`）を
-検出して起動します。WSL/bash からではなく、PowerShell かNushellで実行してください。
+`desktop:run` はbundle内のlauncher（Windowsは`.bat`／`.exe`、Linuxは`radiora-v2-linux`）を
+検出して起動します。WindowsではWSL/bash からではなく、PowerShell かNushellで実行してください。
 WindowsとWSLで同じ `node_modules` を共有しないでください。OSごとにネイティブ依存が異なるため、
 bundleのビルドと検査はWindows PowerShell側で `npm install` した依存を使用してください。
 

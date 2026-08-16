@@ -8,15 +8,18 @@ import {
 export type SurrealProcessLogger = (event: string, detail?: unknown) => void;
 
 const pathSeparator = Deno.build.os === "windows" ? "\\" : "/";
+const surrealCliName = Deno.build.os === "windows" ? "surreal.exe" : "surreal";
 
 export function surrealCommandCandidates(
 	bundledSurrealDir: string | null,
 	userProfile: string | null,
 ): string[] {
 	return [
-		...(bundledSurrealDir ? [`${bundledSurrealDir}${pathSeparator}surreal.exe`] : []),
+		...(bundledSurrealDir ? [`${bundledSurrealDir}${pathSeparator}${surrealCliName}`] : []),
 		"surreal",
-		...(userProfile ? [`${userProfile}${pathSeparator}.surrealdb${pathSeparator}surreal.exe`] : []),
+		...(userProfile
+			? [`${userProfile}${pathSeparator}.surrealdb${pathSeparator}${surrealCliName}`]
+			: []),
 	];
 }
 
@@ -34,8 +37,9 @@ export async function findSurrealCommand(
 			// Try the next known installation location.
 		}
 	}
+	const homeDir = Deno.build.os === "windows" ? "%USERPROFILE%\\" : "$HOME/";
 	throw new Error(
-		"SurrealDB CLI 3.x が見つかりません。bundle内・PATH・%USERPROFILE%\\.surrealdbを確認してください。",
+		`SurrealDB CLI 3.x が見つかりません。bundle内・PATH・${homeDir}.surrealdbを確認してください。`,
 	);
 }
 
@@ -163,10 +167,8 @@ export class SurrealProcess {
 	async findCommand(): Promise<string> {
 		this.trace("process.command-check.begin");
 		const bundledSurrealDir = this.bundledSurrealDir ?? parentDirectory(Deno.execPath());
-		const candidates = surrealCommandCandidates(
-			bundledSurrealDir,
-			Deno.env.get("USERPROFILE") ?? null,
-		);
+		const homeDir = Deno.env.get(Deno.build.os === "windows" ? "USERPROFILE" : "HOME") ?? null;
+		const candidates = surrealCommandCandidates(bundledSurrealDir, homeDir);
 		return await findSurrealCommand(candidates, async (command) => {
 			const output = await new Deno.Command(command, {
 				args: ["version"],

@@ -499,7 +499,7 @@
 	}
 	.time-grid text {
 		fill: #657681;
-		font: 11px Inter, "Noto Sans JP", sans-serif;
+		font: 11px var(--font-ui);
 		letter-spacing: .08em;
 	}
 	.time-grid .knot-mark {
@@ -583,7 +583,7 @@
 	}
 	.cluster-count {
 		fill: #eafcfd;
-		font: 10px Inter, sans-serif;
+		font: 10px var(--font-ui);
 		pointer-events: none;
 	}
 	.node-label {
@@ -591,7 +591,7 @@
 		stroke: #050a10;
 		stroke-width: 6px;
 		paint-order: stroke fill;
-		font: 12px Georgia, "Noto Serif JP", serif;
+		font: 12px var(--font-serif);
 		letter-spacing: .02em;
 		pointer-events: none;
 	}
@@ -621,7 +621,7 @@
 		border-radius: 4px;
 		background: transparent;
 		color: #7f949e;
-		font: 11px Inter, "Noto Sans JP", sans-serif;
+		font: 11px var(--font-ui);
 		letter-spacing: .03em;
 		cursor: pointer;
 	}

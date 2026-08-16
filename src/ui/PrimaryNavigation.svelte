@@ -125,7 +125,7 @@
 		border-bottom: 1px solid var(--border);
 	}
 	.primary-nav .brand strong {
-		font-family: Georgia, serif;
+		font-family: var(--font-serif);
 		font-size: 20px;
 		letter-spacing: .08em;
 	}
