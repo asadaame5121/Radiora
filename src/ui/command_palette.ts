@@ -33,8 +33,3 @@ export function commandPaletteItems(
 		}))
 		.filter((command) => command.label.toLocaleLowerCase().includes(normalizedQuery));
 }
-
-export function nextCommandPaletteIndex(current: number, offset: number, length: number): number {
-	if (length === 0) return -1;
-	return (current + offset + length) % length;
-}

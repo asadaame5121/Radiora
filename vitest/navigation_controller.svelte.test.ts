@@ -16,7 +16,6 @@ describe("navigation controller", () => {
 		expect(controller.browsing.activePaneId).toBe("pane-1");
 		expect(controller.commandPaletteOpen).toBe(false);
 		expect(controller.commandPaletteQuery).toBe("");
-		expect(controller.commandPaletteActiveIndex).toBe(-1);
 		expect(controller.quickCaptureText).toBe("");
 		expect(controller.suggestions).toEqual([]);
 		expect(controller.searchResults).toEqual([]);
@@ -99,12 +98,11 @@ describe("navigation controller", () => {
 		expect(controller.addBrowsingPane()).toBe(expected);
 	});
 
-	test("owns reactive command palette state and corrects the active range", () => {
+	test("owns reactive command palette open and query state", () => {
 		const controller = createNavigationController();
 		const paletteState = $derived({
 			open: controller.commandPaletteOpen,
 			query: controller.commandPaletteQuery,
-			activeIndex: controller.commandPaletteActiveIndex,
 		});
 		const currentPaletteState = () => paletteState;
 
@@ -112,13 +110,7 @@ describe("navigation controller", () => {
 		controller.commandPaletteQuery = "stale";
 		controller.openCommandPalette();
 
-		expect(currentPaletteState()).toEqual({ open: true, query: "", activeIndex: 0 });
-
-		controller.commandPaletteActiveIndex = 7;
-		expect(controller.reconcileCommandPaletteRange(3)).toBe(0);
-		expect(controller.reconcileCommandPaletteRange(0)).toBe(-1);
-		controller.commandPaletteActiveIndex = -1;
-		expect(controller.reconcileCommandPaletteRange(2)).toBe(0);
+		expect(currentPaletteState()).toEqual({ open: true, query: "" });
 
 		controller.closeCommandPalette();
 		expect(currentPaletteState().open).toBe(false);

@@ -36,21 +36,21 @@ Deno.test("command palette projects command service state and guards disabled ex
 	assert(app.includes("commandPaletteItems("));
 	assert(app.includes('event.key.toLocaleLowerCase() === "k"'));
 	assert(app.includes("if (!command?.availability.enabled) return;"));
-	assert(palette.includes("activeCommand.availability.reason"));
+	assert(palette.includes("command.availability.reason"));
 	assert(app.includes("commandPaletteRestoreFocus?.focus()"));
 	assert(app.includes("hasSelectedRecoverySnapshot: false"));
 	assert(app.includes("hasSelectedRecoverySnapshot: true"));
 });
 
-Deno.test("command palette is shortcut-only and closes from its backdrop", async () => {
+Deno.test("command palette is shortcut-only and closes through the dialog overlay", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const palette = await Deno.readTextFile(
 		new URL("../src/ui/CommandPaletteDialog.svelte", import.meta.url),
 	);
 	assert(app.includes("<CommandPaletteDialog"));
-	assert(palette.includes("handleBackdropClick"));
-	assert(palette.includes("event.target !== event.currentTarget"));
-	assert(palette.includes("onclick={handleBackdropClick}"));
+	assert(palette.includes("<Dialog.Overlay>"));
+	assert(palette.includes("onOpenChange={handleOpenChange}"));
+	assert(palette.includes("if (!nextOpen) void onClose()"));
 	assert(!app.includes("onclick={() => openCommandPalette()}>{vocabulary.commandPalette}"));
 });
 

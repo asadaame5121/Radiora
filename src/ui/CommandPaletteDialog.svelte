@@ -1,13 +1,13 @@
 <script lang="ts">
+	import { Command, Dialog } from "bits-ui";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
-	import { nextCommandPaletteIndex, type CommandPaletteItem } from "./command_palette.ts";
+	import type { CommandPaletteItem } from "./command_palette.ts";
 
 	let {
 		open,
 		commands,
 		vocabulary,
 		query = $bindable(""),
-		activeIndex = $bindable(-1),
 		onClose,
 		onExecute,
 	}: {
@@ -15,102 +15,177 @@
 		commands: readonly CommandPaletteItem[];
 		vocabulary: UiVocabulary;
 		query: string;
-		activeIndex: number;
 		onClose: () => void | Promise<void>;
 		onExecute: (command: CommandPaletteItem) => void | Promise<void>;
 	} = $props();
 
 	let commandPaletteInput = $state<HTMLInputElement | null>(null);
 
-	const activeCommand = $derived(
-		activeIndex < 0 ? null : commands[activeIndex] ?? null,
-	);
-
-	$effect(() => {
-		if (open) commandPaletteInput?.focus();
-	});
-
-	function handleBackdropClick(event: MouseEvent): void {
-		if (event.target !== event.currentTarget) return;
-		void onClose();
+	function handleOpenChange(nextOpen: boolean): void {
+		if (!nextOpen) void onClose();
 	}
 
-	function handleKeydown(event: KeyboardEvent): void {
-		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-			event.preventDefault();
-			activeIndex = nextCommandPaletteIndex(
-				activeIndex,
-				event.key === "ArrowDown" ? 1 : -1,
-				commands.length,
-			);
-			return;
-		}
-		if (event.key === "Enter") {
-			event.preventDefault();
-			if (activeCommand) void onExecute(activeCommand);
-			return;
-		}
-		if (event.key === "Escape") {
-			event.preventDefault();
-			void onClose();
-		}
+	function handleOpenAutoFocus(event: Event): void {
+		event.preventDefault();
+		commandPaletteInput?.focus();
 	}
 </script>
 
-{#if open}
-	<dialog
-		open
-		class="command-palette"
-		aria-modal="true"
-		aria-label={vocabulary.commandPalette}
-		onclick={handleBackdropClick}
-	>
-		<div class="command-palette__content">
-			<input
-				bind:this={commandPaletteInput}
-				bind:value={query}
-				aria-label={`${vocabulary.commandPalette}を検索`}
-				aria-controls="command-palette-results"
-				aria-activedescendant={activeCommand
-					? `command-palette-${activeCommand.id}`
-					: undefined}
-				placeholder={`${vocabulary.commandPalette}を検索…`}
-				onkeydown={handleKeydown}
-				autocomplete="off"
-			/>
-			{#if commands.length > 0}
-				<div id="command-palette-results" role="listbox" aria-label={vocabulary.commandPalette}>
-					{#each commands as command, index (command.id)}
-						<button
-							id={`command-palette-${command.id}`}
-							class:active={index === activeIndex}
-							role="option"
-							aria-selected={index === activeIndex}
-							disabled={!command.availability.enabled}
-							title={command.availability.reason}
-							onclick={() => onExecute(command)}
-						>
-							<span>{command.label}</span>
-							{#if command.shortcut}<small>{command.shortcut}</small>{/if}
-						</button>
-					{/each}
+<Dialog.Root {open} onOpenChange={handleOpenChange}>
+	<Dialog.Portal>
+		<Dialog.Overlay>
+			{#snippet child({ props })}
+				<div {...props} class="command-palette"></div>
+			{/snippet}
+		</Dialog.Overlay>
+		<Dialog.Content onOpenAutoFocus={handleOpenAutoFocus}>
+			{#snippet child({ props: contentProps })}
+				<div
+					{...contentProps}
+					class="command-palette__content"
+					role="dialog"
+					aria-label={vocabulary.commandPalette}
+				>
+					<Command.Root
+						shouldFilter={false}
+						loop={true}
+						vimBindings={false}
+						label={vocabulary.commandPalette}
+					>
+						{#snippet child({ props: commandProps })}
+							<div {...commandProps} class="command-palette__command">
+							<Command.Input bind:value={query}>
+									{#snippet child({ props: inputProps })}
+										<input
+											{...inputProps}
+											bind:this={commandPaletteInput}
+											class="command-palette__input"
+											aria-label={`${vocabulary.commandPalette}を検索`}
+											aria-controls="command-palette-results"
+											placeholder={`${vocabulary.commandPalette}を検索…`}
+										/>
+									{/snippet}
+								</Command.Input>
+								<Command.List id="command-palette-results" aria-label={vocabulary.commandPalette}>
+									{#snippet child({ props: listProps })}
+										<div {...listProps} class="command-palette__list">
+											{#each commands as command (command.id)}
+												<Command.Item
+													value={command.id}
+													disabled={!command.availability.enabled}
+													onSelect={() => void onExecute(command)}
+												>
+													{#snippet child({ props: itemProps })}
+														<button
+															{...itemProps}
+															type="button"
+															disabled={!command.availability.enabled}
+															title={command.availability.reason}
+															class="command-palette__item"
+														>
+															<span>{command.label}</span>
+															{#if command.shortcut}<small>{command.shortcut}</small>{/if}
+														</button>
+													{/snippet}
+												</Command.Item>
+											{/each}
+										</div>
+									{/snippet}
+								</Command.List>
+								<Command.Empty>
+									{#snippet child({ props: emptyProps })}
+										<div {...emptyProps} class="command-palette__empty" role="status">
+											<p>一致するコマンドはありません。</p>
+										</div>
+									{/snippet}
+								</Command.Empty>
+							</div>
+						{/snippet}
+					</Command.Root>
 				</div>
-			{:else}
-				<div id="command-palette-results" class="command-palette__empty" role="status">
-					<p>一致するコマンドはありません。</p>
-				</div>
-			{/if}
-			{#if activeCommand && !activeCommand.availability.enabled}
-				<p class="command-palette__reason" aria-live="polite">
-					{activeCommand.availability.reason}
-				</p>
-			{/if}
-		</div>
-	</dialog>
-{/if}
+			{/snippet}
+		</Dialog.Content>
+	</Dialog.Portal>
+</Dialog.Root>
 
 <style>
-	.command-palette__empty {
+	.command-palette {
+		position: fixed;
+		inset: 0;
+		box-sizing: border-box;
+		width: 100vw;
+		height: 100vh;
+		max-width: none;
+		max-height: none;
+		margin: 0;
+		border: 0;
+		z-index: 100;
+		display: grid;
+		place-items: start center;
+		padding-top: min(18vh, 160px);
+		background: rgb(0 0 0 / 52%);
+	}
+
+	.command-palette__content {
+		width: min(560px, calc(100vw - 32px));
+		overflow: hidden;
+		background: var(--surface-raised);
+		border: 1px solid var(--border-bright);
+		border-radius: 10px;
+		box-shadow: 0 20px 60px #000c;
+		position: fixed;
+		top: min(18vh, 160px);
+		left: 50%;
+		z-index: 101;
+		transform: translateX(-50%);
+	}
+
+	.command-palette__input {
+		box-sizing: border-box;
+		width: 100%;
+		border: 0;
+		border-bottom: 1px solid var(--border);
+		background: #04080d;
+		color: var(--text);
+		padding: 14px;
+		outline: none;
+	}
+
+	.command-palette__list {
+		max-height: min(50vh, 400px);
+		overflow: auto;
+	}
+
+	.command-palette__item {
+		display: flex;
+		justify-content: space-between;
+		width: 100%;
+		border: 0;
+		border-bottom: 1px solid var(--border);
+		padding: 11px 14px;
+		text-align: left;
+		background: transparent;
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	.command-palette__item[data-selected],
+	.command-palette__item:hover {
+		background: var(--surface-hover);
+	}
+
+	.command-palette__item:disabled {
 		color: var(--muted);
+		cursor: not-allowed;
+	}
+
+	.command-palette__empty {
+		margin: 0;
+		padding: 10px 14px;
+		color: var(--muted);
+	}
+
+	.command-palette__empty p {
+		margin: 0;
 	}
 </style>

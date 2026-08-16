@@ -491,10 +491,6 @@
 	});
 
 	$effect(() => {
-		navigationController.reconcileCommandPaletteRange(commandPaletteCommands.length);
-	});
-
-	$effect(() => {
 		const workId = selectedItem?.workId;
 		if (workId && startup.phase === "ready") {
 			void loadRevisions(workId);
@@ -576,11 +572,6 @@
 				return;
 			}
 			if (event.defaultPrevented) return;
-			if (commandPaletteOpen && event.key === "Escape") {
-				event.preventDefault();
-				void closeCommandPalette();
-				return;
-			}
 			if (isEditableTarget(event.target)) return;
 			if (
 				event.key === " " &&
@@ -2099,7 +2090,6 @@
 	commands={commandPaletteCommands}
 	{vocabulary}
 	bind:query={navigationController.commandPaletteQuery}
-	bind:activeIndex={navigationController.commandPaletteActiveIndex}
 	onClose={closeCommandPalette}
 	onExecute={executeCommandPaletteItem}
 />
