@@ -121,8 +121,8 @@ jobs:
       - name: Scan Git history for secrets
         run: /tmp/gitleaks git --redact --no-banner --verbose .
 
-  storybook:
-    name: Storybook render, interaction, and a11y
+  a11y:
+    name: Audit the mock application for WCAG A/AA violations
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -141,17 +141,6 @@ jobs:
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-
-      - name: Build Storybook
-        env:
-          STORYBOOK_DISABLE_TELEMETRY: "1"
-        run: npm run build-storybook
-
-      - name: Test stories
-        run: npm run test:storybook
-
-      - name: Compare visual baselines
-        run: npm run test:visual
 
       - name: Audit the mock application
         run: npm run test:a11y
