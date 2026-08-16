@@ -23,7 +23,10 @@ Deno.test("Option groups export, exchange, backup, and live display settings", (
 	for (const heading of ["書き出し", "データ交換", "バックアップ", "表示"]) {
 		assertMatch(view, new RegExp(`<h2[^>]*>${heading}</h2>`));
 	}
-	assertMatch(view, /bind:value=\{markdownExportPreference\.referenceMode\}/);
+	assertMatch(
+		view,
+		/value=\{markdownExportPreference\.referenceMode\} onchange=\{updateMarkdownExportReferenceMode\}/,
+	);
 	assertMatch(view, /bind:this=\{opmlFileInput\}/);
 	assertMatch(view, /bind:this=\{jsonBackupFileInput\}/);
 	assertMatch(app, /setTreeProjectionPreference/);

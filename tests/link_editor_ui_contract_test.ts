@@ -2,13 +2,16 @@ import { assert, assertFalse, assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("Link Editor exposes GUI search, type selection, and direction selection", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const inspector = await Deno.readTextFile(
+		new URL("../src/ui/InspectorView.svelte", import.meta.url),
+	);
 	const editor = await Deno.readTextFile(
 		new URL("../src/ui/LinkEditor.svelte", import.meta.url),
 	);
 
-	assertMatch(app, /<LinkEditor/);
-	assertMatch(app, /selectedWorkId=\{selectedItem\.workId\}/);
-	assertMatch(app, /links=\{selectedLinks\}/);
+	assertMatch(inspector, /<LinkEditor/);
+	assertMatch(inspector, /selectedWorkId=\{selectedItem\.workId\}/);
+	assertMatch(inspector, /links=\{selectedLinks\}/);
 	assertMatch(editor, /await onSearch\(\{ query, contextItemId: selectedWorkId, limit: 16 \}\)/);
 	assertFalse(/createRpcAdapter/.test(editor));
 	assertMatch(editor, /selectedType = \$state<LinkType>\("LIKE"\)/);

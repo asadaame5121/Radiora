@@ -27,6 +27,11 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 	assertMatch(adapter, /this\.#options\.onBlur\?\.\(this\.textarea\)/);
 	assertMatch(adapter, /this\.#instance\.linkTooltip\?\.destroy\?\.\(\)/);
 	assertMatch(adapter, /for \(const cleanup of this\.#cleanup\.splice\(0\)\) cleanup\(\)/);
+	assertMatch(adapter, /preview\.setAttribute\("role", "button"\)/);
+	assertMatch(adapter, /preview\.setAttribute\("tabindex", "0"\)/);
+	assertMatch(adapter, /preview\.setAttribute\("aria-label"/);
+	assertMatch(adapter, /event\.key !== "Enter" && event\.key !== " "/);
+	assertMatch(adapter, /this\.#instance\.focus\(\)/);
 	assertMatch(adapter, /new TextareaMarkdownEditorAdapter\(options\)/);
 	assertMatch(component, /\$effect\(\(\) =>/);
 	assertMatch(component, /current\.setValue\(next\)/);
@@ -36,6 +41,10 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 	assertMatch(component, /changeMode\("preview"\)/);
 	assertMatch(component, /adapter\?\.focus\(\)/);
 	assertMatch(app, /compositionGuard \|\| event\.isComposing \|\| event\.keyCode === 229/);
+	assertMatch(
+		app,
+		/role="tree" aria-label=\{`\$\{vocabulary\.work\}のアウトライン`\} tabindex="0"/,
+	);
 	assertMatch(styles, /\.markdown-editor-host \.overtype-container \{/);
 	assertMatch(styles, /--preview-text-default: var\(--text\)/);
 });

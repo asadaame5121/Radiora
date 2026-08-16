@@ -11,9 +11,9 @@ const stageOneStories = [
 	["primary-navigation", "navigation-primarynavigation--expanded"],
 	["startup", "feedback-startupview--starting"],
 	["save", "feedback-workingcopysavestatus--unsaved"],
-	["options", "settings-optionsview--disabledandnotices"],
+	["options", "settings-optionsview--disabled-and-notices"],
 	["dialog", "feedback-confirmationdialog--rewrite"],
-	["context-menu", "navigation-contextmenu--default"],
+	["context-menu", "navigation-contextmenu--visual-open"],
 ] as const;
 
 for (const [name, storyId] of stories) {

@@ -22,6 +22,7 @@
 	let open = $state(false);
 	let focusRewrite = $state(false);
 	let rewriteInput = $state<HTMLInputElement | null>(null);
+	let resetNotified = false;
 
 	export async function show(shouldFocusRewrite: boolean): Promise<void> {
 		focusRewrite = shouldFocusRewrite;
@@ -44,6 +45,11 @@
 			return;
 		}
 		open = nextOpen;
+		if (!nextOpen && !resetNotified) {
+			resetNotified = true;
+			onReset();
+		}
+		if (nextOpen) resetNotified = false;
 	}
 
 	function handleOpenAutoFocus(event: Event): void {
@@ -53,7 +59,10 @@
 	}
 
 	function handleOpenChangeComplete(nextOpen: boolean): void {
-		if (!nextOpen && !open) onReset();
+		if (!nextOpen && !open && !resetNotified) {
+			resetNotified = true;
+			onReset();
+		}
 	}
 </script>
 
