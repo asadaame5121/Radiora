@@ -196,7 +196,7 @@
 	}
 
 	.context-menu-item.danger {
-		color: var(--danger, #b42318);
+		color: var(--red, #ef5b5b);
 	}
 
 	.context-menu-separator {

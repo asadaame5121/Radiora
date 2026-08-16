@@ -3524,6 +3524,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@axe-core/playwright@4.12.1",
         "npm:@biomejs/biome@2.5.2",
         "npm:@playwright/test@1.58.2",
         "npm:@storybook/addon-a11y@10.5.7",

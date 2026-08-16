@@ -917,6 +917,9 @@ button:disabled {
 	padding: 2px 8px !important;
 	overflow: hidden !important;
 }
+.row:not(.selected):not(:focus-within) .markdown-editor-host :is(.overtype-input, .overtype-preview) {
+	overflow: hidden !important;
+}
 .row:not(.selected):not(:focus-within) .markdown-editor-host .overtype-preview {
 	color: #9aabb2 !important;
 }

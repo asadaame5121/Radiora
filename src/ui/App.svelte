@@ -2156,6 +2156,7 @@
 		</div>
 		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
 			<input
+				role="combobox"
 				aria-label={`検索・${vocabulary.quickCapture}`}
 				placeholder={`思索を検索、Shift+Enterで${quickCaptureDestinationLabel}へ作成…`}
 				bind:value={navigationController.quickCaptureText}
@@ -2164,12 +2165,16 @@
 				autocomplete="off"
 				disabled={startup.phase !== "ready" || quickCaptureSubmitting}
 				aria-expanded={Boolean(quickCaptureText.trim())}
+				aria-controls="omniwindow-results"
+				aria-activedescendant={searchActiveIndex >= 0 ? `omniwindow-option-${searchActiveIndex}` : undefined}
 			/>
 			{#if quickCaptureText.trim()}
-				<div class="search-results" role="listbox" aria-label="検索と新規作成の候補">
+				<div class="search-results" role="listbox" id="omniwindow-results" aria-label="検索と新規作成の候補">
 					{#if suggestions.length}<p class="search-section">タイトル</p>{/if}
 					{#each suggestions as suggestion, index}
-						<button type="button" class:active={searchActiveIndex === index}
+						<button type="button" role="option" id={`omniwindow-option-${index}`}
+							aria-selected={searchActiveIndex === index}
+							class:active={searchActiveIndex === index}
 							onclick={() => selectItem(suggestion.item, suggestion.ancestorIds)}>
 							<strong>{suggestion.title || `(空の${vocabulary.work})`}</strong>
 							<small>先頭一致</small>
@@ -2177,14 +2182,18 @@
 					{/each}
 					{#if searchResults.length}<p class="search-section">本文・関連</p>{/if}
 					{#each searchResults as result, index}
-						<button type="button" class:active={searchActiveIndex === suggestions.length + index}
+						<button type="button" role="option" id={`omniwindow-option-${suggestions.length + index}`}
+							aria-selected={searchActiveIndex === suggestions.length + index}
+							class:active={searchActiveIndex === suggestions.length + index}
 							onclick={() => selectSearch(result)}>
 							<strong>{titleFor(result.item)}</strong>
 							<small>{result.reasons.map((reason) => reason.label).slice(0, 2).join(" · ")}</small>
 						</button>
 					{/each}
 					<p class="search-section">新規作成</p>
-					<button type="button" class="create-candidate"
+					<button type="button" role="option" class="create-candidate"
+						id={`omniwindow-option-${searchEntries.length}`}
+						aria-selected={searchActiveIndex === searchEntries.length}
 						class:active={searchActiveIndex === searchEntries.length}
 						disabled={!commands.quickCapture.enabled}
 						title={commands.quickCapture.reason}
@@ -2310,7 +2319,7 @@
 					<button class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
 				{:else}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div class="rows"
+					<div class="rows" role="tree" aria-label="アウトライン" tabindex="0"
 						onmousedown={(event) => {
 							if (event.target === event.currentTarget) deselectFromBlank(event);
 						}}>
