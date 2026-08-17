@@ -74,6 +74,99 @@ jobs:
         with:
           sarif_file: reports/jscpd/jscpd-report.sarif
 
+  static-analysis:
+    name: Opengrep and secret scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      OPENGREP_VERSION: "1.22.0"
+      OPENGREP_SHA256: "45bcd58440e397ed52c50e953ccf5948909ea77087c9186fc7d277216f62e319"
+      # v8.30.1 has a published binary/checksum regression; keep the last verified release.
+      GITLEAKS_VERSION: "8.30.0"
+      GITLEAKS_SHA256: "79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"
+    steps:
+      - name: Check out repository with history
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install verified Opengrep
+        shell: bash
+        run: |
+          curl -fsSL "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" -o /tmp/opengrep
+          echo "${OPENGREP_SHA256}  /tmp/opengrep" | sha256sum --check
+          chmod +x /tmp/opengrep
+
+      - name: Run Opengrep
+        shell: bash
+        run: |
+          mkdir -p reports
+          /tmp/opengrep scan --error --sarif-output=reports/opengrep.sarif --config .opengrep/rules.yml src scripts
+
+      - name: Upload Opengrep SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: reports/opengrep.sarif
+
+      - name: Install verified Gitleaks
+        shell: bash
+        run: |
+          curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum --check
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+
+      - name: Scan Git history for secrets
+        run: /tmp/gitleaks git --redact --no-banner --verbose .
+
+  a11y:
+    name: Audit the mock application for WCAG A/AA violations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Audit the mock application
+        run: npm run test:a11y
+
+  mutation-preflight:
+    name: Mutation preflight ${{ matrix.batch }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: [parsers, projections, domain, storage, controllers]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: "2.9.3"
+          cache: true
+      - run: npm ci
+      - name: Verify mutation batch wiring
+        run: npm run test:mutation:${{ matrix.batch }} -- --dryRunOnly
+
   surreal-integration:
     name: SurrealDB migration integration
     runs-on: ubuntu-latest

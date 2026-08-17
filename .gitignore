@@ -36,6 +36,10 @@ test_*.surql
 .playwright-cli/
 output/
 reports/
+coverage/
+storybook-static/
+test-results/
+.stryker-tmp/
 probe/
 # Generated tooling artifacts
 *.timestamp-*.mjs

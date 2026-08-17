@@ -135,7 +135,7 @@
 	}
 	header h2 { margin: 0; }
 	label { display: grid; gap: .35rem; margin: .75rem 0; }
-	.snapshot-diff { margin-top: .75rem; font-family: monospace; }
+	.snapshot-diff { margin-top: .75rem; font-family: var(--font-mono); }
 	.snapshot-diff > div { display: grid; grid-template-columns: 2rem 1fr; white-space: pre-wrap; }
 	.snapshot-diff .added { background: #e7f7ed; }
 	.snapshot-diff .removed { background: #fdeaea; }

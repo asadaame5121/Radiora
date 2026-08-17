@@ -5,7 +5,7 @@ import {
 	type CommandContext,
 	dispatchCommand,
 } from "../src/ui/command_service.ts";
-import { commandPaletteItems, nextCommandPaletteIndex } from "../src/ui/command_palette.ts";
+import { commandPaletteItems } from "../src/ui/command_palette.ts";
 
 const context = (overrides: Partial<CommandContext> = {}): CommandContext => ({
 	startupReady: true,
@@ -30,12 +30,6 @@ Deno.test("command palette searches command labels while retaining every command
 		commandPaletteItems("クイック", context(), DEFAULT_UI_VOCABULARY).map((command) => command.id),
 		["quickCapture"],
 	);
-});
-
-Deno.test("command palette selection wraps with arrow-key offsets", () => {
-	assertEquals(nextCommandPaletteIndex(0, -1, 3), 2);
-	assertEquals(nextCommandPaletteIndex(2, 1, 3), 0);
-	assertEquals(nextCommandPaletteIndex(0, 1, 0), -1);
 });
 
 Deno.test("command palette exposes command-service disabled reasons", () => {

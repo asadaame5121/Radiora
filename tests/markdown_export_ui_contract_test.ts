@@ -39,12 +39,24 @@ Deno.test("Markdown export has a visible command button and success notification
 
 Deno.test("Markdown export exposes persisted selected-node scope and independent advanced options", () => {
 	assertMatch(app, /let markdownExportPreference = \$state\(loadMarkdownExportPreference\(\)\)/);
-	assertMatch(view, /bind:value=\{markdownExportPreference\.scope\}/);
+	assertMatch(
+		view,
+		/value=\{markdownExportPreference\.scope\} onchange=\{updateMarkdownExportScope\}/,
+	);
 	assertMatch(view, /value="all">\{vocabulary\.markdownExportAll\}/);
 	assertMatch(view, /<option value="selected">\{vocabulary\.markdownExportSelected\}<\/option>/);
-	assertMatch(view, /bind:checked=\{markdownExportPreference\.includeAncestors\}/);
-	assertMatch(view, /bind:checked=\{markdownExportPreference\.includeDescendants\}/);
-	assertMatch(view, /bind:checked=\{markdownExportPreference\.includeSemanticNeighbors\}/);
+	assertMatch(
+		view,
+		/checked=\{markdownExportPreference\.includeAncestors\} onchange=\{updateMarkdownExportIncludeAncestors\}/,
+	);
+	assertMatch(
+		view,
+		/checked=\{markdownExportPreference\.includeDescendants\} onchange=\{updateMarkdownExportIncludeDescendants\}/,
+	);
+	assertMatch(
+		view,
+		/checked=\{markdownExportPreference\.includeSemanticNeighbors\} onchange=\{updateMarkdownExportIncludeSemanticNeighbors\}/,
+	);
 	assertMatch(app, /saveMarkdownExportPreference\(\{ \.\.\.markdownExportPreference \}\)/);
 	assertMatch(
 		app,
@@ -54,7 +66,10 @@ Deno.test("Markdown export exposes persisted selected-node scope and independent
 });
 
 Deno.test("Markdown export exposes all reference modes through shared vocabulary", () => {
-	assertMatch(view, /bind:value=\{markdownExportPreference\.referenceMode\}/);
+	assertMatch(
+		view,
+		/value=\{markdownExportPreference\.referenceMode\} onchange=\{updateMarkdownExportReferenceMode\}/,
+	);
 	assertMatch(view, /value="radiora">\{vocabulary\.markdownExportRadiora\}/);
 	assertMatch(view, /value="portable">\{vocabulary\.markdownExportPortable\}/);
 	assertMatch(view, /value="obsidian">\{vocabulary\.markdownExportObsidian\}/);

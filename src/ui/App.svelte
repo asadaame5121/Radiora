@@ -5,9 +5,8 @@
 	import ComparisonPane from "./ComparisonPane.svelte";
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
-	import LinkEditor from "./LinkEditor.svelte";
 	import MarkdownEditor from "./MarkdownEditor.svelte";
-	import SparseOutlineView from "./SparseOutlineView.svelte";
+	import InspectorView, { type InspectorAsideMode } from "./InspectorView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
 	import InAppHelp from "./InAppHelp.svelte";
 	import ContextMenu from "./ContextMenu.svelte";
@@ -17,8 +16,15 @@
 	import TagBrowserView from "./TagBrowserView.svelte";
 	import TrashView from "./TrashView.svelte";
 	import OptionsView from "./OptionsView.svelte";
+	import WorkingCopySaveStatus from "./WorkingCopySaveStatus.svelte";
+	import StartupCacheStatus from "./StartupCacheStatus.svelte";
+	import StartupView from "./StartupView.svelte";
+	import PrimaryNavigation, {
+		type RecentNavigationItem,
+	} from "./PrimaryNavigation.svelte";
 	import ConfirmationDialog from "./ConfirmationDialog.svelte";
 	import Toast from "./Toast.svelte";
+	import IconButton from "./primitives/IconButton.svelte";
 	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
 	import LicensesDialog, {
 		type LicenseEntry,
@@ -127,23 +133,10 @@
 		projectSemanticLinkAnnotations,
 		type SemanticLinkAnnotation,
 	} from "../services/semantic_link_annotations";
+	import type { ViewMode } from "./app_view_mode.ts";
 
 	const api = createRpcAdapter<RadioraBindings>();
 
-	type ViewMode =
-		| "outline"
-		| "today"
-		| "unplaced"
-		| "stubs"
-		| "duplicates"
-		| "tags"
-		| "globalLineage"
-		| "workLineage"
-		| "comparison"
-		| "trash"
-		| "help"
-		| "options";
-	type AsideMode = "overview" | "relation" | "history" | "query";
 	type OccurrenceContextMenuState = {
 		targetId: string;
 		source: "outline" | "tree";
@@ -182,7 +175,7 @@
 	});
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
-	let asideMode = $state<AsideMode>("overview");
+	let asideMode = $state<InspectorAsideMode>("overview");
 	let aliases = $state<SearchAlias[]>([]);
 	let aliasCanonical = $state("");
 	let aliasVariants = $state("");
@@ -219,7 +212,7 @@
 	let comparisonRequest = 0;
 	const confirmationController = createConfirmationController();
 	let confirmationDialog: ConfirmationDialog;
-	let licensesDialog = $state<HTMLDialogElement>();
+	let licensesDialogOpen = $state(false);
 	let licenseIndex = $state<LicenseIndex | null>(null);
 	let licenseDetail = $state<{ name: string; text: string } | null>(null);
 	let licenseError = $state("");
@@ -336,6 +329,15 @@
 			})
 			.slice(0, 6);
 	});
+	const primaryNavigationRecentItems = $derived<RecentNavigationItem[]>(
+		recentEditedItems.map((item) => ({
+			workId: item.workId,
+			id: item.id,
+			title: titleFor(item),
+			parentLabel: item.parentId ? titleForId(item.parentId) : "ルート",
+			editedAtLabel: formatRecentEditAt(item.updatedAt),
+		})),
+	);
 	const selectedBranchId = $derived(
 		selectedItem?.revisionSelector.mode === "branch"
 			? selectedItem.revisionSelector.branchId
@@ -487,10 +489,6 @@
 	});
 
 	$effect(() => {
-		navigationController.reconcileCommandPaletteRange(commandPaletteCommands.length);
-	});
-
-	$effect(() => {
 		const workId = selectedItem?.workId;
 		if (workId && startup.phase === "ready") {
 			void loadRevisions(workId);
@@ -572,11 +570,6 @@
 				return;
 			}
 			if (event.defaultPrevented) return;
-			if (commandPaletteOpen && event.key === "Escape") {
-				event.preventDefault();
-				void closeCommandPalette();
-				return;
-			}
 			if (isEditableTarget(event.target)) return;
 			if (
 				event.key === " " &&
@@ -897,11 +890,21 @@
 		window.addEventListener("pointerup", stop, { once: true });
 	}
 
-	async function openInspectorTool(mode: Extract<AsideMode, "query">): Promise<void> {
+	async function openInspectorTool(mode: Extract<InspectorAsideMode, "query">): Promise<void> {
 		asideMode = mode;
 		if (dedicatedView) viewMode = "outline";
 		await tick();
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
+	}
+
+	function selectInspectorPlacement(id: string): void {
+		viewMode = "outline";
+		selectOccurrence(id);
+		requestFocus(id);
+	}
+
+	function toggleSparseOutline(): void {
+		showSparseOutline = !showSparseOutline;
 	}
 
 	function requestFocus(id: string, caretOffset?: number): void {
@@ -1490,10 +1493,14 @@
 		await selectItem(item, ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id));
 	}
 
+	function openRecentNavigationItem(item: RecentNavigationItem): void {
+		const outlineItem = itemById.get(item.id);
+if (outlineItem) void openRecentItem(outlineItem);
+	}
+
 	function openHelp(): void {
 		viewMode = "help";
 	}
-
 	async function loadEmergence(id: string): Promise<void> {
 		await emergenceController.load(id);
 	}
@@ -1939,7 +1946,7 @@
 		} finally {
 			licenseLoading = false;
 		}
-		licensesDialog?.showModal();
+		licensesDialogOpen = true;
 	}
 
 	async function selectLicense(entry: LicenseEntry): Promise<void> {
@@ -2090,7 +2097,6 @@
 	commands={commandPaletteCommands}
 	{vocabulary}
 	bind:query={navigationController.commandPaletteQuery}
-	bind:activeIndex={navigationController.commandPaletteActiveIndex}
 	onClose={closeCommandPalette}
 	onExecute={executeCommandPaletteItem}
 />
@@ -2107,74 +2113,33 @@
 {/if}
 
 {#if startupCacheActive}
-	<section class="startup-cache-status" role="status" aria-live="polite">
-		{#if startup.phase === "failed"}
-			<span>前回の内容を表示しています。起動に失敗しました。</span>
-			<button onclick={() => void retryStartup()}>再試行</button>
-		{:else if startup.phase === "ready"}
-			<span>前回の内容を表示しています。最新データを読み込めませんでした。</span>
-			<button onclick={() => void reloadCachedStartupData()}>再読み込み</button>
-		{:else}
-			<span>前回の内容を表示しています。最新データを同期中…</span>
-		{/if}
-	</section>
+	<StartupCacheStatus
+		startup={startup}
+		onRetry={() => void retryStartup()}
+		onReload={() => void reloadCachedStartupData()}
+	/>
 {/if}
 
 <div class="shell" class:nav-collapsed={navCollapsed} inert={startupCacheActive} aria-busy={startupCacheActive}>
-	<nav class="primary-nav" class:nav-collapsed={navCollapsed} aria-label="主な画面">
-		<button
-			class="nav-collapse-toggle"
-			type="button"
-			aria-label={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
-			aria-expanded={!navCollapsed}
-			title={navCollapsed ? "ナビゲーションを開く" : "ナビゲーションを閉じる"}
-			onclick={toggleNavigation}
-		>{navCollapsed ? "»" : "«"}</button>
-		<div class="brand"><strong>Radiora</strong><span>v2</span></div>
-		<section>
-			<p>作業</p>
-			<button class:active={viewMode === "today"} aria-pressed={viewMode === "today"}
-				onclick={openToday}>{vocabulary.today}</button>
-			<button class:active={viewMode === "unplaced"} aria-pressed={viewMode === "unplaced"}
-				onclick={openUnplaced}>{vocabulary.unplacedInbox}</button>
-			<button class:active={viewMode === "stubs"} aria-pressed={viewMode === "stubs"}
-				onclick={openStubs}>{vocabulary.stubList}</button>
-		</section>
-		<section class="recent-edits" aria-labelledby="recent-edits-heading">
-			<p id="recent-edits-heading">最近編集した{vocabulary.work}</p>
-			{#each recentEditedItems as item (item.workId)}
-				<button
-					class:active={viewMode === "outline" && selectedId === item.id}
-					onclick={() => void openRecentItem(item)}
-				>
-					<strong>{titleFor(item)}</strong>
-					<small>{item.parentId ? titleForId(item.parentId) : "ルート"} · {formatRecentEditAt(item.updatedAt)}</small>
-				</button>
-			{:else}
-				<span class="nav-empty">編集した{vocabulary.work}はありません</span>
-			{/each}
-		</section>
-		<section>
-			<p>探索</p>
-			<button class:active={viewMode === "duplicates"} aria-pressed={viewMode === "duplicates"}
-				onclick={openDuplicates}>{vocabulary.duplicateCandidates}</button>
-		</section>
-		<section>
-			<p>管理</p>
-			<button class:active={viewMode === "trash"} aria-pressed={viewMode === "trash"}
-				onclick={openTrash}>ゴミ箱</button>
-			<button class:active={viewMode === "options"} aria-pressed={viewMode === "options"}
-				onclick={() => (viewMode = "options")}>Option</button>
-		</section>
-		<section class="nav-tools">
-			<p>ツール</p>
-			<button class:active={viewMode === "tags"} onclick={openTags}>{vocabulary.tag}管理</button>
-			<button class:active={asideMode === "query"} onclick={() => openInspectorTool("query")}
-				disabled={!selectedItem}>Query・検索別名</button>
-			<button class:active={viewMode === "help"} onclick={openHelp} title="F1">ヘルプ</button>
-		</section>
-	</nav>
-
+	<PrimaryNavigation
+		collapsed={navCollapsed}
+		activeView={viewMode}
+		queryActive={asideMode === "query"}
+		queryAvailable={Boolean(selectedItem)}
+		recentItems={primaryNavigationRecentItems}
+		selectedId={selectedId}
+		onToggleCollapse={toggleNavigation}
+		onOpenToday={() => void openToday()}
+		onOpenUnplaced={() => void openUnplaced()}
+		onOpenStubs={() => void openStubs()}
+		onOpenDuplicates={() => void openDuplicates()}
+		onOpenTrash={() => void openTrash()}
+		onOpenOptions={() => (viewMode = "options")}
+		onOpenTags={() => void openTags()}
+		onOpenQuery={() => void openInspectorTool("query")}
+		onOpenHelp={openHelp}
+		onOpenRecentItem={(item) => void openRecentNavigationItem(item)}
+	/>
 	<header class="top-bar">
 		<div class="current-location">
 			<div class="view-switcher" role="group" aria-label="アウトラインとツリー">
@@ -2189,6 +2154,7 @@
 		</div>
 		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
 			<input
+				role="combobox"
 				aria-label={`検索・${vocabulary.quickCapture}`}
 				placeholder={`思索を検索、Shift+Enterで${quickCaptureDestinationLabel}へ作成…`}
 				bind:value={navigationController.quickCaptureText}
@@ -2196,13 +2162,19 @@
 				onkeydown={handleSearchKeydown}
 				autocomplete="off"
 				disabled={startup.phase !== "ready" || quickCaptureSubmitting}
+				aria-autocomplete="list"
+				aria-haspopup="listbox"
 				aria-expanded={Boolean(quickCaptureText.trim())}
+				aria-controls={quickCaptureText.trim() ? "omniwindow-search-results" : undefined}
+				aria-activedescendant={searchActiveIndex >= 0 ? `omni-option-${searchActiveIndex}` : undefined}
 			/>
 			{#if quickCaptureText.trim()}
-				<div class="search-results" role="listbox" aria-label="検索と新規作成の候補">
+				<div id="omniwindow-search-results" class="search-results" role="listbox" aria-label="検索と新規作成の候補">
 					{#if suggestions.length}<p class="search-section">タイトル</p>{/if}
 					{#each suggestions as suggestion, index}
-						<button type="button" class:active={searchActiveIndex === index}
+						<button id={`omni-option-${index}`} type="button" role="option"
+							aria-selected={searchActiveIndex === index}
+							class:active={searchActiveIndex === index}
 							onclick={() => selectItem(suggestion.item, suggestion.ancestorIds)}>
 							<strong>{suggestion.title || `(空の${vocabulary.work})`}</strong>
 							<small>先頭一致</small>
@@ -2210,14 +2182,17 @@
 					{/each}
 					{#if searchResults.length}<p class="search-section">本文・関連</p>{/if}
 					{#each searchResults as result, index}
-						<button type="button" class:active={searchActiveIndex === suggestions.length + index}
+						<button id={`omni-option-${suggestions.length + index}`} type="button" role="option"
+							aria-selected={searchActiveIndex === suggestions.length + index}
+							class:active={searchActiveIndex === suggestions.length + index}
 							onclick={() => selectSearch(result)}>
 							<strong>{titleFor(result.item)}</strong>
 							<small>{result.reasons.map((reason) => reason.label).slice(0, 2).join(" · ")}</small>
 						</button>
 					{/each}
 					<p class="search-section">新規作成</p>
-					<button type="button" class="create-candidate"
+					<button id={`omni-option-${searchEntries.length}`} type="button" role="option" class="create-candidate"
+						aria-selected={searchActiveIndex === searchEntries.length}
 						class:active={searchActiveIndex === searchEntries.length}
 						disabled={!commands.quickCapture.enabled}
 						title={commands.quickCapture.reason}
@@ -2257,43 +2232,14 @@
 			>詳細</button>
 		</div>
 		{#if workingCopySaveStatus}
-			<div
-				class="working-copy-save-status"
-				class:failed={workingCopySaveStatus.phase === "failed"}
-				class:pending={workingCopySaveStatus.phase === "unsaved" ||
-					workingCopySaveStatus.phase === "saving"}
-				aria-live="polite"
-				title={workingCopySaveStatus.error}
-			>
-				<span>
-					{workingCopySaveStatus.phase === "failed"
-						? `${vocabulary.workingCopy}を保存できませんでした`
-						: workingCopySaveStatus.phase === "saving"
-						? `${vocabulary.workingCopy}を保存中…`
-						: workingCopySaveStatus.phase === "unsaved"
-						? `未保存の${vocabulary.workingCopy}があります`
-						: `${vocabulary.workingCopy}を保存しました`}
-				</span>
-				{#if workingCopySaveStatus.phase === "failed"}
-					<button onclick={retryWorkingCopySave}>再試行</button>
-				{/if}
-			</div>
+			<WorkingCopySaveStatus status={workingCopySaveStatus} onRetry={retryWorkingCopySave} />
 		{/if}
 	</header>
 
-	{#if error}<div class="error">{error}<button onclick={() => (error = "")}>×</button></div>{/if}
+	{#if error}<div class="error">{error}<IconButton label="エラーメッセージを閉じる" onclick={() => (error = "")}>×</IconButton></div>{/if}
 
 	{#if startup.phase !== "ready" && !startupCacheActive}
-		<main class="app-main startup-main">
-			<section class="startup-card" aria-live="polite">
-				<div class:failed={startup.phase === "failed"} class="startup-indicator"></div>
-				<p class="eyebrow">{startup.phase === "failed" ? "STARTUP FAILED" : "STARTING"}</p>
-				<h1>{startup.message}</h1>
-				{#if startup.detail}<p class="startup-detail">{startup.detail}</p>{/if}
-				{#if startup.logPath}<p class="startup-log">診断ログ: <code>{startup.logPath}</code></p>{/if}
-				{#if startup.phase === "failed"}<button class="retry" onclick={retryStartup}>再試行</button>{/if}
-			</section>
-		</main>
+		<StartupView startup={startup} onRetry={retryStartup} />
 	{:else}
 	<main
 		class="app-main"
@@ -2325,7 +2271,8 @@
 								>プレビュー</button>
 							</div>
 							{#if longForm.preview}
-								<div class="long-form-preview">{@html renderMarkdownPreview(longForm.text)}</div>
+			<!-- nosemgrep: radiora.no-dangerous-html -- renderMarkdownPreview escapes raw HTML before adding controlled markup. -->
+			<div class="long-form-preview">{@html renderMarkdownPreview(longForm.text)}</div>
 							{:else}
 								<textarea
 									class="long-form-textarea"
@@ -2371,7 +2318,7 @@
 					<button class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
 				{:else}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div class="rows"
+					<div class="rows" role="tree" aria-label={`${vocabulary.work}のアウトライン`} tabindex="0"
 						onmousedown={(event) => {
 							if (event.target === event.currentTarget) deselectFromBlank(event);
 						}}>
@@ -2388,7 +2335,11 @@
 									if (event.target === event.currentTarget) deselectFromBlank(event);
 								}}
 								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
-								<button class="disclosure" class:hidden={!row.hasChildren} onclick={() => toggle(row)}>{row.item.collapsed ? "›" : "⌄"}</button>
+								<IconButton
+									class={`disclosure${row.hasChildren ? "" : " hidden"}`}
+									label={row.item.collapsed ? `${titleFor(row.item)}を展開` : `${titleFor(row.item)}を折りたたむ`}
+									onclick={() => toggle(row)}
+								>{row.item.collapsed ? "›" : "⌄"}</IconButton>
 								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
 								<button class="bullet" aria-label={`${vocabulary.work}を選択`} title={`ダブルクリックでこの${vocabulary.work}へZoom`}
 									onclick={() => selectOccurrence(row.item.id)} ondblclick={() => hoistOccurrence(row.item.id)}>•</button>
@@ -2762,198 +2713,72 @@
 		{/if}
 
 		{#if !dedicatedView}
-			<aside bind:this={inspectorElement} class="inspector">
-			<button
-				class="inspector-resize-handle"
-				type="button"
-				aria-label="右ペインの幅を変更"
-				onpointerdown={startInspectorResize}
-				title="ドラッグして幅を変更"
-			></button>
-			{#if selectedItem}
-				<nav class="aside-tabs" aria-label="詳細表示">
-					<button class:active={asideMode === "overview"} onclick={() => (asideMode = "overview")}>概要</button>
-					<button class:active={asideMode === "relation"} onclick={() => (asideMode = "relation")}>関係</button>
-					<button class:active={asideMode === "history"} onclick={() => (asideMode = "history")}>履歴</button>
-				</nav>
-				<p class="eyebrow">選択中</p>
-				<div class="inspector-heading">
-					<h2>{titleFor(selectedItem)}</h2>
-					<div class="inspector-heading-actions">
-						<button class="inspector-action" onclick={addBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
-						<button class="clear-selection" onclick={() => selectOccurrence(null)}>選択解除</button>
-						<button class="clear-selection" onclick={() => setInspectorCollapsed(true)}>閉じる</button>
-					</div>
-				</div>
-				{#if asideMode === "overview"}
-					<label>
-						{vocabulary.occurrence}固有の見出し
-						<input value={selectedItem.contextualHeading ?? ""}
-							onchange={(event) => updateSelectedHeading(event.currentTarget.value)}
-							placeholder="未設定時は本文の先頭行" />
-					</label>
-					<section class="placements">
-						<h3>すべての{vocabulary.occurrence}<small>{selectedPlacements.length}件</small></h3>
-						<div>
-							{#each selectedPlacements as placement (placement.id)}
-								<button class:active={placement.id === selectedItem.id}
-									onclick={() => {
-										viewMode = "outline";
-										selectOccurrence(placement.id);
-										requestFocus(placement.id);
-									}}>
-									<strong>{titleFor(placement)}</strong>
-									<span>{placement.parentId ? `親: ${titleForId(placement.parentId)}` : "ルート"}</span>
-								</button>
-							{/each}
-						</div>
-					</section>
-				<div class="discovery-actions">
-						<button onclick={startLongFormEditing} disabled={!commands.startLongFormEditing.enabled} title={commands.startLongFormEditing.reason}>長文編集</button>
-					</div>
-					<div class="thought-meta">
-						<div><span class="meta-label">作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
-						<div><span class="meta-label">更新日</span><time datetime={selectedItem.updatedAt}>{formatCreatedAt(selectedItem.updatedAt)}</time></div>
-						{#if selectedItem.parentId}
-							<div><span class="meta-label">親</span><span>{titleForId(selectedItem.parentId)}</span></div>
-						{/if}
-					</div>
-					{#if viewMode === "outline"}
-						<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>
-					{/if}
-				{:else if asideMode === "relation"}
-					<LinkEditor
-						selectedWorkId={selectedItem.workId}
-						selectedDisplayName={titleFor(selectedItem)}
-						links={selectedLinks}
-						titleForWork={titleForWorkId}
-						onConfirm={(input) => executeCommand("createLink", undefined, input)}
-						onDelete={removeLink}
-						onReverse={reverseLink}
-						onCompare={(link) => openLinkComparison(link.id)}
-					/>
-					{#if inlineSemanticLinkNotice}
-						<p class="inline-semantic-link-notice" role="status">{inlineSemanticLinkNotice}</p>
-					{/if}
-					<section class="internal-reference-backlinks">
-						<h3>{vocabulary.backlink}<small>{internalReferenceBacklinks.length}件</small></h3>
-						{#each internalReferenceBacklinks as backlink (JSON.stringify(backlink.source))}
-							<button onclick={() => openInternalReferenceBacklink(backlink)}>
-								<strong>{backlink.displayName}</strong>
-								<span>
-									{backlink.source.scope === "work" ? vocabulary.workingCopy : `固定${vocabulary.revision}`}
-									· {backlink.count}箇所
-								</span>
-							</button>
-						{:else}
-							<p class="empty">{vocabulary.backlink}はありません</p>
-						{/each}
-					</section>
-					{#if internalReferenceNotice}
-						<p class="internal-reference-notice" role="status">{internalReferenceNotice}</p>
-					{/if}
-					<div class="discoveries">
-						{#if emergenceLoading}<p class="empty">{vocabulary.emergenceLoading}</p>{/if}
-						{#each emergenceSuggestions as suggestion}
-							<article class:pinned={suggestion.status === "pinned"}>
-								<div class="discovery-title"><span>{suggestion.title}</span><small>{Math.round(suggestion.score * 100)}%</small></div>
-								<strong>{titleForId(suggestion.targetItemId)}</strong>
-								<p>{suggestion.explanation}</p>
-								<ol>{#each suggestion.evidence as step}<li>{step.relation}: {titleForId(step.fromId)} → {titleForId(step.toId)}</li>{/each}</ol>
-								<input
-									aria-label={vocabulary.emergenceResolutionReason}
-									placeholder={vocabulary.emergenceResolutionReason}
-									value={emergenceResolutionReasons[suggestion.id] ?? ""}
-									oninput={(event) =>
-										emergenceController.setResolutionReason(
-											suggestion.id,
-											event.currentTarget.value,
-										)}
-								/>
-								<div class="discovery-actions">
-									<button onclick={() => resolveEmergence(suggestion, "accept")}>{vocabulary.emergenceAccept}</button>
-									<button onclick={() => resolveEmergence(suggestion, "pin")}>{vocabulary.emergenceHold}</button>
-									<button
-										onclick={() => resolveEmergence(suggestion, "dismiss")}
-										disabled={!emergenceResolutionReasons[suggestion.id]?.trim()}
-									>{vocabulary.emergenceDismiss}</button>
-								</div>
-							</article>
-						{:else}
-							{#if !emergenceLoading}<p class="empty">{vocabulary.noEmergenceSuggestion}</p>{/if}
-						{/each}
-					</div>
-				{:else if asideMode === "history"}
-					<div class="history-panel">
-						<p class="hint">選択中の{vocabulary.work}に従属する履歴です。</p>
-						<button onclick={() => void executeCommand("createBranch")} disabled={!commands.createBranch.enabled} title={commands.createBranch.reason}>
-							新しい{vocabulary.branch}を作る
-						</button>
-						<button onclick={() => (viewMode = "workLineage")} disabled={!selectedItem}>
-							{vocabulary.workLineage}を開く
-						</button>
-						<button onclick={openSelectedRevisionComparison} disabled={!selectedItem}>
-							{vocabulary.revision}{vocabulary.comparisonPane}を開く
-						</button>
-						{#if selectedBranchId}
-							<button onclick={() => (viewMode = "workLineage")}>
-								Recovery snapshotsを開く
-							</button>
-							<small>{recoverySnapshots.length}件のRecovery snapshot</small>
-						{:else}
-							<small>Recoveryは{vocabulary.branch}を選択すると利用できます。</small>
-						{/if}
-					</div>
-				{:else}
-					<div class="query-panel">
-						<label for="rule-source">読み取り専用Datalog</label>
-						<textarea id="rule-source" rows="6" bind:value={ruleSource} spellcheck="false"></textarea>
-						<div class="query-actions"><button onclick={executeRule} disabled={!commands.runQuery.enabled} title={commands.runQuery.reason}>実行</button><input placeholder="保存名" bind:value={ruleName} /><button onclick={saveRule} disabled={!commands.saveQuery.enabled} title={commands.saveQuery.reason}>保存</button></div>
-						{#if ruleError}<p class="query-error">{ruleError}</p>{/if}
-						{#if ruleResult}
-							<p class="query-meta">{ruleResult.rows.length}件・{ruleResult.elapsedMs.toFixed(1)}ms</p>
-							{#if sparseOutlineNodes.length}
-								<div class="sparse-outline-section">
-									<div class="sparse-outline-header">
-										<h3>{vocabulary.sparseOutline}<small>{sparseOutlineQueryName}</small></h3>
-										<button class="sparse-toggle" onclick={() => (showSparseOutline = !showSparseOutline)}>
-											{showSparseOutline ? "テーブル表示" : "投影表示"}
-										</button>
-									</div>
-									{#if showSparseOutline}
-										<SparseOutlineView nodes={sparseOutlineNodes} onSelectNode={handleSparseOutlineSelect} />
-									{:else}
-										<div class="query-table"><table><thead><tr>{#each ruleResult.columns as column}<th>{column}</th>{/each}</tr></thead>
-											<tbody>{#each ruleResult.rows as row}<tr>{#each row as value}<td>{titleForId(value)}</td>{/each}</tr>{/each}</tbody>
-										</table></div>
-									{/if}
-								</div>
-							{:else}
-								<div class="query-table"><table><thead><tr>{#each ruleResult.columns as column}<th>{column}</th>{/each}</tr></thead>
-									<tbody>{#each ruleResult.rows as row}<tr>{#each row as value}<td>{titleForId(value)}</td>{/each}</tr>{/each}</tbody>
-								</table></div>
-							{/if}
-						{/if}
-						<div class="saved-queries">
-							{#each savedRuleQueries as saved}
-								<button onclick={() => void loadSparseOutlineForQuery(saved)}>{saved.name}</button>
-								<button class="remove-saved" onclick={() => removeRule(saved.id)}>×</button>
-							{/each}
-						</div>
-						<h3>検索別名</h3>
-						<input placeholder="基準語" bind:value={aliasCanonical} />
-						<textarea rows="2" placeholder="別名（カンマ区切り）" bind:value={aliasVariants}></textarea>
-						<button onclick={saveAlias}>別名を追加</button>
-						<div class="alias-list">{#each aliases as alias}<div><span>{alias.canonical} ↔ {alias.variants.join(", ")}</span><button onclick={() => removeAlias(alias.id)}>×</button></div>{/each}</div>
-					</div>
-				{/if}
-			{:else}
-				<div class="aside-empty">
-					<button class="inspector-close" type="button" onclick={() => setInspectorCollapsed(true)}>閉じる</button>
-					<span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p>
-				</div>
-			{/if}
-		</aside>
+			<InspectorView
+				{asideMode}
+				{selectedItem}
+				{selectedPlacements}
+				{selectedLinks}
+				{selectedBranchId}
+				{recoverySnapshots}
+				{commands}
+				{vocabulary}
+				inlineSemanticLinkNotice={inlineSemanticLinkNotice}
+				internalReferenceBacklinks={internalReferenceBacklinks}
+				internalReferenceNotice={internalReferenceNotice}
+				{emergenceSuggestions}
+				emergenceResolutionReasons={emergenceResolutionReasons}
+				{emergenceLoading}
+				query={{
+					ruleSource,
+					ruleResult,
+					ruleName,
+					ruleError,
+					savedRuleQueries,
+					sparseOutlineNodes,
+					sparseOutlineQueryName,
+					showSparseOutline,
+					aliases,
+					aliasCanonical,
+					aliasVariants,
+					onRuleSourceChange: (value) => ruleSource = value,
+					onRuleNameChange: (value) => ruleName = value,
+					onAliasCanonicalChange: (value) => aliasCanonical = value,
+					onAliasVariantsChange: (value) => aliasVariants = value,
+					onExecuteRule: executeRule,
+					onSaveRule: saveRule,
+					onLoadSavedQuery: loadSparseOutlineForQuery,
+					onRemoveRule: removeRule,
+					onSaveAlias: saveAlias,
+					onRemoveAlias: removeAlias,
+					onSelectSparseNode: handleSparseOutlineSelect,
+					onToggleSparseOutline: toggleSparseOutline,
+				}}
+				onAsideModeChange={(mode) => asideMode = mode}
+				onElement={(element) => inspectorElement = element}
+				onStartResize={startInspectorResize}
+				onAddBookmark={addBookmark}
+				onSelectOccurrence={selectOccurrence}
+				onSetInspectorCollapsed={setInspectorCollapsed}
+				onUpdateSelectedHeading={updateSelectedHeading}
+				onSelectPlacement={selectInspectorPlacement}
+				showOutlineHint={viewMode === "outline"}
+				onStartLongFormEditing={startLongFormEditing}
+				onConfirmLink={(input) => executeCommand("createLink", undefined, input)}
+				onDeleteLink={removeLink}
+				onReverseLink={reverseLink}
+				onCompareLink={(link) => openLinkComparison(link.id)}
+				onSearch={api.searchItems}
+				{titleFor}
+				titleForId={titleForId}
+				titleForWork={titleForWorkId}
+				{formatCreatedAt}
+				onOpenBacklink={openInternalReferenceBacklink}
+				onSetEmergenceReason={(id, value) => emergenceController.setResolutionReason(id, value)}
+				onResolveEmergence={resolveEmergence}
+				onOpenWorkLineage={() => viewMode = "workLineage"}
+				onOpenRevisionComparison={openSelectedRevisionComparison}
+				onCreateBranch={() => executeCommand("createBranch")}
+			/>
 		{/if}
 	</main>
 	{/if}
@@ -2979,7 +2804,7 @@
 />
 
 <LicensesDialog
-	bind:dialog={licensesDialog}
+	bind:open={licensesDialogOpen}
 	{licenseIndex}
 	{licenseDetail}
 	{licenseError}

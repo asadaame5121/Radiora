@@ -1,6 +1,13 @@
 import { assert, assertMatch, assertNotMatch } from "jsr:@std/assert@1";
 
 const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+const navigation = await Deno.readTextFile(
+	new URL("../src/ui/PrimaryNavigation.svelte", import.meta.url),
+);
+const navigationStyles = navigation.slice(navigation.indexOf("<style>"));
+const inspector = await Deno.readTextFile(
+	new URL("../src/ui/InspectorView.svelte", import.meta.url),
+);
 const navigationController = await Deno.readTextFile(
 	new URL("../src/ui/navigation_controller.svelte.ts", import.meta.url),
 );
@@ -48,14 +55,20 @@ Deno.test("Omniwindow shares the quick-capture command value with search", () =>
 });
 
 Deno.test("shell keeps global navigation, contextual inspector, and dedicated full-width views separate", () => {
-	for (const label of ["作業", "探索", "管理", "アウトライン", "ゴミ箱", "ツール"]) {
+	for (const label of ["作業", "探索", "管理", "ツール"]) {
+		assert(navigation.includes(label));
+	}
+	for (const label of ["アウトライン", "ゴミ箱"]) {
 		assert(app.includes(label));
 	}
 	for (const tab of [">概要</button>", ">関係</button>", ">履歴</button>"]) {
-		assert(app.includes(tab));
+		assert(inspector.includes(tab));
 	}
+	assertMatch(navigation, /<nav class="primary-nav"/);
+	assertMatch(navigation, /<button type="button"[^>]*>\{vocabulary\.today\}<\/button>/);
 	assertMatch(app, /class:full-workspace=\{dedicatedView\}/);
-	assertMatch(app, /\{#if !dedicatedView\}\s*<aside[^>]*class="inspector">/);
+	assertMatch(app, /\{#if !dedicatedView\}\s*<InspectorView/);
+	assertMatch(inspector, /<aside bind:this=\{inspectorElement\} class="inspector">/);
 	assertMatch(app, /<div class="work-lineage-workspace">/);
 	assertMatch(styles, /\.shell > \.top-bar/);
 	assertMatch(styles, /\.app-main > \.inspector/);
@@ -66,20 +79,22 @@ Deno.test("shell keeps global navigation, contextual inspector, and dedicated fu
 Deno.test("left and right sidebars are collapsible", () => {
 	assertMatch(app, /let navCollapsed = \$state\(initialUiLayoutPreference\.navCollapsed\)/);
 	assertMatch(app, /class="shell" class:nav-collapsed=\{navCollapsed\}/);
-	assertMatch(app, /class="primary-nav" class:nav-collapsed=\{navCollapsed\}/);
-	assertMatch(app, /nav-collapse-toggle/);
-	assertMatch(app, /aria-expanded=\{!navCollapsed\}/);
-	assertMatch(app, /onclick=\{toggleNavigation\}/);
+	assertMatch(app, /<PrimaryNavigation/);
+	assertMatch(app, /onToggleCollapse=\{toggleNavigation\}/);
+	assertMatch(navigation, /class="primary-nav" class:nav-collapsed=\{collapsed\}/);
+	assertMatch(navigation, /class="nav-collapse-toggle"/);
+	assertMatch(navigation, /aria-expanded=\{!collapsed\}/);
+	assertMatch(navigation, /onclick=\{onToggleCollapse\}/);
 	assertMatch(
 		app,
 		/saveUiLayoutPreference\(\{ navCollapsed, inspectorCollapsed, inspectorWidth \}\)/,
 	);
 	assertMatch(styles, /\.shell\.nav-collapsed \{\s*grid-template-columns: 42px minmax\(0, 1fr\);/);
 	assertMatch(
-		styles,
+		navigationStyles,
 		/\.primary-nav\.nav-collapsed \.brand,\s*\.primary-nav\.nav-collapsed section \{\s*display: none;/,
 	);
-	assertMatch(app, /inspector-close/);
+	assertMatch(inspector, /inspector-close/);
 	assertMatch(app, /inspectorCollapsed = true/);
 	assertMatch(app, /async function toggleInspector/);
 	assertMatch(app, /class="inspector-jump"/);

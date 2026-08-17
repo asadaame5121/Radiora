@@ -62,6 +62,7 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 		if (!instance) throw new Error("Overtype did not create an editor instance");
 		this.#instance = instance;
 		this.textarea = instance.textarea;
+		this.#installPreviewAccessibility();
 		this.#installHostListeners();
 		this.#suppressChange = 0;
 	}
@@ -170,6 +171,21 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 			event.stopImmediatePropagation();
 			this.#options.onInternalReference?.(destination);
 		}, { capture: true });
+	}
+
+	#installPreviewAccessibility(): void {
+		const preview = this.#instance.preview;
+		preview.setAttribute("role", "button");
+		preview.setAttribute("tabindex", "0");
+		const editorLabel = this.textarea.getAttribute("aria-label");
+		preview.setAttribute("aria-label", editorLabel ? `${editorLabel}を開始` : "Edit markdown");
+		this.#listen(preview, "keydown", (rawEvent) => {
+			const event = rawEvent as KeyboardEvent;
+			if (event.key !== "Enter" && event.key !== " ") return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.#instance.focus();
+		});
 	}
 }
 

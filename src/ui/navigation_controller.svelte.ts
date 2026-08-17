@@ -39,7 +39,6 @@ export function createNavigationController(options: NavigationControllerOptions 
 	let nextPaneNumber = options.nextPaneNumber ?? nextPaneNumberAfter(initialPaneId);
 	let commandPaletteOpen = $state(false);
 	let commandPaletteQuery = $state("");
-	let commandPaletteActiveIndex = $state(-1);
 	let quickCaptureText = $state("");
 	let suggestions = $state<Suggestion[]>([]);
 	let searchResults = $state<SearchResult[]>([]);
@@ -80,12 +79,6 @@ export function createNavigationController(options: NavigationControllerOptions 
 		},
 		set commandPaletteQuery(value: string) {
 			commandPaletteQuery = value;
-		},
-		get commandPaletteActiveIndex() {
-			return commandPaletteActiveIndex;
-		},
-		set commandPaletteActiveIndex(value: number) {
-			commandPaletteActiveIndex = value;
 		},
 		get quickCaptureText() {
 			return quickCaptureText;
@@ -156,18 +149,10 @@ export function createNavigationController(options: NavigationControllerOptions 
 		},
 		openCommandPalette(): void {
 			commandPaletteQuery = "";
-			commandPaletteActiveIndex = 0;
 			commandPaletteOpen = true;
 		},
 		closeCommandPalette(): void {
 			commandPaletteOpen = false;
-		},
-		reconcileCommandPaletteRange(itemCount: number): number {
-			if (itemCount <= 0) commandPaletteActiveIndex = -1;
-			else if (commandPaletteActiveIndex < 0 || commandPaletteActiveIndex >= itemCount) {
-				commandPaletteActiveIndex = 0;
-			}
-			return commandPaletteActiveIndex;
 		},
 		queueSearch(): void {
 			clearSearchTimers();

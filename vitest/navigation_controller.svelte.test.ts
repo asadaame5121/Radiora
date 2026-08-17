@@ -10,6 +10,23 @@ import { createNavigationController } from "../src/ui/navigation_controller.svel
 describe("navigation controller", () => {
 	afterEach(() => vi.useRealTimers());
 
+	test("starts with an empty default navigation state", () => {
+		const controller = createNavigationController();
+
+		expect(controller.browsing.activePaneId).toBe("pane-1");
+		expect(controller.commandPaletteOpen).toBe(false);
+		expect(controller.commandPaletteQuery).toBe("");
+		expect(controller.quickCaptureText).toBe("");
+		expect(controller.suggestions).toEqual([]);
+		expect(controller.searchResults).toEqual([]);
+		expect(controller.searchActiveIndex).toBe(-1);
+
+		controller.quickCaptureText = "capture";
+		controller.searchActiveIndex = 2;
+		expect(controller.quickCaptureText).toBe("capture");
+		expect(controller.searchActiveIndex).toBe(2);
+	});
+
 	test("owns browsing selection, hoist, panes, and snapshot reconciliation", () => {
 		const snapshot = outline();
 		const controller = createNavigationController();
@@ -56,12 +73,36 @@ describe("navigation controller", () => {
 		expect(controller.addBrowsingPane()).toBe("pane-5");
 	});
 
-	test("owns reactive command palette state and corrects the active range", () => {
+	test("honors initial navigation options and skips occupied pane numbers", () => {
+		const controller = createNavigationController({
+			initialPaneId: "custom",
+			initialLocation: { selectedOccurrenceId: "root", hoistOccurrenceId: null },
+			nextPaneNumber: 1,
+		});
+
+		expect(controller.browsing.activePaneId).toBe("custom");
+		expect(controller.browsingLocation.selectedOccurrenceId).toBe("root");
+		expect(controller.addBrowsingPane()).toBe("pane-1");
+		expect(controller.addBrowsingPane()).toBe("pane-2");
+	});
+
+	test.each(
+		[
+			["pane-9", "pane-10"],
+			["pane-10-extra", "pane-2"],
+			["x-pane-10", "pane-2"],
+			["pane-a", "pane-2"],
+		] as const,
+	)("derives the next id after %s as %s", (initialPaneId, expected) => {
+		const controller = createNavigationController({ initialPaneId });
+		expect(controller.addBrowsingPane()).toBe(expected);
+	});
+
+	test("owns reactive command palette open and query state", () => {
 		const controller = createNavigationController();
 		const paletteState = $derived({
 			open: controller.commandPaletteOpen,
 			query: controller.commandPaletteQuery,
-			activeIndex: controller.commandPaletteActiveIndex,
 		});
 		const currentPaletteState = () => paletteState;
 
@@ -69,13 +110,7 @@ describe("navigation controller", () => {
 		controller.commandPaletteQuery = "stale";
 		controller.openCommandPalette();
 
-		expect(currentPaletteState()).toEqual({ open: true, query: "", activeIndex: 0 });
-
-		controller.commandPaletteActiveIndex = 7;
-		expect(controller.reconcileCommandPaletteRange(3)).toBe(0);
-		expect(controller.reconcileCommandPaletteRange(0)).toBe(-1);
-		controller.commandPaletteActiveIndex = -1;
-		expect(controller.reconcileCommandPaletteRange(2)).toBe(0);
+		expect(currentPaletteState()).toEqual({ open: true, query: "" });
 
 		controller.closeCommandPalette();
 		expect(currentPaletteState().open).toBe(false);
@@ -118,6 +153,48 @@ describe("navigation controller", () => {
 		expect(controller.moveSearchActiveIndex(1)).toBe(0);
 		expect(controller.moveSearchActiveIndex(-1)).toBe(-1);
 		expect(reportError).not.toHaveBeenCalled();
+	});
+
+	test("clears results immediately for a whitespace-only query", () => {
+		const controller = createNavigationController();
+		controller.quickCaptureText = "   ";
+		controller.searchActiveIndex = 4;
+
+		controller.queueSearch();
+
+		expect(controller.searchActiveIndex).toBe(-1);
+		expect(controller.suggestions).toEqual([]);
+		expect(controller.searchResults).toEqual([]);
+		expect(controller.omniEntryCount).toBe(0);
+	});
+
+	test("requires a search port only for non-empty queries", () => {
+		const controller = createNavigationController();
+		controller.quickCaptureText = "needle";
+
+		expect(() => controller.queueSearch()).toThrow("Navigation search port is not configured");
+	});
+
+	test("clamps search movement to the available entry range", async () => {
+		vi.useFakeTimers();
+		const controller = createNavigationController({
+			searchPort: {
+				suggestItems: vi.fn(async () => [suggestionFor("one")]),
+				searchItems: vi.fn(async () => [resultFor("two")]),
+				getSelectedId: () => null,
+				reportError: vi.fn(),
+			},
+		});
+		controller.quickCaptureText = "capture";
+		controller.queueSearch();
+		await vi.advanceTimersByTimeAsync(250);
+
+		expect(controller.omniEntryCount).toBe(3);
+		expect(controller.moveSearchActiveIndex(1)).toBe(0);
+		expect(controller.moveSearchActiveIndex(1)).toBe(1);
+		expect(controller.moveSearchActiveIndex(1)).toBe(2);
+		expect(controller.moveSearchActiveIndex(1)).toBe(2);
+		expect(controller.moveSearchActiveIndex(-1)).toBe(1);
 	});
 
 	test("cancels timers and ignores stale async results when the omniwindow is cleared", async () => {

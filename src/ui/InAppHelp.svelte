@@ -233,7 +233,7 @@
 		margin: 0;
 	}
 	.help-card h2 {
-		font-family: Georgia, "Noto Serif JP", serif;
+		font-family: var(--font-serif);
 		font-size: 20px;
 		font-weight: normal;
 		color: #edf9fa;

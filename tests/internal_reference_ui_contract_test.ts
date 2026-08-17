@@ -2,6 +2,9 @@ import { assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("internal reference UI supports [[ completion, caret replacement, safe navigation, and backlinks", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const inspector = await Deno.readTextFile(
+		new URL("../src/ui/InspectorView.svelte", import.meta.url),
+	);
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
 	);
@@ -19,7 +22,7 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 	assertMatch(controller, /listInternalReferenceBacklinks\("work", workId\)/);
 	assertMatch(app, /editorController\.updateEditorSelection/);
 	assertMatch(app, /vocabulary\.internalReference/);
-	assertMatch(app, /vocabulary\.backlink/);
+	assertMatch(inspector, /vocabulary\.backlink/);
 	assertMatch(vocabulary, /internalReference: "内部参照"/);
 	assertMatch(vocabulary, /backlink: "被参照"/);
 	assertMatch(controller, /resolution\.navigationTarget\.kind === "work"[\s\S]*?return;/);

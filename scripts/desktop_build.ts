@@ -1,4 +1,9 @@
-const outputDir = new URL("../dist-desktop/radiora-v2-windows/", import.meta.url);
+const isWindows = Deno.build.os === "windows";
+const pathSeparator = isWindows ? "\\" : "/";
+const platformLabel = isWindows ? "Windows" : "Linux";
+const outputDirName = isWindows ? "radiora-v2-windows" : "radiora-v2-linux";
+const surrealCliName = isWindows ? "surreal.exe" : "surreal";
+const outputDir = new URL(`../dist-desktop/${outputDirName}/`, import.meta.url);
 
 const licensesIndex = new URL("../dist/licenses/index.json", import.meta.url);
 try {
@@ -17,11 +22,11 @@ try {
 
 try {
 	await Deno.remove(outputDir, { recursive: true });
-	console.log("Removed previous Windows bundle and its WebView2 runtime cache.");
+	console.log(`Removed previous ${platformLabel} bundle and its runtime cache.`);
 } catch (cause) {
 	if (!(cause instanceof Deno.errors.NotFound)) {
 		throw new Error(
-			"Windows bundleを更新できません。起動中のRadioraウィンドウを閉じて再実行してください。",
+			`${platformLabel} bundleを更新できません。起動中のRadioraウィンドウを閉じて再実行してください。`,
 			{ cause },
 		);
 	}
@@ -36,13 +41,16 @@ const command = new Deno.Command(Deno.execPath(), {
 const status = await command.spawn().status;
 if (!status.success) Deno.exit(status.code);
 
-const surrealSource = Deno.env.get("RADIORA_SURREAL_BUNDLE_SOURCE") ??
-	(Deno.env.get("USERPROFILE") ? `${Deno.env.get("USERPROFILE")}\\.surrealdb\\surreal.exe` : null);
+const homeDir = isWindows ? Deno.env.get("USERPROFILE") : Deno.env.get("HOME");
+const defaultSurrealSource = homeDir
+	? `${homeDir}${pathSeparator}.surrealdb${pathSeparator}${surrealCliName}`
+	: null;
+const surrealSource = Deno.env.get("RADIORA_SURREAL_BUNDLE_SOURCE") ?? defaultSurrealSource;
 if (surrealSource) {
 	try {
 		const info = await Deno.stat(surrealSource);
 		if (!info.isFile) throw new Error("not a file");
-		await Deno.copyFile(surrealSource, new URL("surreal.exe", outputDir));
+		await Deno.copyFile(surrealSource, new URL(surrealCliName, outputDir));
 		console.log(`Bundled SurrealDB CLI: ${surrealSource} (${info.size} bytes)`);
 	} catch {
 		console.warn(
@@ -51,5 +59,9 @@ if (surrealSource) {
 		);
 	}
 } else {
-	console.warn("SurrealDB CLI のコピー元がありません。USERPROFILE を確認してください。");
+	console.warn(
+		`SurrealDB CLI のコピー元がありません。${
+			isWindows ? "USERPROFILE" : "HOME"
+		} を確認してください。`,
+	);
 }
