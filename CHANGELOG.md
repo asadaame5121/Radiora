@@ -5,6 +5,12 @@ bookmark上のchangeを提供済み機能としては扱わない。
 
 ## Unreleased
 
+### Added
+
+- Linux (x86_64)向けのDesktop bundle生成と起動をサポート。`desktop:build`は実行OSに応じて
+  `dist-desktop/radiora-v2-windows`または`dist-desktop/radiora-v2-linux`へ出力し、 SurrealDB
+  CLI（Windowsは`surreal.exe`、Linuxは`surreal`）を自動で同梱します。
+
 ## 0.4.0 - 2026-08-09
 
 ### Added

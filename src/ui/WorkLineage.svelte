@@ -133,7 +133,7 @@
 	header h1 {
 		margin-top: 4px;
 		color: #eafcfd;
-		font: 25px Georgia, "Noto Serif JP", serif;
+		font: 25px var(--font-serif);
 	}
 	header > p {
 		max-width: 420px;

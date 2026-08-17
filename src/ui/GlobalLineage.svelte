@@ -135,7 +135,7 @@
 	.lineage-heading h1 {
 		margin-top: 3px;
 		color: #eafcfd;
-		font: 22px Georgia, "Noto Serif JP", serif;
+		font: 22px var(--font-serif);
 	}
 	.lineage-heading > p:last-child {
 		margin-top: 5px;
