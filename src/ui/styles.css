@@ -1,5 +1,8 @@
 :root {
-	font-family: Inter, "Noto Sans JP", system-ui, sans-serif;
+	--font-ui: Inter, "Noto Sans JP", "Noto Sans CJK JP", system-ui, sans-serif;
+	--font-serif: Georgia, "Noto Serif JP", "Noto Serif CJK JP", serif;
+	--font-mono: ui-monospace, "Noto Sans Mono CJK JP", "Noto Sans Mono", monospace;
+	font-family: var(--font-ui);
 	color: #dce7ec;
 	background: #05070b;
 	font-synthesis: none;
@@ -122,7 +125,7 @@ button:disabled {
 	backdrop-filter: blur(14px);
 }
 .shell > .top-bar strong {
-	font-family: Georgia, serif;
+	font-family: var(--font-serif);
 	font-size: 22px;
 	letter-spacing: .08em;
 	color: #edf9fa;
@@ -422,7 +425,7 @@ button:disabled {
 }
 .comparison-heading h1 {
 	margin: 4px 0 0;
-	font-family: Georgia, "Noto Serif JP", serif;
+	font-family: var(--font-serif);
 	font-size: 21px;
 	font-weight: normal;
 	color: #edf9fa;
@@ -499,7 +502,7 @@ button:disabled {
 	margin: 0;
 	padding: 12px;
 	color: #c4d3d9;
-	font-family: ui-monospace, "Noto Sans Mono CJK JP", monospace;
+	font-family: var(--font-mono);
 	font-size: 11px;
 	line-height: 1.65;
 	white-space: pre-wrap;
@@ -517,14 +520,14 @@ button:disabled {
 	border-right: 1px solid var(--border);
 	color: var(--muted);
 	text-align: right;
-	font: 10px/1.65 ui-monospace, monospace;
+	font: 10px/1.65 var(--font-mono);
 	user-select: none;
 }
 .diff-line code {
 	display: block;
 	padding: 3px 9px;
 	color: #c4d3d9;
-	font-family: ui-monospace, "Noto Sans Mono CJK JP", monospace;
+	font-family: var(--font-mono);
 	font-size: 11px;
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
@@ -575,7 +578,7 @@ button:disabled {
 .outline-context h1 {
 	max-width: min(760px, 70vw);
 	margin: 3px 0 4px;
-	font-family: Georgia, "Noto Serif JP", serif;
+	font-family: var(--font-serif);
 	font-size: clamp(20px, 2.5vw, 30px);
 	font-weight: normal;
 	line-height: 1.25;
@@ -631,7 +634,7 @@ button:disabled {
 }
 .tag-browser__heading h1 {
 	margin: 3px 0 6px;
-	font-family: Georgia, "Noto Serif JP", serif;
+	font-family: var(--font-serif);
 	font-size: clamp(24px, 3vw, 34px);
 	font-weight: normal;
 	color: #edf9fa;
@@ -1284,7 +1287,7 @@ button:disabled {
 }
 .app-main > .inspector h2 {
 	margin: 0;
-	font-family: Georgia, serif;
+	font-family: var(--font-serif);
 	font-size: 18px;
 	line-height: 1.5;
 	font-weight: normal;
@@ -1334,7 +1337,7 @@ button:disabled {
 }
 .thought-body {
 	color: #afc1c9;
-	font-family: Georgia, "Noto Serif JP", serif;
+	font-family: var(--font-serif);
 	font-size: 13px;
 	line-height: 1.75;
 	white-space: pre-wrap;
@@ -1602,7 +1605,7 @@ button:disabled {
 	letter-spacing: .08em;
 }
 .discoveries article > strong {
-	font-family: Georgia, serif;
+	font-family: var(--font-serif);
 	font-size: 13px;
 }
 .discoveries article p,
@@ -1645,7 +1648,7 @@ button:disabled {
 	padding: 7px;
 	background: #04080d;
 	color: var(--text);
-	font-family: ui-monospace, monospace;
+	font-family: var(--font-mono);
 	font-size: 10px;
 	resize: vertical;
 }
@@ -1806,7 +1809,7 @@ button:disabled {
 }
 .confirmation-dialog h2 {
 	margin: 8px 0 12px;
-	font-family: Georgia, "Noto Serif JP", serif;
+	font-family: var(--font-serif);
 	font-size: 20px;
 	font-weight: normal;
 	color: #edf9fa;
@@ -1863,7 +1866,7 @@ button:disabled {
 }
 .licenses-dialog__header h2 {
 	margin: 8px 0 8px;
-	font-family: Georgia, "Noto Serif JP", serif;
+	font-family: var(--font-serif);
 	font-size: 20px;
 	font-weight: normal;
 	color: #edf9fa;
@@ -2239,7 +2242,7 @@ button:disabled {
 	border: 1px solid var(--border);
 	border-radius: 6px;
 	color: var(--text);
-	font-family: Georgia, "Noto Serif JP", serif;
+	font-family: var(--font-serif);
 	font-size: 14px;
 	line-height: 1.75;
 	padding: 16px;
@@ -2257,7 +2260,7 @@ button:disabled {
 	border: 1px solid var(--border);
 	border-radius: 6px;
 	color: #afc1c9;
-	font-family: Georgia, "Noto Serif JP", serif;
+	font-family: var(--font-serif);
 	font-size: 14px;
 	line-height: 1.75;
 	padding: 16px;

@@ -108,7 +108,7 @@ interface LicenseEntry {
 
 const runtimeEntries: LicenseEntry[] = [
 	{
-		name: "SurrealDB CLI (surreal.exe)",
+		name: "SurrealDB CLI",
 		version: "3.x",
 		license: "Business Source License 1.1",
 		file: "runtime/surrealdb-cli-BSL-1.1.txt",
