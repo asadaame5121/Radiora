@@ -1,13 +1,9 @@
-import { assertEquals, assertRejects, assertStringIncludes } from "jsr:@std/assert";
+import { assertEquals, assertRejects } from "jsr:@std/assert";
 import { findSurrealCommand, surrealCommandCandidates } from "./surreal_process.ts";
-import {
-	powerShellRecoverListenerScript,
-	powerShellStartScript,
-	powerShellStopScript,
-} from "./windows_hidden_process.ts";
 
 const sep = Deno.build.os === "windows" ? "\\" : "/";
 const surrealCliName = Deno.build.os === "windows" ? "surreal.exe" : "surreal";
+const surrealSidecarName = "radiora-surreal.exe";
 
 Deno.test("surrealCommandCandidates: bundle directory is searched first", () => {
 	const candidates = surrealCommandCandidates(
@@ -15,6 +11,9 @@ Deno.test("surrealCommandCandidates: bundle directory is searched first", () => 
 		`C:${sep}Users${sep}taro`,
 	);
 	assertEquals(candidates, [
+		...(Deno.build.os === "windows"
+			? [`C:${sep}apps${sep}radiora${sep}${surrealSidecarName}`]
+			: []),
 		`C:${sep}apps${sep}radiora${sep}${surrealCliName}`,
 		"surreal",
 		`C:${sep}Users${sep}taro${sep}.surrealdb${sep}${surrealCliName}`,
@@ -24,6 +23,9 @@ Deno.test("surrealCommandCandidates: bundle directory is searched first", () => 
 Deno.test("surrealCommandCandidates: omits empty locations", () => {
 	assertEquals(surrealCommandCandidates(null, null), ["surreal"]);
 	assertEquals(surrealCommandCandidates(`C:${sep}apps${sep}radiora`, null), [
+		...(Deno.build.os === "windows"
+			? [`C:${sep}apps${sep}radiora${sep}${surrealSidecarName}`]
+			: []),
 		`C:${sep}apps${sep}radiora${sep}${surrealCliName}`,
 		"surreal",
 	]);
@@ -58,35 +60,4 @@ Deno.test("findSurrealCommand: reports a clear error when no CLI is available", 
 		Error,
 		"bundle内",
 	);
-});
-
-Deno.test("powerShellStartScript hides the child process and quotes paths", () => {
-	const script = powerShellStartScript(
-		"C:\\Users\\Yudai A\\Radiora V2",
-		"C:\\Program Files\\Radiora\\surreal.exe",
-		["start", "rocksdb:C:\\Users\\Yudai A\\Radiora V2\\main.db"],
-	);
-	assertStringIncludes(script, "-WindowStyle Hidden");
-	assertStringIncludes(script, "-FilePath 'C:\\Program Files\\Radiora\\surreal.exe'");
-	assertStringIncludes(
-		script,
-		"-ArgumentList @('start', 'rocksdb:C:\\Users\\Yudai A\\Radiora V2\\main.db')",
-	);
-	assertStringIncludes(script, "-WorkingDirectory 'C:\\Users\\Yudai A\\Radiora V2'");
-});
-
-Deno.test("powerShellStopScript terminates the hidden process tree", () => {
-	const script = powerShellStopScript(1234, 8012);
-	assertStringIncludes(script, "netstat.exe -ano -p tcp");
-	assertStringIncludes(script, "127\\.0\\.0\\.1:8012");
-	assertStringIncludes(script, "Stop-Process -Id $listenerPid -Force");
-	assertStringIncludes(script, "Get-Process -Id 1234");
-});
-
-Deno.test("powerShellRecoverListenerScript only stops SurrealDB on the application port", () => {
-	const script = powerShellRecoverListenerScript(8012);
-	assertStringIncludes(script, "netstat.exe -ano -p tcp");
-	assertStringIncludes(script, "127\\.0\\.0\\.1:8012");
-	assertStringIncludes(script, "$target.ProcessName -ne 'surreal'");
-	assertStringIncludes(script, "Stop-Process -Id $target.Id -Force");
 });

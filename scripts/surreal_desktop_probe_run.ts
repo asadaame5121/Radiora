@@ -1,10 +1,10 @@
 if (Deno.build.os !== "windows") {
-	throw new Error("SurrealDB desktop probeはWindows PowerShellまたはNushellから実行してください。");
+	throw new Error("SurrealDB desktop probeはWindows環境から実行してください。");
 }
 
 const stage = (Deno.args[0] ?? "p0").toLowerCase();
-if (!["p0", "p1", "p2", "p3", "p5"].includes(stage)) {
-	throw new Error(`Probe stage must be one of p0, p1, p2, p3, p5: ${stage}`);
+if (!["p0", "p1", "p2", "p3", "p5", "sidecar"].includes(stage)) {
+	throw new Error(`Probe stage must be one of p0, p1, p2, p3, p5, sidecar: ${stage}`);
 }
 const outputDir = new URL(
 	stage === "p5"
@@ -16,7 +16,11 @@ const entries = [];
 for await (const entry of Deno.readDir(outputDir)) entries.push(entry);
 const launcher = entries.find((entry) => entry.isFile && entry.name.endsWith(".bat")) ??
 	entries.find((entry) =>
-		entry.isFile && entry.name.endsWith(".exe") && !entry.name.startsWith("bootstrap")
+		entry.isFile &&
+		entry.name.endsWith(".exe") &&
+		!entry.name.startsWith("bootstrap") &&
+		entry.name.toLowerCase() !== "radiora-surreal.exe" &&
+		entry.name.toLowerCase() !== "surreal.exe"
 	);
 if (!launcher) {
 	throw new Error("Probe launcher (.bat/.exe) が見つかりません。先にbuildしてください。");

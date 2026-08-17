@@ -33,6 +33,11 @@ jobs:
           deno-version: "2.9.3"
           cache: true
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.24.x"
+
       - name: Install frontend dependencies
         run: npm ci
 
@@ -67,6 +72,15 @@ jobs:
             throw "Bundled SurrealDB CLI SHA-256 mismatch. Expected $env:SURREALDB_SHA256, got $actual"
           }
           Write-Host "Verified bundled SurrealDB CLI ($actual)"
+
+      - name: Verify SurrealDB sidecar is bundled
+        shell: pwsh
+        run: |
+          $sidecar = Join-Path $env:GITHUB_WORKSPACE "dist-desktop\radiora-v2-windows\radiora-surreal.exe"
+          if (-not (Test-Path -LiteralPath $sidecar -PathType Leaf)) {
+            throw "The Windows bundle does not contain radiora-surreal.exe: $sidecar"
+          }
+          Write-Host "Verified bundled SurrealDB sidecar: $sidecar"
 
       - name: Package release archive
         run: |

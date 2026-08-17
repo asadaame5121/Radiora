@@ -98,7 +98,11 @@ async function relayCliOutput(
 
 async function findSurrealCommand(): Promise<string> {
 	const userProfile = Deno.env.get("USERPROFILE");
+	const executablePath = Deno.execPath();
+	const bundleDir = executablePath.slice(0, executablePath.lastIndexOf("\\"));
 	const candidates = [
+		`${bundleDir}\\radiora-surreal.exe`,
+		`${bundleDir}\\surreal.exe`,
 		"surreal",
 		...(userProfile ? [`${userProfile}\\.surrealdb\\surreal.exe`] : []),
 	];
@@ -116,6 +120,11 @@ async function findSurrealCommand(): Promise<string> {
 				});
 				return command;
 			}
+			trace("cli.command.failed", {
+				command,
+				code: output.code,
+				stderr: new TextDecoder().decode(output.stderr).trim(),
+			});
 			// biome-ignore lint/plugin/noSwallowedRejection: A failed executable probe means this candidate is unavailable; the next candidate is tried.
 		} catch {
 			// Try the next known installation location.
@@ -159,8 +168,53 @@ async function stopChild(): Promise<void> {
 	trace("cli.stop.ready");
 }
 
+async function closeChildByStdin(): Promise<void> {
+	const active = child;
+	child = null;
+	if (!active) return;
+	trace("cli.stdin-eof.begin");
+	// biome-ignore lint/plugin/noSwallowedRejection: EOF teardown has no recovery path after the child is stopped.
+	const stdinClose = active.stdin?.close().catch(() => undefined);
+	if (stdinClose) {
+		await Promise.race([
+			stdinClose,
+			new Promise<void>((resolve) => setTimeout(resolve, 1000)),
+		]);
+	}
+	// biome-ignore lint/plugin/noSwallowedRejection: Exit status rejection during EOF teardown has no remaining recovery action.
+	await active.status.catch(() => undefined);
+	await Promise.allSettled(cliOutputTasks);
+	cliOutputTasks = [];
+	trace("cli.stdin-eof.ready");
+}
+
+async function waitForPortRelease(): Promise<void> {
+	for (let attempt = 1; attempt <= 50; attempt++) {
+		try {
+			const listener = Deno.listen({ hostname: host, port });
+			listener.close();
+			trace("sidecar.port-release.ready", { attempt });
+			return;
+		} catch {
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+	}
+	throw new Error(`Port ${port} was not released after the sidecar stopped.`);
+}
+
+async function runSidecarLifecycleProbe(): Promise<void> {
+	await closeChildByStdin();
+	await waitForPortRelease();
+	await startRawChild();
+	await stopChild();
+	await waitForPortRelease();
+}
+
 async function startRawChild(): Promise<void> {
 	const command = await step("cli.command", findSurrealCommand);
+	if (probeStage === "sidecar" && !command.toLowerCase().endsWith("radiora-surreal.exe")) {
+		throw new Error(`The sidecar probe did not select radiora-surreal.exe: ${command}`);
+	}
 	trace("cli.spawn.begin", { command });
 	child = new Deno.Command(command, {
 		args: [
@@ -175,6 +229,7 @@ async function startRawChild(): Promise<void> {
 		],
 		stdout: "piped",
 		stderr: "piped",
+		stdin: "piped",
 	}).spawn();
 	trace("cli.spawn.ready", { pid: child.pid });
 	cliOutputTasks = [
@@ -280,10 +335,10 @@ async function runProbe(): Promise<void> {
 		dataDir,
 	});
 	try {
-		if (!["p0", "p1", "p2", "p3", "p5"].includes(probeStage)) {
+		if (!["p0", "p1", "p2", "p3", "p5", "sidecar"].includes(probeStage)) {
 			throw new Error(`Unknown probe stage: ${probeStage}`);
 		}
-		if (probeStage === "p0" || probeStage === "p2") {
+		if (probeStage === "p0" || probeStage === "p2" || probeStage === "sidecar") {
 			await startRawChild();
 		} else {
 			trace("actual-process.import.begin");
@@ -294,8 +349,9 @@ async function runProbe(): Promise<void> {
 		}
 
 		const targetEndpoint = managedProcess?.endpoint ?? endpoint;
-		if (probeStage === "p0" || probeStage === "p1") {
+		if (probeStage === "p0" || probeStage === "p1" || probeStage === "sidecar") {
 			await runRawSdk(targetEndpoint);
+			if (probeStage === "sidecar") await runSidecarLifecycleProbe();
 		} else {
 			await runStoreScenario(targetEndpoint, probeStage === "p3" || probeStage === "p5");
 		}
