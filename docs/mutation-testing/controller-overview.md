@@ -18,8 +18,8 @@ Stryker は `src/ui/*_controller.svelte.ts` を mutation 対象とし、 `vitest
 | Navigation   |     111 |       19 |       2 |          6 |        85.61% |      81.88% |
 | Work         |      41 |        0 |       0 |        130 |       100.00% |      23.98% |
 | Editor       |      16 |       20 |       0 |        600 |        44.44% |       2.52% |
-| Emergence    |       0 |        0 |       0 |         73 |      対象なし |       0.00% |
-| **合計**     | **234** |   **41** |   **2** |    **809** |    **85.20%** |  **21.73%** |
+| Emergence    |      69 |        4 |       0 |          0 |        94.52% |      94.52% |
+| **合計**     | **303** |   **43** |   **2** |    **736** |    **87.61%** |   **27.18%** |
 
 `Covered score` はテストが到達した mutant に限った検出率であり、`Total score` は `NoCoverage` も
 含む。したがって Work の `Covered score` 100% は Controller 全体のテスト完了を意味しない。 171
@@ -87,7 +87,10 @@ threshold が別途必要である。
 
 ## 次の作業順
 
-1. Emergence Controller の公開契約テストを追加し、全件 `NoCoverage` を解消する。
+1. ~~Emergence Controller の公開契約テストを追加し、全件 `NoCoverage` を解消する。~~ 完了済み
+   - `vitest/emergence_controller.svelte.test.ts` を追加し、73件の `NoCoverage` を0件にした。
+   - 残る survived 4件は `if (toast)` / `if (unseen.length)` を `true` にする等価 mutant と、
+     request ID の `++`/`--` 置換（staleness 判定が外部契約として等価）に分類できる。
 2. Navigation の survived 19件と timeout 2件を、不足テスト、等価 mutant、計測制約に分類する。
 3. Work の quick capture、trash/purge、duplicate merge、unplaced link を作業単位ごとにテストする。
 4. Editor は `docs/refactoring-candidates.md` の R1 を先に実施し、責務境界ごとに mutation target と
