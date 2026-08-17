@@ -1,3 +1,5 @@
+import { buildSurrealSidecar, copySurrealCli } from "./sidecar_build.ts";
+
 const variants = [
 	{
 		output: new URL("../dist-desktop/surreal-desktop-probe/", import.meta.url),
@@ -38,4 +40,6 @@ for (const variant of variants) {
 	});
 	const status = await command.spawn().status;
 	if (!status.success) Deno.exit(status.code);
+	await copySurrealCli(variant.output);
+	await buildSurrealSidecar(variant.output);
 }
