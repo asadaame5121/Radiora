@@ -1,9 +1,12 @@
-import { assert, assertFalse, assertMatch } from "jsr:@std/assert@1";
+import { assertFalse, assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("Link Editor exposes GUI search, type selection, and direction selection", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const inspector = await Deno.readTextFile(
 		new URL("../src/ui/InspectorView.svelte", import.meta.url),
+	);
+	const relationTab = await Deno.readTextFile(
+		new URL("../src/ui/InspectorRelationTab.svelte", import.meta.url),
 	);
 	const editor = await Deno.readTextFile(
 		new URL("../src/ui/LinkEditor.svelte", import.meta.url),
@@ -12,9 +15,10 @@ Deno.test("Link Editor exposes GUI search, type selection, and direction selecti
 		new URL("../src/ui/link_editor_controller.svelte.ts", import.meta.url),
 	);
 
-	assertMatch(inspector, /<LinkEditor/);
-	assertMatch(inspector, /selectedWorkId=\{selectedItem\.workId\}/);
-	assertMatch(inspector, /links=\{selectedLinks\}/);
+	assertMatch(inspector, /<InspectorRelationTab/);
+	assertMatch(relationTab, /<LinkEditor/);
+	assertMatch(relationTab, /selectedWorkId=\{selectedItem\.workId\}/);
+	assertMatch(relationTab, /links=\{selectedLinks\}/);
 	assertMatch(controller, /ports\.onSearch\(\{/);
 	assertMatch(controller, /limit:\s*SEARCH_LIMIT/);
 	assertFalse(/createRpcAdapter/.test(editor));

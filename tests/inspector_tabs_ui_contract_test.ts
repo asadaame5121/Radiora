@@ -3,6 +3,9 @@ import { assert, assertMatch } from "jsr:@std/assert@1";
 const inspector = await Deno.readTextFile(
 	new URL("../src/ui/InspectorView.svelte", import.meta.url),
 );
+const queryPanel = await Deno.readTextFile(
+	new URL("../src/ui/InspectorQueryPanel.svelte", import.meta.url),
+);
 
 Deno.test("Inspector uses horizontal automatic Bits Tabs for the three tab screens", () => {
 	assertMatch(inspector, /import \{ Tabs \} from "bits-ui"/);
@@ -30,11 +33,14 @@ Deno.test("Inspector forwards Bits tab props and keeps active state controlled b
 });
 
 Deno.test("Inspector keeps query mode outside the Tabs model", () => {
-	const queryBranch = inspector.indexOf('{#if selectedItem && asideMode === "query"}');
+	const queryBranch = inspector.search(
+		/\{#if (?:props\.)?selectedItem && (?:props\.)?asideMode === "query"\}/,
+	);
 	const tabsRoot = inspector.indexOf("<Tabs.Root");
 	assert(queryBranch >= 0, "query branch exists");
 	assert(tabsRoot > queryBranch, "Tabs are rendered after the query branch");
-	assertMatch(inspector, /<div class="query-panel">/);
+	assertMatch(inspector, /<InspectorQueryPanel/);
+	assertMatch(queryPanel, /<div class="query-panel">/);
 });
 
 Deno.test("App delegates Inspector state and callbacks to the extracted View", async () => {
