@@ -6,6 +6,8 @@
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
 	import MarkdownEditor from "./MarkdownEditor.svelte";
+	import InlineLinkCompletion from "./InlineLinkCompletion.svelte";
+	import InternalReferenceCompletion from "./InternalReferenceCompletion.svelte";
 	import InspectorView, { type InspectorAsideMode } from "./InspectorView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
 	import InAppHelp from "./InAppHelp.svelte";
@@ -2358,118 +2360,26 @@
 									{#if rowBody && selectedId !== row.item.id}
 										<p class="row-body-preview">{rowBody.replace(/\s+/gu, " ").trim()}</p>
 									{/if}
-					{#if inlineLinkCompletion?.itemId === row.item.id}
-						<div class="inline-link-completions inline-link-omniwindow" role="dialog"
-							aria-label={`@${vocabulary.semanticLink}先を検索`}>
-							<div class="inline-link-omniwindow__search">
-								<span aria-hidden="true">@</span>
-								<input
-									value={inlineLinkCompletion.query}
-									placeholder={`${vocabulary.work}を検索…`}
-									aria-label={`@${vocabulary.semanticLink}先を検索`}
-									readonly={inlineLinkCompletion.phase !== "candidate"}
-									disabled={inlineLinkCompletion.creating}
-									oninput={(event) => void updateInlineLinkSearch(row.item.id, event.currentTarget.value)}
-									onkeydown={(event) => handleInlineLinkOmniKeydown(event, row.item.id)}
-									onmousedown={(event) => event.stopPropagation()}
-								/>
-							</div>
-							<div class="inline-link-omniwindow__body">
-							{#if inlineLinkCompletion.phase === "candidate"}
-								<p class="inline-link-completions__hint" aria-live="polite">
-									{inlineLinkCompletion.searching ? "検索中…" : `@${vocabulary.semanticLink}先を検索`}
-								</p>
-								<div role="listbox" aria-label={`${vocabulary.work}候補`}>
-									{#each inlineLinkCompletion.candidates as candidate, index (candidate.scope + candidate.id)}
-										<button
-											class:active={index === inlineLinkCompletion.activeIndex}
-											role="option"
-											aria-selected={index === inlineLinkCompletion.activeIndex}
-											onmousedown={(event) => event.preventDefault()}
-											onclick={() => selectInlineLinkCandidate(row.item.id, candidate)}
-										>
-											<strong>{candidate.displayName}</strong>
-											<span>{candidate.scopeLabel} · {candidate.shortId}</span>
-										</button>
-									{/each}
-									{#if !inlineLinkCompletion.searching && inlineLinkCompletion.query.trim()}
-										<button
-											class="create-candidate"
-											class:active={inlineLinkCompletion.activeIndex === inlineLinkCompletion.candidates.length}
-											role="option"
-											aria-selected={inlineLinkCompletion.activeIndex === inlineLinkCompletion.candidates.length}
-											disabled={inlineLinkCompletion.creating}
-											onmousedown={(event) => event.preventDefault()}
-											onclick={() => void createInlineLinkTarget(row.item.id)}
-										>
-											<strong>「{inlineLinkCompletion.query.trim()}」を新規作成</strong>
-											<span>未配置箱 · Shift+Enter</span>
-										</button>
-									{/if}
-								</div>
-								{#if !inlineLinkCompletion.searching && !inlineLinkCompletion.candidates.length}
-									<p>一致する{vocabulary.work}はありません。</p>
-								{:else if !inlineLinkCompletion.searching && inlineLinkCompletion.query.trim()}
-									<p class="inline-link-completions__hint">候補から選択するか、Shift+Enterで新規作成できます。</p>
-								{/if}
-							{:else}
-								{#if inlineLinkCompletion.selectedCandidate}
-									<div class="inline-link-completions__target">
-										<strong>@{inlineLinkCompletion.selectedCandidate.displayName}</strong>
-										<span>{vocabulary.linkType}を選択</span>
-									</div>
-									{#if inlineLinkCompletion.phase === "type"}
-										<div class="inline-link-types" aria-label={vocabulary.linkType}>
-											{#each LINK_TYPES as type}
-												<button
-													class:active={inlineLinkCompletion.selectedType === type}
-													onmousedown={(event) => event.preventDefault()}
-													onclick={() => {
-																	selectInlineLinkType(row.item.id, type);
-													}}
-												>{type}</button>
-											{/each}
-										</div>
-									{:else}
-										<div class="inline-link-direction" aria-label={`${vocabulary.semanticLink}方向`}>
-											<button
-												class:active={inlineLinkCompletion.direction === "forward"}
-												onmousedown={(event) => event.preventDefault()}
-												onclick={() => setInlineLinkDirection(row.item.id, "forward")}
-											>{titleFor(row.item)} → {inlineLinkCompletion.selectedCandidate.displayName}</button>
-											<button
-												class:active={inlineLinkCompletion.direction === "reverse"}
-												onmousedown={(event) => event.preventDefault()}
-												onclick={() => setInlineLinkDirection(row.item.id, "reverse")}
-											>{inlineLinkCompletion.selectedCandidate.displayName} → {titleFor(row.item)}</button>
-										</div>
-										<p class="inline-link-preview" role="status">
-											{inlineLinkCompletion.direction === "forward"
-												? previewDirection(titleFor(row.item), inlineLinkCompletion.selectedType ?? "RELATED", inlineLinkCompletion.selectedCandidate.displayName)
-												: previewDirection(inlineLinkCompletion.selectedCandidate.displayName, inlineLinkCompletion.selectedType ?? "RELATED", titleFor(row.item))}
-										</p>
-										<button type="button" onclick={() => void commitInlineLink(row.item.id)}>この方向で{vocabulary.semanticLink}</button>
-									{/if}
-								{/if}
-							{/if}
-						</div>
-						</div>
-					{/if}
 									{#if internalReferenceCompletion?.itemId === row.item.id}
-										<div class="internal-reference-completions" role="listbox"
-											aria-label={`${vocabulary.internalReference}候補`}>
-											{#each internalReferenceCompletion.candidates as candidate, index (candidate.scope + candidate.id)}
-												<button class:active={index === internalReferenceCompletion.activeIndex}
-													role="option" aria-selected={index === internalReferenceCompletion.activeIndex}
-													onmousedown={(event) => event.preventDefault()}
-													onclick={() => applyInternalReferenceCompletion(row.item.id, candidate)}>
-													<strong>{candidate.displayName}</strong>
-													<span>{candidate.scopeLabel} · {candidate.shortId}</span>
-												</button>
-											{:else}
-												<p>一致する候補はありません。</p>
-											{/each}
-										</div>
+										<InternalReferenceCompletion
+											completion={internalReferenceCompletion}
+											{vocabulary}
+											onSelect={(candidate) => applyInternalReferenceCompletion(row.item.id, candidate)}
+										/>
+									{/if}
+									{#if inlineLinkCompletion?.itemId === row.item.id}
+										<InlineLinkCompletion
+											completion={inlineLinkCompletion}
+											itemTitle={titleFor(row.item)}
+											{vocabulary}
+											onSearch={(query) => void updateInlineLinkSearch(row.item.id, query)}
+											onKeydown={(event) => handleInlineLinkOmniKeydown(event, row.item.id)}
+											onSelectCandidate={(candidate) => selectInlineLinkCandidate(row.item.id, candidate)}
+											onCreateTarget={() => void createInlineLinkTarget(row.item.id)}
+											onSelectType={(type) => selectInlineLinkType(row.item.id, type)}
+											onSetDirection={(direction) => setInlineLinkDirection(row.item.id, direction)}
+											onCommit={() => void commitInlineLink(row.item.id)}
+										/>
 									{/if}
 									{#if referencesIn(row.item.text).length}
 										<div class="internal-reference-chips" aria-label={vocabulary.internalReference}>

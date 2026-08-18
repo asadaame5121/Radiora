@@ -45,8 +45,8 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 		app,
 		/role="tree" aria-label=\{`\$\{vocabulary\.work\}のアウトライン`\} tabindex="0"/,
 	);
-	assertMatch(styles, /\.markdown-editor-host \.overtype-container \{/);
-	assertMatch(styles, /--preview-text-default: var\(--text\)/);
+	assertMatch(component, /\.markdown-editor-host :global\(\.overtype-container\) \{/);
+	assertMatch(component, /--preview-text-default: var\(--text\)/);
 });
 
 Deno.test("Markdown editor keeps native replacement, autosave, completion, and resolver paths", async () => {

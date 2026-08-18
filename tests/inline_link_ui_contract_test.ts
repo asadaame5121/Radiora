@@ -8,7 +8,9 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 	const service = await Deno.readTextFile(
 		new URL("../src/services/inline_link.ts", import.meta.url),
 	);
-	const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
+	const completionView = await Deno.readTextFile(
+		new URL("../src/ui/InlineLinkCompletion.svelte", import.meta.url),
+	);
 
 	assertMatch(controller, /findInlineLinkTrigger/);
 	assertMatch(controller, /ports\.api\.listInternalReferenceCompletions\(trigger\.query, 16\)/);
@@ -17,14 +19,15 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 	assertMatch(controller, /phase: "candidate"/);
 	assertMatch(controller, /phase: "type"/);
 	assertMatch(controller, /phase: "direction"/);
-	assertMatch(app, /inline-link-omniwindow/);
+	assertMatch(app, /<InlineLinkCompletion/);
+	assertMatch(completionView, /inline-link-omniwindow/);
 	assertMatch(app, /updateInlineLinkSearch/);
-	assertMatch(app, /Shift\+Enterで新規作成できます/);
+	assertMatch(completionView, /Shift\+Enterで新規作成できます/);
 	assertMatch(controller, /event\.key === "Enter" && event\.shiftKey/);
-	assertMatch(app, /activeIndex === inlineLinkCompletion\.candidates\.length/);
+	assertMatch(completionView, /activeIndex === completion\.candidates\.length/);
 	assertMatch(controller, /ports\.api\.quickCapture\(query\)/);
 	assertMatch(controller, /isSymmetricLinkType\(state\.selectedType\)/);
-	assertMatch(app, /previewDirection\(/);
+	assertMatch(completionView, /previewDirection\(/);
 	assertMatch(controller, /ports\.api\.createLink\(\{ fromId, toId, type/);
 	const commit = controller.slice(
 		controller.indexOf("async function commitInlineLink"),
@@ -39,8 +42,8 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 		throw new Error("Semantic Relation completion must not create a Markdown Internal Reference");
 	}
 	assertMatch(service, /fenced blocks/);
-	assertMatch(styles, /\.inline-link-completions/);
-	assertMatch(styles, /\.inline-link-direction/);
+	assertMatch(completionView, /\.inline-link-completions/);
+	assertMatch(completionView, /\.inline-link-direction/);
 });
 
 Deno.test("@ semantic relation search offers OmniWindow creation for unresolved targets", async () => {
