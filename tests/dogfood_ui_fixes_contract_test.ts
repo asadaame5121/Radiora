@@ -6,16 +6,13 @@ const inspector = await Deno.readTextFile(
 );
 const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
 
-Deno.test("inspector modes are mutually exclusive and selection can be cleared", () => {
+Deno.test("inspector modes are mutually exclusive and header does not duplicate clear-selection actions", () => {
 	assertMatch(inspector, /<Tabs\.Root[\s\S]*?value=\{tabValue\}/);
 	assertMatch(inspector, /<Tabs\.Content value="overview">/);
 	assertMatch(inspector, /<Tabs\.Content value="relation">/);
 	assertMatch(inspector, /<Tabs\.Content value="history">/);
 	assertNotMatch(inspector, /asideMode === "tags"/);
-	assertMatch(
-		inspector,
-		/<button class="clear-selection" type="button" onclick=\{\(\) => onSelectOccurrence\(null\)\}>選択解除<\/button>/,
-	);
+	assertNotMatch(inspector, /class="clear-selection"/);
 	assertNotMatch(inspector, /\{#if asideMode === "overview" &&/);
 });
 
@@ -25,10 +22,7 @@ Deno.test("outline provides non-button Zoom and preserves an explicit return pat
 	assertMatch(app, /if \(browsingLocation\.hoistOccurrenceId\)/);
 	assertMatch(app, /requestClearHoist/);
 	assertNotMatch(app, /onclick=\{requestHoist\}/);
-	assertMatch(
-		inspector,
-		/<button class="clear-selection" type="button" onclick=\{\(\) => onSelectOccurrence\(null\)\}>選択解除<\/button>/,
-	);
+	assertNotMatch(inspector, /class="clear-selection"/);
 });
 
 Deno.test("compact OverType hosts contain their overlay layers and reserve selected-row controls", () => {

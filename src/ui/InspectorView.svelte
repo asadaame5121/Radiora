@@ -279,8 +279,6 @@
 				<h2>{titleFor(selectedItem)}</h2>
 				<div class="inspector-heading-actions">
 					<button class="inspector-action" type="button" onclick={onAddBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
-					<button class="clear-selection" type="button" onclick={() => onSelectOccurrence(null)}>選択解除</button>
-					<button class="clear-selection" type="button" onclick={() => onSetInspectorCollapsed(true)}>閉じる</button>
 				</div>
 			</div>
 			<Tabs.Content value="overview">

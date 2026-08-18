@@ -168,6 +168,9 @@ jobs:
       - build-windows
       - build-linux
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
       - name: Download release archives
         uses: actions/download-artifact@v4
         with:
@@ -181,8 +184,20 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           printf '{\n  "version": "%s",\n  "patches": {}\n}\n' "$version" > release-assets/latest.json
 
+      - name: Extract release notes from changelog
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v version="$version" '
+            $0 ~ "^## " version " -" { in_section = 1; print; next }
+            in_section && $0 ~ /^## / { exit }
+            in_section { print }
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: release-assets/*
           fail_on_unmatched_files: true
+          body_path: release-notes.md
