@@ -18,9 +18,13 @@ Deno.test("inspector modes are mutually exclusive and header does not duplicate 
 	assertNotMatch(inspector, /\{#if asideMode === "overview" &&/);
 });
 
+const outlineRowItem = await Deno.readTextFile(
+	new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
+);
+
 Deno.test("outline provides non-button Zoom and preserves an explicit return path", () => {
 	assertMatch(app, /function hoistOccurrence\(id: string\)/);
-	assertMatch(app, /ondblclick=\{\(\) => hoistOccurrence\(row\.item\.id\)\}/);
+	assertMatch(outlineRowItem, /ondblclick=\{\(\) => handlers\.hoistOccurrence\(row\.item\.id\)\}/);
 	assertMatch(app, /if \(browsingLocation\.hoistOccurrenceId\)/);
 	assertMatch(app, /requestClearHoist/);
 	assertNotMatch(app, /onclick=\{requestHoist\}/);

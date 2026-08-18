@@ -2,6 +2,12 @@ import { assert, assertFalse, assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("App exposes browsing scope, breadcrumb, and recent-edit navigation", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const outlineView = await Deno.readTextFile(
+		new URL("../src/ui/OutlineView.svelte", import.meta.url),
+	);
+	const outlineRowItem = await Deno.readTextFile(
+		new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
+	);
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/navigation_controller.svelte.ts", import.meta.url),
 	);
@@ -10,8 +16,8 @@ Deno.test("App exposes browsing scope, breadcrumb, and recent-edit navigation", 
 	assert(app.includes("navigationController.projectBrowsing(snapshot)"));
 	assert(app.includes("$derived(navigationController.browsingLocation)"));
 	assert(app.includes("$derived(navigationController.browsingPane)"));
-	assert(app.includes("vocabulary.hoist"));
-	assert(app.includes("vocabulary.breadcrumb"));
+	assert(outlineView.includes("vocabulary.breadcrumb"));
+	assert(outlineRowItem.includes("vocabulary.work"));
 	assert(app.includes("recentEditedItems"));
 	assert(app.includes("openRecentItem"));
 	assert(app.includes("outlineContextTitle"));
