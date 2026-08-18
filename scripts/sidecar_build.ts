@@ -21,7 +21,6 @@ export async function copySurrealCli(outputDir: URL): Promise<void> {
 		const info = await Deno.stat(source);
 		if (!info.isFile) throw new Error("not a file");
 		const destination = new URL(surrealCliName, outputDir);
-		// biome-ignore lint/style/noMagicNumbers: Standard Unix executable mode 0o755
 		const executableMode = 0o755;
 		if (!isWindows) await Deno.chmod(destination, executableMode);
 		console.log(`Bundled SurrealDB CLI: ${source} (${info.size} bytes)`);
