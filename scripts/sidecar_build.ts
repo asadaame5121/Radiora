@@ -20,7 +20,9 @@ export async function copySurrealCli(outputDir: URL): Promise<void> {
 	try {
 		const info = await Deno.stat(source);
 		if (!info.isFile) throw new Error("not a file");
-		await Deno.copyFile(source, new URL(surrealCliName, outputDir));
+		const destination = new URL(surrealCliName, outputDir);
+		await Deno.copyFile(source, destination);
+		if (!isWindows) await Deno.chmod(destination, 0o755);
 		console.log(`Bundled SurrealDB CLI: ${source} (${info.size} bytes)`);
 	} catch (cause) {
 		if (isWindows) {
