@@ -12,8 +12,8 @@ Deno.test("Today UI keeps created and updated projections separate without creat
 	assert(view.includes("この期間に作成"));
 	assert(view.includes("この期間に更新"));
 	assert(app.includes("api.projectDates"));
-	assert(styles.includes(".date-entry"));
-	assert(styles.includes("background: var(--surface-raised) !important"));
+	assert(view.includes(".date-entry"));
+	assert(view.includes("background: var(--surface-raised) !important"));
 	const openDateEntry = app.slice(
 		app.indexOf("async function openDateEntry"),
 		app.indexOf("async function loadRevisions"),

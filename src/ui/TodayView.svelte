@@ -126,3 +126,87 @@
 		</section>
 	{/if}
 </section>
+
+<style>
+	.date-projection {
+		display: grid;
+		gap: 18px;
+	}
+	.date-projection > :global(.section-title) {
+		margin-bottom: 0;
+	}
+	.date-controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+	}
+	.date-controls label {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 11px;
+		color: var(--muted);
+	}
+	.date-controls input[type="date"] {
+		padding: 4px 6px;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		background: var(--surface);
+		color: var(--text);
+		font-size: 11px;
+	}
+	.date-projection section {
+		display: grid;
+		gap: 6px;
+	}
+	.date-projection h2 {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		margin: 0 0 4px;
+		color: var(--text);
+		font-size: 18px;
+	}
+	.date-projection h2 small {
+		color: var(--muted);
+		font-size: 11px;
+		font-weight: normal;
+	}
+	.date-entry {
+		display: grid;
+		width: 100%;
+		gap: 4px;
+		padding: 9px 11px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--surface-raised) !important;
+		color: var(--text) !important;
+		text-align: left;
+		line-height: 1.35;
+		cursor: pointer;
+	}
+	.date-entry:hover,
+	.date-entry:focus-visible {
+		border-color: var(--cyan);
+		background: var(--surface-hover) !important;
+		outline: none;
+	}
+	.date-entry:disabled {
+		opacity: .7;
+		cursor: not-allowed;
+	}
+	.date-entry strong {
+		color: var(--text);
+		font-size: 12px;
+		font-weight: normal;
+	}
+	.date-entry small {
+		color: var(--muted);
+		font-size: 10px;
+	}
+	.date-projection section > :global(.hint) {
+		margin: 0;
+	}
+</style>
