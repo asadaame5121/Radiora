@@ -1495,13 +1495,12 @@
 
 	function openRecentNavigationItem(item: RecentNavigationItem): void {
 		const outlineItem = itemById.get(item.id);
-		if (outlineItem) void openRecentItem(outlineItem);
+if (outlineItem) void openRecentItem(outlineItem);
 	}
 
 	function openHelp(): void {
 		viewMode = "help";
 	}
-
 	async function loadEmergence(id: string): Promise<void> {
 		await emergenceController.load(id);
 	}

@@ -34,7 +34,6 @@ function createEmergenceToastController(titleForId: (id: string) => string) {
 
 function createEmergenceResolutionState() {
 	let reasons = $state<Record<string, string>>({});
-
 	return {
 		get content() {
 			return reasons;
