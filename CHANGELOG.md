@@ -5,11 +5,34 @@ bookmark上のchangeを提供済み機能としては扱わない。
 
 ## Unreleased
 
+## 0.4.2 - 2026-08-18
+
 ### Added
 
 - Linux (x86_64)向けのDesktop bundle生成と起動をサポート。`desktop:build`は実行OSに応じて
   `dist-desktop/radiora-v2-windows`または`dist-desktop/radiora-v2-linux`へ出力し、 SurrealDB
   CLI（Windowsは`surreal.exe`、Linuxは`surreal`）を自動で同梱します。
+- Linux版でDeno Desktopの`autoUpdate`を起動時に試験実行し、更新を次回起動へstageした結果と
+  rollbackを構造化ログへ記録します。Releaseには初回Linux版用の`latest.json`も同梱します。
+
+### Changed
+
+- アプリケーションとバックアップ／migration metadataのバージョンを0.4.2へ更新。
+
+## 0.4.1 - 2026-08-12
+
+### Added
+
+- 発見候補をアプリ内トーストで通知し、候補の存在を作業中に確認できるようにした。
+
+### Fixed
+
+- 別稿配置とインラインリンクの候補をブランチ単位で扱い、作業コピーの再水和や書き換え配置の解決を修正。
+- 固定済み配置を読み取り専用にし、別ブランチの本文をリンク候補へ含め、ブランチ関連エラーの表示を明確化。
+
+### Changed
+
+- アプリケーションとバックアップ／migration metadataのバージョンを0.4.1へ更新。
 
 ## 0.4.0 - 2026-08-09
 

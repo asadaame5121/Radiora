@@ -165,10 +165,20 @@ async function main(): Promise<void> {
 		"bundleに surreal.exe が含まれていません。desktop:build がSurrealDB CLIを検出できる環境で再実行するか、" +
 			"RADIORA_SURREAL_BUNDLE_SOURCE で指定してください。",
 	);
+	await requireUrlExists(
+		new URL("radiora-surreal.exe", bundleDir),
+		"bundleに radiora-surreal.exe が含まれていません。Go sidecarをビルドしてから再実行してください。",
+	);
 
 	const launcherName = await (async (): Promise<string> => {
 		for await (const entry of Deno.readDir(bundleDir)) {
-			if (entry.isFile && entry.name.endsWith(".exe") && !entry.name.startsWith("bootstrap")) {
+			if (
+				entry.isFile &&
+				entry.name.endsWith(".exe") &&
+				!entry.name.startsWith("bootstrap") &&
+				entry.name.toLowerCase() !== "surreal.exe" &&
+				entry.name.toLowerCase() !== "radiora-surreal.exe"
+			) {
 				return entry.name;
 			}
 		}

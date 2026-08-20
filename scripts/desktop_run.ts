@@ -19,7 +19,11 @@ let launcher: Deno.DirEntry | undefined;
 if (isWindows) {
 	launcher = entries.find((entry) => entry.isFile && entry.name.endsWith(".bat")) ??
 		entries.find((entry) =>
-			entry.isFile && entry.name.endsWith(".exe") && !entry.name.startsWith("bootstrap")
+			entry.isFile &&
+			entry.name.endsWith(".exe") &&
+			!entry.name.startsWith("bootstrap") &&
+			entry.name.toLowerCase() !== "radiora-surreal.exe" &&
+			entry.name.toLowerCase() !== "surreal.exe"
 		);
 } else {
 	launcher = entries.find((entry) => entry.isFile && entry.name === "radiora-v2-linux") ??

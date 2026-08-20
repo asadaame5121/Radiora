@@ -11,7 +11,8 @@ MSIXパッケージには次のものが含まれる。
 | ------------------------------ | ---------------------------------------------------------------- |
 | Radiora launcher (CEF backend) | `deno desktop` が生成するWindows bundle                          |
 | Deno runtime / CEF             | `denort.dll` と `libcef.dll` 群                                  |
-| `surreal.exe`                  | SurrealDB CLI 3.x（`desktop:build` がbundleへコピー）            |
+| `radiora-surreal.exe`          | SurrealDB起動用Go sidecar（`desktop:build` がbundleへ生成）      |
+| `surreal.exe`                  | sidecarが起動するSurrealDB CLI 3.x（bundleへコピー）             |
 | `Licenses/`                    | サードパーティライセンス（`licenses`タスクが生成）               |
 | アイコン                       | `Assets/*.png`（`desktop_msix`が`src/Radiora_icon.png`から生成） |
 
@@ -22,7 +23,7 @@ MSIXパッケージ本体は読み取り専用だが、`surreal.exe`はパッケ
 ## ビルド手順（Windows PowerShell）
 
 ```powershell
-deno task desktop:build     # Windows bundle生成 + surreal.exeコピー
+deno task desktop:build     # Windows bundle生成 + sidecar/surreal.exeコピー
 deno task desktop:msix      # ライセンス生成 + MSIX作成 + 署名
 ```
 
@@ -39,9 +40,10 @@ deno task desktop:msix      # ライセンス生成 + MSIX作成 + 署名
 ### 前提ツール
 
 - Windows SDK（`makeappx.exe` / `signtool.exe` を含む）
+- Go 1.22以上（`radiora-surreal.exe`のビルドに使用）
 - `WINDOWS_KIT_BIN` でbinディレクトリを指定すると検索を省略できる
-- SurrealDB CLI 3.x が `%USERPROFILE%\.surrealdb\surreal.exe` か `RADIORA_SURREAL_BUNDLE_SOURCE`
-  で指定した場所にあること
+- SurrealDB CLI 3.x が `%USERPROFILE%\.surrealdb\surreal.exe`、PATH、Scoopの標準配置、または
+  `RADIORA_SURREAL_BUNDLE_SOURCE` で指定した場所にあること
 
 ### 署名オプション
 
@@ -64,11 +66,16 @@ Add-AppxPackage -Path dist-desktop\Radiora_0.1.0.0_x64.msix
 
 ## SurrealDB CLIの探索順序
 
-`src/desktop/surreal_process.ts` の `findCommand()` は次の順で探索する。
+`src/desktop/surreal_process.ts` の `findCommand()` はWindowsでは次の順で探索する。
 
-1. bundle内（`Deno.execPath()` の隣の `surreal.exe`）— 配布物はここを使う
-2. `surreal`（PATH）
-3. `%USERPROFILE%\.surrealdb\surreal.exe` — 開発環境の従来インストール先
+1. bundle内（`Deno.execPath()` の隣の `radiora-surreal.exe`）— 配布物はここを使う
+2. bundle内の `surreal.exe` — sidecarがない開発用bundleのフォールバック
+3. `surreal`（PATH）
+4. `%USERPROFILE%\.surrealdb\surreal.exe` — 開発環境の従来インストール先
+
+`radiora-surreal.exe` はコンソールを作らず、同じディレクトリの `surreal.exe` をJob
+Object（kill-on-close）で管理する。アプリ終了時はsidecarのstdinを閉じ、アプリクラッシュ時も stdin
+pipeのEOFでSurrealDBを終了させるため、アプリ側からPowerShellやポート所有プロセスの検索は 行わない。
 
 ## ライセンス
 

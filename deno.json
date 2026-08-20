@@ -1,6 +1,6 @@
 {
 	"nodeModulesDir": "manual",
-	"version": "0.4.0",
+	"version": "0.4.2",
 	"compilerOptions": {
 		"lib": ["deno.window", "deno.desktop", "dom", "dom.iterable"],
 		"strict": true
@@ -15,6 +15,9 @@
 			}
 		},
 		"backend": "cef",
+		"release": {
+			"baseUrl": "https://github.com/asadaame5121/Radiora/releases/download/v0.4.2"
+		},
 		"output": {
 			"windows": "./dist-desktop/radiora-v2-windows",
 			"linux": "./dist-desktop/radiora-v2-linux"
@@ -50,6 +53,7 @@
 		"desktop:surreal": "deno task desktop",
 		"desktop:json": "deno task desktop:preflight && deno task build && deno task desktop:build && deno task desktop:run:json",
 		"desktop:build": "deno run -A scripts/desktop_build.ts",
+		"desktop:sidecar": "deno run -A scripts/sidecar_build.ts",
 		"desktop:run": "deno run -A scripts/desktop_run.ts",
 		"desktop:run:surreal": "deno task desktop:run",
 		"desktop:run:json": "deno run -A scripts/desktop_run.ts --json",
