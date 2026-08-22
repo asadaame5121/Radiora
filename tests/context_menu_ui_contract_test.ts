@@ -7,6 +7,9 @@ const tree = await Deno.readTextFile(
 const inspector = await Deno.readTextFile(
 	new URL("../src/ui/InspectorView.svelte", import.meta.url),
 );
+const historyTab = await Deno.readTextFile(
+	new URL("../src/ui/InspectorHistoryTab.svelte", import.meta.url),
+);
 
 Deno.test("outline and tree share the occurrence context menu without intercepting editors", () => {
 	assertMatch(app, /<ContextMenu/);
@@ -52,6 +55,7 @@ Deno.test("persistent row and inspector destructive buttons moved into the conte
 	assertNotMatch(outline, /class="delete" title=\{`この\$\{vocabulary\.occurrence\}を外す`\}/);
 	assertNotMatch(inspector, /onclick=\{duplicateSelectedOccurrence\}/);
 	assertNotMatch(inspector, /onclick=\{trashSelectedWork\}/);
-	assertMatch(inspector, /onclick=\{\(\) => void onCreateBranch\(\)\}/);
+	assertMatch(historyTab, /onclick=\{\(\) => void onCreateBranch\(\)\}/);
+	assertMatch(inspector, /onCreateBranch=\{props\.onCreateBranch\}/);
 	assertMatch(app, /onCreateBranch=\{\(\) => executeCommand\("createBranch"\)\}/);
 });

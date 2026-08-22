@@ -5,11 +5,16 @@ Deno.test("emergence decisions stay explicit and use injected vocabulary", async
 	const inspector = await Deno.readTextFile(
 		new URL("../src/ui/InspectorView.svelte", import.meta.url),
 	);
+	const relationTab = await Deno.readTextFile(
+		new URL("../src/ui/InspectorRelationTab.svelte", import.meta.url),
+	);
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/emergence_controller.svelte.ts", import.meta.url),
 	);
-	const sectionStart = inspector.indexOf('<div class="discoveries">');
-	const section = sectionStart >= 0 ? inspector.slice(sectionStart) : "";
+	const sectionStart = relationTab.indexOf('<div class="discoveries">');
+	const section = sectionStart >= 0 ? relationTab.slice(sectionStart) : "";
+
+	assert(inspector.includes("InspectorRelationTab"), "renders relation tab in inspector");
 
 	assert(section.length > 0, "emergence suggestion section not found");
 	for (
