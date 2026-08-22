@@ -1,11 +1,12 @@
 import type { LinkEndpoint, LinkType, OutlineLink, Revision } from "../domain/models.ts";
-import type { RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
+import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
+import { mergeImplicitFromLinks } from "./implicit_relation.ts";
 import { titleFromText } from "./search_text.ts";
 
 export const COMPARABLE_LINK_TYPES = ["FROM", "FIX", "VS"] as const satisfies readonly LinkType[];
 export type ComparableLinkType = (typeof COMPARABLE_LINK_TYPES)[number];
 
-type ComparisonStore = RelationStorePort & WorkStorePort;
+type ComparisonStore = RelationStorePort & WorkStorePort & Pick<OutlineStorePort, "listItems">;
 
 export interface ComparisonDocument {
 	scope: "work" | "branch" | "revision";
@@ -45,15 +46,17 @@ export class ComparisonService {
 	constructor(private readonly store: ComparisonStore) {}
 
 	async resolveLink(linkId: string): Promise<LinkComparisonProjection> {
-		const [works, branches, copies, revisions, links] = await Promise.all([
+		const [works, branches, copies, revisions, links, items] = await Promise.all([
 			this.store.listWorks(),
 			this.store.listBranches(),
 			this.store.listWorkingCopies(),
 			this.store.listRevisions(),
 			this.store.listLinks(),
+			this.store.listItems(),
 		]);
 		const activeWorkIds = new Set(works.map((work) => work.id));
-		const link = links.find((candidate) =>
+		const mergedLinks = mergeImplicitFromLinks(items, links);
+		const link = mergedLinks.find((candidate) =>
 			candidate.id === linkId && candidate.status !== "retracted"
 		);
 		if (!link) throw new Error(`Active semantic Link not found: ${linkId}`);

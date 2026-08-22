@@ -10,6 +10,7 @@ import type {
 	TrashEntry,
 } from "../domain/models.ts";
 import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
+import { fetchActiveMergedLinks } from "./implicit_relation.ts";
 
 const ORDER_STEP = 1024;
 
@@ -30,7 +31,7 @@ export class OccurrenceOperations {
 		const stashItemIds = [...new Set(knots.flatMap((knot) => knot.cycleIds))];
 		return {
 			items: this.markRecursivePlacements(items),
-			links: await this.listActiveLinks(),
+			links: await this.listActiveLinks(items),
 			knots,
 			stashItemIds,
 		};
@@ -217,8 +218,8 @@ export class OccurrenceOperations {
 		return this.store.purgeWork(workId);
 	}
 
-	private async listActiveLinks() {
-		return (await this.store.listLinks()).filter((link) => link.status !== "retracted");
+	private listActiveLinks(items?: readonly OutlineItem[]) {
+		return fetchActiveMergedLinks(this.store, items);
 	}
 
 	private async branchWorkingCopySource(workId: string, branchId?: string): Promise<OutlineItem> {

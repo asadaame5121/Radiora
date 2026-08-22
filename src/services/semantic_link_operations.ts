@@ -1,6 +1,7 @@
 import type { CreateLinkInput, LinkEndpoint, LinkType, OutlineLink } from "../domain/models.ts";
 import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
 import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
+import { fetchActiveMergedLinks } from "./implicit_relation.ts";
 
 type SemanticLinkStore = OutlineStorePort & RelationStorePort & WorkStorePort;
 
@@ -19,6 +20,12 @@ export class SemanticLinkOperations {
 
 	async createLink(input: CreateLinkInput): Promise<void> {
 		if (!LINK_TYPES.includes(input.type)) throw new Error(`Unsupported link type: ${input.type}`);
+		const origin: unknown = input.origin;
+		if (
+			origin !== undefined && origin !== "human" && origin !== "suggestion" && origin !== "import"
+		) {
+			throw new Error(`Unsupported link origin: ${String(origin)}`);
+		}
 		const [works, occurrences, revisions] = await Promise.all([
 			this.store.listWorks(),
 			this.store.listOccurrences(),
@@ -79,7 +86,7 @@ export class SemanticLinkOperations {
 			to: toEndpoint,
 			type: input.type,
 			status: input.status ?? "asserted",
-			origin: input.origin ?? "human",
+			origin: origin ?? "human",
 			createdAt: new Date().toISOString(),
 			reason: input.reason?.trim() || undefined,
 		});
@@ -95,7 +102,7 @@ export class SemanticLinkOperations {
 		return this.store.deleteLink(fromWorkId, toWorkId, type);
 	}
 
-	private async listActiveLinks(): Promise<OutlineLink[]> {
-		return (await this.store.listLinks()).filter((link) => link.status !== "retracted");
+	private listActiveLinks(): Promise<OutlineLink[]> {
+		return fetchActiveMergedLinks(this.store);
 	}
 }

@@ -1,5 +1,12 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
-import type { Branch, Occurrence, Revision, Work, WorkingCopy } from "../domain/models.ts";
+import type {
+	Branch,
+	CreateLinkInput,
+	Occurrence,
+	Revision,
+	Work,
+	WorkingCopy,
+} from "../domain/models.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { SemanticLinkOperations } from "./semantic_link_operations.ts";
 
@@ -107,6 +114,26 @@ Deno.test("SemanticLinkOperations keeps definition links directed", async () => 
 	assertEquals(links[0].type, "DEF");
 	assertEquals(links[0].status, "asserted");
 	assertEquals(links[0].origin, "human");
+});
+
+Deno.test("SemanticLinkOperations rejects derived origins at the persistence boundary", async () => {
+	const store = new MemoryGraphStore();
+	await addWork(store, "alpha");
+	await addWork(store, "beta");
+	const operations = new SemanticLinkOperations(store);
+	const input = {
+		fromId: "alpha",
+		toId: "beta",
+		type: "FROM",
+		origin: "derived",
+	} as unknown as CreateLinkInput;
+
+	await assertRejects(
+		() => operations.createLink(input),
+		Error,
+		"Unsupported link origin: derived",
+	);
+	assertEquals(await store.listLinks(), []);
 });
 
 Deno.test("SemanticLinkOperations retracts symmetric links when deleting through reversed occurrence ids", async () => {

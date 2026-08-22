@@ -17,6 +17,18 @@ Deno.test("occurrence operations creates ordered siblings and preserves child or
 	assertEquals(roots.map((item) => item.id), [first.id, a.id, b.id]);
 });
 
+Deno.test("occurrence operations includes implicit FROM links in listOutline", async () => {
+	const operations = new OccurrenceOperations(new MemoryGraphStore());
+	const parent = await operations.createItem({ text: "parent work", parentId: null });
+	const child = await operations.createItem({ text: "child work", parentId: parent.id });
+
+	const snapshot = await operations.listOutline();
+	assertEquals(snapshot.links.length, 1);
+	assertEquals(snapshot.links[0].from.workId, parent.workId);
+	assertEquals(snapshot.links[0].to.workId, child.workId);
+	assertEquals(snapshot.links[0].type, "FROM");
+});
+
 Deno.test("occurrence operations reconciles knots after a move and listOutline persists its projection", async () => {
 	const store = new MemoryGraphStore();
 	const operations = new OccurrenceOperations(store);

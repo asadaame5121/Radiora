@@ -143,6 +143,38 @@ Deno.test("comparison follows Work Working Copy but pins Revision endpoint text"
 	});
 });
 
+Deno.test("comparison resolves implicit FROM links from outline parent-child structure", async () => {
+	const store = new MemoryGraphStore();
+	const parent = await createWork(store, "parent-work", "親の思考");
+	// Create child under parent
+	const childBranchId = "branch-child-work";
+	const childOccId = "occ-child-work";
+	await store.createWorkBundle(
+		{ id: "child-work", createdAt: NOW, updatedAt: NOW },
+		{ id: childBranchId, workId: "child-work", name: "main", headRevisionId: null, createdAt: NOW },
+		{ branchId: childBranchId, workId: "child-work", text: "子の思考", updatedAt: NOW },
+		{
+			id: childOccId,
+			workId: "child-work",
+			parentOccurrenceId: parent.occurrenceId,
+			orderKey: 2048,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: childBranchId },
+		},
+	);
+
+	const service = new ComparisonService(store);
+	const expectedLinkId = `implicit:from:${JSON.stringify(["parent-work", "child-work"])}`;
+	const projection = await service.resolveLink(expectedLinkId);
+	assertEquals(projection.linkId, expectedLinkId);
+	assertEquals(projection.type, "FROM");
+	assertEquals(projection.direction, "directed");
+	assertEquals(projection.left.workId, "parent-work");
+	assertEquals(projection.left.title, "親の思考");
+	assertEquals(projection.right.workId, "child-work");
+	assertEquals(projection.right.title, "子の思考");
+});
+
 Deno.test("comparison rejects unsupported links without creating graph data", async () => {
 	const store = new MemoryGraphStore();
 	await createWork(store, "a", "A");
