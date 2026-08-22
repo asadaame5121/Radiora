@@ -6,7 +6,7 @@ import { titleFromText } from "./search_text.ts";
 export const COMPARABLE_LINK_TYPES = ["FROM", "FIX", "VS"] as const satisfies readonly LinkType[];
 export type ComparableLinkType = (typeof COMPARABLE_LINK_TYPES)[number];
 
-type ComparisonStore = RelationStorePort & WorkStorePort & OutlineStorePort;
+type ComparisonStore = RelationStorePort & WorkStorePort & Pick<OutlineStorePort, "listItems">;
 
 export interface ComparisonDocument {
 	scope: "work" | "branch" | "revision";
