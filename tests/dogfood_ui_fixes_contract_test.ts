@@ -4,7 +4,9 @@ const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.
 const inspector = await Deno.readTextFile(
 	new URL("../src/ui/InspectorView.svelte", import.meta.url),
 );
-const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
+const editor = await Deno.readTextFile(
+	new URL("../src/ui/MarkdownEditor.svelte", import.meta.url),
+);
 
 Deno.test("inspector modes are mutually exclusive and header does not duplicate clear-selection actions", () => {
 	assertMatch(inspector, /<Tabs\.Root[\s\S]*?value=\{tabValue\}/);
@@ -16,9 +18,13 @@ Deno.test("inspector modes are mutually exclusive and header does not duplicate 
 	assertNotMatch(inspector, /\{#if asideMode === "overview" &&/);
 });
 
+const outlineRowItem = await Deno.readTextFile(
+	new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
+);
+
 Deno.test("outline provides non-button Zoom and preserves an explicit return path", () => {
 	assertMatch(app, /function hoistOccurrence\(id: string\)/);
-	assertMatch(app, /ondblclick=\{\(\) => hoistOccurrence\(row\.item\.id\)\}/);
+	assertMatch(outlineRowItem, /ondblclick=\{\(\) => handlers\.hoistOccurrence\(row\.item\.id\)\}/);
 	assertMatch(app, /if \(browsingLocation\.hoistOccurrenceId\)/);
 	assertMatch(app, /requestClearHoist/);
 	assertNotMatch(app, /onclick=\{requestHoist\}/);
@@ -26,16 +32,16 @@ Deno.test("outline provides non-button Zoom and preserves an explicit return pat
 });
 
 Deno.test("compact OverType hosts contain their overlay layers and reserve selected-row controls", () => {
-	assertMatch(styles, /\.markdown-editor-host \{[\s\S]*?position: relative/);
+	assertMatch(editor, /\.markdown-editor-host \{[\s\S]*?position: relative/);
 	assertMatch(
-		styles,
-		/\.markdown-editor-host :is\(\.overtype-container, \.overtype-wrapper\) \{[\s\S]*?min-height: 0 !important[\s\S]*?overflow: hidden !important/,
+		editor,
+		/\.markdown-editor-host :global\(\.overtype-container\)/,
 	);
-	assertMatch(styles, /\.row\.selected \.markdown-editor,[\s\S]*?padding-top: 22px/);
-	assertMatch(styles, /\.markdown-editor-mode \{[\s\S]*?display: none/);
+	assertMatch(editor, /:global\(\.row\.selected\) \.markdown-editor,[\s\S]*?padding-top: 22px/);
+	assertMatch(editor, /\.markdown-editor-mode \{[\s\S]*?display: none/);
 	assertMatch(
-		styles,
-		/\.row\.has-body:not\(\.selected\):not\(:focus-within\) \.markdown-editor-host \{/,
+		editor,
+		/:global\(\.row\.has-body:not\(\.selected\):not\(:focus-within\)\) \.markdown-editor-host \{/,
 	);
-	assertMatch(styles, /\.overtype-preview > div:nth-child\(n \+ 3\)/);
+	assertMatch(editor, /\.overtype-preview > div:nth-child\(n \+ 3\)/);
 });

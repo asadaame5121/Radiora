@@ -1,252 +1,85 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { Tabs } from "bits-ui";
-	import type {
-		CreateLinkInput,
-		EmergenceSuggestion,
-		OutlineItem,
-		OutlineLink,
-		RecoverySnapshot,
-		RuleQueryResult,
-		SavedRuleQuery,
-		SearchAlias,
-		SearchRequest,
-		SearchResult,
-		TransientProjectionNode,
-	} from "../domain/models";
-	import type { InternalReferenceBacklink } from "../services/internal_reference_service";
-	import type { UiVocabulary } from "../shared/ui_vocabulary";
+	import type { OutlineItem } from "../domain/models.ts";
+	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type {
 		CommandAvailability,
 		CommandId,
-	} from "./command_service";
-	import IconButton from "./primitives/IconButton.svelte";
-	import LinkEditor from "./LinkEditor.svelte";
-	import SparseOutlineView from "./SparseOutlineView.svelte";
-
-	const PERCENT_SCALE = 100;
+	} from "./command_service.ts";
+	import InspectorHistoryTab, {
+		type InspectorHistoryTabProps,
+	} from "./InspectorHistoryTab.svelte";
+	import InspectorOverviewTab, {
+		type InspectorOverviewTabProps,
+	} from "./InspectorOverviewTab.svelte";
+	import InspectorQueryPanel, {
+		type InspectorQueryState,
+	} from "./InspectorQueryPanel.svelte";
+	import InspectorRelationTab, {
+		type InspectorRelationTabProps,
+	} from "./InspectorRelationTab.svelte";
 
 	export type InspectorAsideMode = "overview" | "relation" | "history" | "query";
 	type InspectorTab = Exclude<InspectorAsideMode, "query">;
+	export type { InspectorQueryState };
 	type InspectorCommands = Pick<
 		Readonly<Record<CommandId, CommandAvailability>>,
 		"addBookmark" | "createBranch" | "createLink" | "runQuery" | "saveQuery" | "startLongFormEditing"
 	>;
 
-	type InspectorQueryState = {
-		ruleSource: string;
-		ruleResult: RuleQueryResult | null;
-		ruleName: string;
-		ruleError: string;
-		savedRuleQueries: readonly SavedRuleQuery[];
-		sparseOutlineNodes: TransientProjectionNode[];
-		sparseOutlineQueryName: string;
-		showSparseOutline: boolean;
-		aliases: readonly SearchAlias[];
-		aliasCanonical: string;
-		aliasVariants: string;
-		onRuleSourceChange: (value: string) => void;
-		onRuleNameChange: (value: string) => void;
-		onAliasCanonicalChange: (value: string) => void;
-		onAliasVariantsChange: (value: string) => void;
-		onExecuteRule: () => void;
-		onSaveRule: () => void;
-		onLoadSavedQuery: (query: SavedRuleQuery) => void | Promise<void>;
-		onRemoveRule: (id: string) => void | Promise<void>;
-		onSaveAlias: () => void | Promise<void>;
-		onRemoveAlias: (id: string) => void | Promise<void>;
-		onSelectSparseNode: (node: TransientProjectionNode) => void | Promise<void>;
-		onToggleSparseOutline: () => void;
-	};
+	export type InspectorViewProps = InspectorOverviewTabProps &
+		InspectorRelationTabProps &
+		InspectorHistoryTabProps & {
+			asideMode: InspectorAsideMode;
+			selectedItem: OutlineItem | null;
+			commands: InspectorCommands;
+			vocabulary: UiVocabulary;
+			query: InspectorQueryState;
+			onAsideModeChange: (mode: InspectorAsideMode) => void;
+			onElement: (element: HTMLElement | null) => void;
+			onStartResize: (event: PointerEvent) => void;
+			onAddBookmark: () => void;
+			onSelectOccurrence: (id: string | null) => void;
+			onSetInspectorCollapsed: (collapsed: boolean) => void;
+		};
 
-	let {
-		asideMode,
-		selectedItem,
-		selectedPlacements,
-		selectedLinks,
-		selectedBranchId,
-		recoverySnapshots,
-		commands,
-		vocabulary,
-		inlineSemanticLinkNotice,
-		internalReferenceBacklinks,
-		internalReferenceNotice,
-		emergenceSuggestions,
-		emergenceResolutionReasons,
-		emergenceLoading,
-		query,
-		onAsideModeChange,
-		onElement,
-		onStartResize,
-		onAddBookmark,
-		onSelectOccurrence,
-		onSetInspectorCollapsed,
-		onUpdateSelectedHeading,
-		onSelectPlacement,
-		showOutlineHint,
-		onStartLongFormEditing,
-		onConfirmLink,
-		onDeleteLink,
-		onReverseLink,
-		onCompareLink,
-		onSearch,
-		titleFor,
-		titleForId,
-		titleForWork,
-		formatCreatedAt,
-		onOpenBacklink,
-		onSetEmergenceReason,
-		onResolveEmergence,
-		onOpenWorkLineage,
-		onOpenRevisionComparison,
-		onCreateBranch,
-	}: {
-		asideMode: InspectorAsideMode;
-		selectedItem: OutlineItem | null;
-		selectedPlacements: readonly OutlineItem[];
-		selectedLinks: readonly OutlineLink[];
-		selectedBranchId: string | null;
-		recoverySnapshots: readonly RecoverySnapshot[];
-		commands: InspectorCommands;
-		vocabulary: UiVocabulary;
-		inlineSemanticLinkNotice: string;
-		internalReferenceBacklinks: readonly InternalReferenceBacklink[];
-		internalReferenceNotice: string;
-		emergenceSuggestions: readonly EmergenceSuggestion[];
-		emergenceResolutionReasons: Readonly<Record<string, string>>;
-		emergenceLoading: boolean;
-		query: InspectorQueryState;
-		onAsideModeChange: (mode: InspectorAsideMode) => void;
-		onElement: (element: HTMLElement | null) => void;
-		onStartResize: (event: PointerEvent) => void;
-		onAddBookmark: () => void;
-		onSelectOccurrence: (id: string | null) => void;
-		onSetInspectorCollapsed: (collapsed: boolean) => void;
-		onUpdateSelectedHeading: (value: string) => void | Promise<void>;
-		onSelectPlacement: (id: string) => void;
-		showOutlineHint: boolean;
-		onStartLongFormEditing: () => void;
-		onConfirmLink: (input: CreateLinkInput) => void | Promise<void>;
-		onDeleteLink: (link: OutlineLink) => void | Promise<void>;
-		onReverseLink: (link: OutlineLink) => void | Promise<void>;
-		onCompareLink: (link: OutlineLink) => void | Promise<void>;
-		onSearch: (request: SearchRequest | string) => Promise<SearchResult[]>;
-		titleFor: (item: OutlineItem) => string;
-		titleForId: (id: string) => string;
-		titleForWork: (id: string) => string;
-		formatCreatedAt: (value: string) => string;
-		onOpenBacklink: (backlink: InternalReferenceBacklink) => void | Promise<void>;
-		onSetEmergenceReason: (id: string, value: string) => void;
-		onResolveEmergence: (
-			suggestion: EmergenceSuggestion,
-			action: "accept" | "dismiss" | "pin",
-		) => void | Promise<void>;
-		onOpenWorkLineage: () => void;
-		onOpenRevisionComparison: () => void;
-		onCreateBranch: () => void | Promise<void>;
-	} = $props();
+	let props: InspectorViewProps = $props();
 
 	let inspectorElement: HTMLElement | null = null;
 
 	onMount(() => {
-		onElement(inspectorElement);
-		return () => onElement(null);
+		props.onElement(inspectorElement);
+		return () => props.onElement(null);
 	});
 
-	const tabValue = $derived<InspectorTab>(asideMode === "query" ? "overview" : asideMode);
+	const tabValue = $derived<InspectorTab>(props.asideMode === "query" ? "overview" : props.asideMode);
 
 	function isInspectorTab(value: string): value is InspectorTab {
 		return value === "overview" || value === "relation" || value === "history";
 	}
 
 	function handleTabChange(value: string): void {
-		if (isInspectorTab(value)) onAsideModeChange(value);
+		if (isInspectorTab(value)) props.onAsideModeChange(value);
 	}
 </script>
-
-{#snippet queryTable(result: RuleQueryResult)}
-	<div class="query-table"><table><thead><tr>{#each result.columns as column}<th>{column}</th>{/each}</tr></thead>
-		<tbody>{#each result.rows as row}<tr>{#each row as value}<td>{titleForId(value)}</td>{/each}</tr>{/each}</tbody>
-	</table></div>
-{/snippet}
 
 <aside bind:this={inspectorElement} class="inspector">
 	<button
 		class="inspector-resize-handle"
 		type="button"
 		aria-label="右ペインの幅を変更"
-		onpointerdown={onStartResize}
+		onpointerdown={props.onStartResize}
 		title="ドラッグして幅を変更"
 	></button>
-	{#if selectedItem && asideMode === "query"}
-		<div class="query-panel">
-			<label for="rule-source">読み取り専用Datalog</label>
-			<textarea
-				id="rule-source"
-				rows="6"
-				value={query.ruleSource}
-				spellcheck="false"
-				oninput={(event) => query.onRuleSourceChange(event.currentTarget.value)}
-			></textarea>
-			<div class="query-actions">
-				<button type="button" onclick={query.onExecuteRule} disabled={!commands.runQuery.enabled} title={commands.runQuery.reason}>実行</button>
-				<input
-					placeholder="保存名"
-					value={query.ruleName}
-					oninput={(event) => query.onRuleNameChange(event.currentTarget.value)}
-				/>
-				<button type="button" onclick={query.onSaveRule} disabled={!commands.saveQuery.enabled} title={commands.saveQuery.reason}>保存</button>
-			</div>
-			{#if query.ruleError}<p class="query-error">{query.ruleError}</p>{/if}
-			{#if query.ruleResult}
-				<p class="query-meta">{query.ruleResult.rows.length}件・{query.ruleResult.elapsedMs.toFixed(1)}ms</p>
-				{#if query.sparseOutlineNodes.length}
-					<div class="sparse-outline-section">
-						<div class="sparse-outline-header">
-							<h3>{vocabulary.sparseOutline}<small>{query.sparseOutlineQueryName}</small></h3>
-							<button class="sparse-toggle" type="button" onclick={query.onToggleSparseOutline}>
-								{query.showSparseOutline ? "テーブル表示" : "投影表示"}
-							</button>
-						</div>
-						{#if query.showSparseOutline}
-							<SparseOutlineView nodes={query.sparseOutlineNodes} onSelectNode={query.onSelectSparseNode} />
-						{:else}
-							{@render queryTable(query.ruleResult)}
-						{/if}
-					</div>
-				{:else}
-					{@render queryTable(query.ruleResult)}
-				{/if}
-			{/if}
-			<div class="saved-queries">
-				{#each query.savedRuleQueries as saved}
-					<button type="button" onclick={() => void query.onLoadSavedQuery(saved)}>{saved.name}</button>
-					<IconButton class="remove-saved" label={`${saved.name}を削除`} onclick={() => void query.onRemoveRule(saved.id)}>×</IconButton>
-				{/each}
-			</div>
-			<h3>検索別名</h3>
-			<input
-				placeholder="基準語"
-				value={query.aliasCanonical}
-				oninput={(event) => query.onAliasCanonicalChange(event.currentTarget.value)}
-			/>
-			<textarea
-				rows="2"
-				placeholder="別名（カンマ区切り）"
-				value={query.aliasVariants}
-				oninput={(event) => query.onAliasVariantsChange(event.currentTarget.value)}
-			></textarea>
-			<button type="button" onclick={() => void query.onSaveAlias()}>別名を追加</button>
-			<div class="alias-list">
-				{#each query.aliases as alias}
-					<div>
-						<span>{alias.canonical} ↔ {alias.variants.join(", ")}</span>
-						<IconButton label={`「${alias.canonical}」の検索別名を削除`} onclick={() => void query.onRemoveAlias(alias.id)}>×</IconButton>
-					</div>
-				{/each}
-			</div>
-		</div>
-	{:else if selectedItem}
+	{#if props.selectedItem && props.asideMode === "query"}
+		<InspectorQueryPanel
+			query={props.query}
+			vocabulary={props.vocabulary}
+			commands={props.commands}
+			titleForId={props.titleForId}
+		/>
+	{:else if props.selectedItem}
 		<Tabs.Root
 			value={tabValue}
 			orientation="horizontal"
@@ -276,124 +109,190 @@
 			</Tabs.List>
 			<p class="eyebrow">選択中</p>
 			<div class="inspector-heading">
-				<h2>{titleFor(selectedItem)}</h2>
+				<h2>{props.titleFor(props.selectedItem)}</h2>
 				<div class="inspector-heading-actions">
-					<button class="inspector-action" type="button" onclick={onAddBookmark} disabled={!commands.addBookmark.enabled} title={commands.addBookmark.reason}>☆ {vocabulary.bookmark}</button>
+					<button class="inspector-action" type="button" onclick={props.onAddBookmark} disabled={!props.commands.addBookmark.enabled} title={props.commands.addBookmark.reason}>☆ {props.vocabulary.bookmark}</button>
 				</div>
 			</div>
 			<Tabs.Content value="overview">
-				{#snippet child({ props })}
-					<div {...props}>
-						<label>
-							{vocabulary.occurrence}固有の見出し
-							<input
-								value={selectedItem.contextualHeading ?? ""}
-								onchange={(event) => void onUpdateSelectedHeading(event.currentTarget.value)}
-								placeholder="未設定時は本文の先頭行"
-							/>
-						</label>
-						<section class="placements">
-							<h3>すべての{vocabulary.occurrence}<small>{selectedPlacements.length}件</small></h3>
-							<div>
-								{#each selectedPlacements as placement (placement.id)}
-									<button type="button" class:active={placement.id === selectedItem.id} onclick={() => onSelectPlacement(placement.id)}>
-										<strong>{titleFor(placement)}</strong>
-										<span>{placement.parentId ? `親: ${titleForId(placement.parentId)}` : "ルート"}</span>
-									</button>
-								{/each}
-							</div>
-						</section>
-						<div class="discovery-actions">
-							<button type="button" onclick={onStartLongFormEditing} disabled={!commands.startLongFormEditing.enabled} title={commands.startLongFormEditing.reason}>長文編集</button>
-						</div>
-						<div class="thought-meta">
-							<div><span class="meta-label">作成日</span><time datetime={selectedItem.createdAt}>{formatCreatedAt(selectedItem.createdAt)}</time></div>
-							<div><span class="meta-label">更新日</span><time datetime={selectedItem.updatedAt}>{formatCreatedAt(selectedItem.updatedAt)}</time></div>
-							{#if selectedItem.parentId}
-								<div><span class="meta-label">親</span><span>{titleForId(selectedItem.parentId)}</span></div>
-							{/if}
-						</div>
-						{#if showOutlineHint}<p class="hint">Enter: 兄弟　Shift+Enter: 改行<br />Tab / Shift+Tab: 階層　Alt+↑↓: 移動</p>{/if}
+				{#snippet child({ props: contentProps })}
+					<div {...contentProps}>
+						<InspectorOverviewTab
+							selectedItem={props.selectedItem}
+							selectedPlacements={props.selectedPlacements}
+							vocabulary={props.vocabulary}
+							commands={props.commands}
+							showOutlineHint={props.showOutlineHint}
+							onUpdateSelectedHeading={props.onUpdateSelectedHeading}
+							onSelectPlacement={props.onSelectPlacement}
+							onStartLongFormEditing={props.onStartLongFormEditing}
+							titleFor={props.titleFor}
+							titleForId={props.titleForId}
+							formatCreatedAt={props.formatCreatedAt}
+						/>
 					</div>
 				{/snippet}
 			</Tabs.Content>
 			<Tabs.Content value="relation">
-				{#snippet child({ props })}
-					<div {...props}>
-						<LinkEditor
-							selectedWorkId={selectedItem.workId}
-							selectedDisplayName={titleFor(selectedItem)}
-							links={selectedLinks}
-							titleForWork={titleForWork}
-							onConfirm={onConfirmLink}
-							onDelete={onDeleteLink}
-							onReverse={onReverseLink}
-							onCompare={onCompareLink}
-							onSearch={onSearch}
+				{#snippet child({ props: contentProps })}
+					<div {...contentProps}>
+						<InspectorRelationTab
+							selectedItem={props.selectedItem}
+							selectedLinks={props.selectedLinks}
+							vocabulary={props.vocabulary}
+							inlineSemanticLinkNotice={props.inlineSemanticLinkNotice}
+							internalReferenceBacklinks={props.internalReferenceBacklinks}
+							internalReferenceNotice={props.internalReferenceNotice}
+							emergenceSuggestions={props.emergenceSuggestions}
+							emergenceResolutionReasons={props.emergenceResolutionReasons}
+							emergenceLoading={props.emergenceLoading}
+							titleFor={props.titleFor}
+							titleForId={props.titleForId}
+							titleForWork={props.titleForWork}
+							onConfirmLink={props.onConfirmLink}
+							onDeleteLink={props.onDeleteLink}
+							onReverseLink={props.onReverseLink}
+							onCompareLink={props.onCompareLink}
+							onSearch={props.onSearch}
+							onOpenBacklink={props.onOpenBacklink}
+							onSetEmergenceReason={props.onSetEmergenceReason}
+							onResolveEmergence={props.onResolveEmergence}
 						/>
-						{#if inlineSemanticLinkNotice}<p class="inline-semantic-link-notice" role="status">{inlineSemanticLinkNotice}</p>{/if}
-						<section class="internal-reference-backlinks">
-							<h3>{vocabulary.backlink}<small>{internalReferenceBacklinks.length}件</small></h3>
-							{#each internalReferenceBacklinks as backlink (JSON.stringify(backlink.source))}
-								<button type="button" onclick={() => void onOpenBacklink(backlink)}>
-									<strong>{backlink.displayName}</strong>
-									<span>{backlink.source.scope === "work" ? vocabulary.workingCopy : `固定${vocabulary.revision}`} · {backlink.count}箇所</span>
-								</button>
-							{:else}
-								<p class="empty">{vocabulary.backlink}はありません</p>
-							{/each}
-						</section>
-						{#if internalReferenceNotice}<p class="internal-reference-notice" role="status">{internalReferenceNotice}</p>{/if}
-						<div class="discoveries">
-							{#if emergenceLoading}<p class="empty">{vocabulary.emergenceLoading}</p>{/if}
-							{#each emergenceSuggestions as suggestion}
-								<article class:pinned={suggestion.status === "pinned"}>
-									<div class="discovery-title"><span>{suggestion.title}</span><small>{Math.round(suggestion.score * PERCENT_SCALE)}%</small></div>
-									<strong>{titleForId(suggestion.targetItemId)}</strong>
-									<p>{suggestion.explanation}</p>
-									<ol>{#each suggestion.evidence as step}<li>{step.relation}: {titleForId(step.fromId)} → {titleForId(step.toId)}</li>{/each}</ol>
-									<input
-										aria-label={vocabulary.emergenceResolutionReason}
-										placeholder={vocabulary.emergenceResolutionReason}
-										value={emergenceResolutionReasons[suggestion.id] ?? ""}
-										oninput={(event) => onSetEmergenceReason(suggestion.id, event.currentTarget.value)}
-									/>
-									<div class="discovery-actions">
-										<button type="button" onclick={() => void onResolveEmergence(suggestion, "accept")}>{vocabulary.emergenceAccept}</button>
-										<button type="button" onclick={() => void onResolveEmergence(suggestion, "pin")}>{vocabulary.emergenceHold}</button>
-										<button type="button" onclick={() => void onResolveEmergence(suggestion, "dismiss")} disabled={!emergenceResolutionReasons[suggestion.id]?.trim()}>{vocabulary.emergenceDismiss}</button>
-									</div>
-								</article>
-							{:else}
-								{#if !emergenceLoading}<p class="empty">{vocabulary.noEmergenceSuggestion}</p>{/if}
-							{/each}
-						</div>
 					</div>
 				{/snippet}
 			</Tabs.Content>
 			<Tabs.Content value="history">
-				{#snippet child({ props })}
-					<div {...props}>
-						<div class="history-panel">
-							<p class="hint">選択中の{vocabulary.work}に従属する履歴です。</p>
-							<button type="button" onclick={() => void onCreateBranch()} disabled={!commands.createBranch.enabled} title={commands.createBranch.reason}>新しい{vocabulary.branch}を作る</button>
-							<button type="button" onclick={onOpenWorkLineage} disabled={!selectedItem}>{vocabulary.workLineage}を開く</button>
-							<button type="button" onclick={onOpenRevisionComparison} disabled={!selectedItem}>{vocabulary.revision}{vocabulary.comparisonPane}を開く</button>
-							{#if selectedBranchId}
-								<button type="button" onclick={onOpenWorkLineage}>Recovery snapshotsを開く</button>
-								<small>{recoverySnapshots.length}件のRecovery snapshot</small>
-							{:else}
-								<small>Recoveryは{vocabulary.branch}を選択すると利用できます。</small>
-							{/if}
-						</div>
+				{#snippet child({ props: contentProps })}
+					<div {...contentProps}>
+						<InspectorHistoryTab
+							selectedItem={props.selectedItem}
+							selectedBranchId={props.selectedBranchId}
+							recoverySnapshots={props.recoverySnapshots}
+							vocabulary={props.vocabulary}
+							commands={props.commands}
+							onCreateBranch={props.onCreateBranch}
+							onOpenWorkLineage={props.onOpenWorkLineage}
+							onOpenRevisionComparison={props.onOpenRevisionComparison}
+						/>
 					</div>
 				{/snippet}
 			</Tabs.Content>
 		</Tabs.Root>
 	{:else}
 		<div class="aside-empty">
-			<button class="inspector-close" type="button" onclick={() => onSetInspectorCollapsed(true)}>閉じる</button>
-			<span>•</span><p>{vocabulary.work}を選択すると<br />関連{vocabulary.semanticLink}を編集できます</p>
+			<button class="inspector-close" type="button" onclick={() => props.onSetInspectorCollapsed(true)}>閉じる</button>
+			<span>•</span>
+			<p>{props.vocabulary.work}を選択すると<br />関連{props.vocabulary.semanticLink}を編集できます</p>
 		</div>
 	{/if}
 </aside>
+
+<style>
+	.inspector {
+		position: relative;
+		border-left: 1px solid var(--border);
+		background: rgb(8 16 26 / 92%);
+		padding: 26px 22px;
+		overflow: auto;
+		min-width: 0;
+	}
+	.inspector-resize-handle {
+		position: absolute;
+		z-index: 2;
+		top: 0;
+		left: -7px;
+		width: 14px;
+		height: 100%;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		cursor: col-resize;
+	}
+	.inspector-resize-handle:hover,
+	.inspector-resize-handle:focus-visible {
+		background: rgb(37 198 209 / 18%);
+		outline: 0;
+	}
+	.aside-tabs {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 3px;
+		margin: -10px 0 20px;
+		padding: 3px;
+		border: 1px solid var(--border);
+		border-radius: 7px;
+	}
+	.aside-tabs button {
+		border: 0;
+		border-radius: 4px;
+		padding: 6px 3px;
+		background: transparent;
+		color: var(--muted);
+		cursor: pointer;
+		font-size: 10px;
+	}
+	.aside-tabs button.active {
+		background: var(--surface-hover);
+		color: var(--cyan-soft);
+	}
+	.eyebrow {
+		color: var(--cyan);
+		font-size: 9px;
+		letter-spacing: .18em;
+		margin: 0;
+	}
+	.inspector h2 {
+		margin: 0;
+		font-family: var(--font-serif);
+		font-size: 18px;
+		line-height: 1.5;
+		font-weight: normal;
+		color: #edf9fa;
+		word-break: break-word;
+	}
+	.inspector-heading {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 10px;
+		margin: 12px 0 16px;
+	}
+	.inspector-heading-actions {
+		display: flex;
+		flex: none;
+		gap: 4px;
+		flex-wrap: wrap;
+	}
+	.inspector-action {
+		flex: none;
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		padding: 4px 6px;
+		background: var(--surface-raised);
+		color: var(--muted);
+		font-size: 10px;
+		cursor: pointer;
+	}
+	.inspector-action:hover:not(:disabled) {
+		border-color: var(--border-bright);
+		color: var(--text);
+	}
+	.aside-empty {
+		color: var(--muted);
+		font-size: 12px;
+		text-align: center;
+		margin-top: 40vh;
+		transform: translateY(-50%);
+		line-height: 1.7;
+	}
+	.aside-empty .inspector-close {
+		display: block;
+		margin: 0 0 18px auto;
+		padding: 4px 9px;
+		font-size: 10px;
+	}
+	.aside-empty span {
+		font-size: 36px;
+		color: var(--border-bright);
+	}
+</style>

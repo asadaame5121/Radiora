@@ -5,11 +5,18 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 	const inspector = await Deno.readTextFile(
 		new URL("../src/ui/InspectorView.svelte", import.meta.url),
 	);
+	const relationTab = await Deno.readTextFile(
+		new URL("../src/ui/InspectorRelationTab.svelte", import.meta.url),
+	);
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
 	);
 	const vocabulary = await Deno.readTextFile(
 		new URL("../src/shared/ui_vocabulary.ts", import.meta.url),
+	);
+
+	const outlineRowItem = await Deno.readTextFile(
+		new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
 	);
 
 	assertMatch(controller, /findInternalReferenceTrigger/);
@@ -21,8 +28,9 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 	assertMatch(controller, /openRevisionComparison\(resolution\.revision\.id\)/);
 	assertMatch(controller, /listInternalReferenceBacklinks\("work", workId\)/);
 	assertMatch(app, /editorController\.updateEditorSelection/);
-	assertMatch(app, /vocabulary\.internalReference/);
-	assertMatch(inspector, /vocabulary\.backlink/);
+	assertMatch(outlineRowItem, /vocabulary\.internalReference/);
+	assertMatch(inspector, /<InspectorRelationTab/);
+	assertMatch(relationTab, /vocabulary\.backlink/);
 	assertMatch(vocabulary, /internalReference: "内部参照"/);
 	assertMatch(vocabulary, /backlink: "被参照"/);
 	assertMatch(controller, /resolution\.navigationTarget\.kind === "work"[\s\S]*?return;/);

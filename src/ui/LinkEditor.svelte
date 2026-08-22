@@ -2,168 +2,50 @@
 	import { onDestroy } from "svelte";
 	import type {
 		CreateLinkInput,
-		LinkType,
 		OutlineItem,
 		OutlineLink,
 		SearchRequest,
 		SearchResult,
-	} from "../domain/models";
-	import { isSymmetricLinkType, LINK_TYPES } from "../domain/models";
-	import { isComparableLinkType } from "../services/comparison_service";
-	import { useUiVocabulary } from "./ui_vocabulary_context";
+	} from "../domain/models.ts";
+	import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
+	import { isComparableLinkType } from "../services/comparison_service.ts";
+	import {
+		LinkEditorController,
+		type LinkEditorControllerPorts,
+	} from "./link_editor_controller.svelte.ts";
+	import { useUiVocabulary } from "./ui_vocabulary_context.ts";
 
-	type LinkDirection = "outgoing" | "incoming";
-
-	let {
-		selectedWorkId,
-		selectedDisplayName,
-		links,
-		titleForWork,
-		onConfirm,
-		onDelete,
-		onReverse,
-		onCompare,
-		onSearch,
-	}: {
+	type LinkEditorProps = LinkEditorControllerPorts & {
 		selectedWorkId: string;
 		selectedDisplayName?: string;
 		links: readonly OutlineLink[];
 		titleForWork: (workId: string) => string;
-		onConfirm: (input: CreateLinkInput) => void | Promise<void>;
-		onDelete: (link: OutlineLink) => void | Promise<void>;
-		onReverse: (link: OutlineLink) => void | Promise<void>;
-		onCompare?: (link: OutlineLink) => void | Promise<void>;
-		onSearch: (request: SearchRequest | string) => Promise<SearchResult[]>;
-	} = $props();
+	};
+
+	let props: LinkEditorProps = $props();
 
 	const vocabulary = useUiVocabulary();
-
-	let searchQuery = $state("");
-	let searchResults = $state<SearchResult[]>([]);
-	let searching = $state(false);
-	let searchError = $state("");
-	let searchTimer: number | undefined;
-	let searchRequestId = 0;
-	let selectedType = $state<LinkType>("LIKE");
-	let direction = $state<LinkDirection>("outgoing");
-	let reason = $state("");
-	let submitting = $state(false);
-	let activeLinkId = $state<string | null>(null);
-	let initializedWorkId = "";
-
-	const currentLinks = $derived(
-		links.filter((link) => link.fromId === selectedWorkId || link.toId === selectedWorkId),
-	);
-
-	$effect(() => {
-		const workId = selectedWorkId;
-		if (workId === initializedWorkId) return;
-		initializedWorkId = workId;
-		clearSearch();
-		direction = "outgoing";
-		reason = "";
+	const controller = new LinkEditorController({
+		onConfirm: (input) => props.onConfirm(input),
+		onDelete: (link) => props.onDelete(link),
+		onReverse: (link) => props.onReverse(link),
+		onCompare: (link) => props.onCompare?.(link),
+		onSearch: (req) => props.onSearch(req),
 	});
 
-	function scheduleSearch(): void {
-		if (searchTimer !== undefined) window.clearTimeout(searchTimer);
-		const requestId = ++searchRequestId;
-		const query = searchQuery.trim();
-		searchError = "";
-		searchResults = [];
-		if (!query) {
-			searching = false;
-			return;
-		}
-		searching = true;
-		searchTimer = window.setTimeout(() => void search(query, requestId), 250);
-	}
+	let initializedWorkId = "";
+	$effect(() => {
+		const workId = props.selectedWorkId;
+		if (workId === initializedWorkId) return;
+		initializedWorkId = workId;
+		controller.reset();
+	});
 
-	async function search(query: string, requestId: number): Promise<void> {
-		try {
-			const results = await onSearch({ query, contextItemId: selectedWorkId, limit: 16 });
-			if (requestId !== searchRequestId) return;
-			const seenWorkIds = new Set<string>();
-			searchResults = results.filter((result) => {
-				if (result.item.workId === selectedWorkId || seenWorkIds.has(result.item.workId)) return false;
-				seenWorkIds.add(result.item.workId);
-				return true;
-			});
-		} catch (cause) {
-			if (requestId === searchRequestId) searchError = errorMessage(cause);
-		} finally {
-			if (requestId === searchRequestId) searching = false;
-		}
-	}
-
-	function clearSearch(): void {
-		searchRequestId++;
-		if (searchTimer !== undefined) window.clearTimeout(searchTimer);
-		searchTimer = undefined;
-		searchQuery = "";
-		searchResults = [];
-		searchError = "";
-		searching = false;
-	}
-
-	async function addLink(result: SearchResult): Promise<void> {
-		if (submitting || result.item.workId === selectedWorkId) return;
-		const fromId = direction === "outgoing" ? selectedWorkId : result.item.workId;
-		const toId = direction === "outgoing" ? result.item.workId : selectedWorkId;
-		try {
-			submitting = true;
-			searchError = "";
-			await onConfirm({
-				fromId,
-				toId,
-				type: selectedType,
-				reason: reason.trim() || undefined,
-			});
-			clearSearch();
-		} catch (cause) {
-			searchError = errorMessage(cause);
-		} finally {
-			submitting = false;
-		}
-	}
-
-	async function deleteLink(link: OutlineLink): Promise<void> {
-		if (activeLinkId || submitting) return;
-		try {
-			activeLinkId = link.id;
-			searchError = "";
-			await onDelete(link);
-		} catch (cause) {
-			searchError = errorMessage(cause);
-		} finally {
-			activeLinkId = null;
-		}
-	}
-
-	async function reverseLink(link: OutlineLink): Promise<void> {
-		if (activeLinkId || submitting || isSymmetricLinkType(link.type)) return;
-		try {
-			activeLinkId = link.id;
-			searchError = "";
-			await onReverse(link);
-		} catch (cause) {
-			searchError = errorMessage(cause);
-		} finally {
-			activeLinkId = null;
-		}
-	}
-
-	async function compareLink(link: OutlineLink): Promise<void> {
-		if (activeLinkId || submitting || !onCompare) return;
-		try {
-			activeLinkId = link.id;
-			searchError = "";
-			await onCompare(link);
-		} catch (cause) {
-			searchError = errorMessage(cause);
-		} finally {
-			activeLinkId = null;
-		}
-	}
+	const currentLinks = $derived(
+		props.links.filter(
+			(link) => link.fromId === props.selectedWorkId || link.toId === props.selectedWorkId,
+		),
+	);
 
 	function titleOf(item: OutlineItem): string {
 		return item.contextualHeading ??
@@ -176,26 +58,20 @@
 	}
 
 	function otherWorkId(link: OutlineLink): string {
-		return link.fromId === selectedWorkId ? link.toId : link.fromId;
+		return link.fromId === props.selectedWorkId ? link.toId : link.fromId;
 	}
 
 	function linkDirection(link: OutlineLink): string {
 		if (isSymmetricLinkType(link.type)) return "↔";
-		return link.fromId === selectedWorkId ? "→" : "←";
+		return link.fromId === props.selectedWorkId ? "→" : "←";
 	}
 
-	function errorMessage(cause: unknown): string {
-		return cause instanceof Error ? cause.message : String(cause);
-	}
-
-	onDestroy(() => {
-		if (searchTimer !== undefined) window.clearTimeout(searchTimer);
-	});
+	onDestroy(() => controller.destroy());
 </script>
 
 <section class="link-editor" aria-label={`${vocabulary.semanticLink}編集`}>
 	<h3>{vocabulary.semanticLink}</h3>
-	{#if selectedDisplayName}<p class="link-editor-context">選択中: {selectedDisplayName}</p>{/if}
+	{#if props.selectedDisplayName}<p class="link-editor-context">選択中: {props.selectedDisplayName}</p>{/if}
 
 	<section class="link-editor-section" aria-labelledby="current-links-heading">
 		<h4 id="current-links-heading">接続中の{vocabulary.semanticLink}<small>{currentLinks.length}件</small></h4>
@@ -206,30 +82,30 @@
 				{#each currentLinks as link (link.id)}
 					<li>
 						<div class="link-editor-link-copy">
-							<strong>{titleForWork(otherWorkId(link))}</strong>
+							<strong>{props.titleForWork(otherWorkId(link))}</strong>
 							<span>{link.type} {linkDirection(link)}</span>
 							{#if link.reason}<small>「{link.reason}」</small>{/if}
 						</div>
 						<div class="link-editor-link-actions">
-							{#if onCompare && isComparableLinkType(link.type)}
+							{#if props.onCompare && isComparableLinkType(link.type)}
 								<button
 									type="button"
-									disabled={Boolean(activeLinkId) || submitting}
-									onclick={() => void compareLink(link)}
+									disabled={Boolean(controller.activeLinkId) || controller.submitting}
+									onclick={() => void controller.compareLink(link)}
 								>{vocabulary.comparisonPane}</button>
 							{/if}
 							<button
 								type="button"
-								disabled={Boolean(activeLinkId) || submitting || isSymmetricLinkType(link.type)}
+								disabled={Boolean(controller.activeLinkId) || controller.submitting || isSymmetricLinkType(link.type)}
 								title={isSymmetricLinkType(link.type) ? "対称な関係には向きがありません" : "向きを反転"}
-								onclick={() => void reverseLink(link)}
+								onclick={() => void controller.reverseLink(link)}
 							>反転</button>
 							<button
 								type="button"
 								class="danger"
-								disabled={Boolean(activeLinkId) || submitting}
+								disabled={Boolean(controller.activeLinkId) || controller.submitting}
 								title="接続を解除"
-								onclick={() => void deleteLink(link)}
+								onclick={() => void controller.deleteLink(link)}
 							>解除</button>
 						</div>
 					</li>
@@ -243,7 +119,7 @@
 		<div class="link-editor-form-row">
 			<label>
 				<span>{vocabulary.linkType}</span>
-				<select bind:value={selectedType} disabled={submitting} aria-label={`${vocabulary.semanticLink}種別`}>
+				<select bind:value={controller.selectedType} disabled={controller.submitting} aria-label={`${vocabulary.semanticLink}種別`}>
 					{#each LINK_TYPES as type}
 						<option value={type}>{type}</option>
 					{/each}
@@ -251,41 +127,41 @@
 			</label>
 			<label>
 				<span>向き</span>
-				<select bind:value={direction} disabled={submitting} aria-label={`${vocabulary.semanticLink}の向き`}>
+				<select bind:value={controller.direction} disabled={controller.submitting} aria-label={`${vocabulary.semanticLink}の向き`}>
 					<option value="outgoing">選択中 → 検索結果</option>
 					<option value="incoming">検索結果 → 選択中</option>
 				</select>
 			</label>
 		</div>
-		{#if isSymmetricLinkType(selectedType)}
-			<p class="link-editor-hint">{selectedType}は対称な関係のため、保存時に向きは正規化されます。</p>
+		{#if isSymmetricLinkType(controller.selectedType)}
+			<p class="link-editor-hint">{controller.selectedType}は対称な関係のため、保存時に向きは正規化されます。</p>
 		{/if}
 		<label>
 			<span>説明（任意）</span>
-			<input bind:value={reason} disabled={submitting} placeholder="この関係の理由" />
+			<input bind:value={controller.reason} disabled={controller.submitting} placeholder="この関係の理由" />
 		</label>
 		<div class="link-editor-search">
 			<input
 				type="search"
-				bind:value={searchQuery}
-				oninput={scheduleSearch}
+				bind:value={controller.searchQuery}
+				oninput={() => controller.scheduleSearch(props.selectedWorkId)}
 				placeholder="ノードを検索して接続…"
 				aria-label="接続先を検索"
-				aria-busy={searching}
-				disabled={submitting}
+				aria-busy={controller.searching}
+				disabled={controller.submitting}
 				autocomplete="off"
 			/>
-			{#if searching}<span class="link-editor-searching" aria-label="検索中">…</span>{/if}
+			{#if controller.searching}<span class="link-editor-searching" aria-label="検索中">…</span>{/if}
 		</div>
-		{#if searchError}<p class="link-editor-error" role="alert">{searchError}</p>{/if}
-		{#if searchQuery.trim() && !searching && !searchError && searchResults.length === 0}
+		{#if controller.searchError}<p class="link-editor-error" role="alert">{controller.searchError}</p>{/if}
+		{#if controller.searchQuery.trim() && !controller.searching && !controller.searchError && controller.searchResults.length === 0}
 			<p class="link-editor-empty">一致する{vocabulary.work}はありません</p>
 		{/if}
-		{#if searchResults.length > 0}
+		{#if controller.searchResults.length > 0}
 			<ul class="link-editor-results" aria-label="接続先候補">
-				{#each searchResults as result (result.item.workId)}
+				{#each controller.searchResults as result (result.item.workId)}
 					<li>
-						<button type="button" disabled={submitting} onclick={() => void addLink(result)}>
+						<button type="button" disabled={controller.submitting} onclick={() => void controller.addLink(result, props.selectedWorkId)}>
 							<strong>{titleOf(result.item)}</strong>
 							{#if snippetOf(result.item)}<small>{snippetOf(result.item)}</small>{/if}
 						</button>
@@ -295,3 +171,174 @@
 		{/if}
 	</section>
 </section>
+
+<style>
+	.link-editor {
+		display: grid;
+		gap: 8px;
+		margin-top: 18px;
+		padding: 12px;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+	}
+	.link-editor h3,
+	.link-editor p,
+	.link-editor h4 {
+		margin: 0;
+	}
+	.link-editor-section {
+		display: grid;
+		gap: 7px;
+	}
+	.link-editor-section + .link-editor-section {
+		margin-top: 8px;
+		padding-top: 12px;
+		border-top: 1px solid var(--border);
+	}
+	.link-editor-section h4 {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		color: var(--muted);
+		font-size: 10px;
+		font-weight: normal;
+		letter-spacing: .08em;
+	}
+	.link-editor-section h4 small {
+		font-size: inherit;
+		letter-spacing: normal;
+	}
+	.link-editor-list,
+	.link-editor-results {
+		display: grid;
+		gap: 5px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.link-editor-list li {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		min-width: 0;
+		padding: 7px;
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		background: var(--surface-raised);
+	}
+	.link-editor-link-copy {
+		display: grid;
+		gap: 2px;
+		min-width: 0;
+	}
+	.link-editor-link-copy strong {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 11px;
+		font-weight: normal;
+	}
+	.link-editor-link-copy span,
+	.link-editor-link-copy small {
+		color: var(--muted);
+		font-size: 10px;
+	}
+	.link-editor-link-copy small {
+		font-style: italic;
+	}
+	.link-editor-link-actions {
+		display: flex;
+		flex: none;
+		gap: 3px;
+	}
+	.link-editor-link-actions button {
+		padding: 3px 6px;
+		border-color: transparent;
+		background: transparent;
+		color: var(--muted);
+		font-size: 10px;
+	}
+	.link-editor-link-actions button:hover:not(:disabled) {
+		border-color: var(--border-bright);
+		background: var(--surface-hover);
+		color: var(--text);
+	}
+	.link-editor-link-actions button.danger:hover:not(:disabled) {
+		border-color: #71433d;
+		color: #ffb8af;
+	}
+	.link-editor-form-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+		gap: 6px;
+	}
+	.link-editor label {
+		display: grid;
+		gap: 4px;
+		color: var(--muted);
+		font-size: 10px;
+	}
+	.link-editor label input,
+	.link-editor label select,
+	.link-editor-search input {
+		width: 100%;
+		min-width: 0;
+		padding: 7px 8px;
+		font-size: 11px;
+	}
+	.link-editor-hint,
+	.link-editor-empty,
+	.link-editor-error {
+		color: var(--muted);
+		font-size: 10px;
+	}
+	.link-editor-hint {
+		padding: 5px 7px;
+		border-left: 2px solid var(--cyan);
+		background: var(--surface-hover);
+	}
+	.link-editor-search {
+		position: relative;
+	}
+	.link-editor-searching {
+		position: absolute;
+		top: 6px;
+		right: 9px;
+		color: var(--cyan);
+		font-size: 12px;
+	}
+	.link-editor-error {
+		padding: 6px 8px;
+		border-left: 2px solid var(--red);
+		background: var(--surface-hover);
+		color: #ffb8af;
+	}
+	.link-editor-results {
+		max-height: 190px;
+		overflow: auto;
+	}
+	.link-editor-results button {
+		display: grid;
+		gap: 3px;
+		width: 100%;
+		padding: 7px 8px;
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		background: var(--surface-raised);
+		color: var(--text);
+		text-align: left;
+		font-size: 11px;
+	}
+	.link-editor-results button:hover:not(:disabled) {
+		border-color: var(--cyan);
+		background: var(--surface-hover);
+	}
+	.link-editor-results button small {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--muted);
+		font-size: 10px;
+	}
+</style>

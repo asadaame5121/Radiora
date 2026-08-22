@@ -108,10 +108,127 @@
 
 	.licenses-dialog {
 		position: fixed;
-		top: 50%;
-		left: 50%;
+		inset: 0;
+		margin: auto;
 		z-index: 1000;
+		width: min(880px, calc(100vw - 48px));
+		height: min(640px, calc(100vh - 96px));
+		border: 1px solid var(--border-bright);
+		border-radius: 10px;
+		padding: 0;
+		background: var(--surface-raised);
+		color: var(--text);
+		box-shadow: 0 24px 80px #000c;
+	}
+
+	.licenses-dialog__content {
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		padding: 24px;
+		box-sizing: border-box;
+	}
+
+	.licenses-dialog__header h2 {
+		margin: 8px 0;
+		font: normal 20px/1.4 var(--font-serif);
+		color: #edf9fa;
+	}
+
+	.licenses-dialog__header p:not(.eyebrow) {
 		margin: 0;
-		transform: translate(-50%, -50%);
+		font-size: 13px;
+		color: #afc1c9;
+		line-height: 1.6;
+	}
+
+	.licenses-dialog__layout {
+		display: grid;
+		grid-template-columns: 280px 1fr;
+		gap: 16px;
+		flex: 1;
+		min-height: 0;
+		margin-top: 16px;
+	}
+
+	.licenses-dialog__list {
+		overflow-y: auto;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+	}
+
+	.licenses-dialog__list li {
+		border-bottom: 1px solid var(--border);
+	}
+
+	.licenses-dialog__list li:last-child {
+		border-bottom: none;
+	}
+
+	.licenses-dialog__list button {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+		width: 100%;
+		padding: 8px 12px;
+		border: none;
+		background: transparent;
+		color: var(--text);
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.licenses-dialog__list button:hover {
+		background: var(--surface-hover);
+	}
+
+	.licenses-dialog__list small {
+		color: #afc1c9;
+	}
+
+	.licenses-dialog__detail {
+		overflow-y: auto;
+		padding: 12px 16px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+	}
+
+	.licenses-dialog__detail h3 {
+		margin: 0 0 8px;
+		font-size: 14px;
+	}
+
+	.licenses-dialog__detail pre {
+		margin: 0;
+		white-space: pre-wrap;
+		word-break: break-word;
+		font-size: 12px;
+		line-height: 1.55;
+		color: #c7d5da;
+	}
+
+	.licenses-dialog__hint {
+		margin: 0;
+		color: #afc1c9;
+		font-size: 13px;
+	}
+
+	.licenses-dialog__error {
+		color: #ffd2cd;
+	}
+
+	.licenses-dialog__actions {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 14px;
+	}
+
+	.licenses-dialog__actions button {
+		padding: 8px 16px;
 	}
 </style>

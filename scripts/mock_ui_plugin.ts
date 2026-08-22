@@ -361,12 +361,11 @@ export function mockUiPlugin(): Plugin {
 						const sourceBranchId = String(args[0]);
 						const name = String(args[1] ?? "").trim();
 						if (!name) throw new Error("Branch name must not be empty");
-						const source = snapshot.items.find((item) =>
-							item.revisionSelector.mode === "branch" &&
-							item.revisionSelector.branchId === sourceBranchId
+						const source = snapshot.items.find((i) =>
+							i.revisionSelector.mode === "branch" && i.revisionSelector.branchId === sourceBranchId
 						);
 						if (!source) throw new Error(`Branch not found: ${sourceBranchId}`);
-						const baseRevision = mockRevisions(source.workId).at(-1)!;
+						const baseRevision = mockRevisions(source.workId).at(-1) ?? { id: "mock-rev-0" };
 						const branch = {
 							id: `mock-branch-${crypto.randomUUID()}`,
 							workId: source.workId,
@@ -404,7 +403,8 @@ export function mockUiPlugin(): Plugin {
 							parentId: string | null;
 							contextualHeading?: string;
 						};
-						const source = snapshot.items.find((item) => item.workId === input.workId)!;
+						const source = snapshot.items.find((i) => i.workId === input.workId) ??
+							snapshot.items[0];
 						const created = {
 							...source,
 							id: `mock-${crypto.randomUUID()}`,

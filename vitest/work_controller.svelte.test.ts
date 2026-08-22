@@ -27,7 +27,7 @@ function createPorts(apiOverrides: Partial<WorkApiPort>): WorkControllerPorts {
 		reload: vi.fn(async () => true),
 		openView: vi.fn(),
 		selectOccurrence: vi.fn(),
-		requestConfirmation: vi.fn(async () => {}),
+		requestConfirmation: vi.fn(async () => undefined),
 		reportError: vi.fn(),
 	};
 }
@@ -85,7 +85,7 @@ describe("work controller", () => {
 			updatedAt: "2026-08-09T00:00:00.000Z",
 		};
 		const after = { ...before, text: "after", updatedAt: "2026-08-09T00:01:00.000Z" };
-		const updateUnplacedWorkText = vi.fn(async () => {});
+		const updateUnplacedWorkText = vi.fn(async () => undefined);
 		const listUnplacedWorks = vi.fn()
 			.mockResolvedValueOnce([before])
 			.mockResolvedValueOnce([after]);

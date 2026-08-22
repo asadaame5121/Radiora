@@ -5,7 +5,16 @@
 	import ComparisonPane from "./ComparisonPane.svelte";
 	import RecoverySnapshots from "./RecoverySnapshots.svelte";
 	import WorkLineage from "./WorkLineage.svelte";
-	import MarkdownEditor from "./MarkdownEditor.svelte";
+	import AppTopBar from "./AppTopBar.svelte";
+	import LongFormEditor from "./LongFormEditor.svelte";
+	import OutlineView from "./OutlineView.svelte";
+	import type {
+		OutlineHelpers,
+		OutlineLinkSelectionHandlers,
+		OutlineLinkSelectionViewState,
+		OutlineRowHandlers,
+	} from "./outline_row_types.ts";
+	import { OutlineLinkSelectionController } from "./outline_link_selection_controller.svelte.ts";
 	import InspectorView, { type InspectorAsideMode } from "./InspectorView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
 	import InAppHelp from "./InAppHelp.svelte";
@@ -271,6 +280,9 @@
 		persistSnapshotCache: persistStartupSnapshotCache,
 		vocabulary,
 	});
+	const outlineLinkSelectionController = new OutlineLinkSelectionController({
+		createLink: (input) => api.createLink(input),
+	});
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
@@ -368,6 +380,18 @@
 		transientExpandedIds,
 		!browsingLocation.hoistOccurrenceId,
 	));
+	const outlineLinkSelection = $derived<OutlineLinkSelectionViewState>({
+		active: outlineLinkSelectionController.active,
+		originWorkId: outlineLinkSelectionController.originWorkId,
+		originDisplayName: outlineLinkSelectionController.originDisplayName,
+		selectedWorkIds: outlineLinkSelectionController.selectedWorkIds,
+		selectedWorkCount: outlineLinkSelectionController.selectedWorkCount,
+		selectedType: outlineLinkSelectionController.selectedType,
+		direction: outlineLinkSelectionController.direction,
+		reason: outlineLinkSelectionController.reason,
+		submitting: outlineLinkSelectionController.submitting,
+		error: outlineLinkSelectionController.error,
+	});
 	const dedicatedView = $derived(
 		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison" ||
 			viewMode === "tags" || viewMode === "options" || viewMode === "help",
@@ -487,6 +511,28 @@
 			outlineFilter = { ...EMPTY_OUTLINE_FILTER };
 		}
 	});
+
+	let outlineLinkSelectionContextKey = "";
+	$effect(() => {
+		const contextKey = outlineLinkSelectionContextKeyForCurrentState();
+		const contextChanged = Boolean(outlineLinkSelectionContextKey) &&
+			contextKey !== outlineLinkSelectionContextKey;
+		if (contextChanged && outlineLinkSelectionController.active) {
+			outlineLinkSelectionController.cancel();
+		}
+		outlineLinkSelectionContextKey = contextKey;
+	});
+
+	function outlineLinkSelectionContextKeyForCurrentState(): string {
+		return [
+			selectedId ?? "",
+			viewMode,
+			browsingLocation.hoistOccurrenceId ?? "",
+			outlineFilter.freeText,
+			outlineFilter.tagsAll,
+			outlineFilter.tagsNone,
+		].join("\u0000");
+	}
 
 	$effect(() => {
 		const workId = selectedItem?.workId;
@@ -701,6 +747,7 @@
 	}
 
 	function selectOccurrence(id: string | null): void {
+		if (id !== selectedId) outlineLinkSelectionController.cancel();
 		selectedId = id;
 		navigationController.browseToOccurrence(snapshot, id);
 	}
@@ -1592,6 +1639,15 @@ if (outlineItem) void openRecentItem(outlineItem);
 		await load();
 	}
 
+	function toggleLinkSelection(workId: string): void {
+		outlineLinkSelectionController.toggleTarget(workId);
+	}
+
+	async function submitOutlineLinkSelection(): Promise<void> {
+		const completed = await outlineLinkSelectionController.submit();
+		if (completed) await load();
+	}
+
 	async function removeLink(link: OutlineLink): Promise<void> {
 		await api.deleteLink(link.fromId, link.toId, link.type);
 		await load();
@@ -1759,12 +1815,11 @@ if (outlineItem) void openRecentItem(outlineItem);
 
 	async function openLinkEditor(): Promise<void> {
 		if (!selectedItem) return;
-		asideMode = "relation";
-		await tick();
-		const input = document.querySelector<HTMLInputElement>(
-			".link-editor input[type=search]",
-		);
-		input?.focus();
+		viewMode = "outline";
+		asideMode = "overview";
+		outlineFilter = { ...EMPTY_OUTLINE_FILTER };
+		outlineLinkSelectionContextKey = outlineLinkSelectionContextKeyForCurrentState();
+		outlineLinkSelectionController.start(selectedItem.workId, titleFor(selectedItem));
 	}
 
 	function inlineSemanticLinksFor(text: string) {
@@ -2088,6 +2143,48 @@ if (outlineItem) void openRecentItem(outlineItem);
 		if (typeof cause === "object" && cause && "message" in cause) return String(cause.message);
 		return String(cause);
 	}
+
+	const outlineHelpers = $derived<OutlineHelpers>({
+		inlineSemanticLinksFor,
+		semanticLinkAnnotationsFor,
+		bodyFor,
+		titleFor,
+		referencesIn,
+		annotationDirection,
+	});
+
+	const outlineHandlers: OutlineRowHandlers = {
+		openOccurrenceContextMenu,
+		handleOccurrenceContextMenuKeydown,
+		deselectFromBlank,
+		dropOn,
+		toggle,
+		selectOccurrence,
+		toggleLinkSelection,
+		hoistOccurrence,
+		updateLocalText,
+		updateEditorSelection,
+		handleKeydown,
+		openEditorInternalReference,
+		applyInternalReferenceCompletion,
+		updateInlineLinkSearch,
+		handleInlineLinkOmniKeydown,
+		selectInlineLinkCandidate,
+		createInlineLinkTarget,
+		selectInlineLinkType,
+		setInlineLinkDirection,
+		commitInlineLink,
+		openInternalReference,
+		inspectInlineSemanticLink,
+	};
+
+	const outlineLinkSelectionHandlers: OutlineLinkSelectionHandlers = {
+		setType: (type) => outlineLinkSelectionController.setType(type),
+		setDirection: (direction) => outlineLinkSelectionController.setDirection(direction),
+		setReason: (reason) => outlineLinkSelectionController.setReason(reason),
+		submit: submitOutlineLinkSelection,
+		cancel: () => outlineLinkSelectionController.cancel(),
+	};
 </script>
 
 <svelte:head><title>Radiora v2 PoC</title></svelte:head>
@@ -2140,101 +2237,42 @@ if (outlineItem) void openRecentItem(outlineItem);
 		onOpenHelp={openHelp}
 		onOpenRecentItem={(item) => void openRecentNavigationItem(item)}
 	/>
-	<header class="top-bar">
-		<div class="current-location">
-			<div class="view-switcher" role="group" aria-label="アウトラインとツリー">
-				<button class:active={viewMode === "outline"} aria-pressed={viewMode === "outline"}
-					onclick={() => (viewMode = "outline")}>アウトライン</button>
-				<button class:active={viewMode === "globalLineage"} aria-pressed={viewMode === "globalLineage"}
-					onclick={() => (viewMode = "globalLineage")}>ツリー</button>
-			</div>
-			{#if viewMode !== "outline" && viewMode !== "globalLineage"}
-				<small class="current-location__status">表示中: {viewModeLabel}</small>
-			{/if}
-		</div>
-		<form class="omniwindow" onsubmit={(event) => event.preventDefault()}>
-			<input
-				role="combobox"
-				aria-label={`検索・${vocabulary.quickCapture}`}
-				placeholder={`思索を検索、Shift+Enterで${quickCaptureDestinationLabel}へ作成…`}
-				bind:value={navigationController.quickCaptureText}
-				oninput={() => navigationController.queueSearch()}
-				onkeydown={handleSearchKeydown}
-				autocomplete="off"
-				disabled={startup.phase !== "ready" || quickCaptureSubmitting}
-				aria-autocomplete="list"
-				aria-haspopup="listbox"
-				aria-expanded={Boolean(quickCaptureText.trim())}
-				aria-controls={quickCaptureText.trim() ? "omniwindow-search-results" : undefined}
-				aria-activedescendant={searchActiveIndex >= 0 ? `omni-option-${searchActiveIndex}` : undefined}
-			/>
-			{#if quickCaptureText.trim()}
-				<div id="omniwindow-search-results" class="search-results" role="listbox" aria-label="検索と新規作成の候補">
-					{#if suggestions.length}<p class="search-section">タイトル</p>{/if}
-					{#each suggestions as suggestion, index}
-						<button id={`omni-option-${index}`} type="button" role="option"
-							aria-selected={searchActiveIndex === index}
-							class:active={searchActiveIndex === index}
-							onclick={() => selectItem(suggestion.item, suggestion.ancestorIds)}>
-							<strong>{suggestion.title || `(空の${vocabulary.work})`}</strong>
-							<small>先頭一致</small>
-						</button>
-					{/each}
-					{#if searchResults.length}<p class="search-section">本文・関連</p>{/if}
-					{#each searchResults as result, index}
-						<button id={`omni-option-${suggestions.length + index}`} type="button" role="option"
-							aria-selected={searchActiveIndex === suggestions.length + index}
-							class:active={searchActiveIndex === suggestions.length + index}
-							onclick={() => selectSearch(result)}>
-							<strong>{titleFor(result.item)}</strong>
-							<small>{result.reasons.map((reason) => reason.label).slice(0, 2).join(" · ")}</small>
-						</button>
-					{/each}
-					<p class="search-section">新規作成</p>
-					<button id={`omni-option-${searchEntries.length}`} type="button" role="option" class="create-candidate"
-						aria-selected={searchActiveIndex === searchEntries.length}
-						class:active={searchActiveIndex === searchEntries.length}
-						disabled={!commands.quickCapture.enabled}
-						title={commands.quickCapture.reason}
-						onclick={() => executeCommand("quickCapture")}>
-						<strong>「{quickCaptureText.trim()}」を{quickCaptureDestinationLabel}へ作成</strong>
-						<small>Shift+Enter</small>
-					</button>
-				</div>
-			{/if}
-		</form>
-		<div class="top-actions">
-			<div class="toolbar-group toolbar-nav" aria-label="ナビゲーション">
-				<button onclick={resumeEditing}>{vocabulary.resumePosition}から再開</button>
-			</div>
-			<button
-				onclick={exportMarkdown}
-				disabled={!commands.exportMarkdown.enabled || markdownExportSelectionRequired}
-				title={markdownExportSelectionRequired
-					? vocabulary.markdownExportSelectionRequired
-					: commands.exportMarkdown.reason}
-			>{vocabulary.markdownExportAction}</button>
-			<button class:active={viewMode === "help"} onclick={openHelp} title="F1でヘルプを開く">ヘルプ</button>
-			<button class:active={viewMode === "options"} onclick={() => (viewMode = "options")}>Option</button>
-			{#each bookmarks as bookmark}
-				<span class="bookmark-control">
-					<button onclick={() => openBookmark(bookmark.id)}>{vocabulary.bookmark} {bookmark.id.slice(0, 4)}</button>
-					<button aria-label={`${vocabulary.bookmark}を削除`} onclick={() => removeBookmark(bookmark.id)}>×</button>
-				</span>
-			{/each}
-			<button
-				class="inspector-jump"
-				type="button"
-				aria-expanded={!inspectorCollapsed}
-				aria-label={inspectorCollapsed ? "インスペクターペインを開く" : "インスペクターペインを閉じる"}
-				title={inspectorCollapsed ? "インスペクターペインを開く" : "インスペクターペインを閉じる"}
-				onclick={toggleInspector}
-			>{inspectorCollapsed ? "«" : "»"}</button>
-		</div>
-		{#if workingCopySaveStatus}
-			<WorkingCopySaveStatus status={workingCopySaveStatus} onRetry={retryWorkingCopySave} />
-		{/if}
-	</header>
+	<AppTopBar
+		{viewMode}
+		{viewModeLabel}
+		quickCaptureText={navigationController.quickCaptureText}
+		{quickCaptureDestinationLabel}
+		{quickCaptureSubmitting}
+		startupPhase={startup.phase}
+		{searchActiveIndex}
+		{suggestions}
+		{searchResults}
+		searchEntriesLength={searchEntries.length}
+		{commands}
+		{vocabulary}
+		{markdownExportSelectionRequired}
+		{bookmarks}
+		{inspectorCollapsed}
+		{workingCopySaveStatus}
+		onSetViewMode={(mode) => (viewMode = mode)}
+		onQuickCaptureInput={(val) => {
+			navigationController.quickCaptureText = val;
+			navigationController.queueSearch();
+		}}
+		onQuickCaptureKeydown={handleSearchKeydown}
+		onSelectSuggestion={(item, ancestorIds) => selectItem(item, ancestorIds ?? [])}
+		onSelectSearch={selectSearch}
+		onExecuteCommand={(cmd) => void executeCommand(cmd)}
+		onResumeEditing={resumeEditing}
+		onExportMarkdown={exportMarkdown}
+		onOpenHelp={openHelp}
+		onOpenOptions={() => (viewMode = "options")}
+		onOpenBookmark={openBookmark}
+		onRemoveBookmark={removeBookmark}
+		onToggleInspector={toggleInspector}
+		onRetryWorkingCopySave={retryWorkingCopySave}
+		{titleFor}
+	/>
 
 	{#if error}<div class="error">{error}<IconButton label="エラーメッセージを閉じる" onclick={() => (error = "")}>×</IconButton></div>{/if}
 
@@ -2249,284 +2287,44 @@ if (outlineItem) void openRecentItem(outlineItem);
 	>
 		{#if viewMode === "outline"}
 			<section class="outline-panel">
-				<!-- browsing.panes remains an internal extension point; vocabulary.pane is intentionally not rendered. -->
 				{#if longForm.active}
 					{#if selectedItem}
-						<div class="section-title"><span>Outline · 長文編集</span></div>
-						<div class="long-form-editor">
-							<div class="long-form-breadcrumb">
-								{#each selectedBreadcrumb as ancestor (ancestor.id)}
-									<span>{titleFor(ancestor)} › </span>
-								{/each}
-								<span class="long-form-title">{titleFor(selectedItem)}</span>
-							</div>
-							<div class="long-form-toolbar">
-								<button
-									class:active={!longForm.preview}
-									onclick={() => (longForm.preview = false)}
-								>編集</button>
-								<button
-									class:active={longForm.preview}
-									onclick={() => (longForm.preview = true)}
-								>プレビュー</button>
-							</div>
-							{#if longForm.preview}
-			<!-- nosemgrep: radiora.no-dangerous-html -- renderMarkdownPreview escapes raw HTML before adding controlled markup. -->
-			<div class="long-form-preview">{@html renderMarkdownPreview(longForm.text)}</div>
-							{:else}
-								<textarea
-									class="long-form-textarea"
-									value={longForm.text}
-									oninput={(event) => handleLongFormInput(event.currentTarget.value)}
-								></textarea>
-							{/if}
-							<div class="long-form-actions">
-								<button
-									onclick={saveLongFormEditing}
-									disabled={!longForm.dirty}
-								>保存</button>
-								<button onclick={cancelLongFormEditing}>キャンセル</button>
-							</div>
-						</div>
+						<LongFormEditor
+							item={selectedItem}
+							{selectedBreadcrumb}
+							preview={longForm.preview}
+							text={longForm.text}
+							dirty={longForm.dirty}
+							{titleFor}
+							{renderMarkdownPreview}
+							onInput={(value) => handleLongFormInput(value)}
+							onSave={saveLongFormEditing}
+							onCancel={cancelLongFormEditing}
+							onSetPreview={(prev) => (longForm.preview = prev)}
+						/>
 					{/if}
-			{:else}
-				<div class="outline-context">
-					<div>
-						{#if outlineContextBreadcrumb}
-							<nav class="outline-context__breadcrumb" aria-label={vocabulary.breadcrumb}>
-								{#each outlineContextBreadcrumbItems as ancestor (ancestor.id)}
-									<button onclick={() => openBreadcrumb(ancestor.id)}>{titleFor(ancestor)}</button>
-									<span aria-hidden="true">›</span>
-								{/each}
-							</nav>
-						{/if}
-						<h1>{outlineContextTitle}</h1>
-						<p class="outline-context__meta">
-							{visibleRows.filter((row) => !row.stash).length}件の{vocabulary.work} · 行をそのまま編集できます
-						</p>
-					</div>
-					<div class="section-title outline-actions">
-						{#if browsingLocation.hoistOccurrenceId}
-							<button onclick={requestClearHoist} disabled={!commands.clearHoist.enabled} title={commands.clearHoist.reason}>{vocabulary.hoist}を解除</button>
-						{/if}
-						<button onclick={createRoot}>＋ ルートに追加</button>
-					</div>
-				</div>
-				{#if loading}
-					<p class="empty">Loading…</p>
-				{:else if snapshot.items.length === 0}
-					<button class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
 				{:else}
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div class="rows" role="tree" aria-label={`${vocabulary.work}のアウトライン`} tabindex="0"
-						onmousedown={(event) => {
-							if (event.target === event.currentTarget) deselectFromBlank(event);
-						}}>
-						{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
-							{@const inlineLinks = inlineSemanticLinksFor(row.item.text)}
-							{@const annotations = semanticLinkAnnotationsFor(row.item.id)}
-							{@const rowBody = bodyFor(row.item)}
-							<div class:selected={selectedId === row.item.id} class:dragging={draggedId === row.item.id} class="row" style={`--depth:${row.depth}`} role="treeitem"
-								aria-selected={selectedId === row.item.id} tabindex="-1"
-								oncontextmenu={(event) => openOccurrenceContextMenu(row.item.id, "outline", event)}
-								onkeydown={(event) => handleOccurrenceContextMenuKeydown(row.item.id, "outline", event)}
-								draggable="true" ondragstart={() => draggedId = row.item.id} ondragend={() => draggedId = null}
-								onmousedown={(event) => {
-									if (event.target === event.currentTarget) deselectFromBlank(event);
-								}}
-								ondragover={(event) => event.preventDefault()} ondrop={() => dropOn(row.item)}>
-								<IconButton
-									class={`disclosure${row.hasChildren ? "" : " hidden"}`}
-									label={row.item.collapsed ? `${titleFor(row.item)}を展開` : `${titleFor(row.item)}を折りたたむ`}
-									onclick={() => toggle(row)}
-								>{row.item.collapsed ? "›" : "⌄"}</IconButton>
-								{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
-								<button class="bullet" aria-label={`${vocabulary.work}を選択`} title={`ダブルクリックでこの${vocabulary.work}へZoom`}
-									onclick={() => selectOccurrence(row.item.id)} ondblclick={() => hoistOccurrence(row.item.id)}>•</button>
-								<div class="internal-reference-editor">
-									<MarkdownEditor
-										value={row.item.text}
-										itemId={row.item.id}
-										onFocus={() => selectOccurrence(row.item.id)}
-										onChange={(_value, textarea) => updateLocalText(row.item.id, textarea)}
-										onSelectionChange={(textarea) => updateEditorSelection(row.item.id, textarea)}
-										onKeydown={(event, textarea, compositionGuard) =>
-											handleKeydown(event, row, textarea, compositionGuard)}
-										onInternalReference={openEditorInternalReference}
-									/>
-									{#if rowBody && selectedId !== row.item.id}
-										<p class="row-body-preview">{rowBody.replace(/\s+/gu, " ").trim()}</p>
-									{/if}
-					{#if inlineLinkCompletion?.itemId === row.item.id}
-						<div class="inline-link-completions inline-link-omniwindow" role="dialog"
-							aria-label={`@${vocabulary.semanticLink}先を検索`}>
-							<div class="inline-link-omniwindow__search">
-								<span aria-hidden="true">@</span>
-								<input
-									value={inlineLinkCompletion.query}
-									placeholder={`${vocabulary.work}を検索…`}
-									aria-label={`@${vocabulary.semanticLink}先を検索`}
-									readonly={inlineLinkCompletion.phase !== "candidate"}
-									disabled={inlineLinkCompletion.creating}
-									oninput={(event) => void updateInlineLinkSearch(row.item.id, event.currentTarget.value)}
-									onkeydown={(event) => handleInlineLinkOmniKeydown(event, row.item.id)}
-									onmousedown={(event) => event.stopPropagation()}
-								/>
-							</div>
-							<div class="inline-link-omniwindow__body">
-							{#if inlineLinkCompletion.phase === "candidate"}
-								<p class="inline-link-completions__hint" aria-live="polite">
-									{inlineLinkCompletion.searching ? "検索中…" : `@${vocabulary.semanticLink}先を検索`}
-								</p>
-								<div role="listbox" aria-label={`${vocabulary.work}候補`}>
-									{#each inlineLinkCompletion.candidates as candidate, index (candidate.scope + candidate.id)}
-										<button
-											class:active={index === inlineLinkCompletion.activeIndex}
-											role="option"
-											aria-selected={index === inlineLinkCompletion.activeIndex}
-											onmousedown={(event) => event.preventDefault()}
-											onclick={() => selectInlineLinkCandidate(row.item.id, candidate)}
-										>
-											<strong>{candidate.displayName}</strong>
-											<span>{candidate.scopeLabel} · {candidate.shortId}</span>
-										</button>
-									{/each}
-									{#if !inlineLinkCompletion.searching && inlineLinkCompletion.query.trim()}
-										<button
-											class="create-candidate"
-											class:active={inlineLinkCompletion.activeIndex === inlineLinkCompletion.candidates.length}
-											role="option"
-											aria-selected={inlineLinkCompletion.activeIndex === inlineLinkCompletion.candidates.length}
-											disabled={inlineLinkCompletion.creating}
-											onmousedown={(event) => event.preventDefault()}
-											onclick={() => void createInlineLinkTarget(row.item.id)}
-										>
-											<strong>「{inlineLinkCompletion.query.trim()}」を新規作成</strong>
-											<span>未配置箱 · Shift+Enter</span>
-										</button>
-									{/if}
-								</div>
-								{#if !inlineLinkCompletion.searching && !inlineLinkCompletion.candidates.length}
-									<p>一致する{vocabulary.work}はありません。</p>
-								{:else if !inlineLinkCompletion.searching && inlineLinkCompletion.query.trim()}
-									<p class="inline-link-completions__hint">候補から選択するか、Shift+Enterで新規作成できます。</p>
-								{/if}
-							{:else}
-								{#if inlineLinkCompletion.selectedCandidate}
-									<div class="inline-link-completions__target">
-										<strong>@{inlineLinkCompletion.selectedCandidate.displayName}</strong>
-										<span>{vocabulary.linkType}を選択</span>
-									</div>
-									{#if inlineLinkCompletion.phase === "type"}
-										<div class="inline-link-types" aria-label={vocabulary.linkType}>
-											{#each LINK_TYPES as type}
-												<button
-													class:active={inlineLinkCompletion.selectedType === type}
-													onmousedown={(event) => event.preventDefault()}
-													onclick={() => {
-																	selectInlineLinkType(row.item.id, type);
-													}}
-												>{type}</button>
-											{/each}
-										</div>
-									{:else}
-										<div class="inline-link-direction" aria-label={`${vocabulary.semanticLink}方向`}>
-											<button
-												class:active={inlineLinkCompletion.direction === "forward"}
-												onmousedown={(event) => event.preventDefault()}
-												onclick={() => setInlineLinkDirection(row.item.id, "forward")}
-											>{titleFor(row.item)} → {inlineLinkCompletion.selectedCandidate.displayName}</button>
-											<button
-												class:active={inlineLinkCompletion.direction === "reverse"}
-												onmousedown={(event) => event.preventDefault()}
-												onclick={() => setInlineLinkDirection(row.item.id, "reverse")}
-											>{inlineLinkCompletion.selectedCandidate.displayName} → {titleFor(row.item)}</button>
-										</div>
-										<p class="inline-link-preview" role="status">
-											{inlineLinkCompletion.direction === "forward"
-												? previewDirection(titleFor(row.item), inlineLinkCompletion.selectedType ?? "RELATED", inlineLinkCompletion.selectedCandidate.displayName)
-												: previewDirection(inlineLinkCompletion.selectedCandidate.displayName, inlineLinkCompletion.selectedType ?? "RELATED", titleFor(row.item))}
-										</p>
-										<button type="button" onclick={() => void commitInlineLink(row.item.id)}>この方向で{vocabulary.semanticLink}</button>
-									{/if}
-								{/if}
-							{/if}
-						</div>
-						</div>
-					{/if}
-									{#if internalReferenceCompletion?.itemId === row.item.id}
-										<div class="internal-reference-completions" role="listbox"
-											aria-label={`${vocabulary.internalReference}候補`}>
-											{#each internalReferenceCompletion.candidates as candidate, index (candidate.scope + candidate.id)}
-												<button class:active={index === internalReferenceCompletion.activeIndex}
-													role="option" aria-selected={index === internalReferenceCompletion.activeIndex}
-													onmousedown={(event) => event.preventDefault()}
-													onclick={() => applyInternalReferenceCompletion(row.item.id, candidate)}>
-													<strong>{candidate.displayName}</strong>
-													<span>{candidate.scopeLabel} · {candidate.shortId}</span>
-												</button>
-											{:else}
-												<p>一致する候補はありません。</p>
-											{/each}
-										</div>
-									{/if}
-									{#if referencesIn(row.item.text).length}
-										<div class="internal-reference-chips" aria-label={vocabulary.internalReference}>
-										{#each referencesIn(row.item.text) as reference (reference.range.start)}
-												<button onclick={() => openInternalReference(
-													row.item.text,
-													reference.scope,
-													reference.id,
-													reference.range.start,
-												)}>
-													{reference.scope === "work" ? vocabulary.work : vocabulary.revision}
-													· {reference.id.slice(0, 8)}
-												</button>
-											{/each}
-										</div>
-									{/if}
-									{#if inlineLinks.candidates.length || inlineLinks.diagnostics.length}
-										<div class="inline-semantic-links" aria-label="本文中の関係候補">
-											{#each inlineLinks.candidates as candidate (candidate.start)}
-												<button type="button" onclick={() => void inspectInlineSemanticLink(candidate)}>
-													<span>{candidate.source} · {candidate.type} · {candidate.target}</span>
-													{#if candidate.reason}<small>「{candidate.reason}」</small>{/if}
-												</button>
-											{/each}
-											{#each inlineLinks.diagnostics as diagnostic (diagnostic.start)}
-												<p class="inline-semantic-link-error" role="status">{diagnostic.message}</p>
-											{/each}
-										</div>
-									{/if}
-									{#if annotations.length}
-										<div class="semantic-link-annotations" aria-label="関係注釈">
-											{#each annotations as annotation (annotation.linkId)}
-												<p>
-													<span aria-hidden="true">┄ {annotationDirection(annotation)}</span>
-													<strong>{annotation.type}</strong>
-													<span>{annotation.otherDisplayName}</span>
-													<small>「{annotation.reason}」</small>
-												</p>
-											{/each}
-										</div>
-									{/if}
-								</div>
-							</div>
-						{/each}
-					</div>
+					<OutlineView
+						{outlineContextBreadcrumb}
+						{outlineContextBreadcrumbItems}
+						{outlineContextTitle}
+						{visibleRows}
+						{vocabulary}
+						{loading}
+						snapshotItemsLength={snapshot.items.length}
+						{selectedId}
+						{internalReferenceCompletion}
+						{inlineLinkCompletion}
+						stashItemIdsLength={snapshot.stashItemIds.length}
+						knotsLength={snapshot.knots.length}
+						{openBreadcrumb}
+						{createRoot}
+						handlers={outlineHandlers}
+						helpers={outlineHelpers}
+						linkSelection={outlineLinkSelection}
+						linkSelectionHandlers={outlineLinkSelectionHandlers}
+					/>
 				{/if}
-
-				{#if snapshot.stashItemIds.length}
-					<div class="section-title stash-title"><span>Stash / Knots</span><small>{snapshot.knots.length} knot</small></div>
-					<div class="stash-list">
-						{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
-							<button class:selected={selectedId === row.item.id} onclick={() => selectOccurrence(row.item.id)}>
-								<span>∞</span>{row.item.text || `(空の${vocabulary.work})`}
-							</button>
-						{/each}
-					</div>
-				{/if}
-			{/if}
 			</section>
 		{:else if viewMode === "today"}
 			<TodayView
