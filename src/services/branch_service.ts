@@ -10,6 +10,7 @@ import type {
 } from "../domain/models.ts";
 import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
 import { applyGlobalLineageFilter, type GlobalLineageFilter } from "./global_lineage_filter.ts";
+import { mergeImplicitFromLinks } from "./implicit_relation.ts";
 
 type BranchStore = OutlineStorePort & RelationStorePort & WorkStorePort;
 
@@ -186,7 +187,8 @@ export class BranchService {
 			}
 		}
 
-		const candidateLinks = links.filter((link) =>
+		const mergedLinks = mergeImplicitFromLinks(items, links);
+		const candidateLinks = mergedLinks.filter((link) =>
 			link.status !== "retracted" &&
 			activeWorkIds.has(link.from.workId) &&
 			activeWorkIds.has(link.to.workId)

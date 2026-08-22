@@ -155,7 +155,9 @@ try {
 		items: snapshot.items.length,
 		links: snapshot.links.length,
 	});
-	if (snapshot.items.length !== 7 || snapshot.links.length !== 2) {
+	const explicitLinks = snapshot.links.filter((link) => link.origin !== "derived");
+	// biome-ignore lint/style/noMagicNumbers: Integration test expects 7 items and 2 explicit links
+	if (snapshot.items.length !== 7 || explicitLinks.length !== 2) {
 		throw new Error(`Persistence verification failed: ${JSON.stringify(snapshot)}`);
 	}
 	const expectedStashIds = [
@@ -175,7 +177,7 @@ try {
 	if (
 		!migratedLegacy ||
 		!migratedLegacy.text.includes("日本語・**Markdown**・radiora://item/") ||
-		snapshot.links.some((link) => link.type === "FROM")
+		explicitLinks.some((link) => link.type === "FROM")
 	) {
 		throw new Error(`Version 0 migration verification failed: ${JSON.stringify(snapshot)}`);
 	}

@@ -17,6 +17,8 @@ import type {
 	OutlineStorePort,
 	RelationStorePort,
 } from "../storage/graph_store.ts";
+import { ancestorsOf, isReservedTagAlias, neighborMap, rootId } from "./discovery_helpers.ts";
+import { fetchActiveMergedLinks } from "./implicit_relation.ts";
 import { runRuleQuery } from "./rule_query.ts";
 import { normalizeSearchText, titleOf } from "./search_text.ts";
 import { buildSparseOutline } from "./sparse_outline.ts";
@@ -448,8 +450,8 @@ export class DiscoveryOperations {
 		return [...expansions.values()];
 	}
 
-	private async listActiveLinks(): Promise<OutlineLink[]> {
-		return (await this.store.listLinks()).filter((link) => link.status !== "retracted");
+	private listActiveLinks(): Promise<OutlineLink[]> {
+		return fetchActiveMergedLinks(this.store);
 	}
 
 	private addSuggestion(
@@ -498,46 +500,4 @@ export class DiscoveryOperations {
 		}
 		return `s-${(hash >>> 0).toString(16)}`;
 	}
-}
-
-function neighborMap(links: OutlineLink[]): Map<string, Set<string>> {
-	const result = new Map<string, Set<string>>();
-	for (const link of links) {
-		const from = result.get(link.fromId) ?? new Set<string>();
-		const to = result.get(link.toId) ?? new Set<string>();
-		from.add(link.toId);
-		to.add(link.fromId);
-		result.set(link.fromId, from);
-		result.set(link.toId, to);
-	}
-	return result;
-}
-
-function rootId(item: OutlineItem, byId: Map<string, OutlineItem>): string {
-	const visited = new Set([item.id]);
-	let current = item;
-	while (current.parentId && !visited.has(current.parentId)) {
-		visited.add(current.parentId);
-		const parent = byId.get(current.parentId);
-		if (!parent) break;
-		current = parent;
-	}
-	return current.id;
-}
-
-function isReservedTagAlias(alias: SearchAlias): boolean {
-	return alias.canonical.startsWith("#") &&
-		alias.variants.every((variant) => variant.startsWith("#"));
-}
-
-function ancestorsOf(item: OutlineItem, byId: Map<string, OutlineItem>): string[] {
-	const result: string[] = [];
-	const visited = new Set([item.id]);
-	let parentId = item.parentId;
-	while (parentId && !visited.has(parentId)) {
-		visited.add(parentId);
-		result.unshift(parentId);
-		parentId = byId.get(parentId)?.parentId ?? null;
-	}
-	return result;
 }

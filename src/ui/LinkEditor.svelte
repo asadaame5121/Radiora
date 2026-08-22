@@ -207,7 +207,7 @@
 					<li>
 						<div class="link-editor-link-copy">
 							<strong>{titleForWork(otherWorkId(link))}</strong>
-							<span>{link.type} {linkDirection(link)}</span>
+							<span>{link.type} {linkDirection(link)}{#if link.origin === "derived"}（暗黙）{/if}</span>
 							{#if link.reason}<small>「{link.reason}」</small>{/if}
 						</div>
 						<div class="link-editor-link-actions">
@@ -220,15 +220,15 @@
 							{/if}
 							<button
 								type="button"
-								disabled={Boolean(activeLinkId) || submitting || isSymmetricLinkType(link.type)}
-								title={isSymmetricLinkType(link.type) ? "対称な関係には向きがありません" : "向きを反転"}
+								disabled={Boolean(activeLinkId) || submitting || isSymmetricLinkType(link.type) || link.origin === "derived"}
+								title={link.origin === "derived" ? "アウトライン階層から導出された関係のため直接変更できません" : isSymmetricLinkType(link.type) ? "対称な関係には向きがありません" : "向きを反転"}
 								onclick={() => void reverseLink(link)}
 							>反転</button>
 							<button
 								type="button"
 								class="danger"
-								disabled={Boolean(activeLinkId) || submitting}
-								title="接続を解除"
+								disabled={Boolean(activeLinkId) || submitting || link.origin === "derived"}
+								title={link.origin === "derived" ? "アウトライン階層から導出された関係のため直接変更できません" : "接続を解除"}
 								onclick={() => void deleteLink(link)}
 							>解除</button>
 						</div>

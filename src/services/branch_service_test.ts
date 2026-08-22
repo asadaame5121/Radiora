@@ -170,6 +170,47 @@ Deno.test("global lineage projects one node per Work and only promoted confirmed
 	);
 });
 
+Deno.test("global lineage projection includes implicit FROM links from outline hierarchy", async () => {
+	const store = await createStore();
+	// Create another work that is placed under "work" in outline hierarchy
+	await store.createWorkBundle(
+		{ id: "child-work", createdAt: CREATED_AT, updatedAt: CREATED_AT },
+		{
+			id: "child-main",
+			workId: "child-work",
+			name: "main",
+			headRevisionId: null,
+			createdAt: CREATED_AT,
+		},
+		{
+			branchId: "child-main",
+			workId: "child-work",
+			text: "Child thought",
+			updatedAt: CREATED_AT,
+		},
+		{
+			id: "child-occurrence",
+			workId: "child-work",
+			parentOccurrenceId: "occurrence", // "occurrence" is the occurrence id of "work" in createStore()
+			orderKey: 2048,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "child-main" },
+		},
+	);
+
+	const branches = service(store);
+	const projection = await branches.listGlobalLineage({
+		includeIsolated: false,
+		linkTypes: ["FROM"],
+		includeWorkIds: [],
+	});
+
+	assertEquals(projection.snapshot.links.length, 1);
+	assertEquals(projection.snapshot.links[0].from.workId, "work");
+	assertEquals(projection.snapshot.links[0].to.workId, "child-work");
+	assertEquals(projection.snapshot.links[0].type, "FROM");
+});
+
 Deno.test("global lineage filter removes isolated Works and keeps promoted Branches", async () => {
 	const store = await createStore();
 	await store.createWorkBundle(
