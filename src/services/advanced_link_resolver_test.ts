@@ -1,4 +1,4 @@
-import { assertEquals, assertMatch } from "jsr:@std/assert@1";
+import { assertEquals, assertExists, assertMatch } from "jsr:@std/assert@1";
 import { OutlineService } from "./outline_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 
@@ -44,7 +44,8 @@ Deno.test("Advanced Link keeps duplicate names ambiguous and returns all identif
 	assertEquals(resolved.source.candidates.length, 2);
 	const firstCandidate = resolved.source.candidates.find((candidate) =>
 		candidate.workId === first.workId
-	)!;
+	);
+	assertExists(firstCandidate);
 	assertEquals(firstCandidate.placements.length, 2);
 	assertEquals(firstCandidate.placements.map((placement) => placement.breadcrumb), [
 		["Duplicate", "Second placement"],

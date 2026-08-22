@@ -8,9 +8,12 @@
 	} from "./editor_controller.svelte.ts";
 	import type {
 		OutlineHelpers,
+		OutlineLinkSelectionHandlers,
+		OutlineLinkSelectionViewState,
 		OutlineRowHandlers,
 	} from "./outline_row_types.ts";
 	import OutlineRowItem from "./OutlineRowItem.svelte";
+	import OutlineLinkSelectionBar from "./OutlineLinkSelectionBar.svelte";
 
 	let {
 		outlineContextBreadcrumb,
@@ -29,6 +32,8 @@
 		createRoot,
 		handlers,
 		helpers,
+		linkSelection,
+		linkSelectionHandlers,
 	}: {
 		outlineContextBreadcrumb: string;
 		outlineContextBreadcrumbItems: readonly OutlineItem[];
@@ -46,6 +51,8 @@
 		createRoot: () => void;
 		handlers: OutlineRowHandlers;
 		helpers: OutlineHelpers;
+		linkSelection: OutlineLinkSelectionViewState;
+		linkSelectionHandlers: OutlineLinkSelectionHandlers;
 	} = $props();
 
 	let draggedId = $state<string | null>(null);
@@ -76,6 +83,12 @@
 {:else if snapshotItemsLength === 0}
 	<button type="button" class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
 {:else}
+	{#if linkSelection.active}
+		<OutlineLinkSelectionBar
+			state={linkSelection}
+			handlers={linkSelectionHandlers}
+		/>
+	{/if}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="rows"
@@ -96,6 +109,7 @@
 				{inlineLinkCompletion}
 				{handlers}
 				{helpers}
+				linkSelection={linkSelection}
 				onDragStart={(id) => (draggedId = id)}
 				onDragEnd={() => (draggedId = null)}
 			/>

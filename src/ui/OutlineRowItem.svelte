@@ -7,6 +7,7 @@
 	} from "./editor_controller.svelte.ts";
 	import type {
 		OutlineHelpers,
+		OutlineLinkSelectionViewState,
 		OutlineRowHandlers,
 	} from "./outline_row_types.ts";
 	import IconButton from "./primitives/IconButton.svelte";
@@ -23,6 +24,7 @@
 		inlineLinkCompletion,
 		handlers,
 		helpers,
+		linkSelection,
 		onDragStart,
 		onDragEnd,
 	}: {
@@ -34,6 +36,7 @@
 		inlineLinkCompletion: InlineLinkCompletionState | null;
 		handlers: OutlineRowHandlers;
 		helpers: OutlineHelpers;
+		linkSelection: OutlineLinkSelectionViewState;
 		onDragStart: (id: string) => void;
 		onDragEnd: () => void;
 	} = $props();
@@ -43,9 +46,16 @@
 	const inlineLinks = $derived(helpers.inlineSemanticLinksFor(row.item.text));
 	const annotations = $derived(helpers.semanticLinkAnnotationsFor(row.item.id));
 	const rowBody = $derived(helpers.bodyFor(row.item));
+	const linkSelectionOrigin = $derived(
+		linkSelection.active && linkSelection.originWorkId === row.item.workId,
+	);
+	const linkSelectionChecked = $derived(
+		linkSelection.active && linkSelection.selectedWorkIds.has(row.item.workId),
+	);
 </script>
 
 <div
+	class:link-selection-mode={linkSelection.active}
 	class:selected={selectedId === row.item.id}
 	class:dragging={draggedId === row.item.id}
 	class="row"
@@ -63,21 +73,35 @@
 	}}
 	ondragover={(event) => event.preventDefault()}
 	ondrop={() => handlers.dropOn(row.item)}
->
-	<IconButton
-		class={`disclosure${row.hasChildren ? "" : " hidden"}`}
-		label={row.item.collapsed ? `${helpers.titleFor(row.item)}を展開` : `${helpers.titleFor(row.item)}を折りたたむ`}
-		onclick={() => handlers.toggle(row)}
-	>{row.item.collapsed ? "›" : "⌄"}</IconButton>
-	{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
-	<button
-		type="button"
-		class="bullet"
-		aria-label={`${vocabulary.work}を選択`}
-		title={`ダブルクリックでこの${vocabulary.work}へZoom`}
-		onclick={() => handlers.selectOccurrence(row.item.id)}
-		ondblclick={() => handlers.hoistOccurrence(row.item.id)}
-	>•</button>
+	>
+	{#if linkSelection.active}
+		<label class="link-selection-toggle">
+			<input
+				type="checkbox"
+				checked={linkSelectionChecked}
+				disabled={linkSelectionOrigin || linkSelection.submitting}
+				aria-label={`${helpers.titleFor(row.item)}を接続対象にする`}
+				onchange={() => handlers.toggleLinkSelection(row.item.workId)}
+			/>
+			{#if linkSelectionOrigin}<span class="link-selection-origin">起点</span>{/if}
+		</label>
+	{/if}
+	<div class="row-controls">
+		<IconButton
+			class={`disclosure${row.hasChildren ? "" : " hidden"}`}
+			label={row.item.collapsed ? `${helpers.titleFor(row.item)}を展開` : `${helpers.titleFor(row.item)}を折りたたむ`}
+			onclick={() => handlers.toggle(row)}
+		>{row.item.collapsed ? "›" : "⌄"}</IconButton>
+		{#if row.item.referenceStub}<span class="reference-stub" title="再帰参照">↩</span>{/if}
+		<button
+			type="button"
+			class="bullet"
+			aria-label={`${vocabulary.work}を選択`}
+			title={`ダブルクリックでこの${vocabulary.work}へZoom`}
+			onclick={() => handlers.selectOccurrence(row.item.id)}
+			ondblclick={() => handlers.hoistOccurrence(row.item.id)}
+		>•</button>
+	</div>
 	<div class="internal-reference-editor">
 		<MarkdownEditor
 			value={row.item.text}
@@ -164,7 +188,7 @@
 		--indent: calc(var(--depth) * 24px);
 		position: relative;
 		display: grid;
-		grid-template-columns: 22px 20px 1fr 26px;
+		grid-template-columns: 42px minmax(0, 1fr);
 		align-items: start;
 		padding: 3px 4px 3px var(--indent);
 		border-radius: 5px;
@@ -185,6 +209,36 @@
 	.row.dragging {
 		opacity: .5;
 		box-shadow: inset 2px 0 var(--amber);
+	}
+	.row.link-selection-mode {
+		grid-template-columns: 32px 42px minmax(0, 1fr);
+	}
+	.row-controls {
+		display: flex;
+		align-items: flex-start;
+		min-width: 0;
+	}
+	.link-selection-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 28px;
+		color: var(--cyan-soft);
+		font-size: 9px;
+	}
+	.link-selection-toggle input {
+		width: 14px;
+		height: 14px;
+		margin: 0;
+		accent-color: var(--cyan);
+	}
+	.link-selection-origin {
+		padding: 2px 3px;
+		border: 1px solid var(--cyan);
+		border-radius: 3px;
+		font-size: 9px;
+		line-height: 1.1;
+		white-space: nowrap;
 	}
 	.internal-reference-editor {
 		position: relative;

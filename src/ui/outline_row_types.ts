@@ -14,6 +14,29 @@ export type InlineSemanticLinksProjection = {
 	readonly diagnostics: readonly InlineSemanticLinkDiagnostic[];
 };
 
+export type OutlineLinkSelectionDirection = "outgoing" | "incoming";
+
+export type OutlineLinkSelectionViewState = {
+	readonly active: boolean;
+	readonly originWorkId: string | null;
+	readonly originDisplayName: string;
+	readonly selectedWorkIds: ReadonlySet<string>;
+	readonly selectedWorkCount: number;
+	readonly selectedType: LinkType;
+	readonly direction: OutlineLinkSelectionDirection;
+	readonly reason: string;
+	readonly submitting: boolean;
+	readonly error: string;
+};
+
+export type OutlineLinkSelectionHandlers = {
+	setType: (type: LinkType) => void;
+	setDirection: (direction: OutlineLinkSelectionDirection) => void;
+	setReason: (reason: string) => void;
+	submit: () => void | Promise<void>;
+	cancel: () => void;
+};
+
 export type OutlineRowHandlers = {
 	openOccurrenceContextMenu: (id: string, mode: "outline", event: MouseEvent) => void;
 	handleOccurrenceContextMenuKeydown: (id: string, mode: "outline", event: KeyboardEvent) => void;
@@ -21,6 +44,7 @@ export type OutlineRowHandlers = {
 	dropOn: (item: OutlineItem) => void;
 	toggle: (row: VisibleRow) => void;
 	selectOccurrence: (id: string) => void;
+	toggleLinkSelection: (workId: string) => void;
 	hoistOccurrence: (id: string) => void;
 	updateLocalText: (id: string, textarea: HTMLTextAreaElement) => void;
 	updateEditorSelection: (id: string, textarea: HTMLTextAreaElement) => void;

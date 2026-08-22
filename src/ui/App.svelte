@@ -8,7 +8,13 @@
 	import AppTopBar from "./AppTopBar.svelte";
 	import LongFormEditor from "./LongFormEditor.svelte";
 	import OutlineView from "./OutlineView.svelte";
-	import type { OutlineHelpers, OutlineRowHandlers } from "./outline_row_types.ts";
+	import type {
+		OutlineHelpers,
+		OutlineLinkSelectionHandlers,
+		OutlineLinkSelectionViewState,
+		OutlineRowHandlers,
+	} from "./outline_row_types.ts";
+	import { OutlineLinkSelectionController } from "./outline_link_selection_controller.svelte.ts";
 	import InspectorView, { type InspectorAsideMode } from "./InspectorView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
 	import InAppHelp from "./InAppHelp.svelte";
@@ -274,6 +280,9 @@
 		persistSnapshotCache: persistStartupSnapshotCache,
 		vocabulary,
 	});
+	const outlineLinkSelectionController = new OutlineLinkSelectionController({
+		createLink: (input) => api.createLink(input),
+	});
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
@@ -371,6 +380,18 @@
 		transientExpandedIds,
 		!browsingLocation.hoistOccurrenceId,
 	));
+	const outlineLinkSelection = $derived<OutlineLinkSelectionViewState>({
+		active: outlineLinkSelectionController.active,
+		originWorkId: outlineLinkSelectionController.originWorkId,
+		originDisplayName: outlineLinkSelectionController.originDisplayName,
+		selectedWorkIds: outlineLinkSelectionController.selectedWorkIds,
+		selectedWorkCount: outlineLinkSelectionController.selectedWorkCount,
+		selectedType: outlineLinkSelectionController.selectedType,
+		direction: outlineLinkSelectionController.direction,
+		reason: outlineLinkSelectionController.reason,
+		submitting: outlineLinkSelectionController.submitting,
+		error: outlineLinkSelectionController.error,
+	});
 	const dedicatedView = $derived(
 		viewMode === "globalLineage" || viewMode === "workLineage" || viewMode === "comparison" ||
 			viewMode === "tags" || viewMode === "options" || viewMode === "help",
@@ -490,6 +511,28 @@
 			outlineFilter = { ...EMPTY_OUTLINE_FILTER };
 		}
 	});
+
+	let outlineLinkSelectionContextKey = "";
+	$effect(() => {
+		const contextKey = outlineLinkSelectionContextKeyForCurrentState();
+		const contextChanged = Boolean(outlineLinkSelectionContextKey) &&
+			contextKey !== outlineLinkSelectionContextKey;
+		if (contextChanged && outlineLinkSelectionController.active) {
+			outlineLinkSelectionController.cancel();
+		}
+		outlineLinkSelectionContextKey = contextKey;
+	});
+
+	function outlineLinkSelectionContextKeyForCurrentState(): string {
+		return [
+			selectedId ?? "",
+			viewMode,
+			browsingLocation.hoistOccurrenceId ?? "",
+			outlineFilter.freeText,
+			outlineFilter.tagsAll,
+			outlineFilter.tagsNone,
+		].join("\u0000");
+	}
 
 	$effect(() => {
 		const workId = selectedItem?.workId;
@@ -704,6 +747,7 @@
 	}
 
 	function selectOccurrence(id: string | null): void {
+		if (id !== selectedId) outlineLinkSelectionController.cancel();
 		selectedId = id;
 		navigationController.browseToOccurrence(snapshot, id);
 	}
@@ -1596,6 +1640,15 @@
 		await load();
 	}
 
+	function toggleLinkSelection(workId: string): void {
+		outlineLinkSelectionController.toggleTarget(workId);
+	}
+
+	async function submitOutlineLinkSelection(): Promise<void> {
+		const completed = await outlineLinkSelectionController.submit();
+		if (completed) await load();
+	}
+
 	async function removeLink(link: OutlineLink): Promise<void> {
 		await api.deleteLink(link.fromId, link.toId, link.type);
 		await load();
@@ -1763,12 +1816,11 @@
 
 	async function openLinkEditor(): Promise<void> {
 		if (!selectedItem) return;
-		asideMode = "relation";
-		await tick();
-		const input = document.querySelector<HTMLInputElement>(
-			".link-editor input[type=search]",
-		);
-		input?.focus();
+		viewMode = "outline";
+		asideMode = "overview";
+		outlineFilter = { ...EMPTY_OUTLINE_FILTER };
+		outlineLinkSelectionContextKey = outlineLinkSelectionContextKeyForCurrentState();
+		outlineLinkSelectionController.start(selectedItem.workId, titleFor(selectedItem));
 	}
 
 	function inlineSemanticLinksFor(text: string) {
@@ -2109,6 +2161,7 @@
 		dropOn,
 		toggle,
 		selectOccurrence,
+		toggleLinkSelection,
 		hoistOccurrence,
 		updateLocalText,
 		updateEditorSelection,
@@ -2124,6 +2177,14 @@
 		commitInlineLink,
 		openInternalReference,
 		inspectInlineSemanticLink,
+	};
+
+	const outlineLinkSelectionHandlers: OutlineLinkSelectionHandlers = {
+		setType: (type) => outlineLinkSelectionController.setType(type),
+		setDirection: (direction) => outlineLinkSelectionController.setDirection(direction),
+		setReason: (reason) => outlineLinkSelectionController.setReason(reason),
+		submit: submitOutlineLinkSelection,
+		cancel: () => outlineLinkSelectionController.cancel(),
 	};
 </script>
 
@@ -2261,6 +2322,8 @@
 						{createRoot}
 						handlers={outlineHandlers}
 						helpers={outlineHelpers}
+						linkSelection={outlineLinkSelection}
+						linkSelectionHandlers={outlineLinkSelectionHandlers}
 					/>
 				{/if}
 			</section>
