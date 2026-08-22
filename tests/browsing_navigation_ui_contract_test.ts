@@ -17,6 +17,8 @@ Deno.test("App exposes browsing scope, breadcrumb, and recent-edit navigation", 
 	assert(app.includes("$derived(navigationController.browsingLocation)"));
 	assert(app.includes("$derived(navigationController.browsingPane)"));
 	assert(outlineView.includes("vocabulary.breadcrumb"));
+	assert(outlineView.includes("vocabulary.hoist"));
+	assert(outlineView.includes("onClearHoist"));
 	assert(outlineRowItem.includes("vocabulary.work"));
 	assert(app.includes("recentEditedItems"));
 	assert(app.includes("openRecentItem"));

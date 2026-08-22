@@ -16,6 +16,10 @@
 		outlineContextBreadcrumb,
 		outlineContextBreadcrumbItems,
 		outlineContextTitle,
+		hoisted,
+		canClearHoist,
+		clearHoistReason,
+		onClearHoist,
 		visibleRows,
 		vocabulary,
 		loading,
@@ -33,6 +37,10 @@
 		outlineContextBreadcrumb: string;
 		outlineContextBreadcrumbItems: readonly OutlineItem[];
 		outlineContextTitle: string;
+		hoisted: boolean;
+		canClearHoist: boolean;
+		clearHoistReason: string | undefined;
+		onClearHoist: () => void;
 		visibleRows: readonly VisibleRow[];
 		vocabulary: UiVocabulary;
 		loading: boolean;
@@ -67,6 +75,9 @@
 		</p>
 	</div>
 	<div class="section-title outline-actions">
+		{#if hoisted}
+			<button type="button" onclick={onClearHoist} disabled={!canClearHoist} title={clearHoistReason}>{vocabulary.hoist}を解除</button>
+		{/if}
 		<button type="button" onclick={createRoot}>＋ ルートに追加</button>
 	</div>
 </div>

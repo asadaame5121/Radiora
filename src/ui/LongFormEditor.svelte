@@ -8,7 +8,6 @@
 		text,
 		dirty,
 		titleFor,
-		renderMarkdownPreview,
 		onInput,
 		onSave,
 		onCancel,
@@ -20,7 +19,6 @@
 		text: string;
 		dirty: boolean;
 		titleFor: (item: OutlineItem) => string;
-		renderMarkdownPreview: (text: string) => string;
 		onInput: (value: string) => void;
 		onSave: () => void;
 		onCancel: () => void;
@@ -49,8 +47,7 @@
 		>プレビュー</button>
 	</div>
 	{#if preview}
-		<!-- nosemgrep: radiora.no-dangerous-html -- renderMarkdownPreview escapes raw HTML before adding controlled markup. -->
-		<div class="long-form-preview">{@html renderMarkdownPreview(text)}</div>
+		<div class="long-form-preview">{text}</div>
 	{:else}
 		<textarea
 			class="long-form-textarea"

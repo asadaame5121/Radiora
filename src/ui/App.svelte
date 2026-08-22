@@ -1376,10 +1376,6 @@
 		longForm.dirty = true;
 	}
 
-	function renderMarkdownPreview(text: string): string {
-		return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-	}
-
 	function clearOutlineFilter(): void {
 		outlineFilter = { ...EMPTY_OUTLINE_FILTER };
 	}
@@ -2233,11 +2229,10 @@
 							item={selectedItem}
 							{selectedBreadcrumb}
 							preview={longForm.preview}
-							text={longForm.text}
-							dirty={longForm.dirty}
-							{titleFor}
-							{renderMarkdownPreview}
-							onInput={(value) => handleLongFormInput(value)}
+						text={longForm.text}
+						dirty={longForm.dirty}
+						{titleFor}
+						onInput={(value) => handleLongFormInput(value)}
 							onSave={saveLongFormEditing}
 							onCancel={cancelLongFormEditing}
 							onSetPreview={(prev) => (longForm.preview = prev)}
@@ -2248,6 +2243,10 @@
 						{outlineContextBreadcrumb}
 						{outlineContextBreadcrumbItems}
 						{outlineContextTitle}
+						hoisted={Boolean(browsingLocation.hoistOccurrenceId)}
+						canClearHoist={commands.clearHoist.enabled}
+						clearHoistReason={commands.clearHoist.reason}
+						onClearHoist={requestClearHoist}
 						{visibleRows}
 						{vocabulary}
 						{loading}
