@@ -141,6 +141,20 @@ Deno.test("implicit relation: safely handles Work IDs containing delimiter chara
 	assertEquals(implicit?.to.workId, "b:c");
 });
 
+Deno.test("implicit relation: treats Unicode-equivalent Work IDs as distinct and keeps pair keys undirected", () => {
+	const composed = "é";
+	const decomposed = "e\u0301";
+	const items: OutlineItem[] = [
+		createItem("item-a", composed, null),
+		createItem("item-b", decomposed, "item-a"),
+	];
+	const explicitLinks = [createExplicitLink("link-1", decomposed, composed, "RELATED")];
+
+	const result = mergeImplicitFromLinks(items, explicitLinks);
+
+	assertEquals(result.map((link) => link.id), ["link-1"]);
+});
+
 Deno.test("implicit relation: generates implicit FROM when explicit link is retracted", () => {
 	const items: OutlineItem[] = [
 		createItem("item-1", "work-parent", null),

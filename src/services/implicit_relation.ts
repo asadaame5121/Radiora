@@ -2,8 +2,12 @@ import type { OutlineItem, OutlineLink } from "../domain/models.ts";
 import type { OutlineStorePort, RelationStorePort } from "../storage/graph_store.ts";
 
 function workPairKey(workA: string, workB: string): string {
-	return JSON.stringify(workA.localeCompare(workB) <= 0 ? [workA, workB] : [workB, workA]);
+	return JSON.stringify(workA <= workB ? [workA, workB] : [workB, workA]);
 }
+
+type ImplicitRelationReadPort =
+	& Pick<OutlineStorePort, "listItems">
+	& Pick<RelationStorePort, "listLinks">;
 
 /**
  * Merges outline parent-child relationships as implicit FROM semantic links
@@ -66,7 +70,7 @@ export function mergeImplicitFromLinks(
  * Convenience store reader that retrieves active links merged with implicit FROM relations.
  */
 export async function fetchActiveMergedLinks(
-	store: OutlineStorePort & RelationStorePort,
+	store: ImplicitRelationReadPort,
 	items?: readonly OutlineItem[],
 ): Promise<OutlineLink[]> {
 	const [links, currentItems] = await Promise.all([
