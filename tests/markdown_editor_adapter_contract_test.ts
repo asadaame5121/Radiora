@@ -13,6 +13,13 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
 
+	const outlineView = await Deno.readTextFile(
+		new URL("../src/ui/OutlineView.svelte", import.meta.url),
+	);
+	const outlineRowItem = await Deno.readTextFile(
+		new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
+	);
+
 	if (/from "overtype"/.test(boundary)) {
 		throw new Error("The host MarkdownEditorAdapter boundary must not expose Overtype types");
 	}
@@ -42,8 +49,8 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 	assertMatch(component, /adapter\?\.focus\(\)/);
 	assertMatch(app, /compositionGuard \|\| event\.isComposing \|\| event\.keyCode === 229/);
 	assertMatch(
-		app,
-		/role="tree" aria-label=\{`\$\{vocabulary\.work\}のアウトライン`\} tabindex="0"/,
+		outlineView,
+		/role="tree"[\s\S]*?aria-label=\{`\$\{vocabulary\.work\}のアウトライン`\}[\s\S]*?tabindex="0"/,
 	);
 	assertMatch(component, /\.markdown-editor-host :global\(\.overtype-container\) \{/);
 	assertMatch(component, /--preview-text-default: var\(--text\)/);
@@ -51,6 +58,9 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 
 Deno.test("Markdown editor keeps native replacement, autosave, completion, and resolver paths", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const outlineRowItem = await Deno.readTextFile(
+		new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
+	);
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
 	);
@@ -58,9 +68,9 @@ Deno.test("Markdown editor keeps native replacement, autosave, completion, and r
 		new URL("../src/ui/overtype_markdown_editor_adapter.ts", import.meta.url),
 	);
 
-	assertMatch(app, /<MarkdownEditor/);
-	assertMatch(app, /onChange=.*updateLocalText/);
-	assertMatch(app, /onSelectionChange=.*updateEditorSelection/);
+	assertMatch(outlineRowItem, /<MarkdownEditor/);
+	assertMatch(outlineRowItem, /onChange=.*handlers\.updateLocalText/);
+	assertMatch(outlineRowItem, /onSelectionChange=.*handlers\.updateEditorSelection/);
 	assertMatch(controller, /textarea\.setRangeText\(/);
 	assertMatch(controller, /inputType: "insertReplacementText"/);
 	assertMatch(

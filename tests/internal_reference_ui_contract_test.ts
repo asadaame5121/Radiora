@@ -15,6 +15,10 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 		new URL("../src/shared/ui_vocabulary.ts", import.meta.url),
 	);
 
+	const outlineRowItem = await Deno.readTextFile(
+		new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
+	);
+
 	assertMatch(controller, /findInternalReferenceTrigger/);
 	assertMatch(controller, /textarea\.setRangeText\(/);
 	assertMatch(controller, /inputType: "insertReplacementText"/);
@@ -24,7 +28,7 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 	assertMatch(controller, /openRevisionComparison\(resolution\.revision\.id\)/);
 	assertMatch(controller, /listInternalReferenceBacklinks\("work", workId\)/);
 	assertMatch(app, /editorController\.updateEditorSelection/);
-	assertMatch(app, /vocabulary\.internalReference/);
+	assertMatch(outlineRowItem, /vocabulary\.internalReference/);
 	assertMatch(inspector, /<InspectorRelationTab/);
 	assertMatch(relationTab, /vocabulary\.backlink/);
 	assertMatch(vocabulary, /internalReference: "内部参照"/);

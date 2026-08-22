@@ -12,6 +12,10 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 		new URL("../src/ui/InlineLinkCompletion.svelte", import.meta.url),
 	);
 
+	const outlineRowItem = await Deno.readTextFile(
+		new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
+	);
+
 	assertMatch(controller, /findInlineLinkTrigger/);
 	assertMatch(controller, /ports\.api\.listInternalReferenceCompletions\(trigger\.query, 16\)/);
 	assertMatch(controller, /filterInlineLinkCandidates/);
@@ -19,7 +23,7 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 	assertMatch(controller, /phase: "candidate"/);
 	assertMatch(controller, /phase: "type"/);
 	assertMatch(controller, /phase: "direction"/);
-	assertMatch(app, /<InlineLinkCompletion/);
+	assertMatch(outlineRowItem, /<InlineLinkCompletion/);
 	assertMatch(completionView, /inline-link-omniwindow/);
 	assertMatch(app, /updateInlineLinkSearch/);
 	assertMatch(completionView, /Shift\+Enterで新規作成できます/);
