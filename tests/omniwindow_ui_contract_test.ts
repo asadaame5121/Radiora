@@ -12,6 +12,9 @@ const navigationController = await Deno.readTextFile(
 	new URL("../src/ui/navigation_controller.svelte.ts", import.meta.url),
 );
 const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
+const markdownEditor = await Deno.readTextFile(
+	new URL("../src/ui/MarkdownEditor.svelte", import.meta.url),
+);
 const overtype = await Deno.readTextFile(
 	new URL("../src/ui/overtype_markdown_editor_adapter.ts", import.meta.url),
 );
@@ -105,7 +108,7 @@ Deno.test("left and right sidebars are collapsible", () => {
 
 Deno.test("outline editors use an explicit dark Overtype theme and compact idle rows", () => {
 	assertMatch(overtype, /theme: "cave"/);
-	assertMatch(styles, /\.markdown-editor-host\s*\{[\s\S]*?height: 34px/);
-	assertMatch(styles, /\.row\.selected \.markdown-editor-host/);
-	assert(styles.includes("background: transparent !important"));
+	assertMatch(markdownEditor, /\.markdown-editor-host\s*\{[\s\S]*?height: 34px/);
+	assertMatch(markdownEditor, /:global\(\.row\.selected\) \.markdown-editor-host/);
+	assert(markdownEditor.includes("background: transparent !important"));
 });
