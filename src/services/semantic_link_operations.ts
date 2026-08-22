@@ -1,6 +1,7 @@
 import type { CreateLinkInput, LinkEndpoint, LinkType, OutlineLink } from "../domain/models.ts";
 import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
 import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
+import { fetchActiveMergedLinks } from "./implicit_relation.ts";
 
 type SemanticLinkStore = OutlineStorePort & RelationStorePort & WorkStorePort;
 
@@ -95,7 +96,7 @@ export class SemanticLinkOperations {
 		return this.store.deleteLink(fromWorkId, toWorkId, type);
 	}
 
-	private async listActiveLinks(): Promise<OutlineLink[]> {
-		return (await this.store.listLinks()).filter((link) => link.status !== "retracted");
+	private listActiveLinks(): Promise<OutlineLink[]> {
+		return fetchActiveMergedLinks(this.store);
 	}
 }
