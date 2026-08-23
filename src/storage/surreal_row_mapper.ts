@@ -1,4 +1,3 @@
-import { RecordId } from "surrealdb";
 import type {
 	Bookmark,
 	Branch,
@@ -39,7 +38,6 @@ export function domainId(
 
 export function optionalRecordDomainId(value: unknown): string | null {
 	if (value == null) return null;
-	if (value instanceof RecordId) return String(value.id);
 	if (typeof value === "object" && "id" in value) {
 		return String((value as { id: unknown }).id);
 	}

@@ -8,6 +8,7 @@ import {
 	itemFromRow,
 	knotFromRow,
 	occurrenceFromRow,
+	optionalRecordDomainId,
 	outlineLinkFromRow,
 	purgeManifestFromRow,
 	recoverySnapshotFromRow,
@@ -67,6 +68,7 @@ Deno.test("Surreal row mappers preserve UUID domain boundaries and optional reco
 		}).parentRevisionIds,
 		[REVISION_ID],
 	);
+	assertEquals(optionalRecordDomainId(new RecordId("revision", REVISION_ID)), REVISION_ID);
 });
 
 Deno.test("Surreal work row mappers retain complete metadata and omit partial optionals", () => {
