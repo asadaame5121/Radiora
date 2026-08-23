@@ -2704,6 +2704,7 @@ if (outlineItem) void openRecentItem(outlineItem);
 				filter={activeGlobalLineageFilter}
 				onFilterChange={handleGlobalLineageFilterChange}
 				{selectedId}
+				selectedWorkId={selectedItem?.workId ?? null}
 				onSelect={(id) => selectOccurrence(id)}
 				onOpen={(id) => void openTreeOccurrence(id)}
 				onContextMenu={(id, event) => openOccurrenceContextMenu(id, "tree", event)}

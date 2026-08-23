@@ -3,6 +3,7 @@ import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
 import {
 	buildDirectNeighborSet,
 	buildLaneOrder,
+	buildStructuralClosure,
 	calculateLineageProjection,
 	calculateTreeLayout,
 	labelForItem,
@@ -163,6 +164,50 @@ Deno.test("direct neighborhood includes parent, children, and related links", ()
 	assertEquals(
 		buildDirectNeighborSet(data, "focus"),
 		new Set(["focus", "parent", "child", "related"]),
+	);
+});
+
+Deno.test("structural closure includes every ancestor and descendant, but not siblings", () => {
+	const data = snapshot([
+		item("root", "2025-01-01T00:00:00.000Z"),
+		item("branch", "2025-01-02T00:00:00.000Z", "root"),
+		item("leaf", "2025-01-03T00:00:00.000Z", "branch"),
+		item("sibling", "2025-01-04T00:00:00.000Z", "root"),
+	]);
+
+	assertEquals(buildStructuralClosure(data, "branch"), new Set(["branch", "root", "leaf"]));
+	assertEquals(
+		buildStructuralClosure(data, "root"),
+		new Set(["root", "branch", "sibling", "leaf"]),
+	);
+});
+
+Deno.test("structural closure stops safely at missing or cyclic parents", () => {
+	const data = snapshot([
+		item("a", "2025-01-01T00:00:00.000Z", "b"),
+		item("b", "2025-01-02T00:00:00.000Z", "a"),
+		item("orphan", "2025-01-03T00:00:00.000Z", "missing"),
+	]);
+
+	assertEquals(buildStructuralClosure(data, "a"), new Set(["a", "b"]));
+	assertEquals(buildStructuralClosure(data, "orphan"), new Set(["orphan"]));
+});
+
+Deno.test("structural closure follows active FROM links but ignores other semantic links", () => {
+	const data = snapshot([
+		item("root", "2025-01-01T00:00:00.000Z"),
+		item("branch", "2025-01-02T00:00:00.000Z"),
+		item("leaf", "2025-01-03T00:00:00.000Z"),
+	]);
+	data.links.push(
+		{ ...link("root", "branch", "FROM"), origin: "derived" },
+		link("branch", "leaf", "FROM"),
+		link("root", "leaf", "RELATED"),
+	);
+
+	assertEquals(
+		buildStructuralClosure(data, "branch"),
+		new Set(["branch", "root", "leaf"]),
 	);
 });
 

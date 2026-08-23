@@ -4,6 +4,7 @@
 	import type { OutlineSnapshot } from "../domain/models";
 	import {
 		buildDirectNeighborSet,
+		buildStructuralClosure,
 		calculateLineageProjection,
 		calculateTreeLayout,
 		type TreeLayoutEdge,
@@ -24,6 +25,7 @@
 	let {
 		snapshot,
 		selectedId = null,
+		selectedWorkId = null,
 		onSelect,
 		onOpen,
 		onContextMenu,
@@ -32,6 +34,7 @@
 	}: {
 		snapshot: OutlineSnapshot;
 		selectedId?: string | null;
+		selectedWorkId?: string | null;
 		onSelect: (id: string | null) => void;
 		onOpen: (id: string) => void;
 		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
@@ -111,10 +114,20 @@
 		}
 		return marks;
 	});
-	const focusId = $derived(hoveredId ?? selectedId);
-	const directNeighbors = $derived(
-		focusId ? buildDirectNeighborSet(snapshot, focusId) : new Set<string>(),
-	);
+	const selectionId = $derived.by(() => {
+		if (selectedId && snapshot.items.some((item) => item.id === selectedId)) return selectedId;
+		return snapshot.items.find((item) => item.workId === selectedWorkId)?.id ?? null;
+	});
+	const focusId = $derived(hoveredId ?? selectionId);
+	const highlightedIds = $derived.by(() => {
+		if (hoveredId) return buildDirectNeighborSet(snapshot, hoveredId);
+		return selectionId
+			? new Set([
+				...buildStructuralClosure(snapshot, selectionId),
+				...buildDirectNeighborSet(snapshot, selectionId),
+			])
+			: new Set<string>();
+	});
 	const nodeGrid = $derived.by(() => {
 		// Spatial index over screen positions so label collision checks stay
 		// local instead of scanning every node.
@@ -124,8 +137,8 @@
 		const visible = new Set<string>();
 		const accepted: Array<{ x1: number; x2: number; y1: number; y2: number }> = [];
 		const candidates = [...layout.nodes].sort((a, b) => {
-			const aEmphasized = a.itemIds.some((id) => directNeighbors.has(id)) ? 0 : 1;
-			const bEmphasized = b.itemIds.some((id) => directNeighbors.has(id)) ? 0 : 1;
+			const aEmphasized = a.itemIds.some((id) => highlightedIds.has(id)) ? 0 : 1;
+			const bEmphasized = b.itemIds.some((id) => highlightedIds.has(id)) ? 0 : 1;
 			return aEmphasized - bEmphasized || a.x - b.x;
 		});
 		for (const node of candidates) {
@@ -209,13 +222,13 @@
 
 	function nodeIsEmphasized(node: TreeLayoutNode): boolean {
 		if (!focusId) return true;
-		return node.itemIds.some((id) => directNeighbors.has(id));
+		return node.itemIds.some((id) => highlightedIds.has(id));
 	}
 
 	function edgeIsEmphasized(edge: TreeLayoutEdge): boolean {
 		if (!focusId) return false;
-		const sourceFocused = edge.source.itemIds.includes(focusId);
-		const targetFocused = edge.target.itemIds.includes(focusId);
+		const sourceFocused = edge.source.itemIds.some((id) => highlightedIds.has(id));
+		const targetFocused = edge.target.itemIds.some((id) => highlightedIds.has(id));
 		return sourceFocused || targetFocused;
 	}
 
@@ -405,7 +418,7 @@
 						class="tree-node"
 						class:dimmed={Boolean(focusId) && !nodeIsEmphasized(node)}
 						class:emphasized={Boolean(focusId) && nodeIsEmphasized(node)}
-						class:selected={node.itemIds.includes(selectedId ?? "")}
+						class:selected={node.itemIds.includes(selectionId ?? "")}
 						class:aggregate={node.aggregate}
 						class:knot={node.isKnot}
 						transform={`translate(${node.x} ${node.y})`}
