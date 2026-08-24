@@ -2230,7 +2230,7 @@ if (outlineItem) void openRecentItem(outlineItem);
 				aria-label={inspectorCollapsed ? "インスペクターペインを開く" : "インスペクターペインを閉じる"}
 				title={inspectorCollapsed ? "インスペクターペインを開く" : "インスペクターペインを閉じる"}
 				onclick={toggleInspector}
-			>詳細</button>
+			>{inspectorCollapsed ? "«" : "»"}</button>
 		</div>
 		{#if workingCopySaveStatus}
 			<WorkingCopySaveStatus status={workingCopySaveStatus} onRetry={retryWorkingCopySave} />

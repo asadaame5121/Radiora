@@ -47,6 +47,13 @@ const logger = new Logger({
 });
 const startupSnapshotCache = new StartupSnapshotCacheFile(startupSnapshotCachePath);
 
+if (Deno.build.os === "linux") {
+	Deno.autoUpdate({
+		onUpdateReady: (version) => logger.info("desktop.update.ready", { version }),
+		onRollback: (reason) => logger.warn("desktop.update.rollback", { reason }),
+	});
+}
+
 let startupStatus: StartupStatus = {
 	phase: "starting",
 	message: "Radioraを起動しています…",

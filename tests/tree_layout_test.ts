@@ -3,12 +3,12 @@ import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
 import {
 	buildDirectNeighborSet,
 	buildLaneOrder,
-	buildStructuralClosure,
 	calculateLineageProjection,
 	calculateTreeLayout,
 	labelForItem,
 	lodForScreenCollisions,
 } from "../src/ui/tree_layout.ts";
+import { buildStructuralClosure } from "../src/ui/tree_highlight.ts";
 
 function item(
 	id: string,

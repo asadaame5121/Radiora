@@ -2,9 +2,9 @@
 	import { onMount } from "svelte";
 	import * as d3 from "d3";
 	import type { OutlineSnapshot } from "../domain/models";
+	import { buildTreeHighlightSet, resolveTreeSelectionId } from "./tree_highlight";
 	import {
 		buildDirectNeighborSet,
-		buildStructuralClosure,
 		calculateLineageProjection,
 		calculateTreeLayout,
 		type TreeLayoutEdge,
@@ -114,20 +114,9 @@
 		}
 		return marks;
 	});
-	const selectionId = $derived.by(() => {
-		if (selectedId && snapshot.items.some((item) => item.id === selectedId)) return selectedId;
-		return snapshot.items.find((item) => item.workId === selectedWorkId)?.id ?? null;
-	});
+	const selectionId = $derived(resolveTreeSelectionId(snapshot, selectedId, selectedWorkId));
 	const focusId = $derived(hoveredId ?? selectionId);
-	const highlightedIds = $derived.by(() => {
-		if (hoveredId) return buildDirectNeighborSet(snapshot, hoveredId);
-		return selectionId
-			? new Set([
-				...buildStructuralClosure(snapshot, selectionId),
-				...buildDirectNeighborSet(snapshot, selectionId),
-			])
-			: new Set<string>();
-	});
+	const highlightedIds = $derived(buildTreeHighlightSet(snapshot, selectionId, hoveredId));
 	const nodeGrid = $derived.by(() => {
 		// Spatial index over screen positions so label collision checks stay
 		// local instead of scanning every node.

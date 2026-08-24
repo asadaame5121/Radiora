@@ -1321,20 +1321,6 @@ button:disabled {
 	border-color: var(--border-bright);
 	color: var(--text);
 }
-.clear-selection {
-	flex: none;
-	border: 1px solid var(--border);
-	border-radius: 5px;
-	padding: 4px 6px;
-	background: transparent;
-	color: var(--muted);
-	font-size: 10px;
-	cursor: pointer;
-}
-.clear-selection:hover {
-	border-color: var(--border-bright);
-	color: var(--text);
-}
 .thought-body {
 	color: #afc1c9;
 	font-family: var(--font-serif);

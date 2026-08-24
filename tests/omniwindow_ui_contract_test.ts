@@ -96,10 +96,10 @@ Deno.test("left and right sidebars are collapsible", () => {
 	);
 	assertMatch(inspector, /inspector-close/);
 	assertMatch(app, /inspectorCollapsed = true/);
-	assertMatch(app, /async function toggleInspector/);
 	assertMatch(app, /class="inspector-jump"/);
 	assertMatch(app, /aria-expanded=\{!inspectorCollapsed\}/);
 	assertMatch(app, /onclick=\{toggleInspector\}/);
+	assertMatch(app, /\{inspectorCollapsed \? "«" : "»"\}/);
 	assertMatch(styles, /\.inspector-jump \{\s*display: block;/);
 });
 

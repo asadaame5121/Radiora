@@ -326,62 +326,6 @@ export function buildDirectNeighborSet(snapshot: OutlineSnapshot, id: string): S
 }
 
 /**
- * Returns the structural closure around an Occurrence: every ancestor and
- * every descendant. Active FROM links are structural regardless of origin;
- * other semantic links are not traversed.
- */
-export function buildStructuralClosure(snapshot: OutlineSnapshot, id: string): Set<string> {
-	const itemById = new Map(snapshot.items.map((item) => [item.id, item]));
-	const itemIdsByWork = new Map<string, string[]>();
-	const parentsById = new Map<string, Set<string>>();
-	const childrenById = new Map<string, Set<string>>();
-	const addStructuralRelation = (parentId: string, childId: string): void => {
-		if (parentId === childId || !itemById.has(parentId) || !itemById.has(childId)) return;
-		const children = childrenById.get(parentId) ?? new Set<string>();
-		children.add(childId);
-		childrenById.set(parentId, children);
-		const parents = parentsById.get(childId) ?? new Set<string>();
-		parents.add(parentId);
-		parentsById.set(childId, parents);
-	};
-
-	for (const item of snapshot.items) {
-		const workItems = itemIdsByWork.get(item.workId) ?? [];
-		workItems.push(item.id);
-		itemIdsByWork.set(item.workId, workItems);
-		if (item.parentId) addStructuralRelation(item.parentId, item.id);
-	}
-	for (const link of snapshot.links) {
-		if (link.status === "retracted" || link.type !== "FROM") continue;
-		for (const parentId of itemIdsByWork.get(link.fromId) ?? []) {
-			for (const childId of itemIdsByWork.get(link.toId) ?? []) {
-				addStructuralRelation(parentId, childId);
-			}
-		}
-	}
-
-	const result = new Set<string>([id]);
-	const ancestors = [id];
-	for (let index = 0; index < ancestors.length; index++) {
-		for (const parentId of parentsById.get(ancestors[index]) ?? []) {
-			if (result.has(parentId)) continue;
-			result.add(parentId);
-			ancestors.push(parentId);
-		}
-	}
-
-	const descendants = [id];
-	for (let index = 0; index < descendants.length; index++) {
-		for (const childId of childrenById.get(descendants[index]) ?? []) {
-			if (result.has(childId)) continue;
-			result.add(childId);
-			descendants.push(childId);
-		}
-	}
-	return result;
-}
-
-/**
  * Deterministic order for placing same-X items onto Y lanes.
  *
  * The order walks connected components of FROM links, outline parent/child
