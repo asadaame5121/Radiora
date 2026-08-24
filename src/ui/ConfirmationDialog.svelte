@@ -100,7 +100,7 @@
 											: pending.action === "merge-duplicate"
 											? vocabulary.duplicateMergeConfirm
 											: pending.action === "cancel-longform"
-											? "長文編集をキャンセルしますか？"
+											? "原稿の編集をキャンセルしますか？"
 											: "完全消去しますか？"}
 									</h2>
 								{/snippet}

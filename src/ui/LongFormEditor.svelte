@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { OutlineItem } from "../domain/models.ts";
+	import { useUiVocabulary } from "./ui_vocabulary_context.ts";
 
 	let {
 		item,
@@ -24,9 +25,11 @@
 		onCancel: () => void;
 		onSetPreview: (preview: boolean) => void;
 	} = $props();
+
+	const vocabulary = useUiVocabulary();
 </script>
 
-<div class="section-title"><span>Outline · 長文編集</span></div>
+<div class="section-title"><span>Outline · {vocabulary.manuscript}</span></div>
 <div class="long-form-editor">
 	<div class="long-form-breadcrumb">
 		{#each selectedBreadcrumb as ancestor (ancestor.id)}

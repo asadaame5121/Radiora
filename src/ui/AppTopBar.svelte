@@ -18,7 +18,6 @@
 		searchEntriesLength,
 		commands,
 		vocabulary,
-		markdownExportSelectionRequired,
 		bookmarks,
 		inspectorCollapsed,
 		workingCopySaveStatus,
@@ -29,9 +28,6 @@
 		onSelectSearch,
 		onExecuteCommand,
 		onResumeEditing,
-		onExportMarkdown,
-		onOpenHelp,
-		onOpenOptions,
 		onOpenBookmark,
 		onRemoveBookmark,
 		onToggleInspector,
@@ -50,7 +46,6 @@
 		searchEntriesLength: number;
 		commands: Readonly<Record<string, { enabled: boolean; reason?: string }>>;
 		vocabulary: UiVocabulary;
-		markdownExportSelectionRequired: boolean;
 		bookmarks: readonly Bookmark[];
 		inspectorCollapsed: boolean;
 		workingCopySaveStatus: WorkingCopySaveStatusValue | null;
@@ -61,9 +56,6 @@
 		onSelectSearch: (result: SearchResult) => void;
 		onExecuteCommand: (commandId: CommandId) => void;
 		onResumeEditing: () => void;
-		onExportMarkdown: () => void;
-		onOpenHelp: () => void;
-		onOpenOptions: () => void;
 		onOpenBookmark: (id: string) => void;
 		onRemoveBookmark: (id: string) => void;
 		onToggleInspector: () => void;
@@ -162,16 +154,6 @@
 		<div class="toolbar-group toolbar-nav" role="toolbar" aria-label="ナビゲーション">
 			<button type="button" onclick={onResumeEditing}>{vocabulary.resumePosition}から再開</button>
 		</div>
-		<button
-			type="button"
-			onclick={onExportMarkdown}
-			disabled={!commands.exportMarkdown?.enabled || markdownExportSelectionRequired}
-			title={markdownExportSelectionRequired
-				? vocabulary.markdownExportSelectionRequired
-				: commands.exportMarkdown?.reason}
-		>{vocabulary.markdownExportAction}</button>
-		<button type="button" class:active={viewMode === "help"} onclick={onOpenHelp} title="F1でヘルプを開く">ヘルプ</button>
-		<button type="button" class:active={viewMode === "options"} onclick={onOpenOptions}>Option</button>
 		{#each bookmarks as bookmark}
 			<span class="bookmark-control">
 				<button type="button" onclick={() => onOpenBookmark(bookmark.id)}>{vocabulary.bookmark} {bookmark.id.slice(0, BOOKMARK_PREFIX_LENGTH)}</button>
@@ -357,7 +339,12 @@
 		padding-inline: 4px;
 	}
 	.inspector-jump {
-		display: block;
+		display: grid;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		padding: 0;
+		font-size: 14px;
 	}
 	@media (max-width: 1120px) {
 		.top-bar {
@@ -381,7 +368,7 @@
 			display: none;
 		}
 		.inspector-jump {
-			display: block;
+			display: grid;
 		}
 	}
 </style>

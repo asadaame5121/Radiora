@@ -172,6 +172,6 @@ Deno.test("ui_vocabulary includes sparse outline codes", async () => {
 	assert(source.includes("sparseOutline"), "has sparseOutline code");
 	assert(source.includes("queryResult"), "has queryResult code");
 	assert(source.includes("noQueryResult"), "has noQueryResult code");
-	assert(source.includes("投影表示"), "has sparseOutline label");
+	assert(source.includes("抜粋表示"), "has sparseOutline label");
 	assert(source.includes("一致する項目はありません"), "has noQueryResult label");
 });

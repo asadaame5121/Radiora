@@ -65,11 +65,11 @@ Deno.test("Omniwindow shares the quick-capture command value with search", () =>
 });
 
 Deno.test("shell keeps global navigation, contextual inspector, and dedicated full-width views separate", () => {
-	for (const label of ["作業", "探索", "管理", "ツール"]) {
+	for (const label of ["作業", "探索", "ツール"]) {
 		assert(navigation.includes(label));
 	}
 	assert(topBar.includes("アウトライン"));
-	assert(app.includes("ゴミ箱"));
+	assertNotMatch(navigation, />ゴミ箱<\/button>/);
 	for (const tab of [">概要</button>", ">関係</button>", ">履歴</button>"]) {
 		assert(inspector.includes(tab));
 	}
@@ -99,17 +99,29 @@ Deno.test("left and right sidebars are collapsible", () => {
 		/saveUiLayoutPreference\(\{ navCollapsed, inspectorCollapsed, inspectorWidth \}\)/,
 	);
 	assertMatch(styles, /\.shell\.nav-collapsed \{\s*grid-template-columns: 42px minmax\(0, 1fr\);/);
+	assertMatch(styles, /\.app-main\.inspector-collapsed > \.inspector \{\s*display: none;/);
+	assertMatch(
+		styles,
+		/grid-template-columns: minmax\(420px, 1fr\) var\(--inspector-width, 280px\);/,
+	);
 	assertMatch(
 		navigationStyles,
 		/\.primary-nav\.nav-collapsed \.brand,\s*\.primary-nav\.nav-collapsed section \{\s*display: none;/,
 	);
-	assertMatch(inspector, /inspector-close/);
+	assertNotMatch(inspector, /inspector-close/);
 	assertMatch(app, /inspectorCollapsed = true/);
 	assertMatch(topBar, /class="inspector-jump"/);
 	assertMatch(topBar, /aria-expanded=\{!inspectorCollapsed\}/);
 	assertMatch(topBar, /onclick=\{onToggleInspector\}/);
 	assertMatch(topBar, /\{inspectorCollapsed \? "«" : "»"\}/);
-	assertMatch(topBar, /\.inspector-jump \{\s*display: block;/);
+	assertMatch(
+		topBar,
+		/\.inspector-jump \{\s*display: grid;[\s\S]*?width: 36px;[\s\S]*?height: 36px;/,
+	);
+	assertMatch(
+		navigation,
+		/\.primary-nav \.nav-collapse-toggle \{[\s\S]*?width: 36px;[\s\S]*?height: 36px;/,
+	);
 });
 
 Deno.test("outline editors use an explicit dark Overtype theme and compact idle rows", () => {

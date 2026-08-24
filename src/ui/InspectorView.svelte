@@ -41,7 +41,6 @@
 			onStartResize: (event: PointerEvent) => void;
 			onAddBookmark: () => void;
 			onSelectOccurrence: (id: string | null) => void;
-			onSetInspectorCollapsed: (collapsed: boolean) => void;
 		};
 
 	let props: InspectorViewProps = $props();
@@ -180,9 +179,8 @@
 		</Tabs.Root>
 	{:else}
 		<div class="aside-empty">
-			<button class="inspector-close" type="button" onclick={() => props.onSetInspectorCollapsed(true)}>閉じる</button>
 			<span>•</span>
-			<p>{props.vocabulary.work}を選択すると<br />関連{props.vocabulary.semanticLink}を編集できます</p>
+			<p>{props.vocabulary.work}を選択すると<br />{props.vocabulary.semanticLink}を編集できます</p>
 		</div>
 	{/if}
 </aside>
@@ -284,12 +282,6 @@
 		margin-top: 40vh;
 		transform: translateY(-50%);
 		line-height: 1.7;
-	}
-	.aside-empty .inspector-close {
-		display: block;
-		margin: 0 0 18px auto;
-		padding: 4px 9px;
-		font-size: 10px;
 	}
 	.aside-empty span {
 		font-size: 36px;

@@ -22,7 +22,6 @@
 		onOpenUnplaced,
 		onOpenStubs,
 		onOpenDuplicates,
-		onOpenTrash,
 		onOpenOptions,
 		onOpenTags,
 		onOpenQuery,
@@ -40,7 +39,6 @@
 		onOpenUnplaced: () => void | Promise<void>;
 		onOpenStubs: () => void | Promise<void>;
 		onOpenDuplicates: () => void | Promise<void>;
-		onOpenTrash: () => void | Promise<void>;
 		onOpenOptions: () => void;
 		onOpenTags: () => void | Promise<void>;
 		onOpenQuery: () => void | Promise<void>;
@@ -90,19 +88,18 @@
 		<button type="button" class:active={activeView === "duplicates"} aria-pressed={activeView === "duplicates"}
 			onclick={onOpenDuplicates}>{vocabulary.duplicateCandidates}</button>
 	</section>
-	<section>
-		<p>管理</p>
-		<button type="button" class:active={activeView === "trash"} aria-pressed={activeView === "trash"}
-			onclick={onOpenTrash}>ゴミ箱</button>
-		<button type="button" class:active={activeView === "options"} aria-pressed={activeView === "options"}
-			onclick={onOpenOptions}>Option</button>
-	</section>
 	<section class="nav-tools">
 		<p>ツール</p>
 		<button type="button" class:active={activeView === "tags"} onclick={onOpenTags}>{vocabulary.tag}管理</button>
 		<button type="button" class:active={queryActive} onclick={onOpenQuery}
 			disabled={!queryAvailable}>Query・検索別名</button>
-		<button type="button" class:active={activeView === "help"} onclick={onOpenHelp} title="F1">ヘルプ</button>
+		<div class="nav-icon-row" aria-label="設定とヘルプ">
+			<button type="button" class:active={activeView === "options" || activeView === "trash"}
+				aria-pressed={activeView === "options" || activeView === "trash"} aria-label="Option" title="Option"
+				onclick={onOpenOptions}>⚙</button>
+			<button type="button" class:active={activeView === "help"} aria-pressed={activeView === "help"}
+				aria-label="ヘルプ" title="ヘルプ (F1)" onclick={onOpenHelp}>?</button>
+		</div>
 	</section>
 </nav>
 
@@ -204,17 +201,17 @@
 	.primary-nav .nav-collapse-toggle {
 		flex: 0 0 auto;
 		align-self: flex-start;
-		width: 28px;
-		height: 28px;
+		width: 36px;
+		height: 36px;
 		display: grid;
 		place-items: center;
 		padding: 0;
-		font-size: 12px;
+		font-size: 14px;
 		line-height: 1;
 		text-align: center;
 	}
 	.primary-nav.nav-collapsed {
-		padding: 12px 7px;
+		padding: 12px 3px;
 		gap: 0;
 		align-items: stretch;
 	}
@@ -223,8 +220,22 @@
 		display: none;
 	}
 	.primary-nav.nav-collapsed .nav-collapse-toggle {
-		width: 28px;
-		height: 28px;
+		width: 36px;
+		height: 36px;
+	}
+	.primary-nav .nav-icon-row {
+		display: flex;
+		gap: 6px;
+		margin-top: 6px;
+	}
+	.primary-nav .nav-icon-row button {
+		display: grid;
+		place-items: center;
+		width: 36px;
+		height: 36px;
+		padding: 0;
+		font-size: 16px;
+		text-align: center;
 	}
 	@media (max-width: 820px) {
 		.primary-nav {

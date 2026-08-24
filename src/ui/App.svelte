@@ -433,7 +433,7 @@
 			{ id: "zoom", label: `この${vocabulary.occurrence}へZoom` },
 			{
 				id: "long-form",
-				label: "長文編集",
+				label: vocabulary.manuscriptOpen,
 				disabled: !commands.startLongFormEditing.enabled,
 				reason: commands.startLongFormEditing.reason,
 			},
@@ -2166,7 +2166,6 @@
 		onOpenUnplaced={() => void openUnplaced()}
 		onOpenStubs={() => void openStubs()}
 		onOpenDuplicates={() => void openDuplicates()}
-		onOpenTrash={() => void openTrash()}
 		onOpenOptions={() => (viewMode = "options")}
 		onOpenTags={() => void openTags()}
 		onOpenQuery={() => void openInspectorTool("query")}
@@ -2186,7 +2185,6 @@
 		searchEntriesLength={searchEntries.length}
 		{commands}
 		{vocabulary}
-		{markdownExportSelectionRequired}
 		{bookmarks}
 		{inspectorCollapsed}
 		{workingCopySaveStatus}
@@ -2200,9 +2198,6 @@
 		onSelectSearch={selectSearch}
 		onExecuteCommand={(cmd) => void executeCommand(cmd)}
 		onResumeEditing={resumeEditing}
-		onExportMarkdown={exportMarkdown}
-		onOpenHelp={openHelp}
-		onOpenOptions={() => (viewMode = "options")}
 		onOpenBookmark={openBookmark}
 		onRemoveBookmark={removeBookmark}
 		onToggleInspector={toggleInspector}
@@ -2352,6 +2347,7 @@
 				onInspectorCollapsedChange={setInspectorCollapsed}
 				onInspectorWidthChange={setInspectorWidth}
 				onPersistQuickCapturePreference={persistQuickCapturePreference}
+				onOpenTrash={() => void openTrash()}
 				onOpenLicenses={openLicenses}
 			/>
 		{:else if viewMode === "help"}
@@ -2413,7 +2409,11 @@
 			{:else if workLineage}
 				{#key workLineage.work.id}
 					<div class="work-lineage-workspace">
-						<WorkLineage projection={workLineage} onCompare={openWorkComparison} />
+						<WorkLineage
+							projection={workLineage}
+							onCompare={openWorkComparison}
+							onBack={() => { viewMode = "outline"; }}
+						/>
 						{#if selectedItem && selectedBranchId}
 							<RecoverySnapshots
 								snapshots={recoverySnapshots}
@@ -2493,7 +2493,6 @@
 				onStartResize={startInspectorResize}
 				onAddBookmark={addBookmark}
 				onSelectOccurrence={selectOccurrence}
-				onSetInspectorCollapsed={setInspectorCollapsed}
 				onUpdateSelectedHeading={updateSelectedHeading}
 				onSelectPlacement={selectInspectorPlacement}
 				showOutlineHint={viewMode === "outline"}

@@ -72,7 +72,7 @@
 						onclick={onCreateTarget}
 					>
 						<strong>「{completion.query.trim()}」を新規作成</strong>
-						<span>未配置箱 · Shift+Enter</span>
+						<span>{vocabulary.unplacedInbox} · Shift+Enter</span>
 					</button>
 				{/if}
 			</div>

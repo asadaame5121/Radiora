@@ -23,6 +23,8 @@ Deno.test("global and selected Work lineage have separate UI responsibilities", 
 	assert(work.includes("projection.revisions"));
 	assert(work.includes("projection.branches"));
 	assert(work.includes("revision.parentRevisionIds"));
+	assert(work.includes("← アウトラインに戻る"));
+	assert(app.includes('onBack={() => { viewMode = "outline"; }}'));
 	assertFalse(work.includes("PhylogeneticTree"));
 	assertFalse(work.includes("semanticLink"));
 });

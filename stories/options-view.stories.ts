@@ -14,6 +14,7 @@ const callbacks = {
 	onInspectorCollapsedChange: fn(),
 	onInspectorWidthChange: fn(),
 	onPersistQuickCapturePreference: fn(),
+	onOpenTrash: fn(),
 	onOpenLicenses: fn(),
 };
 

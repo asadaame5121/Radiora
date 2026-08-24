@@ -8,5 +8,5 @@ Deno.test("原稿ビューのルートとコンポーネントはアウトライ
 	assertFalse(app.includes('viewMode === "manuscript"'));
 	assertFalse(app.includes("openManuscript("));
 	assertFalse(app.includes("manuscriptLoading"));
-	assert(app.includes("長文編集"));
+	assert(app.includes("vocabulary.manuscriptOpen"));
 });
