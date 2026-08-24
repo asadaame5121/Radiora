@@ -82,10 +82,12 @@ workspace/change）を分けて少しずつ進める。
   - prefix suggestion、lexical search、alias 展開・保存を所有する
   - 完了条件: search が `DiscoveryStorePort` と必要最小限の参照 port のみに依存する
   - 依存: D1
-- [ ] **D3: emergence suggestion 計算を分離する** — 難易度 4
+- [x] **D3: emergence suggestion 計算を分離する** — 難易度 4
   - neighbor、ancestor、候補 ranking などの純粋計算と、データ取得を分ける
   - 完了条件: 候補計算を store なしで直接テストできる
   - 依存: D1、D2 の search API
+  - 実績: データ取得と materialize を facade に残し、3種類の候補計算と安定 ID 生成を純粋関数へ
+    分離した。store を使わない fixture で neighbor、branch/score filter、productive tension を固定した
 - [ ] **D4: emergence persistence/resolution を分離する** — 難易度 3
   - feedback、accept/dismiss/pin、asserted link 作成のトランザクション境界を所有する
   - 完了条件: 候補計算と更新コマンドが互いの内部状態を共有しない

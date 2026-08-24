@@ -17,7 +17,11 @@ import type {
 	OutlineStorePort,
 	RelationStorePort,
 } from "../storage/graph_store.ts";
-import { ancestorsOf, isReservedTagAlias, neighborMap, rootId } from "./discovery_helpers.ts";
+import { ancestorsOf, isReservedTagAlias, neighborMap } from "./discovery_helpers.ts";
+import {
+	calculateEmergenceSuggestions,
+	emergenceSuggestionFingerprint,
+} from "./emergence_suggestion_calculator.ts";
 import { fetchActiveMergedLinks } from "./implicit_relation.ts";
 import { runRuleQuery } from "./rule_query.ts";
 import { normalizeSearchText, titleOf } from "./search_text.ts";
@@ -187,97 +191,21 @@ export class DiscoveryOperations {
 		const links = await this.listActiveLinks();
 		const context = items.find((item) => item.id === contextItemId);
 		if (!context) return [];
-		const byId = new Map(items.map((item) => [item.id, item]));
-		const byWorkId = new Map(items.map((item) => [item.workId, item]));
-		const neighbors = neighborMap(links);
-		const contextNeighbors = neighbors.get(context.workId) ?? new Set<string>();
-		const direct = new Set(contextNeighbors);
-		const suggestions = new Map<string, EmergenceSuggestion>();
-		for (const candidate of byWorkId.values()) {
-			if (candidate.workId === context.workId || direct.has(candidate.workId)) continue;
-			const shared = [...contextNeighbors].filter((id) => neighbors.get(candidate.workId)?.has(id));
-			if (shared.length >= 2) {
-				this.addSuggestion(suggestions, {
-					kind: "latent-relation",
-					context,
-					target: candidate,
-					score: Math.min(1, shared.length / 3),
-					proposedLinkType: "LIKE",
-					title: "潜在的な関係",
-					explanation: `${shared.length}件の共通リンクを介してつながっています。`,
-					evidence: shared.slice(0, 3).flatMap((workId) => [
-						{
-							fromId: context.id,
-							toId: byWorkId.get(workId)?.id ?? workId,
-							relation: "LIKE" as const,
-						},
-						{
-							fromId: byWorkId.get(workId)?.id ?? workId,
-							toId: candidate.id,
-							relation: "LIKE" as const,
-						},
-					]),
-				});
-			}
-		}
-		for (
-			const result of await this.searchItems({ query: titleOf(context), contextItemId, limit: 20 })
-		) {
-			const target = result.item;
-			if (
-				direct.has(target.workId) || rootId(context, byId) === rootId(target, byId) ||
-				result.score < 0.35
-			) continue;
-			this.addSuggestion(suggestions, {
-				kind: "cross-branch-resonance",
-				context,
-				target,
-				score: result.score,
-				proposedLinkType: "LIKE",
-				title: "枝を越えた共鳴",
-				explanation: "異なるアウトライン枝に、語彙が強く重なる思索があります。",
-				evidence: [{ fromId: context.id, toId: target.id, relation: "LEXICAL" }],
-			});
-		}
-		for (
-			const first of links.filter((link) =>
-				link.type === "LIKE" && (link.fromId === context.workId || link.toId === context.workId)
-			)
-		) {
-			const middle = first.fromId === context.workId ? first.toId : first.fromId;
-			for (
-				const second of links.filter((link) =>
-					(link.type === "VS" || link.type === "FIX") &&
-					(link.fromId === middle || link.toId === middle)
-				)
-			) {
-				const targetId = second.fromId === middle ? second.toId : second.fromId;
-				const target = byWorkId.get(targetId);
-				if (!target || target.workId === context.workId) continue;
-				this.addSuggestion(suggestions, {
-					kind: "productive-tension",
-					context,
-					target,
-					score: 0.65,
-					proposedLinkType: "RELATED",
-					title: "対立・修正の観点",
-					explanation: `類似する思索の先に${second.type}関係があります。`,
-					evidence: [
-						{ fromId: context.id, toId: byWorkId.get(middle)?.id ?? middle, relation: "LIKE" },
-						{ fromId: byWorkId.get(middle)?.id ?? middle, toId: target.id, relation: second.type },
-					],
-				});
-			}
-		}
+		const searchResults = await this.searchItems({
+			query: titleOf(context),
+			contextItemId,
+			limit: 20,
+		});
+		const suggestions = calculateEmergenceSuggestions({ context, items, links, searchResults });
 		const visible: EmergenceSuggestion[] = [];
 		const persisted = new Map(
 			(await this.store.listEmergenceSuggestions()).map((
 				suggestion,
 			) => [suggestion.id, suggestion]),
 		);
-		for (const suggestion of suggestions.values()) {
+		for (const suggestion of suggestions) {
 			const existing = persisted.get(suggestion.id);
-			const legacyId = this.fingerprint(
+			const legacyId = emergenceSuggestionFingerprint(
 				`${suggestion.kind}:${suggestion.contextItemId}:${suggestion.targetItemId}`,
 			);
 			const feedback = existing ? null : await this.store.getEmergenceFeedback(suggestion.id) ??
@@ -452,52 +380,5 @@ export class DiscoveryOperations {
 
 	private listActiveLinks(): Promise<OutlineLink[]> {
 		return fetchActiveMergedLinks(this.store);
-	}
-
-	private addSuggestion(
-		target: Map<string, EmergenceSuggestion>,
-		input:
-			& Omit<
-				EmergenceSuggestion,
-				| "id"
-				| "contextWorkId"
-				| "targetWorkId"
-				| "contextItemId"
-				| "targetItemId"
-				| "persistenceStatus"
-				| "createdAt"
-				| "updatedAt"
-				| "resolvedAt"
-				| "resolutionReason"
-				| "status"
-			>
-			& { context: OutlineItem; target: OutlineItem },
-	): void {
-		const id = this.fingerprint(`${input.kind}:${input.context.workId}:${input.target.workId}`);
-		target.set(id, {
-			id,
-			kind: input.kind,
-			contextWorkId: input.context.workId,
-			targetWorkId: input.target.workId,
-			contextItemId: input.context.id,
-			targetItemId: input.target.id,
-			proposedLinkType: input.proposedLinkType,
-			title: input.title,
-			explanation: input.explanation,
-			evidence: input.evidence,
-			score: input.score,
-			persistenceStatus: "pending",
-			createdAt: "",
-			updatedAt: "",
-		});
-	}
-
-	private fingerprint(value: string): string {
-		let hash = 2166136261;
-		for (const char of value) {
-			hash ^= char.codePointAt(0) ?? 0;
-			hash = Math.imul(hash, 16777619);
-		}
-		return `s-${(hash >>> 0).toString(16)}`;
 	}
 }
