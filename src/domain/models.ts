@@ -20,7 +20,8 @@ export function isSymmetricLinkType(type: LinkType): boolean {
 }
 
 export type LinkStatus = "provisional" | "asserted" | "retracted";
-export type LinkOrigin = "human" | "suggestion" | "import";
+export type PersistedLinkOrigin = "human" | "suggestion" | "import";
+export type LinkOrigin = PersistedLinkOrigin | "derived";
 
 export type StubCreationKind = "stub-list" | "advanced-link-editor";
 
@@ -229,7 +230,7 @@ export interface CreateLinkInput {
 	toId: string;
 	type: LinkType;
 	status?: LinkStatus;
-	origin?: LinkOrigin;
+	origin?: PersistedLinkOrigin;
 	reason?: string;
 	fromEndpoint?: LinkEndpoint;
 	toEndpoint?: LinkEndpoint;

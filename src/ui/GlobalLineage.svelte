@@ -11,6 +11,7 @@
 	let {
 		projection,
 		selectedId = null,
+		selectedWorkId = null,
 		filter,
 		onFilterChange,
 		onSelect,
@@ -20,6 +21,7 @@
 	}: {
 		projection: GlobalLineageProjection;
 		selectedId?: string | null;
+		selectedWorkId?: string | null;
 		filter: GlobalLineageFilter;
 		onFilterChange: (filter: GlobalLineageFilter) => void;
 		onSelect: (id: string | null) => void;
@@ -85,6 +87,7 @@
 			bind:this={treeElement}
 			snapshot={projection.snapshot}
 			{selectedId}
+			{selectedWorkId}
 			{onSelect}
 			{onOpen}
 			{onContextMenu}

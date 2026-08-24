@@ -1593,12 +1593,13 @@ if (outlineItem) void openRecentItem(outlineItem);
 	}
 
 	async function removeLink(link: OutlineLink): Promise<void> {
+		if (link.origin === "derived") return;
 		await api.deleteLink(link.fromId, link.toId, link.type);
 		await load();
 	}
 
 	async function reverseLink(link: OutlineLink): Promise<void> {
-		if (isSymmetricLinkType(link.type)) return;
+		if (link.origin === "derived" || isSymmetricLinkType(link.type)) return;
 		await api.deleteLink(link.fromId, link.toId, link.type);
 		await api.createLink({
 			fromId: link.toId,
@@ -2703,6 +2704,7 @@ if (outlineItem) void openRecentItem(outlineItem);
 				filter={activeGlobalLineageFilter}
 				onFilterChange={handleGlobalLineageFilterChange}
 				{selectedId}
+				selectedWorkId={selectedItem?.workId ?? null}
 				onSelect={(id) => selectOccurrence(id)}
 				onOpen={(id) => void openTreeOccurrence(id)}
 				onContextMenu={(id, event) => openOccurrenceContextMenu(id, "tree", event)}
