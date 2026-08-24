@@ -93,7 +93,7 @@
 		<button type="button" class:active={activeView === "tags"} onclick={onOpenTags}>{vocabulary.tag}管理</button>
 		<button type="button" class:active={queryActive} onclick={onOpenQuery}
 			disabled={!queryAvailable}>Query・検索別名</button>
-		<div class="nav-icon-row" aria-label="設定とヘルプ">
+		<div class="nav-icon-row">
 			<button type="button" class:active={activeView === "options" || activeView === "trash"}
 				aria-pressed={activeView === "options" || activeView === "trash"} aria-label="Option" title="Option"
 				onclick={onOpenOptions}>⚙</button>
