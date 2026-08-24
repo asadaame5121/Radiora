@@ -78,7 +78,7 @@ workspace/change）を分けて少しずつ進める。
   - 完了条件: 分割後にどのテストを移すか判断でき、主要な異常系が固定されている
   - 実績: test support を共有しつつ3責務の契約テストへ分け、無効入力、stale suggestion、 missing
     saved query と失敗時に永続化されないことを固定した
-- [ ] **D2: search operations を分離する** — 難易度 3
+- [x] **D2: search operations を分離する** — 難易度 3
   - prefix suggestion、lexical search、alias 展開・保存を所有する
   - 完了条件: search が `DiscoveryStorePort` と必要最小限の参照 port のみに依存する
   - 依存: D1

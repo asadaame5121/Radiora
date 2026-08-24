@@ -1,13 +1,13 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
-import { DiscoveryOperations } from "./discovery_operations.ts";
+import { SearchOperations } from "./search_operations.ts";
 import { addDiscoveryTestWork, DISCOVERY_TEST_NOW } from "./discovery_operations_test_support.ts";
 
 Deno.test("search contract: aliases expand results while reserved tag aliases stay isolated", async () => {
 	const store = new MemoryGraphStore();
 	await addDiscoveryTestWork(store, "alpha", "Alpha\n\n本文");
 	await addDiscoveryTestWork(store, "beta", "Beta\n\n別名の本文");
-	const operations = new DiscoveryOperations(store);
+	const operations = new SearchOperations(store);
 	await operations.saveSearchAlias({ canonical: "alpha", variants: ["別名"] });
 	await store.upsertAlias({
 		id: "tag",
@@ -28,7 +28,7 @@ Deno.test("search contract: aliases expand results while reserved tag aliases st
 
 Deno.test("search contract: invalid and empty alias input has no persistence side effect", async () => {
 	const store = new MemoryGraphStore();
-	const operations = new DiscoveryOperations(store);
+	const operations = new SearchOperations(store);
 
 	assertEquals(await operations.searchItems(" \n "), []);
 	await assertRejects(
