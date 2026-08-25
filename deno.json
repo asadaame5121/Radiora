@@ -1,6 +1,6 @@
 {
 	"nodeModulesDir": "manual",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"compilerOptions": {
 		"lib": ["deno.window", "deno.desktop", "dom", "dom.iterable"],
 		"strict": true
@@ -16,7 +16,7 @@
 		},
 		"backend": "cef",
 		"release": {
-			"baseUrl": "https://github.com/asadaame5121/Radiora/releases/download/v0.4.2"
+			"baseUrl": "https://github.com/asadaame5121/Radiora/releases/download/v0.4.3"
 		},
 		"output": {
 			"windows": "./dist-desktop/radiora-v2-windows",
