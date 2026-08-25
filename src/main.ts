@@ -5,12 +5,15 @@ import { OutlineService } from "./services/outline_service.ts";
 import { RevisionService } from "./services/revision_service.ts";
 import { Logger } from "./services/logger.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
-import type { GraphStore } from "./storage/graph_store.ts";
+import type { GraphStateSnapshot, GraphStore } from "./storage/graph_store.ts";
 import { JsonGraphStore } from "./storage/json_store.ts";
+import { TursoGraphStore } from "./storage/turso_store.ts";
+import { migrateLegacyStorageToTurso } from "./storage/turso_migration.ts";
 import {
 	prepareStorageMigrationBackup,
 	recordStorageVersion,
 	restoreStorageMigrationBackup,
+	storagePathExists,
 } from "./storage/migration_backup.ts";
 import { CURRENT_STORAGE_SCHEMA_VERSION } from "./storage/migrations/mod.ts";
 
@@ -30,8 +33,10 @@ const dataDir = `${appData}\\RadioraV2`;
 const logDir = `${dataDir}\\logs`;
 const logPath = `${logDir}\\startup.log`;
 const startupSnapshotCachePath = `${dataDir}\\startup-snapshot.json`;
-const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "surreal";
+const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "turso";
 const surrealPort = Number(Deno.env.get("RADIORA_SURREAL_PORT") ?? "8012");
+const MIN_TCP_PORT = 1;
+const MAX_TCP_PORT = 65_535;
 await Deno.mkdir(logDir, { recursive: true });
 
 const logger = new Logger({
@@ -64,6 +69,75 @@ let store: GraphStore | null = null;
 let surrealProcess: SurrealProcess | null = null;
 let bootstrapPromise: Promise<StartupStatus> | null = null;
 
+async function exportLegacySnapshot(copyPath: string): Promise<GraphStateSnapshot> {
+	const port = await findAvailablePort();
+	const process = new SurrealProcess(
+		copyPath,
+		"127.0.0.1",
+		port,
+		(event, detail) => logger.info("surrealdb.migration.event", { sourceEvent: event, detail }),
+	);
+	let legacyStore: GraphStore | null = null;
+	try {
+		await process.start();
+		const { SurrealGraphStore } = await import("./storage/surreal_store.ts");
+		legacyStore = new SurrealGraphStore(process.endpoint, "root", "root");
+		await legacyStore.initialize();
+		return await legacyStore.exportGraphState();
+	} finally {
+		if (legacyStore) {
+			try {
+				await legacyStore.close();
+			} catch (cause) {
+				logger.error("surrealdb.migration_store.close.failed", cause);
+			}
+		}
+		await process.stop();
+	}
+}
+
+async function openSurrealStore(
+	databasePath: string,
+): Promise<{ process: SurrealProcess; store: GraphStore }> {
+	assertTcpPort(surrealPort);
+	const process = new SurrealProcess(
+		databasePath,
+		"127.0.0.1",
+		surrealPort,
+		(event, detail) => logger.info("surrealdb.event", { sourceEvent: event, detail }),
+	);
+	try {
+		await process.start();
+		const { SurrealGraphStore } = await import("./storage/surreal_store.ts");
+		const store = new SurrealGraphStore(process.endpoint, "root", "root");
+		return { process, store };
+	} catch (cause) {
+		try {
+			await process.stop();
+		} catch (stopCause) {
+			logger.error("surrealdb.fallback_stop.failed", stopCause);
+		}
+		throw cause;
+	}
+}
+
+async function findAvailablePort(): Promise<number> {
+	const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+	try {
+		const address = listener.addr;
+		if (address.transport !== "tcp") throw new Error("Expected a TCP listener.");
+		return address.port;
+	} finally {
+		listener.close();
+	}
+}
+
+function assertTcpPort(port: number): void {
+	if (!Number.isInteger(port) || port < MIN_TCP_PORT || port > MAX_TCP_PORT) {
+		throw new Error(`Invalid RADIORA_SURREAL_PORT: ${port}`);
+	}
+}
+
 async function stopBackend(): Promise<void> {
 	service = null;
 	const activeStore = store;
@@ -90,10 +164,33 @@ async function bootstrap(): Promise<StartupStatus> {
 			let storageVersionMarker: string | null = null;
 			if (storageMode === "json") {
 				nextStore = new JsonGraphStore(`${dataDir}\\radiora-v2.json`);
-			} else if (storageMode === "surreal" || storageMode === "surreal-diagnostic") {
-				if (!Number.isInteger(surrealPort) || surrealPort < 1 || surrealPort > 65535) {
-					throw new Error(`Invalid RADIORA_SURREAL_PORT: ${surrealPort}`);
+			} else if (storageMode === "turso") {
+				const tursoDir = `${dataDir}\\turso`;
+				const targetPath = `${tursoDir}\\radiora.db`;
+				const surrealDir = `${dataDir}\\surreal`;
+				const sourcePath = `${surrealDir}\\main.db`;
+				await Deno.mkdir(tursoDir, { recursive: true });
+				try {
+					const migrated = await migrateLegacyStorageToTurso({
+						sourcePath,
+						sourceVersionMarkerPath: `${surrealDir}\\storage-schema-version`,
+						backupRoot: `${tursoDir}\\migration-backups`,
+						targetPath,
+						markerPath: `${targetPath}.migration.json`,
+						exportSnapshot: (copyPath) => exportLegacySnapshot(copyPath),
+					});
+					if (migrated) logger.info("storage.turso_migration.ready", { ...migrated });
+					nextStore = new TursoGraphStore(targetPath);
+				} catch (cause) {
+					if (!(await storagePathExists(sourcePath))) throw cause;
+					logger.error("storage.turso_migration.failed", cause, { sourcePath });
+					const fallback = await openSurrealStore(sourcePath);
+					surrealProcess = fallback.process;
+					nextStore = fallback.store;
+					logger.warn("storage.turso_migration.fallback", { sourcePath });
 				}
+			} else if (storageMode === "surreal" || storageMode === "surreal-diagnostic") {
+				assertTcpPort(surrealPort);
 				const surrealDir = storageMode === "surreal"
 					? `${dataDir}\\surreal`
 					: `${dataDir}\\surreal-diagnostic`;

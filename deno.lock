@@ -3598,6 +3598,7 @@
         "npm:@stryker-mutator/core@9.6.1",
         "npm:@stryker-mutator/vitest-runner@9.6.1",
         "npm:@sveltejs/vite-plugin-svelte@^6.2.4",
+        "npm:@tursodatabase/database@0.7.2",
         "npm:@types/d3@^7.4.3",
         "npm:@vitest/browser-playwright@4.1.10",
         "npm:@vitest/browser@4.1.10",
