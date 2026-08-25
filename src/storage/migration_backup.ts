@@ -82,6 +82,23 @@ async function readRecordedVersion(path: string): Promise<number> {
 	}
 }
 
+export async function readStorageVersion(path: string): Promise<number> {
+	return readRecordedVersion(path);
+}
+
+export async function storagePathExists(path: string): Promise<boolean> {
+	return exists(path);
+}
+
+export async function copyStoragePath(source: string, destination: string): Promise<void> {
+	assertSeparatePaths(source, destination);
+	await copyPath(source, destination);
+}
+
+export async function removeStoragePathIfExists(path: string, recursive = false): Promise<void> {
+	await removeIfExists(path, recursive);
+}
+
 async function exists(path: string): Promise<boolean> {
 	try {
 		await Deno.stat(path);
@@ -104,7 +121,7 @@ async function copyPath(source: string, destination: string): Promise<void> {
 	const stat = await Deno.lstat(source);
 	if (stat.isSymlink) throw new Error(`Migration backup refuses symbolic link: ${source}`);
 	if (stat.isFile) {
-		await Deno.mkdir(parentPath(destination), { recursive: true });
+		await Deno.mkdir(storageParentPath(destination), { recursive: true });
 		await Deno.copyFile(source, destination);
 		return;
 	}
@@ -116,7 +133,7 @@ async function copyPath(source: string, destination: string): Promise<void> {
 	}
 }
 
-function parentPath(path: string): string {
+export function storageParentPath(path: string): string {
 	const separator = Math.max(path.lastIndexOf("\\"), path.lastIndexOf("/"));
 	return separator < 0 ? "." : path.slice(0, separator);
 }
