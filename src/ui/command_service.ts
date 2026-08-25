@@ -71,7 +71,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 	},
 	{
 		id: "startLongFormEditing",
-		label: () => "長文編集モード",
+		label: (vocabulary) => vocabulary.manuscriptOpen,
 		shortcut: "Ctrl+Shift+E",
 		availability: selection,
 	},
@@ -124,7 +124,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 			!selection(context).enabled
 				? selection(context)
 				: !context.canOpenLinkEditor
-				? { enabled: false, reason: "意味関係を追加する項目を選択してください。" }
+				? { enabled: false, reason: "関連を追加する項目を選択してください。" }
 				: { enabled: true },
 	},
 	{
@@ -136,7 +136,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 				? ready(context)
 				: context.ruleSource.trim()
 				? { enabled: true }
-				: { enabled: false, reason: "Query を入力してください。" },
+				: { enabled: false, reason: "検索を入力してください。" },
 	},
 	{
 		id: "saveQuery",
@@ -145,7 +145,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 			!ready(context).enabled
 				? ready(context)
 				: !context.ruleSource.trim()
-				? { enabled: false, reason: "Query を入力してください。" }
+				? { enabled: false, reason: "検索を入力してください。" }
 				: !context.ruleName.trim()
 				? { enabled: false, reason: "保存名を入力してください。" }
 				: { enabled: true },

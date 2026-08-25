@@ -90,7 +90,7 @@
 				<div class="sparse-outline-header">
 					<h3>{vocabulary.sparseOutline}<small>{query.sparseOutlineQueryName}</small></h3>
 					<button class="sparse-toggle" type="button" onclick={query.onToggleSparseOutline}>
-						{query.showSparseOutline ? "テーブル表示" : "投影表示"}
+						{query.showSparseOutline ? "テーブル表示" : vocabulary.sparseOutline}
 					</button>
 				</div>
 				{#if query.showSparseOutline}

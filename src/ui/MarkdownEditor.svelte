@@ -201,7 +201,7 @@
 	.markdown-editor-mode {
 		position: absolute;
 		z-index: 5;
-		top: 0;
+		bottom: 0;
 		right: 6px;
 		display: none;
 		align-items: center;
@@ -215,7 +215,7 @@
 	}
 	:global(.row.selected) .markdown-editor,
 	:global(.row:focus-within) .markdown-editor {
-		padding-top: 22px;
+		padding-bottom: 22px;
 	}
 	.markdown-editor-mode span {
 		color: var(--muted);

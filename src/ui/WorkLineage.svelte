@@ -6,9 +6,11 @@
 	let {
 		projection,
 		onCompare,
+		onBack,
 	}: {
 		projection: WorkLineageProjection;
 		onCompare: (scope: "branch" | "revision", id: string) => void;
+		onBack: () => void;
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
@@ -39,6 +41,7 @@
 <section class="work-lineage" aria-label={vocabulary.workLineage}>
 	<header>
 		<div>
+			<button class="back-button" type="button" onclick={onBack}>← アウトラインに戻る</button>
 			<p class="eyebrow">VERSION LINEAGE</p>
 			<h1>{vocabulary.workLineage}</h1>
 		</div>
@@ -135,6 +138,15 @@
 		color: #eafcfd;
 		font: 25px var(--font-serif);
 	}
+	.back-button {
+		margin-bottom: 14px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: #9fb3bc;
+		cursor: pointer;
+	}
+	.back-button:hover { color: #eafcfd; }
 	header > p {
 		max-width: 420px;
 		color: #7f949e;

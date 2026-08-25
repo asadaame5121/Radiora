@@ -37,8 +37,9 @@ Deno.test("compact OverType hosts contain their overlay layers and reserve selec
 		editor,
 		/\.markdown-editor-host :global\(\.overtype-container\)/,
 	);
-	assertMatch(editor, /:global\(\.row\.selected\) \.markdown-editor,[\s\S]*?padding-top: 22px/);
+	assertMatch(editor, /:global\(\.row\.selected\) \.markdown-editor,[\s\S]*?padding-bottom: 22px/);
 	assertMatch(editor, /\.markdown-editor-mode \{[\s\S]*?display: none/);
+	assertMatch(editor, /\.markdown-editor-mode \{[\s\S]*?bottom: 0/);
 	assertMatch(
 		editor,
 		/:global\(\.row\.has-body:not\(\.selected\):not\(:focus-within\)\) \.markdown-editor-host \{/,

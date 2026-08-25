@@ -69,7 +69,7 @@
 				onclick={onStartLongFormEditing}
 				disabled={!commands.startLongFormEditing.enabled}
 				title={commands.startLongFormEditing.reason}
-			>長文編集</button>
+			>{vocabulary.manuscriptOpen}</button>
 		</div>
 		<div class="thought-meta">
 			<div>
