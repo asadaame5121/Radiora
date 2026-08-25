@@ -14,6 +14,8 @@
     "npm:@stryker-mutator/core@9.6.1": "9.6.1",
     "npm:@stryker-mutator/vitest-runner@9.6.1": "9.6.1_@stryker-mutator+core@9.6.1_vitest@4.1.10__@vitest+browser-playwright@4.1.10__@vitest+coverage-v8@4.1.10__vite@7.3.6__@vitest+browser@4.1.10__playwright@1.58.2_@vitest+browser@4.1.10__vitest@4.1.10__@vitest+browser-playwright@4.1.10__@vitest+coverage-v8@4.1.10__playwright@1.58.2__vite@7.3.6_@vitest+browser-playwright@4.1.10__playwright@1.58.2__vitest@4.1.10__@vitest+coverage-v8@4.1.10__vite@7.3.6_@vitest+coverage-v8@4.1.10__@vitest+browser@4.1.10__vitest@4.1.10__@vitest+browser-playwright@4.1.10__vite@7.3.6_playwright@1.58.2",
     "npm:@sveltejs/vite-plugin-svelte@^6.2.4": "6.2.4_svelte@5.56.8_vite@7.3.6",
+    "npm:@tursodatabase/database@0.7.2": "0.7.2",
+    "npm:@tursodatabase/sync@0.7.2": "0.7.2",
     "npm:@types/d3@^7.4.3": "7.4.3",
     "npm:@vitest/browser-playwright@4.1.10": "4.1.10_playwright@1.58.2_vitest@4.1.10_@vitest+coverage-v8@4.1.10_vite@7.3.6",
     "npm:@vitest/browser@4.1.10": "4.1.10_vitest@4.1.10_@vitest+browser-playwright@4.1.10_@vitest+coverage-v8@4.1.10_playwright@1.58.2_vite@7.3.6",
@@ -1397,6 +1399,84 @@
       "integrity": "sha512-QCGwP6QrjypBLwyj5cuyfVamkaIEy/XGY+1VDehbtbQqOggYmTFpFOdWR5mPz14vX8vXLMVjDHlRNBcClyO9ew==",
       "dependencies": [
         "@testing-library/dom"
+      ]
+    },
+    "@tursodatabase/database-common@0.7.2": {
+      "integrity": "sha512-c4uWaA5m7nyDemUrjvX6lQQ89cBxv1jCv7nmwq5JoagyXgbMxDeBfLcY7N5kn0oEcnD0Y+cf09S0wKEXKFKbfg=="
+    },
+    "@tursodatabase/database-darwin-arm64@0.7.2": {
+      "integrity": "sha512-pDYbrPnmsqzWsf21bQXXGKmGhcLdfQQVjx+yrpC/IboCue5o/h9fDZ1QFzQEP6CHRXXoc+pwQCyF8KBntI8fdA==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@tursodatabase/database-linux-arm64-gnu@0.7.2": {
+      "integrity": "sha512-/Blz7cRssWh7dk8vGs7Cq3kupHOnI0GROAg+u9J4MD5U5ABAabJGN7iW5YQ16jZW35Bv2AkmJAyjvsCWdTyfTg==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@tursodatabase/database-linux-x64-gnu@0.7.2": {
+      "integrity": "sha512-rXxInfTxKRPG3XeOAZvzJuX4wF+m9t9BjLbFnKU83Ad8ob2z88r1x+EV7IBzEFhz2FbvrRgriH7PhIEZ7Lx5ug==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@tursodatabase/database-win32-x64-msvc@0.7.2": {
+      "integrity": "sha512-AUvN3KO1bZOpsXVofRIMM2+MJ6OghUhgK62t8/3Bsb0Zzt6PztaMvJrtaWI6u5Olx0WCfGdhaVKyegcjYPNAeA==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@tursodatabase/database@0.7.2": {
+      "integrity": "sha512-B84QicyDYnKt97qxgb7861cQQC26kuv/LkUlCnpxGs4tuGT9zgS2z/Mt+BkG/wOo1fB4rsSycOgGCbi0xU0YOQ==",
+      "dependencies": [
+        "@tursodatabase/database-common"
+      ],
+      "optionalDependencies": [
+        "@tursodatabase/database-darwin-arm64",
+        "@tursodatabase/database-linux-arm64-gnu",
+        "@tursodatabase/database-linux-x64-gnu",
+        "@tursodatabase/database-win32-x64-msvc"
+      ]
+    },
+    "@tursodatabase/serverless@0.2.4": {
+      "integrity": "sha512-kqf3FINvTGx8N1iH/4e1Dkbr/om5q9qitshzvljtQXwZFQIsVP/mDE76mGg9U2dg/ElOZKFKtT1VXDgd39Dr1w=="
+    },
+    "@tursodatabase/sync-common@0.7.2": {
+      "integrity": "sha512-cme6b5EeYQ4YbPtILpfJQyIrv39FSEAMhk5614MKBpeb2Auv1K89k22lEKvC8uARuXptFDbs5iFplIoXpcQHTg==",
+      "dependencies": [
+        "@tursodatabase/database-common",
+        "@tursodatabase/serverless"
+      ]
+    },
+    "@tursodatabase/sync-darwin-arm64@0.7.2": {
+      "integrity": "sha512-Zx7nDYrupnX0AUwIoaQkSP7KwuPMUYRfonXxo/H3f19VLGRr+3xtFh0+YyImYKkw4EkHmYNtIjZ6ZMkz1BaeOg==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@tursodatabase/sync-linux-arm64-gnu@0.7.2": {
+      "integrity": "sha512-DBILAo7fhMuuSLdulMEuQu6ABlxRGSobHwGSqX0C+Ljrm/Y+8slmue/lXvNDKfky0t8I/iUAvXMeFY6V+UEn9w==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@tursodatabase/sync-linux-x64-gnu@0.7.2": {
+      "integrity": "sha512-ACqB5GAwixdNoFodPJ01D5J76MNlTwCVnxy6c+K1LI6e5SLsI+Ti/1OM6/w2RDZZkiXxj4DRWi0HzEFFh430Yg==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@tursodatabase/sync-win32-x64-msvc@0.7.2": {
+      "integrity": "sha512-H/kGlR+aRIV0RyUT4L3I/QcseSswuWYNc9SB4KN6fIAc3WJPiTUO5y3abSj8ZVQDtlIbGOqH9LBBKY+oLIWwpA==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@tursodatabase/sync@0.7.2": {
+      "integrity": "sha512-qGfywPShGgx5luHzY4WOHTJNvkLj8b6ZNFuzw+AbMpUho6XB3E3titcINdqlogJcLrjDR1ripQjylIbPpqJKyg==",
+      "dependencies": [
+        "@tursodatabase/database-common",
+        "@tursodatabase/sync-common"
+      ],
+      "optionalDependencies": [
+        "@tursodatabase/sync-darwin-arm64",
+        "@tursodatabase/sync-linux-arm64-gnu",
+        "@tursodatabase/sync-linux-x64-gnu",
+        "@tursodatabase/sync-win32-x64-msvc"
       ]
     },
     "@tybys/wasm-util@0.10.3": {
@@ -3599,6 +3679,7 @@
         "npm:@stryker-mutator/vitest-runner@9.6.1",
         "npm:@sveltejs/vite-plugin-svelte@^6.2.4",
         "npm:@tursodatabase/database@0.7.2",
+        "npm:@tursodatabase/sync@0.7.2",
         "npm:@types/d3@^7.4.3",
         "npm:@vitest/browser-playwright@4.1.10",
         "npm:@vitest/browser@4.1.10",

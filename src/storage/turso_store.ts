@@ -1,4 +1,3 @@
-import { connect, type Database } from "@tursodatabase/database";
 import type {
 	Bookmark,
 	Branch,
@@ -18,66 +17,79 @@ import type {
 	WorkingCopy,
 } from "../domain/models.ts";
 import type { GraphStateSnapshot, MergeWorksInput, WorkBundle } from "./graph_store.ts";
-import { validatedGraphStateSnapshot } from "./graph_store.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
+import { TURSO_SCHEMA_SQL, TURSO_STORAGE_SCHEMA_VERSION } from "./turso_schema.ts";
 import {
-	TURSO_RECORD_TABLES,
-	TURSO_SCHEMA_SQL,
-	TURSO_STORAGE_SCHEMA_VERSION,
-} from "./turso_schema.ts";
+	hasPersistedState,
+	isRecord,
+	persistTursoState,
+	readTursoState,
+	type TursoDatabase,
+	type TursoDatabaseTransaction,
+} from "./turso_records.ts";
+import type { TursoSyncConfig, TursoSyncStatus } from "./turso_sync_config.ts";
 
-type RecordTable = (typeof TURSO_RECORD_TABLES)[number];
+export type { TursoDatabase, TursoDatabaseTransaction };
 
-interface StoredRecord {
-	id: string;
-	payload: unknown;
+export type TursoDatabaseConnector = (
+	path: string,
+	syncConfig: TursoSyncConfig | null,
+) => Promise<TursoDatabase>;
+
+export interface TursoGraphStoreOptions {
+	syncConfig?: TursoSyncConfig | null;
+	connector?: TursoDatabaseConnector;
 }
 
-interface UnknownRecord {
-	[key: string]: unknown;
+export interface TursoSyncResult {
+	status: TursoSyncStatus;
+	error?: string;
 }
 
-const TABLE_FOR_STATE: Record<
-	Exclude<keyof GraphStateSnapshot, "emergenceFeedback" | "resumePosition">,
-	RecordTable
-> = {
-	works: "work",
-	branches: "branch",
-	workingCopies: "working_copy",
-	revisions: "revision",
-	recoverySnapshots: "recovery_snapshot",
-	occurrences: "occurrence",
-	links: "semantic_link",
-	systemRelations: "system_relation",
-	knots: "knot",
-	aliases: "search_alias",
-	emergenceSuggestions: "emergence_suggestion",
-	savedRuleQueries: "saved_rule_query",
-	purgeManifests: "purge_manifest",
-	bookmarks: "bookmark",
-};
-
-const ARRAY_STATE_KEYS = Object.keys(TABLE_FOR_STATE) as Array<
-	Exclude<keyof GraphStateSnapshot, "emergenceFeedback" | "resumePosition">
->;
+async function defaultTursoConnector(
+	path: string,
+	syncConfig: TursoSyncConfig | null,
+): Promise<TursoDatabase> {
+	if (syncConfig) {
+		const { connect } = await import("@tursodatabase/sync");
+		const db = await connect({
+			path,
+			url: syncConfig.syncUrl,
+			authToken: syncConfig.authToken,
+		});
+		return db as TursoDatabase;
+	}
+	const { connect } = await import("@tursodatabase/database");
+	const db = await connect(path, { timeout: 5000 });
+	return db as TursoDatabase;
+}
 
 /**
  * Durable Turso implementation of the existing GraphStore contract.
  *
- * ponytail: rewrite the validated full snapshot per mutation; replace with row-level SQL only
- * after a measured dataset shows this O(n) durability path is a bottleneck.
+ * In local-only mode, uses @tursodatabase/database connect(path).
+ * When sync is opted in, uses @tursodatabase/sync connect({ path, url, authToken })
+ * to avoid duplicate connections to the same database file.
  */
 export class TursoGraphStore extends MemoryGraphStore {
-	private db: Database | null = null;
+	private db: TursoDatabase | null = null;
 	private initialized = false;
+	private readonly syncConfig: TursoSyncConfig | null;
+	private readonly connector: TursoDatabaseConnector;
+	private syncStatus: TursoSyncStatus = "disabled";
 
-	constructor(private readonly path: string) {
+	constructor(
+		private readonly path: string,
+		options: TursoGraphStoreOptions = {},
+	) {
 		super();
+		this.syncConfig = options.syncConfig ?? null;
+		this.connector = options.connector ?? defaultTursoConnector;
 	}
 
 	override async initialize(): Promise<void> {
 		if (this.initialized) return;
-		const db = await connect(this.path, { timeout: 5000 });
+		const db = await this.connector(this.path, this.syncConfig);
 		try {
 			await db.exec(TURSO_SCHEMA_SQL);
 			const metadata = await db.get(
@@ -92,10 +104,14 @@ export class TursoGraphStore extends MemoryGraphStore {
 			}
 			this.db = db;
 			this.initialized = true;
+			this.syncStatus = this.syncConfig ? "offline" : "disabled";
 			const state = await this.readState();
 			if (hasPersistedState(state)) await super.restoreGraphState(state);
 			else await this.persistState(await super.exportGraphState());
 		} catch (cause) {
+			this.db = null;
+			this.initialized = false;
+			this.syncStatus = this.syncConfig ? "offline" : "disabled";
 			let closeCause: unknown;
 			try {
 				await db.close();
@@ -116,14 +132,53 @@ export class TursoGraphStore extends MemoryGraphStore {
 		const db = this.db;
 		this.db = null;
 		this.initialized = false;
+		this.syncStatus = this.syncConfig ? "offline" : "disabled";
 		if (!db) return;
 		try {
 			await this.persistState(await super.exportGraphState(), db);
-			await db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-			await db.exec("PRAGMA journal_mode = DELETE");
+			if (this.syncConfig) {
+				await db.checkpoint?.();
+			} else {
+				await db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+				await db.exec("PRAGMA journal_mode = DELETE");
+			}
 		} finally {
 			await db.close();
 		}
+	}
+
+	async sync(): Promise<TursoSyncResult> {
+		this.assertInitialized();
+		if (!this.syncConfig) {
+			return { status: "disabled" };
+		}
+		const db = this.database();
+		if (typeof db.push !== "function" || typeof db.pull !== "function") {
+			throw new Error("Turso sync is enabled but database does not support push/pull");
+		}
+
+		this.syncStatus = "syncing";
+		try {
+			const pulled = await db.pull();
+			if (pulled) {
+				const state = await this.readState();
+				await super.restoreGraphState(state);
+			}
+			await db.push();
+			this.syncStatus = "synced";
+			return { status: "synced" };
+		} catch (cause) {
+			const errorMessage = cause instanceof Error ? cause.message : String(cause);
+			const isAuth = errorMessage.includes("401") || errorMessage.includes("403") ||
+				errorMessage.includes("Unauthorized") || errorMessage.includes("unauthorized");
+			const nextStatus: TursoSyncStatus = isAuth ? "auth_expired" : "offline";
+			this.syncStatus = nextStatus;
+			return { status: nextStatus, error: errorMessage };
+		}
+	}
+
+	getSyncStatus(): TursoSyncStatus {
+		return this.syncStatus;
 	}
 
 	override restoreGraphState(state: GraphStateSnapshot): Promise<void> {
@@ -312,142 +367,22 @@ export class TursoGraphStore extends MemoryGraphStore {
 	}
 
 	private async readState(): Promise<GraphStateSnapshot> {
-		const state: Record<string, unknown> = {
-			works: [],
-			branches: [],
-			workingCopies: [],
-			revisions: [],
-			recoverySnapshots: [],
-			occurrences: [],
-			links: [],
-			systemRelations: [],
-			knots: [],
-			aliases: [],
-			emergenceFeedback: {},
-			emergenceSuggestions: [],
-			savedRuleQueries: [],
-			purgeManifests: [],
-			bookmarks: [],
-			resumePosition: null,
-		};
-		for (const key of ARRAY_STATE_KEYS) {
-			state[key] = (await this.readRecords(TABLE_FOR_STATE[key])).map(({ payload }) => payload);
-		}
-		const feedback = await this.readRecords("emergence_feedback");
-		state.emergenceFeedback = Object.fromEntries(
-			feedback.map(({ id, payload }) => [id, payload]),
-		);
-		const resume = await this.readRecords("resume_position");
-		if (resume.length > 1) throw new Error("Turso resume position singleton is invalid");
-		state.resumePosition = resume[0]?.payload ?? null;
-		return validatedGraphStateSnapshot(state);
+		return readTursoState(this.database());
 	}
 
-	private async readRecords(table: RecordTable): Promise<StoredRecord[]> {
-		const rows: unknown[] = await this.database().all(
-			`SELECT id, payload FROM ${table} ORDER BY position, id`,
-		);
-		return rows.map((row, index) => parseStoredRecord(table, row, index));
+	private async persistState(
+		state: GraphStateSnapshot,
+		db = this.database(),
+	): Promise<void> {
+		return persistTursoState(state, db);
 	}
 
-	private async persistState(state: GraphStateSnapshot, db = this.database()): Promise<void> {
-		const validated = validatedGraphStateSnapshot(state);
-		const transaction = db.transactionAsync(async (txn) => {
-			for (const table of TURSO_RECORD_TABLES) await txn.run(`DELETE FROM ${table}`);
-			for (const key of ARRAY_STATE_KEYS) {
-				const table = TABLE_FOR_STATE[key];
-				for (const [position, value] of validated[key].entries()) {
-					await txn.run(
-						`INSERT INTO ${table} (id, position, payload) VALUES (?, ?, ?)`,
-						recordId(table, value),
-						position,
-						JSON.stringify(value),
-					);
-				}
-			}
-			for (
-				const [position, [id, action]] of Object.entries(validated.emergenceFeedback).entries()
-			) {
-				await txn.run(
-					"INSERT INTO emergence_feedback (id, position, payload) VALUES (?, ?, ?)",
-					id,
-					position,
-					JSON.stringify(action),
-				);
-			}
-			if (validated.resumePosition) {
-				await txn.run(
-					"INSERT INTO resume_position (id, position, payload) VALUES (?, ?, ?)",
-					"current",
-					0,
-					JSON.stringify(validated.resumePosition),
-				);
-			}
-			await txn.run(
-				`INSERT INTO storage_metadata (id, schema_version, updated_at)
-				 VALUES ('radiora', ?, ?)
-				 ON CONFLICT(id) DO UPDATE SET schema_version = excluded.schema_version,
-				 updated_at = excluded.updated_at`,
-				TURSO_STORAGE_SCHEMA_VERSION,
-				new Date().toISOString(),
-			);
-		});
-		await transaction.immediate();
-	}
-
-	private database(): Database {
+	private database(): TursoDatabase {
 		if (!this.db || !this.initialized) throw new Error("TursoGraphStore is not initialized");
 		return this.db;
 	}
 
 	private assertInitialized(): void {
 		this.database();
-	}
-}
-
-function isRecord(value: unknown): value is UnknownRecord {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasPersistedState(state: GraphStateSnapshot): boolean {
-	return Object.values(state).some((value) => Array.isArray(value) && value.length > 0) ||
-		Object.keys(state.emergenceFeedback).length > 0 || state.resumePosition !== null;
-}
-
-function recordId(table: RecordTable, value: unknown): string {
-	if (!isRecord(value)) throw new Error(`Invalid Turso ${table} payload`);
-	const key = table === "working_copy" ? "branchId" : "id";
-	const id = value[key];
-	if (typeof id !== "string" || !id) throw new Error(`Invalid Turso ${table} ID`);
-	return id;
-}
-
-function parseStoredRecord(table: RecordTable, row: unknown, index: number): StoredRecord {
-	if (!isRecord(row) || typeof row.id !== "string" || typeof row.payload !== "string") {
-		throw new Error(`Invalid Turso ${table} row at index ${index}`);
-	}
-	const payload = parsePayload(table, row.payload, index);
-	assertRecordIdentity(table, row.id, payload, index);
-	return { id: row.id, payload };
-}
-
-function parsePayload(table: RecordTable, source: string, index: number): unknown {
-	try {
-		return JSON.parse(source);
-	} catch (cause) {
-		throw new Error(`Invalid Turso ${table} JSON at index ${index}`, { cause });
-	}
-}
-
-function assertRecordIdentity(
-	table: RecordTable,
-	id: string,
-	payload: unknown,
-	index: number,
-): void {
-	if (table === "emergence_feedback" || table === "resume_position") return;
-	const key = table === "working_copy" ? "branchId" : "id";
-	if (!isRecord(payload) || payload[key] !== id) {
-		throw new Error(`Invalid Turso ${table} identity at index ${index}`);
 	}
 }
