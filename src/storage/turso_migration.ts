@@ -7,7 +7,7 @@ import {
 	storageParentPath,
 	storagePathExists,
 } from "./migration_backup.ts";
-import { TursoGraphStore } from "./turso_store.ts";
+import { SqliteGraphStore } from "./sqlite_store.ts";
 
 export const TURSO_MIGRATION_MARKER_VERSION = 1;
 const HEX_RADIX = 16;
@@ -99,7 +99,7 @@ export async function importGraphStateToTurso(
 	}
 	await Deno.mkdir(storageParentPath(targetPath), { recursive: true });
 	const temporaryPath = `${targetPath}.migrating-${crypto.randomUUID()}`;
-	const store = new TursoGraphStore(temporaryPath);
+	const store = new SqliteGraphStore(temporaryPath);
 	try {
 		await store.initialize();
 		await store.restoreGraphState(validated);

@@ -9,7 +9,7 @@ const storageMode = Deno.args.includes("--json")
 	? "surreal-diagnostic"
 	: Deno.args.includes("--surreal")
 	? "surreal"
-	: "turso";
+	: "sqlite";
 const outputDir = new URL(
 	isWindows ? "../dist-desktop/radiora-v2-windows/" : "../dist-desktop/radiora-v2-linux/",
 	import.meta.url,

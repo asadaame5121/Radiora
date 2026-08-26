@@ -5,19 +5,17 @@ import {
 	assertTcpPort,
 	backendOriginFromServeAddress,
 	developmentUiOrigin,
-	findAvailablePort,
 	missingAssetResponse,
 } from "./desktop/desktop_helpers.ts";
 import { OutlineService } from "./services/outline_service.ts";
 import { RevisionService } from "./services/revision_service.ts";
 import { Logger } from "./services/logger.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
-import type { GraphStateSnapshot, GraphStore } from "./storage/graph_store.ts";
+import type { GraphStore } from "./storage/graph_store.ts";
 import { JsonGraphStore } from "./storage/json_store.ts";
-import { TursoGraphStore } from "./storage/turso_store.ts";
+import { SqliteGraphStore } from "./storage/sqlite_store.ts";
 import { migrateLegacyStorageToTurso } from "./storage/turso_migration.ts";
-import { readTursoSyncConfigFromEnv } from "./storage/turso_sync_config.ts";
-import { TursoSyncEngine } from "./storage/turso_sync_engine.ts";
+import { exportLegacySnapshot } from "./storage/legacy_surreal_exporter.ts";
 import {
 	prepareStorageMigrationBackup,
 	recordStorageVersion,
@@ -42,7 +40,7 @@ const dataDir = `${appData}\\RadioraV2`;
 const logDir = `${dataDir}\\logs`;
 const logPath = `${logDir}\\startup.log`;
 const startupSnapshotCachePath = `${dataDir}\\startup-snapshot.json`;
-const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "turso";
+const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "sqlite";
 const surrealPort = Number(Deno.env.get("RADIORA_SURREAL_PORT") ?? "8012");
 await Deno.mkdir(logDir, { recursive: true });
 
@@ -73,36 +71,8 @@ let startupStatus: StartupStatus = {
 };
 let service: OutlineService | null = null;
 let store: GraphStore | null = null;
-let syncEngine: TursoSyncEngine | null = null;
 let surrealProcess: SurrealProcess | null = null;
 let bootstrapPromise: Promise<StartupStatus> | null = null;
-
-async function exportLegacySnapshot(copyPath: string): Promise<GraphStateSnapshot> {
-	const port = await findAvailablePort();
-	const process = new SurrealProcess(
-		copyPath,
-		"127.0.0.1",
-		port,
-		(event, detail) => logger.info("surrealdb.migration.event", { sourceEvent: event, detail }),
-	);
-	let legacyStore: GraphStore | null = null;
-	try {
-		await process.start();
-		const { SurrealGraphStore } = await import("./storage/surreal_store.ts");
-		legacyStore = new SurrealGraphStore(process.endpoint, "root", "root");
-		await legacyStore.initialize();
-		return await legacyStore.exportGraphState();
-	} finally {
-		if (legacyStore) {
-			try {
-				await legacyStore.close();
-			} catch (cause) {
-				logger.error("surrealdb.migration_store.close.failed", cause);
-			}
-		}
-		await process.stop();
-	}
-}
 
 async function openSurrealStore(
 	databasePath: string,
@@ -133,11 +103,8 @@ async function stopBackend(): Promise<void> {
 	service = null;
 	const activeStore = store;
 	const activeProcess = surrealProcess;
-	const activeSyncEngine = syncEngine;
 	store = null;
 	surrealProcess = null;
-	syncEngine = null;
-	await activeSyncEngine?.close().catch((cause) => logger.error("turso_sync.close.failed", cause));
 	await activeStore?.close().catch((cause) => logger.error("store.close.failed", cause));
 	await activeProcess?.stop().catch((cause) => logger.error("surrealdb.stop.failed", cause));
 }
@@ -158,12 +125,11 @@ async function bootstrap(): Promise<StartupStatus> {
 			let storageVersionMarker: string | null = null;
 			if (storageMode === "json") {
 				nextStore = new JsonGraphStore(`${dataDir}\\radiora-v2.json`);
-			} else if (storageMode === "turso") {
+			} else if (storageMode === "sqlite" || storageMode === "turso") {
 				const tursoDir = `${dataDir}\\turso`;
 				const targetPath = `${tursoDir}\\radiora.db`;
 				const surrealDir = `${dataDir}\\surreal`;
 				const sourcePath = `${surrealDir}\\main.db`;
-				const syncConfig = readTursoSyncConfigFromEnv();
 				await Deno.mkdir(tursoDir, { recursive: true });
 				try {
 					const migrated = await migrateLegacyStorageToTurso({
@@ -172,17 +138,17 @@ async function bootstrap(): Promise<StartupStatus> {
 						backupRoot: `${tursoDir}\\migration-backups`,
 						targetPath,
 						markerPath: `${targetPath}.migration.json`,
-						exportSnapshot: (copyPath) => exportLegacySnapshot(copyPath),
+						exportSnapshot: (copyPath) =>
+							exportLegacySnapshot(copyPath, {
+								onLog: (event, fields, cause) => {
+									if (cause) logger.error(event, cause, fields);
+									else logger.info(event, fields);
+								},
+							}),
 					});
 					if (migrated) logger.info("storage.turso_migration.ready", { ...migrated });
-					const tursoStore = new TursoGraphStore(targetPath, { syncConfig });
-					const engine = new TursoSyncEngine({
-						store: tursoStore,
-						syncConfig,
-						onLog: (event, fields) => logger.info(event, fields),
-					});
-					syncEngine = engine;
-					nextStore = tursoStore;
+					const sqliteStore = new SqliteGraphStore(targetPath);
+					nextStore = sqliteStore;
 				} catch (cause) {
 					if (!(await storagePathExists(sourcePath))) throw cause;
 					logger.error("storage.turso_migration.failed", cause, { sourcePath });
@@ -236,7 +202,6 @@ async function bootstrap(): Promise<StartupStatus> {
 			}
 			store = nextStore;
 			await nextStore.initialize();
-			await syncEngine?.initialize();
 			if (storageVersionMarker) {
 				await recordStorageVersion(storageVersionMarker, CURRENT_STORAGE_SCHEMA_VERSION);
 			}
