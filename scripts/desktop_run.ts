@@ -3,13 +3,7 @@ if (Deno.build.os !== "windows" && Deno.build.os !== "linux") {
 }
 
 const isWindows = Deno.build.os === "windows";
-const storageMode = Deno.args.includes("--json")
-	? "json"
-	: Deno.args.includes("--surreal-diagnostic")
-	? "surreal-diagnostic"
-	: Deno.args.includes("--surreal")
-	? "surreal"
-	: "sqlite";
+const storageMode = Deno.args.includes("--json") ? "json" : "sqlite";
 const outputDir = new URL(
 	isWindows ? "../dist-desktop/radiora-v2-windows/" : "../dist-desktop/radiora-v2-linux/",
 	import.meta.url,

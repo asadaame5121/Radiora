@@ -1,8 +1,6 @@
 import { createBindingHandlers } from "./desktop/register_bindings.ts";
-import { SurrealProcess } from "./desktop/surreal_process.ts";
 import { StartupSnapshotCacheFile } from "./desktop/startup_snapshot_cache_file.ts";
 import {
-	assertTcpPort,
 	backendOriginFromServeAddress,
 	developmentUiOrigin,
 	missingAssetResponse,
@@ -12,17 +10,7 @@ import { RevisionService } from "./services/revision_service.ts";
 import { Logger } from "./services/logger.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
 import type { GraphStore } from "./storage/graph_store.ts";
-import { JsonGraphStore } from "./storage/json_store.ts";
-import { SqliteGraphStore } from "./storage/sqlite_store.ts";
-import { migrateLegacyStorageToTurso } from "./storage/turso_migration.ts";
-import { exportLegacySnapshot } from "./storage/legacy_surreal_exporter.ts";
-import {
-	prepareStorageMigrationBackup,
-	recordStorageVersion,
-	restoreStorageMigrationBackup,
-	storagePathExists,
-} from "./storage/migration_backup.ts";
-import { CURRENT_STORAGE_SCHEMA_VERSION } from "./storage/migrations/mod.ts";
+import { bootstrapStorage, type StorageBootstrapSession } from "./storage/storage_bootstrap.ts";
 
 const hmrUiOrigin = developmentUiOrigin(Deno.env.get("RADIORA_HMR_UI_ORIGIN"));
 const hmrBridgeFile = Deno.env.get("RADIORA_HMR_BRIDGE_FILE");
@@ -41,7 +29,6 @@ const logDir = `${dataDir}\\logs`;
 const logPath = `${logDir}\\startup.log`;
 const startupSnapshotCachePath = `${dataDir}\\startup-snapshot.json`;
 const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "sqlite";
-const surrealPort = Number(Deno.env.get("RADIORA_SURREAL_PORT") ?? "8012");
 await Deno.mkdir(logDir, { recursive: true });
 
 const logger = new Logger({
@@ -69,143 +56,36 @@ let startupStatus: StartupStatus = {
 	message: "Radioraを起動しています…",
 	logPath,
 };
+let currentSession: StorageBootstrapSession | null = null;
 let service: OutlineService | null = null;
 let store: GraphStore | null = null;
-let surrealProcess: SurrealProcess | null = null;
 let bootstrapPromise: Promise<StartupStatus> | null = null;
-
-async function openSurrealStore(
-	databasePath: string,
-): Promise<{ process: SurrealProcess; store: GraphStore }> {
-	assertTcpPort(surrealPort);
-	const process = new SurrealProcess(
-		databasePath,
-		"127.0.0.1",
-		surrealPort,
-		(event, detail) => logger.info("surrealdb.event", { sourceEvent: event, detail }),
-	);
-	try {
-		await process.start();
-		const { SurrealGraphStore } = await import("./storage/surreal_store.ts");
-		const store = new SurrealGraphStore(process.endpoint, "root", "root");
-		return { process, store };
-	} catch (cause) {
-		try {
-			await process.stop();
-		} catch (stopCause) {
-			logger.error("surrealdb.fallback_stop.failed", stopCause);
-		}
-		throw cause;
-	}
-}
 
 async function stopBackend(): Promise<void> {
 	service = null;
-	const activeStore = store;
-	const activeProcess = surrealProcess;
 	store = null;
-	surrealProcess = null;
-	await activeStore?.close().catch((cause) => logger.error("store.close.failed", cause));
-	await activeProcess?.stop().catch((cause) => logger.error("surrealdb.stop.failed", cause));
+	const activeSession = currentSession;
+	currentSession = null;
+	if (activeSession) {
+		await activeSession.stop();
+	}
 }
 
 async function bootstrap(): Promise<StartupStatus> {
 	if (bootstrapPromise) return bootstrapPromise;
 	bootstrapPromise = logger.timed("backend.bootstrap", async () => {
 		startupStatus = { phase: "starting", message: "データを読み込んでいます…", logPath };
-		logger.info("backend.startup.begin", { storageMode, surrealPort });
+		logger.info("backend.startup.begin", { storageMode });
 		await stopBackend();
-		let storageMigrationRecovery: {
-			databasePath: string;
-			backupPath: string;
-			versionMarkerPath: string;
-		} | null = null;
 		try {
-			let nextStore: GraphStore;
-			let storageVersionMarker: string | null = null;
-			if (storageMode === "json") {
-				nextStore = new JsonGraphStore(`${dataDir}\\radiora-v2.json`);
-			} else if (storageMode === "sqlite" || storageMode === "turso") {
-				const tursoDir = `${dataDir}\\turso`;
-				const targetPath = `${tursoDir}\\radiora.db`;
-				const surrealDir = `${dataDir}\\surreal`;
-				const sourcePath = `${surrealDir}\\main.db`;
-				await Deno.mkdir(tursoDir, { recursive: true });
-				try {
-					const migrated = await migrateLegacyStorageToTurso({
-						sourcePath,
-						sourceVersionMarkerPath: `${surrealDir}\\storage-schema-version`,
-						backupRoot: `${tursoDir}\\migration-backups`,
-						targetPath,
-						markerPath: `${targetPath}.migration.json`,
-						exportSnapshot: (copyPath) =>
-							exportLegacySnapshot(copyPath, {
-								onLog: (event, fields, cause) => {
-									if (cause) logger.error(event, cause, fields);
-									else logger.info(event, fields);
-								},
-							}),
-					});
-					if (migrated) logger.info("storage.turso_migration.ready", { ...migrated });
-					const sqliteStore = new SqliteGraphStore(targetPath);
-					nextStore = sqliteStore;
-				} catch (cause) {
-					if (!(await storagePathExists(sourcePath))) throw cause;
-					logger.error("storage.turso_migration.failed", cause, { sourcePath });
-					const fallback = await openSurrealStore(sourcePath);
-					surrealProcess = fallback.process;
-					nextStore = fallback.store;
-					logger.warn("storage.turso_migration.fallback", { sourcePath });
-				}
-			} else if (storageMode === "surreal" || storageMode === "surreal-diagnostic") {
-				assertTcpPort(surrealPort);
-				const surrealDir = storageMode === "surreal"
-					? `${dataDir}\\surreal`
-					: `${dataDir}\\surreal-diagnostic`;
-				await Deno.mkdir(surrealDir, { recursive: true });
-				const databasePath = `${surrealDir}\\main.db`;
-				storageVersionMarker = `${surrealDir}\\storage-schema-version`;
-				const backupRoot = `${surrealDir}\\migration-backups`;
-				const protectedBackup = await prepareStorageMigrationBackup(
-					databasePath,
-					backupRoot,
-					storageVersionMarker,
-					CURRENT_STORAGE_SCHEMA_VERSION,
-				);
-				if (protectedBackup) {
-					storageMigrationRecovery = {
-						databasePath,
-						backupPath: protectedBackup,
-						versionMarkerPath: storageVersionMarker,
-					};
-					logger.info("storage.migration_backup.ready", { path: protectedBackup });
-				}
-				const nextProcess = new SurrealProcess(
-					databasePath,
-					"127.0.0.1",
-					surrealPort,
-					(event, detail) => logger.info("surrealdb.event", { sourceEvent: event, detail }),
-				);
-				surrealProcess = nextProcess;
-				await nextProcess.start();
-				logger.info("surrealdb.sdk_import.begin");
-				const { SurrealGraphStore } = await import("./storage/surreal_store.ts");
-				logger.info("surrealdb.sdk_import.ready");
-				nextStore = new SurrealGraphStore(
-					nextProcess.endpoint,
-					"root",
-					"root",
-					(event, detail) => logger.info("surrealdb.event", { sourceEvent: event, detail }),
-				);
-			} else {
-				throw new Error(`Unknown RADIORA_STORAGE mode: ${storageMode}`);
-			}
-			store = nextStore;
-			await nextStore.initialize();
-			if (storageVersionMarker) {
-				await recordStorageVersion(storageVersionMarker, CURRENT_STORAGE_SCHEMA_VERSION);
-			}
-			service = new OutlineService(nextStore);
+			const session = await bootstrapStorage({
+				dataDir,
+				storageMode,
+				logger,
+			});
+			currentSession = session;
+			store = session.store;
+			service = new OutlineService(session.store);
 			startupStatus = { phase: "ready", message: "準備完了", logPath };
 			logger.info("backend.startup.ready", { storageMode });
 		} catch (cause) {
@@ -218,29 +98,6 @@ async function bootstrap(): Promise<StartupStatus> {
 			};
 			logger.error("backend.startup.failed", cause, { storageMode });
 			await stopBackend();
-			if (storageMigrationRecovery) {
-				try {
-					const restored = await restoreStorageMigrationBackup(
-						storageMigrationRecovery.databasePath,
-						storageMigrationRecovery.backupPath,
-						storageMigrationRecovery.versionMarkerPath,
-					);
-					logger.info("storage.migration_backup.restored", { ...restored });
-					startupStatus = {
-						...startupStatus,
-						message: "移行前のデータを復元しました。再試行できます。",
-					};
-				} catch (restoreCause) {
-					logger.error("storage.migration_backup.restore_failed", restoreCause);
-					startupStatus = {
-						...startupStatus,
-						message: "移行に失敗し、バックアップの自動復元にも失敗しました。",
-						detail: `${detail}\n復元エラー: ${
-							restoreCause instanceof Error ? restoreCause.message : String(restoreCause)
-						}`,
-					};
-				}
-			}
 		}
 		return startupStatus;
 	}, { storageMode }).finally(() => {
@@ -289,7 +146,7 @@ const handlers = createBindingHandlers({
 		);
 	},
 });
-logger.info("desktop.runtime.initialized", { storageMode, surrealPort });
+logger.info("desktop.runtime.initialized", { storageMode });
 
 const appWindow = new Deno.BrowserWindow();
 let closingWindow = false;
