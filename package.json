@@ -28,7 +28,6 @@
 		"bits-ui": "2.18.1",
 		"d3": "^7.9.0",
 		"overtype": "2.4.0",
-		"surrealdb": "^2.0.8",
 		"svelte": "^5.56.8"
 	},
 	"overrides": {
@@ -53,6 +52,7 @@
 		"jscpd": "5.0.12",
 		"playwright": "1.58.2",
 		"storybook": "10.5.7",
+		"surrealdb": "^2.0.8",
 		"svelte-check": "^4.7.5",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.6",

@@ -41,15 +41,73 @@ export interface LegacyStorageMigrationOptions {
 	exportSnapshot: (copyPath: string) => Promise<GraphStateSnapshot>;
 }
 
+export interface LegacyMigrationStatusOptions {
+	sourcePath: string;
+	sourceVersionMarkerPath: string;
+	targetPath: string;
+	markerPath: string;
+}
+
+export async function isLegacyStorageMigrationComplete(
+	options: LegacyMigrationStatusOptions,
+): Promise<{ complete: boolean; reason?: string }> {
+	const sourceExists = await storagePathExists(options.sourcePath);
+	if (!sourceExists) {
+		return { complete: true };
+	}
+	const targetExists = await storagePathExists(options.targetPath);
+	const marker = await readMigrationMarker(options.markerPath);
+	if (!targetExists || !marker) {
+		return {
+			complete: false,
+			reason:
+				`Legacy SurrealDB source exists (${options.sourcePath}) but migration target or marker is missing.`,
+		};
+	}
+	if (marker.sourcePath !== options.sourcePath) {
+		return {
+			complete: false,
+			reason:
+				`Migration marker sourcePath (${marker.sourcePath}) does not match current source (${options.sourcePath}).`,
+		};
+	}
+	const currentSourceVersion = await readStorageVersion(options.sourceVersionMarkerPath);
+	if (marker.sourceStorageVersion !== currentSourceVersion) {
+		return {
+			complete: false,
+			reason:
+				`Legacy SurrealDB schema version (${currentSourceVersion}) differs from migration marker (${marker.sourceStorageVersion}).`,
+		};
+	}
+	const currentFingerprint = await fingerprintStoragePath(options.sourcePath);
+	if (marker.sourceFingerprint !== currentFingerprint) {
+		return {
+			complete: false,
+			reason:
+				`Legacy SurrealDB source fingerprint differs from migration marker (source data was modified after migration).`,
+		};
+	}
+	return { complete: true };
+}
+
 export async function migrateLegacyStorageToTurso(
 	options: LegacyStorageMigrationOptions,
 ): Promise<TursoMigrationResult | null> {
 	if (!(await storagePathExists(options.sourcePath))) return null;
-	const marker = await readMigrationMarker(options.markerPath);
+	const status = await isLegacyStorageMigrationComplete({
+		sourcePath: options.sourcePath,
+		sourceVersionMarkerPath: options.sourceVersionMarkerPath,
+		targetPath: options.targetPath,
+		markerPath: options.markerPath,
+	});
+	if (status.complete) {
+		return null;
+	}
 	if (await storagePathExists(options.targetPath)) {
-		if (marker?.sourcePath === options.sourcePath) return null;
 		throw new Error(
-			`Turso migration target exists without a valid completion marker: ${options.targetPath}`,
+			`Turso migration target exists without a valid completion marker or source was modified after migration: ${options.targetPath}. ${
+				status.reason ?? ""
+			}`,
 		);
 	}
 
@@ -204,7 +262,7 @@ function canonicalValue(value: unknown): unknown {
 	);
 }
 
-async function readMigrationMarker(path: string): Promise<TursoMigrationMarker | null> {
+export async function readMigrationMarker(path: string): Promise<TursoMigrationMarker | null> {
 	let text: string;
 	try {
 		text = await Deno.readTextFile(path);

@@ -1,5 +1,3 @@
-import { buildSurrealSidecar, copySurrealCli } from "./sidecar_build.ts";
-
 const isWindows = Deno.build.os === "windows";
 const platformLabel = isWindows ? "Windows" : "Linux";
 const outputDirName = isWindows ? "radiora-v2-windows" : "radiora-v2-linux";
@@ -25,10 +23,18 @@ export function resolveBackend(args: string[]): "cef" | "webview" {
 }
 
 export async function runDesktopBuild(args: string[] = Deno.args): Promise<void> {
+	let needLicenses = false;
 	try {
-		await Deno.lstat(licensesIndex);
+		const raw = await Deno.readTextFile(licensesIndex);
+		if (raw.includes("SurrealDB CLI")) {
+			needLicenses = true;
+		}
 	} catch {
-		console.log("dist/licenses が見つからないため、ライセンス情報を生成します。");
+		needLicenses = true;
+	}
+
+	if (needLicenses) {
+		console.log("ライセンス情報を生成・更新します。");
 		const licenses = new Deno.Command(Deno.execPath(), {
 			args: ["run", "-A", "scripts/licenses.ts"],
 			stdin: "inherit",
@@ -73,9 +79,6 @@ export async function runDesktopBuild(args: string[] = Deno.args): Promise<void>
 	});
 	const status = await command.spawn().status;
 	if (!status.success) Deno.exit(status.code);
-
-	await copySurrealCli(outputDir);
-	await buildSurrealSidecar(outputDir);
 }
 
 if (import.meta.main) {

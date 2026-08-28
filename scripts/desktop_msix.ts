@@ -155,35 +155,41 @@ async function ensureSigningCertificate(): Promise<{ cert: string; password: str
 	return { cert: winPath(devCertPfx), password };
 }
 
-async function main(): Promise<void> {
+export async function assertCleanBundle(dir: URL): Promise<void> {
 	await requireUrlExists(
-		bundleDir,
+		dir,
 		"先に deno task desktop:build を実行してbundleを生成してください。",
 	);
-	await requireUrlExists(
-		new URL("surreal.exe", bundleDir),
-		"bundleに surreal.exe が含まれていません。desktop:build がSurrealDB CLIを検出できる環境で再実行するか、" +
-			"RADIORA_SURREAL_BUNDLE_SOURCE で指定してください。",
-	);
-	await requireUrlExists(
-		new URL("radiora-surreal.exe", bundleDir),
-		"bundleに radiora-surreal.exe が含まれていません。Go sidecarをビルドしてから再実行してください。",
-	);
+	if (await urlExists(new URL("surreal.exe", dir))) {
+		throw new Error(
+			"古い surreal.exe がbundle内に残っています。先に 'deno task desktop:build' でclean rebuildしてください。",
+		);
+	}
+	if (await urlExists(new URL("radiora-surreal.exe", dir))) {
+		throw new Error(
+			"古い radiora-surreal.exe がbundle内に残っています。先に 'deno task desktop:build' でclean rebuildしてください。",
+		);
+	}
+}
 
-	const launcherName = await (async (): Promise<string> => {
-		for await (const entry of Deno.readDir(bundleDir)) {
-			if (
-				entry.isFile &&
-				entry.name.endsWith(".exe") &&
-				!entry.name.startsWith("bootstrap") &&
-				entry.name.toLowerCase() !== "surreal.exe" &&
-				entry.name.toLowerCase() !== "radiora-surreal.exe"
-			) {
-				return entry.name;
-			}
+export async function findLauncher(dir: URL): Promise<string> {
+	for await (const entry of Deno.readDir(dir)) {
+		if (
+			entry.isFile &&
+			entry.name.endsWith(".exe") &&
+			!entry.name.startsWith("bootstrap") &&
+			entry.name.toLowerCase() !== "surreal.exe" &&
+			entry.name.toLowerCase() !== "radiora-surreal.exe"
+		) {
+			return entry.name;
 		}
-		throw new Error("bundle内にlauncher (.exe) が見つかりません。");
-	})();
+	}
+	throw new Error("bundle内にlauncher (.exe) が見つかりません。");
+}
+
+async function main(): Promise<void> {
+	await assertCleanBundle(bundleDir);
+	const launcherName = await findLauncher(bundleDir);
 	const [major, minor, build, revision] = packageVersionParts(version);
 
 	// biome-ignore lint/plugin/noSwallowedRejection: A missing staging directory is the expected first-build state.
@@ -308,8 +314,10 @@ async function main(): Promise<void> {
 	if (!certArg) {
 		console.log("テスト機では開発用証明書を信頼してからインストールしてください:");
 		console.log(`  certutil -addstore Root ${winPath(devCertCer)}`);
-		console.log("  Add-AppxPackage -Path " + winPath(msixPath));
+		console.log(`  Add-AppxPackage -Path ${winPath(msixPath)}`);
 	}
 }
 
-await main();
+if (import.meta.main) {
+	await main();
+}

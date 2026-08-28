@@ -1,8 +1,8 @@
-import type { GraphStateSnapshot, GraphStore } from "./graph_store.ts";
+import type { GraphStore } from "./graph_store.ts";
 import { JsonGraphStore } from "./json_store.ts";
 import { SqliteGraphStore } from "./sqlite_store.ts";
-import { migrateLegacyStorageToTurso } from "./turso_migration.ts";
-import { exportLegacySnapshot } from "./legacy_surreal_exporter.ts";
+import { isLegacyStorageMigrationComplete } from "./turso_migration.ts";
+import { storagePathExists } from "./migration_backup.ts";
 
 export interface StorageBootstrapLogger {
 	info(event: string, fields?: Record<string, unknown>): void;
@@ -13,7 +13,6 @@ export interface StorageBootstrapOptions {
 	dataDir: string;
 	storageMode?: string;
 	logger?: StorageBootstrapLogger;
-	exportSnapshot?: (copyPath: string) => Promise<GraphStateSnapshot>;
 }
 
 export interface StorageBootstrapSession {
@@ -25,8 +24,8 @@ export interface StorageBootstrapSession {
 /**
  * Bootstraps the persistence layer according to storageMode and environment.
  * SQLite is the sole persistent production database backend.
- * One-time migration from legacy SurrealDB is executed automatically when source data exists.
- * Surreal fallback during normal runtime or migration is explicitly rejected.
+ * When legacy SurrealDB data exists without a complete and matching migration marker,
+ * startup is refused non-destructively to require running the standalone migration tool.
  */
 export async function bootstrapStorage(
 	options: StorageBootstrapOptions,
@@ -56,30 +55,27 @@ export async function bootstrapStorage(
 			const targetPath = `${tursoDir}\\radiora.db`;
 			const surrealDir = `${dataDir}\\surreal`;
 			const sourcePath = `${surrealDir}\\main.db`;
+			const sourceVersionMarkerPath = `${surrealDir}\\storage-schema-version`;
+			const markerPath = `${targetPath}.migration.json`;
+
 			await Deno.mkdir(tursoDir, { recursive: true });
 
-			const exporter = options.exportSnapshot ??
-				((copyPath) =>
-					exportLegacySnapshot(copyPath, {
-						onLog: (event, fields, cause) => {
-							if (cause) logger?.error(event, cause, fields);
-							else logger?.info(event, fields);
-						},
-					}));
-
-			try {
-				const migrated = await migrateLegacyStorageToTurso({
+			if (await storagePathExists(sourcePath)) {
+				const status = await isLegacyStorageMigrationComplete({
 					sourcePath,
-					sourceVersionMarkerPath: `${surrealDir}\\storage-schema-version`,
-					backupRoot: `${tursoDir}\\migration-backups`,
+					sourceVersionMarkerPath,
 					targetPath,
-					markerPath: `${targetPath}.migration.json`,
-					exportSnapshot: exporter,
+					markerPath,
 				});
-				if (migrated) logger?.info("storage.turso_migration.ready", { ...migrated });
-			} catch (cause) {
-				logger?.error("storage.turso_migration.failed", cause, { sourcePath });
-				throw cause;
+
+				if (!status.complete) {
+					throw new Error(
+						`Legacy SurrealDB data detected at ${sourcePath}, but has not been cleanly migrated to SQLite yet (${
+							status.reason ?? "migration missing"
+						}). ` +
+							`Please run 'deno task storage:migrate:legacy' to migrate your data before starting Radiora.`,
+					);
+				}
 			}
 
 			nextStore = new SqliteGraphStore(targetPath);

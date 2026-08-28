@@ -57,6 +57,7 @@
 		"desktop:run": "deno run -A scripts/desktop_run.ts",
 		"desktop:run:sqlite": "deno run -A scripts/desktop_run.ts --sqlite",
 		"desktop:run:turso": "deno run -A scripts/desktop_run.ts --turso",
+		"storage:migrate:legacy": "deno run -A scripts/migrate_legacy_surreal.ts",
 		"probe:turso": "deno run -A scripts/turso_probe.ts",
 		"desktop:run:json": "deno run -A scripts/desktop_run.ts --json",
 		"desktop:hmr": "deno run -A scripts/desktop_hmr.ts",
