@@ -108,15 +108,6 @@ interface LicenseEntry {
 
 const runtimeEntries: LicenseEntry[] = [
 	{
-		name: "SurrealDB CLI",
-		version: "3.x",
-		license: "Business Source License 1.1",
-		file: "runtime/surrealdb-cli-BSL-1.1.txt",
-		summary:
-			"SurrealDB CLI本体はBusiness Source License 1.1で提供されます。このアプリの利用形態（ローカル埋め込み・" +
-			"利用者自身のデータ保存）はAdditional Use Grantの「Database Service」に該当しないため商用利用できます。",
-	},
-	{
 		name: "Deno / Deno Desktop runtime",
 		version: "2.9+",
 		license: "MIT",

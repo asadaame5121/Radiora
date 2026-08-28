@@ -1,5 +1,7 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { bootstrapStorage } from "../src/storage/storage_bootstrap.ts";
+import { SqliteGraphStore } from "../src/storage/sqlite_store.ts";
+import { migrateLegacyStorageToTurso } from "../src/storage/turso_migration.ts";
 import type { GraphStateSnapshot } from "../src/storage/graph_store.ts";
 import { validatedGraphStateSnapshot } from "../src/storage/graph_store.ts";
 
@@ -126,8 +128,8 @@ Deno.test("bootstrapStorage rejects deprecated surreal, surreal-diagnostic, and 
 	}
 });
 
-Deno.test("bootstrapStorage executes one-time legacy migration from Surreal data and opens SqliteGraphStore", async () => {
-	const root = await Deno.makeTempDir({ prefix: "radiora-boot-migration-" });
+Deno.test("bootstrapStorage rejects startup with descriptive error when legacy Surreal data exists without migration, preserving source data", async () => {
+	const root = await Deno.makeTempDir({ prefix: "radiora-boot-unmigrated-" });
 	const surrealDir = `${root}\\surreal`;
 	const sourceDbPath = `${surrealDir}\\main.db`;
 	const sourceVersionPath = `${surrealDir}\\storage-schema-version`;
@@ -135,82 +137,89 @@ Deno.test("bootstrapStorage executes one-time legacy migration from Surreal data
 	await Deno.writeTextFile(sourceDbPath, "legacy surreal binary payload");
 	await Deno.writeTextFile(sourceVersionPath, "6");
 
-	const sampleSnapshot = createTestSnapshot();
-	let exporterCalled = false;
-
-	try {
-		const session = await bootstrapStorage({
-			dataDir: root,
-			storageMode: "sqlite",
-			exportSnapshot: async (_copyPath) => {
-				exporterCalled = true;
-				return sampleSnapshot;
-			},
-		});
-
-		assertEquals(exporterCalled, true);
-		const state = await session.store.exportGraphState();
-		assertEquals(state.workingCopies[0].text, "Bootstrap storage text");
-
-		await session.stop();
-
-		// Verify marker was created
-		const markerStat = await Deno.stat(`${root}\\turso\\radiora.db.migration.json`);
-		assert(markerStat.isFile);
-
-		// Subsequent bootstrap should skip migration because marker exists
-		exporterCalled = false;
-		const session2 = await bootstrapStorage({
-			dataDir: root,
-			storageMode: "sqlite",
-			exportSnapshot: async () => {
-				exporterCalled = true;
-				return sampleSnapshot;
-			},
-		});
-		assertEquals(exporterCalled, false);
-		const state2 = await session2.store.exportGraphState();
-		assertEquals(state2.workingCopies[0].text, "Bootstrap storage text");
-		await session2.stop();
-	} finally {
-		await safeRemoveDir(root);
-	}
-});
-
-Deno.test("bootstrapStorage fails without falling back to Surreal when legacy migration fails, preserving source data and cause", async () => {
-	const root = await Deno.makeTempDir({ prefix: "radiora-boot-mig-fail-" });
-	const surrealDir = `${root}\\surreal`;
-	const sourceDbPath = `${surrealDir}\\main.db`;
-	const sourceVersionPath = `${surrealDir}\\storage-schema-version`;
-	await Deno.mkdir(surrealDir, { recursive: true });
-	await Deno.writeTextFile(sourceDbPath, "original surreal data must be untouched");
-	await Deno.writeTextFile(sourceVersionPath, "6");
-
-	const migrationError = new Error("Surreal export process crashed with exit code 1");
-
 	try {
 		const err = await assertRejects(
 			() =>
 				bootstrapStorage({
 					dataDir: root,
 					storageMode: "sqlite",
-					exportSnapshot: async () => {
-						throw migrationError;
-					},
 				}),
 			Error,
 		);
 
-		// Cause or message must preserve the original failure reason
-		assert(
-			err.message.includes("Surreal export process crashed") ||
-				(err.cause instanceof Error &&
-					err.cause.message.includes("Surreal export process crashed")),
-		);
+		// Must clearly point to the standalone migration task
+		assert(err.message.includes("Legacy SurrealDB data detected"));
+		assert(err.message.includes("deno task storage:migrate:legacy"));
 
-		// Verify source data is completely preserved
+		// Source data must be untouched
 		const sourceContent = await Deno.readTextFile(sourceDbPath);
-		assertEquals(sourceContent, "original surreal data must be untouched");
+		assertEquals(sourceContent, "legacy surreal binary payload");
+
+		// Target sqlite DB must not have been created implicitly
+		let targetExists = false;
+		try {
+			await Deno.stat(`${root}\\turso\\radiora.db`);
+			targetExists = true;
+		} catch {
+			targetExists = false;
+		}
+		assertEquals(targetExists, false);
+	} finally {
+		await safeRemoveDir(root);
+	}
+});
+
+Deno.test("bootstrapStorage opens SQLite normally when valid legacy migration marker exists, but rejects if source was modified after migration", async () => {
+	const root = await Deno.makeTempDir({ prefix: "radiora-boot-migrated-" });
+	const surrealDir = `${root}\\surreal`;
+	const sourceDbPath = `${surrealDir}\\main.db`;
+	const sourceVersionPath = `${surrealDir}\\storage-schema-version`;
+	await Deno.mkdir(surrealDir, { recursive: true });
+	await Deno.writeTextFile(sourceDbPath, "legacy surreal binary payload");
+	await Deno.writeTextFile(sourceVersionPath, "6");
+
+	const tursoDir = `${root}\\turso`;
+	const targetPath = `${tursoDir}\\radiora.db`;
+	const markerPath = `${targetPath}.migration.json`;
+	const backupRoot = `${tursoDir}\\migration-backups`;
+
+	const sampleSnapshot = createTestSnapshot();
+
+	try {
+		// Run actual migration helper to create genuine marker & target
+		const migrationResult = await migrateLegacyStorageToTurso({
+			sourcePath: sourceDbPath,
+			sourceVersionMarkerPath: sourceVersionPath,
+			backupRoot,
+			targetPath,
+			markerPath,
+			exportSnapshot: async () => sampleSnapshot,
+		});
+		assert(migrationResult !== null);
+
+		// 1. Normal bootstrap should succeed because marker matches
+		const session = await bootstrapStorage({
+			dataDir: root,
+			storageMode: "sqlite",
+		});
+		assertEquals(session.storageMode, "sqlite");
+		const exported = await session.store.exportGraphState();
+		assertEquals(exported.workingCopies[0].text, "Bootstrap storage text");
+		await session.stop();
+
+		// 2. Modify legacy source after migration (simulating external update)
+		await Deno.writeTextFile(sourceDbPath, "modified legacy surreal payload");
+
+		// Bootstrap must reject to prevent data loss or silent divergence
+		const err = await assertRejects(
+			() =>
+				bootstrapStorage({
+					dataDir: root,
+					storageMode: "sqlite",
+				}),
+			Error,
+		);
+		assert(err.message.includes("source fingerprint differs from migration marker"));
 	} finally {
 		await safeRemoveDir(root);
 	}
