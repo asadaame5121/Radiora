@@ -1,16 +1,26 @@
 import { createBindingHandlers } from "./desktop/register_bindings.ts";
 import { SurrealProcess } from "./desktop/surreal_process.ts";
 import { StartupSnapshotCacheFile } from "./desktop/startup_snapshot_cache_file.ts";
+import {
+	assertTcpPort,
+	backendOriginFromServeAddress,
+	developmentUiOrigin,
+	missingAssetResponse,
+} from "./desktop/desktop_helpers.ts";
 import { OutlineService } from "./services/outline_service.ts";
 import { RevisionService } from "./services/revision_service.ts";
 import { Logger } from "./services/logger.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
 import type { GraphStore } from "./storage/graph_store.ts";
 import { JsonGraphStore } from "./storage/json_store.ts";
+import { SqliteGraphStore } from "./storage/sqlite_store.ts";
+import { migrateLegacyStorageToTurso } from "./storage/turso_migration.ts";
+import { exportLegacySnapshot } from "./storage/legacy_surreal_exporter.ts";
 import {
 	prepareStorageMigrationBackup,
 	recordStorageVersion,
 	restoreStorageMigrationBackup,
+	storagePathExists,
 } from "./storage/migration_backup.ts";
 import { CURRENT_STORAGE_SCHEMA_VERSION } from "./storage/migrations/mod.ts";
 
@@ -30,7 +40,7 @@ const dataDir = `${appData}\\RadioraV2`;
 const logDir = `${dataDir}\\logs`;
 const logPath = `${logDir}\\startup.log`;
 const startupSnapshotCachePath = `${dataDir}\\startup-snapshot.json`;
-const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "surreal";
+const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "sqlite";
 const surrealPort = Number(Deno.env.get("RADIORA_SURREAL_PORT") ?? "8012");
 await Deno.mkdir(logDir, { recursive: true });
 
@@ -64,6 +74,31 @@ let store: GraphStore | null = null;
 let surrealProcess: SurrealProcess | null = null;
 let bootstrapPromise: Promise<StartupStatus> | null = null;
 
+async function openSurrealStore(
+	databasePath: string,
+): Promise<{ process: SurrealProcess; store: GraphStore }> {
+	assertTcpPort(surrealPort);
+	const process = new SurrealProcess(
+		databasePath,
+		"127.0.0.1",
+		surrealPort,
+		(event, detail) => logger.info("surrealdb.event", { sourceEvent: event, detail }),
+	);
+	try {
+		await process.start();
+		const { SurrealGraphStore } = await import("./storage/surreal_store.ts");
+		const store = new SurrealGraphStore(process.endpoint, "root", "root");
+		return { process, store };
+	} catch (cause) {
+		try {
+			await process.stop();
+		} catch (stopCause) {
+			logger.error("surrealdb.fallback_stop.failed", stopCause);
+		}
+		throw cause;
+	}
+}
+
 async function stopBackend(): Promise<void> {
 	service = null;
 	const activeStore = store;
@@ -90,10 +125,40 @@ async function bootstrap(): Promise<StartupStatus> {
 			let storageVersionMarker: string | null = null;
 			if (storageMode === "json") {
 				nextStore = new JsonGraphStore(`${dataDir}\\radiora-v2.json`);
-			} else if (storageMode === "surreal" || storageMode === "surreal-diagnostic") {
-				if (!Number.isInteger(surrealPort) || surrealPort < 1 || surrealPort > 65535) {
-					throw new Error(`Invalid RADIORA_SURREAL_PORT: ${surrealPort}`);
+			} else if (storageMode === "sqlite" || storageMode === "turso") {
+				const tursoDir = `${dataDir}\\turso`;
+				const targetPath = `${tursoDir}\\radiora.db`;
+				const surrealDir = `${dataDir}\\surreal`;
+				const sourcePath = `${surrealDir}\\main.db`;
+				await Deno.mkdir(tursoDir, { recursive: true });
+				try {
+					const migrated = await migrateLegacyStorageToTurso({
+						sourcePath,
+						sourceVersionMarkerPath: `${surrealDir}\\storage-schema-version`,
+						backupRoot: `${tursoDir}\\migration-backups`,
+						targetPath,
+						markerPath: `${targetPath}.migration.json`,
+						exportSnapshot: (copyPath) =>
+							exportLegacySnapshot(copyPath, {
+								onLog: (event, fields, cause) => {
+									if (cause) logger.error(event, cause, fields);
+									else logger.info(event, fields);
+								},
+							}),
+					});
+					if (migrated) logger.info("storage.turso_migration.ready", { ...migrated });
+					const sqliteStore = new SqliteGraphStore(targetPath);
+					nextStore = sqliteStore;
+				} catch (cause) {
+					if (!(await storagePathExists(sourcePath))) throw cause;
+					logger.error("storage.turso_migration.failed", cause, { sourcePath });
+					const fallback = await openSurrealStore(sourcePath);
+					surrealProcess = fallback.process;
+					nextStore = fallback.store;
+					logger.warn("storage.turso_migration.fallback", { sourcePath });
 				}
+			} else if (storageMode === "surreal" || storageMode === "surreal-diagnostic") {
+				assertTcpPort(surrealPort);
 				const surrealDir = storageMode === "surreal"
 					? `${dataDir}\\surreal`
 					: `${dataDir}\\surreal-diagnostic`;
@@ -195,35 +260,6 @@ const mimeTypes: Record<string, string> = {
 function extension(path: string): string {
 	const index = path.lastIndexOf(".");
 	return index < 0 ? "" : path.slice(index);
-}
-
-function developmentUiOrigin(value: string | undefined): string | null {
-	if (!value) return null;
-	const url = new URL(value);
-	if (url.protocol !== "http:" || url.hostname !== "127.0.0.1") {
-		throw new Error("RADIORA_HMR_UI_ORIGIN must be a local HTTP origin.");
-	}
-	return url.origin;
-}
-
-function backendOriginFromServeAddress(address: string): string {
-	const prefix = "tcp:127.0.0.1:";
-	if (!address.startsWith(prefix)) throw new Error("DENO_SERVE_ADDRESS must use loopback TCP.");
-	const port = address.slice(prefix.length);
-	if (!/^[1-9]\d{0,4}$/.test(port)) throw new Error("DENO_SERVE_ADDRESS has an invalid port.");
-	return `http://127.0.0.1:${port}`;
-}
-
-function missingAssetResponse(path: string): Response {
-	const body =
-		`<!doctype html><html lang="ja"><meta charset="utf-8"><title>Radiora 起動エラー</title>
-	<style>body{font:16px system-ui;background:#111310;color:#deddd6;padding:48px;line-height:1.7}code{color:#ffb8af}</style>
-	<h1>Radioraを表示できません</h1><p>UIファイル <code>${path}</code> がbundleに含まれていません。</p>
-	<p><code>deno task desktop</code> で再ビルドしてください。</p></html>`;
-	return new Response(body, {
-		status: 500,
-		headers: { "content-type": "text/html; charset=utf-8" },
-	});
 }
 
 const handlers = createBindingHandlers({
