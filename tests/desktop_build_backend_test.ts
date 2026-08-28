@@ -36,3 +36,17 @@ Deno.test("resolveBackend: throws error when invalid backend is passed", () => {
 		"Invalid backend 'invalid'",
 	);
 });
+
+Deno.test("deno.json: deprecated surreal desktop tasks are removed", async () => {
+	const denoJsonText = await Deno.readTextFile(new URL("../deno.json", import.meta.url));
+	const denoJson = JSON.parse(denoJsonText);
+	assertEquals("desktop:surreal" in (denoJson.tasks ?? {}), false);
+	assertEquals("desktop:run:surreal" in (denoJson.tasks ?? {}), false);
+	assertEquals("desktop:run:surreal-diagnostic" in (denoJson.tasks ?? {}), false);
+});
+
+Deno.test("scripts/desktop_run.ts: deprecated surreal runtime flags are removed", async () => {
+	const scriptText = await Deno.readTextFile(new URL("../scripts/desktop_run.ts", import.meta.url));
+	assertEquals(scriptText.includes("--surreal-diagnostic"), false);
+	assertEquals(scriptText.includes('"--surreal"'), false);
+});
