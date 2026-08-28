@@ -1,7 +1,6 @@
 # Radiora MSIX配布手順
 
-RadioraをMSIXパッケージとして配布するための手順と、SurrealDB CLIバンドル、
-ライセンス同梱の設計をまとめる。
+RadioraをMSIXパッケージとして配布するための手順と、ライセンス同梱の設計をまとめる。
 
 ## 配布物の構成
 
@@ -9,27 +8,23 @@ MSIXパッケージには次のものが含まれる。
 
 | 項目                           | 説明                                                             |
 | ------------------------------ | ---------------------------------------------------------------- |
-| Radiora launcher (CEF backend) | `deno desktop` が生成するWindows bundle                          |
+| Radiora launcher (CEF/WebView) | `deno desktop` が生成するWindows bundle                          |
 | Deno runtime / CEF             | `denort.dll` と `libcef.dll` 群                                  |
-| `radiora-surreal.exe`          | SurrealDB起動用Go sidecar（`desktop:build` がbundleへ生成）      |
-| `surreal.exe`                  | sidecarが起動するSurrealDB CLI 3.x（bundleへコピー）             |
 | `Licenses/`                    | サードパーティライセンス（`licenses`タスクが生成）               |
 | アイコン                       | `Assets/*.png`（`desktop_msix`が`src/Radiora_icon.png`から生成） |
 
-データは実行時に `%LOCALAPPDATA%\RadioraV2\surreal\main.db` へ保存する。
-MSIXパッケージ本体は読み取り専用だが、`surreal.exe`はパッケージ内から実行でき、 RocksDBデータは
-`%LOCALAPPDATA%` 側へ書かれるため問題ない。
+データは実行時に `%LOCALAPPDATA%\RadioraV2\turso\radiora.db`（SQLite）へ保存する。
 
 ## ビルド手順（Windows PowerShell）
 
 ```powershell
-deno task desktop:build     # Windows bundle生成 + sidecar/surreal.exeコピー
+deno task desktop:build     # Windows bundle生成
 deno task desktop:msix      # ライセンス生成 + MSIX作成 + 署名
 ```
 
 `desktop:msix` は次の順で実行される。
 
-1. `scripts/licenses.ts` — npm実行時依存とランタイム（SurrealDB/Deno/CEF）の ライセンスを
+1. `scripts/licenses.ts` — npm実行時依存とランタイム（Deno/CEF）のライセンスを
    `dist-desktop/licenses/` と `dist/licenses/` へ出力
 2. `scripts/desktop_msix.ts` — `dist-desktop/radiora-v2-windows/` を
    stagingへコピーし、`AppxManifest.xml` と `Assets/` を追加して `makeappx.exe`
@@ -40,10 +35,7 @@ deno task desktop:msix      # ライセンス生成 + MSIX作成 + 署名
 ### 前提ツール
 
 - Windows SDK（`makeappx.exe` / `signtool.exe` を含む）
-- Go 1.22以上（`radiora-surreal.exe`のビルドに使用）
 - `WINDOWS_KIT_BIN` でbinディレクトリを指定すると検索を省略できる
-- SurrealDB CLI 3.x が `%USERPROFILE%\.surrealdb\surreal.exe`、PATH、Scoopの標準配置、または
-  `RADIORA_SURREAL_BUNDLE_SOURCE` で指定した場所にあること
 
 ### 署名オプション
 
@@ -58,43 +50,23 @@ deno task desktop:msix      # ライセンス生成 + MSIX作成 + 署名
 
 ```powershell
 certutil -addstore Root dist-desktop\radiora-dev-signing.cer
-Add-AppxPackage -Path dist-desktop\Radiora_0.1.0.0_x64.msix
+Add-AppxPackage -Path dist-desktop\Radiora_0.5.0.0_x64.msix
 ```
 
-起動確認後、`Remove-AppxPackage` でアンインストールできる。バージョンを上げた パッケージはそのまま
+起動確認後、`Remove-AppxPackage` でアンインストールできる。バージョンを上げたパッケージはそのまま
 `Add-AppxPackage` で更新される。
-
-## SurrealDB CLIの探索順序
-
-`src/desktop/surreal_process.ts` の `findCommand()` はWindowsでは次の順で探索する。
-
-1. bundle内（`Deno.execPath()` の隣の `radiora-surreal.exe`）— 配布物はここを使う
-2. bundle内の `surreal.exe` — sidecarがない開発用bundleのフォールバック
-3. `surreal`（PATH）
-4. `%USERPROFILE%\.surrealdb\surreal.exe` — 開発環境の従来インストール先
-
-`radiora-surreal.exe` はコンソールを作らず、同じディレクトリの `surreal.exe` をJob
-Object（kill-on-close）で管理する。アプリ終了時はsidecarのstdinを閉じ、アプリクラッシュ時も stdin
-pipeのEOFでSurrealDBを終了させるため、アプリ側からPowerShellやポート所有プロセスの検索は 行わない。
 
 ## ライセンス
 
-- **SurrealDB CLI は Business Source License 1.1**。このアプリの利用形態
-  （ローカル埋め込み・利用者自身のデータ保存）はAdditional Use Grantの 「Database
-  Service」に該当しないため、バンドル配布・商用利用が可能。
-  ライセンス全文の同梱は必須（`docs/licenses/surrealdb-cli-BSL-1.1.txt`）。 Change
-  Date（3.0は2030-01-01）以降はApache 2.0へ自動移行する。
 - Deno / Deno Desktop runtime は MIT、CEFはBSD-3-Clause系。
   CEFにはChromiumのライセンス条件も適用される（`chromium-LICENSE.txt`）。
-- npm依存は `package-lock.json` の実行時依存から `scripts/licenses.ts` が
-  自動収集する。devDependencies（ビルドツール）は含まれない。
+- npm依存は `package-lock.json` の実行時依存から `scripts/licenses.ts`
+  が自動収集する。devDependencies（ビルドツール）は含まれない。
 - ライセンス表示はMSIX内の `Licenses/` と、アプリ内の 「Option →
   ライセンス」ダイアログ（`/licenses/` 配信）の両方で提供する。
 
 ### 更新時の注意
 
-- SurrealDB CLIのバージョンを上げた場合は、そのバージョンのLICENSEが BSL
-  1.1のままか確認し、`docs/licenses/surrealdb-cli-BSL-1.1.txt` を更新する
 - npm依存の追加・更新後は `deno task licenses` で収集結果を確認する
 
 ## Microsoft Store提出時の変更点
@@ -106,5 +78,5 @@ Centerの予約値に合わせて変更する。
 - `Identity/Publisher`（Store発行のPublisher CN）
 - `desktop:msix` タスク実行時に `--publisher` を渡す
 
-`radiora://` プロトコルは `uap:Extension Category="windows.protocol"` として
-宣言済み。bundle内のdeep-link登録スクリプトと重複しないよう、MSIXでは プロトコル宣言を優先する。
+`radiora://` プロトコルは `uap:Extension Category="windows.protocol"`
+として宣言済み。bundle内のdeep-link登録スクリプトと重複しないよう、MSIXではプロトコル宣言を優先する。

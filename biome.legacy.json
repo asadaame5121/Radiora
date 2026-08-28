@@ -170,7 +170,6 @@
 				"scripts/desktop_msix.ts",
 				"scripts/licenses.ts",
 				"scripts/mock_ui_plugin.ts",
-				"scripts/surreal_desktop_probe.ts",
 				"src/desktop/register_bindings.ts",
 				"src/main.ts",
 				"src/services/branch_service.ts",
