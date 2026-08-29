@@ -123,3 +123,60 @@
 		{/each}
 	</div>
 </section>
+
+<style>
+	.unplaced-inbox {
+		display: grid;
+		gap: 16px;
+	}
+	.unplaced-list {
+		display: grid;
+		gap: 12px;
+		margin-top: 12px;
+	}
+	.unplaced-entry {
+		display: grid;
+		gap: 8px;
+		padding: 12px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+	}
+	.unplaced-entry textarea {
+		width: 100%;
+		box-sizing: border-box;
+		padding: 8px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--surface-raised);
+		color: var(--text);
+		font-family: inherit;
+		resize: vertical;
+	}
+	.unplaced-entry small {
+		color: var(--muted);
+		font-size: 10px;
+	}
+	.unplaced-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		align-items: center;
+	}
+	.unplaced-actions select,
+	.unplaced-actions button {
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		padding: 6px 10px;
+		background: var(--surface-raised);
+		color: var(--text);
+		font-size: 11px;
+	}
+	.unplaced-actions button {
+		cursor: pointer;
+	}
+	.unplaced-actions button:disabled {
+		opacity: .4;
+		cursor: not-allowed;
+	}
+</style>

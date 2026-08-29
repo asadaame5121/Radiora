@@ -72,7 +72,7 @@
 		<p class="eyebrow">GLOBAL LINEAGE</p>
 		<h1>{vocabulary.globalLineage}</h1>
 		<p>
-			{vocabulary.work}同士の意味関係を表示します。明示した{vocabulary.branch}と
+			{vocabulary.work}同士の{vocabulary.semanticLink}を表示します。明示した{vocabulary.branch}と
 			その確定済み先端の{vocabulary.revision}だけが右側に現れます。
 		</p>
 		{#if isFilterActive}

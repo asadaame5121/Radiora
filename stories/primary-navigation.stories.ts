@@ -8,7 +8,6 @@ const callbacks = {
 	onOpenUnplaced: fn(),
 	onOpenStubs: fn(),
 	onOpenDuplicates: fn(),
-	onOpenTrash: fn(),
 	onOpenOptions: fn(),
 	onOpenTags: fn(),
 	onOpenQuery: fn(),

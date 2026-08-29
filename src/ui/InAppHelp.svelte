@@ -72,6 +72,10 @@
 				<li>重要な項目には「栞」を挟んで素早くアクセスできます。</li>
 				<li>最後に作業していた「再開位置」は自動保持され、作業をスムーズに再開できます。</li>
 				<li>集中執筆用の「長文編集モード」でアウトラインと行き来しながら編集できます。</li>
+				<li><kbd>Enter</kbd>で兄弟、<kbd>Shift</kbd> + <kbd>Enter</kbd>で本文中の改行を入力します。</li>
+				<li><kbd>Tab</kbd> / <kbd>Shift</kbd> + <kbd>Tab</kbd>で階層を移動できます。</li>
+				<li>項目を選ぶと、右側の詳細ペインから配置・関係・履歴を確認できます。</li>
+				<li>長い本文は項目を選んで「原稿として開く」を使うと、独立した編集面で扱えます。</li>
 			</ul>
 			<div class="help-actions">
 				<button type="button" onclick={onOpenToday}>今日の更新を見る</button>
@@ -85,6 +89,10 @@
 				<li>本文中で <kbd>[[</kbd> を入力すると、既存の項目や版への「内部参照」（Work/Revisionリンク）を作成します。</li>
 				<li>本文中で <kbd>@</kbd> を入力すると、項目間の連想をつなぐ「意味関係検索」を実行します（内部参照ではありません）。</li>
 				<li>詳細ペインから意味関係（<code>DEF</code> 定義関係など、起点・種別・終点）を明示的に結べます。</li>
+				<li>本文中で <kbd>@</kbd> を入力すると、別の項目へのリンクを作れます。</li>
+				<li>選択した項目から関連を追加すると、リンク元・種類・リンク先を確認して保存できます。</li>
+				<li><code>DEF</code>（定義）は、リンク元がリンク先の概念や用語を定義する有向関係です。</li>
+				<li>タグ管理や重複候補は左のナビゲーションから開き、候補を確認してから操作します。</li>
 			</ul>
 			<p class="help-note">意味関係や参照リンクは自動確定されません。内容を確認してから保存してください。</p>
 		</article>
@@ -120,6 +128,7 @@
 			</ul>
 			<div class="help-actions">
 				<button type="button" onclick={onOpenOptions}>Optionを開く</button>
+				<button type="button" onclick={onOpenUnplaced}>未配置項目を見る</button>
 			</div>
 		</article>
 

@@ -14,7 +14,7 @@ Deno.test("in-app help is a dedicated, reachable and scannable page", async () =
 	// Navigation and reachability
 	assert(viewMode.includes('| "help"'));
 	assert(navigation.includes('activeView === "help"'));
-	assertMatch(navigation, /onclick=\{onOpenHelp\}[^>]*>ヘルプ<\/button>/);
+	assertMatch(navigation, /aria-label="ヘルプ"[\s\S]*?onclick=\{onOpenHelp\}>\?<\/button>/);
 	assert(app.includes('viewMode === "help"'));
 	assert(app.includes("InAppHelp"));
 	assert(app.includes("function openHelp()"));
