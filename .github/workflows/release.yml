@@ -51,7 +51,7 @@ jobs:
           foreach ($item in $forbidden) {
             $artifactPath = Join-Path $bundleDir $item
             if (Test-Path -LiteralPath $artifactPath) {
-              throw "The Windows bundle unexpectedly contains $item: $artifactPath"
+              throw "The Windows bundle unexpectedly contains ${item}: $artifactPath"
             }
           }
           Write-Host "Verified Windows bundle launcher is present and Surreal artifacts are absent."
