@@ -4,7 +4,7 @@
 読み返しやすい形で再構成することを目指します。すべてのデータはローカルに保存され、
 ネットワーク接続は不要です。
 
-技術構成は Deno Desktop (CEF) + Svelte 5 + SurrealDB です。現在は技術PoCとして開発中で、
+技術構成は Deno Desktop (CEF / WebView) + Svelte 5 + SQLite です。現在は技術PoCとして開発中で、
 追加の機能とその検証範囲は `CHANGELOG.md` と `docs/` に記録しています。
 
 ## 特徴
@@ -87,9 +87,22 @@ deno task desktop
 生成済みbundleだけを再起動する場合は `deno task desktop:run` を使用します。アプリが起動したまま
 再ビルドすると生成先がロックされるため、先にウィンドウを閉じてください。
 
-データは Windows では `%LOCALAPPDATA%\RadioraV2\surreal\main.db` に保存されます。JSONストアで
+データは Windows では `%LOCALAPPDATA%\RadioraV2\turso\radiora.db` に保存されます。JSONストアで
 一時的に起動する場合は `deno task desktop:json`、生成済みbundleでは `deno task desktop:run:json` を
 使用します。JSONストアは障害調査用の手動フォールバックです。
+
+### 既存のSurrealDBデータからの移行
+
+旧バージョン（SurrealDB）のデータをお持ちの方は、初回起動前に移行タスクを実行してください。
+移行には本リポジトリのソースコードチェックアウト、`npm install`、およびSurrealDB CLI 3.x（`PATH`
+または `%USERPROFILE%\.surrealdb` に配置）が必要です。
+
+```powershell
+deno task storage:migrate:legacy
+```
+
+このタスクは既存の `%LOCALAPPDATA%\RadioraV2\surreal\main.db`
+を変更せずにコールドバックアップ（`%LOCALAPPDATA%\RadioraV2\turso\migration-backups`）を作成し、SQLite（`%LOCALAPPDATA%\RadioraV2\turso\radiora.db`）へ安全に移行します。未移行のSurrealDBデータが存在する場合、通常起動は安全のために明示的なメッセージで起動を停止します。
 
 ### 起動できない場合
 

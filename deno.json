@@ -1,6 +1,6 @@
 {
 	"nodeModulesDir": "manual",
-	"version": "0.4.3",
+	"version": "0.5.0",
 	"compilerOptions": {
 		"lib": ["deno.window", "deno.desktop", "dom", "dom.iterable"],
 		"strict": true
@@ -16,7 +16,7 @@
 		},
 		"backend": "cef",
 		"release": {
-			"baseUrl": "https://github.com/asadaame5121/Radiora/releases/download/v0.4.3"
+			"baseUrl": "https://github.com/asadaame5121/Radiora/releases/download/v0.5.0"
 		},
 		"output": {
 			"windows": "./dist-desktop/radiora-v2-windows",
@@ -46,14 +46,10 @@
 		"coverage:deno": "deno test -A --coverage=reports/coverage/deno src tests scripts && deno coverage --lcov --output=reports/coverage/deno.lcov reports/coverage/deno",
 		"coverage:ratchet": "deno run --allow-read scripts/quality/coverage_ratchet.ts",
 		"test:integration": "deno run -A scripts/surreal_integration.ts",
-		"desktop:probe": "deno task desktop:preflight && deno task desktop:probe:build && deno task desktop:probe:run",
-		"desktop:probe:build": "deno run -A scripts/surreal_desktop_probe_build.ts",
-		"desktop:probe:run": "deno run -A scripts/surreal_desktop_probe_run.ts",
 		"desktop": "deno task desktop:preflight && deno task build && deno task desktop:build && deno task desktop:run",
 		"desktop:json": "deno task desktop:preflight && deno task build && deno task desktop:build && deno task desktop:run:json",
 		"desktop:build": "deno run -A scripts/desktop_build.ts",
 		"desktop:build:webview": "deno run -A scripts/desktop_build.ts --webview",
-		"desktop:sidecar": "deno run -A scripts/sidecar_build.ts",
 		"desktop:run": "deno run -A scripts/desktop_run.ts",
 		"desktop:run:sqlite": "deno run -A scripts/desktop_run.ts --sqlite",
 		"desktop:run:turso": "deno run -A scripts/desktop_run.ts --turso",

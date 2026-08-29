@@ -43,6 +43,8 @@ Deno.test("deno.json: deprecated surreal desktop tasks are removed", async () =>
 	assertEquals("desktop:surreal" in (denoJson.tasks ?? {}), false);
 	assertEquals("desktop:run:surreal" in (denoJson.tasks ?? {}), false);
 	assertEquals("desktop:run:surreal-diagnostic" in (denoJson.tasks ?? {}), false);
+	assertEquals("desktop:probe" in (denoJson.tasks ?? {}), false);
+	assertEquals("desktop:sidecar" in (denoJson.tasks ?? {}), false);
 });
 
 Deno.test("scripts/desktop_run.ts: deprecated surreal runtime flags are removed", async () => {

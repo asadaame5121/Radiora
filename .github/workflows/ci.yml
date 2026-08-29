@@ -168,7 +168,7 @@ jobs:
         run: npm run test:mutation:${{ matrix.batch }} -- --dryRunOnly
 
   surreal-integration:
-    name: SurrealDB migration integration
+    name: SurrealDB legacy migration integration
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -199,63 +199,3 @@ jobs:
       - name: Test schema migration and persistence
         run: deno task test:integration
 
-  sidecar-cross-compile:
-    name: Cross-compile Windows SurrealDB sidecar
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.24.x"
-
-      - name: Build Windows GUI sidecar
-        working-directory: tools/surreal-sidecar
-        env:
-          CGO_ENABLED: "0"
-          GOOS: windows
-          GOARCH: amd64
-        run: go build -ldflags "-H windowsgui" -o "$RUNNER_TEMP/radiora-surreal.exe" .
-
-  surreal-sidecar-smoke:
-    name: Windows SurrealDB sidecar smoke
-    runs-on: windows-latest
-    timeout-minutes: 15
-    env:
-      SURREALDB_VERSION: "3.2.3"
-      SURREALDB_SHA256: "26311fce16da743cbf26f6edda3ec2427fa783eadb67301f676af7c63101f31a"
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: "2.9.3"
-          cache: true
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.24.x"
-
-      - name: Download and verify SurrealDB CLI
-        shell: pwsh
-        run: |
-          $destination = Join-Path $env:RUNNER_TEMP "surreal.exe"
-          $url = "https://download.surrealdb.com/v$env:SURREALDB_VERSION/surreal-v$env:SURREALDB_VERSION.windows-amd64.exe"
-          Invoke-WebRequest -Uri $url -OutFile $destination
-          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash.ToLowerInvariant()
-          if ($actual -ne $env:SURREALDB_SHA256) {
-            throw "SurrealDB CLI SHA-256 mismatch. Expected $env:SURREALDB_SHA256, got $actual"
-          }
-          "RADIORA_SURREAL_BUNDLE_SOURCE=$destination" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Build sidecar bundle
-        run: deno task desktop:sidecar
-
-      - name: Run headless sidecar smoke
-        run: deno run -A scripts/surreal_sidecar_smoke.ts

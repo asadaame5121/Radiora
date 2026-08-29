@@ -5,6 +5,18 @@ bookmark上のchangeを提供済み機能としては扱わない。
 
 ## Unreleased
 
+## 0.5.0 - 2026-08-28
+
+### Changed
+
+- 通常デスクトップ実行環境の永続化バックエンドを SQLite へ移行。
+- SurrealDB CLI
+  および専用サイドカーの通常ランタイム・配布バンドルへの同梱を廃止し、バンドル構成を軽量化。
+- 既存の SurrealDB データ（`surreal/main.db`）を安全に移行するための独立 CLI
+  ツール（`deno task storage:migrate:legacy`）を提供。
+- 未移行の SurrealDB
+  データが検出された場合は元データを変更せず明示的なメッセージで起動を停止し、移行案内を表示。
+
 ## 0.4.3 - 2026-08-25
 
 ### Added
