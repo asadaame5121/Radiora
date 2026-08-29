@@ -75,22 +75,22 @@ export class JsonGraphStore extends MemoryGraphStore {
 			);
 			this.load(data);
 			if (!("schemaVersion" in parsed)) {
-				await this.protectVersionZeroInput();
+				await this.protectVersionInput(0);
 				await this.persist();
 			} else if (parsed.schemaVersion === 1) {
-				await this.protectVersionOneInput();
+				await this.protectVersionInput(parsed.schemaVersion);
 				await this.persist();
 			} else if (parsed.schemaVersion === 2) {
-				await this.protectVersionTwoInput();
+				await this.protectVersionInput(parsed.schemaVersion);
 				await this.persist();
 			} else if (parsed.schemaVersion === 3) {
-				await this.protectVersionThreeInput();
+				await this.protectVersionInput(parsed.schemaVersion);
 				await this.persist();
 			} else if (parsed.schemaVersion === 4) {
-				await this.protectVersionFourInput();
+				await this.protectVersionInput(parsed.schemaVersion);
 				await this.persist();
 			} else if (parsed.schemaVersion === 5) {
-				await this.protectVersionFiveInput();
+				await this.protectVersionInput(parsed.schemaVersion);
 				await this.persist();
 			}
 		} catch (cause) {
@@ -480,70 +480,10 @@ export class JsonGraphStore extends MemoryGraphStore {
 		this.recoverySnapshots = state.recoverySnapshots;
 	}
 
-	private async protectVersionZeroInput(): Promise<void> {
+	private async protectVersionInput(version: number): Promise<void> {
 		const backup = typeof this.path === "string"
-			? `${this.path}.v0.bak`
-			: new URL(`${this.path.href}.v0.bak`);
-		try {
-			await Deno.stat(backup);
-		} catch (cause) {
-			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
-			await Deno.copyFile(this.path, backup);
-		}
-	}
-
-	private async protectVersionTwoInput(): Promise<void> {
-		const backup = typeof this.path === "string"
-			? `${this.path}.v2.bak`
-			: new URL(`${this.path.href}.v2.bak`);
-		try {
-			await Deno.stat(backup);
-		} catch (cause) {
-			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
-			await Deno.copyFile(this.path, backup);
-		}
-	}
-
-	private async protectVersionThreeInput(): Promise<void> {
-		const backup = typeof this.path === "string"
-			? `${this.path}.v3.bak`
-			: new URL(`${this.path.href}.v3.bak`);
-		try {
-			await Deno.stat(backup);
-		} catch (cause) {
-			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
-			await Deno.copyFile(this.path, backup);
-		}
-	}
-
-	private async protectVersionFourInput(): Promise<void> {
-		const backup = typeof this.path === "string"
-			? `${this.path}.v4.bak`
-			: new URL(`${this.path.href}.v4.bak`);
-		try {
-			await Deno.stat(backup);
-		} catch (cause) {
-			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
-			await Deno.copyFile(this.path, backup);
-		}
-	}
-
-	private async protectVersionFiveInput(): Promise<void> {
-		const backup = typeof this.path === "string"
-			? `${this.path}.v5.bak`
-			: new URL(`${this.path.href}.v5.bak`);
-		try {
-			await Deno.stat(backup);
-		} catch (cause) {
-			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
-			await Deno.copyFile(this.path, backup);
-		}
-	}
-
-	private async protectVersionOneInput(): Promise<void> {
-		const backup = typeof this.path === "string"
-			? `${this.path}.v1.bak`
-			: new URL(`${this.path.href}.v1.bak`);
+			? `${this.path}.v${version}.bak`
+			: new URL(`${this.path.href}.v${version}.bak`);
 		try {
 			await Deno.stat(backup);
 		} catch (cause) {

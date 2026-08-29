@@ -4,6 +4,7 @@
 		matchesOutlineFilter,
 		type OutlineFilter,
 	} from "../services/outline_filter.ts";
+	import OutlineFilterBar from "./OutlineFilterBar.svelte";
 	import { useUiVocabulary } from "./ui_vocabulary_context.ts";
 
 	type LinkableWork = {
@@ -53,28 +54,7 @@
 		配置先を決めずに保存した、本文のある{vocabulary.work}です。本文へ #タグ を入力するとタグ付けできます。
 		本文未記入の{vocabulary.stub}は{vocabulary.stubList}で管理します。
 	</p>
-	<p class="filter-hint">自由語は部分一致 · タグはすべて含む（AND） · NOTタグは除外 · この表示だけに適用</p>
-	<div class="filter-bar">
-		<input
-			class="filter-input"
-			aria-label="テキストで絞り込み"
-			placeholder="テキストで絞り込み…"
-			bind:value={outlineFilter.freeText}
-		/>
-		<input
-			class="filter-input"
-			aria-label="タグ AND"
-			placeholder="#タグ AND"
-			bind:value={outlineFilter.tagsAll}
-		/>
-		<input
-			class="filter-input"
-			aria-label="タグ NOT"
-			placeholder="#除外 NOT"
-			bind:value={outlineFilter.tagsNone}
-		/>
-		<button onclick={onClearFilter} disabled={!outlineFilter.freeText && !outlineFilter.tagsAll && !outlineFilter.tagsNone}>解除</button>
-	</div>
+	<OutlineFilterBar bind:outlineFilter onClear={onClearFilter} />
 	<div class="unplaced-list">
 		{#each filteredWorks as work (work.workId)}
 			<article class="unplaced-entry">

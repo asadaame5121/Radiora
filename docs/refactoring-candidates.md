@@ -6,6 +6,12 @@
 行数はこのロードマップ更新時点の概数。行数だけで分割を決めず、state ownership、I/O 境界、
 変更理由の異なる責務が同居しているかを優先して判断する。
 
+2026-08-31 の静的解析 baseline 調査では、jscpd 40 clones、認知複雑度超過 44 関数、 50 行超過 36
+関数、400 実装行超過 12 ファイルを確認した。これらは優先順位付けと改善確認に使うが、
+数値を減らすためだけの共通 helper や shallow module
+は作らない。同じ不変条件・変更理由を持つ実装だけを 同じ seam の内側へ集約し、触れた範囲の baseline
+を ratchet する。
+
 ## 難易度
 
 | 表記      | 目安     | 判断基準                                             |
@@ -59,14 +65,15 @@ workspace/change）を分けて少しずつ進める。
 1. Discovery Operations を分割し、analysis 系 UI が依存するサービス境界を固定する
 2. `App.svelte` の analysis、Outline、Inspector を順に分離する
 3. Memory/JSON Store を、確定済みの feature port に沿って分割する
-4. Tree UI と tree layout を純粋計算、状態、View に分ける
-5. inline semantic link parser を characterization test で固定して分割する
-6. CSS と追加候補を再レビューする
+4. graph snapshot validation を characterization test で固定して分割する
+5. Tree UI と tree layout を純粋計算、状態、View に分ける
+6. inline semantic link parser を characterization test で固定して分割する
+7. OPML parser、CSS、追加候補を再レビューする
 
 依存しないタスクは並行実施できる。特に Storage、Tree、Parser は、Discovery/App 系と別担当で
 進められる。ただし同じファイルを触るタスクは同時に開始しない。
 
-## P0: Discovery Operations
+## D: Discovery Operations
 
 対象: `src/services/discovery_operations.ts`（約 243 行）
 
@@ -90,10 +97,12 @@ workspace/change）を分けて少しずつ進める。
   - 依存: D1、D2 の search API
   - 実績: 永続化前の候補計算と最終 ranking を `emergence_suggestion_calculator.ts` へ分け、3候補種と
     pinned/score/limit 順序を直接テストした
-- [ ] **D4: emergence persistence/resolution を分離する** — 難易度 3
+- [x] **D4: emergence persistence/resolution を分離する** — 難易度 3
   - feedback、accept/dismiss/pin、asserted link 作成のトランザクション境界を所有する
   - 完了条件: 候補計算と更新コマンドが互いの内部状態を共有しない
   - 依存: D1
+  - 実績: 候補計算から materialize/legacy feedback/resolve lifecycle を分離し、公開 interface
+    と既存の stale・pin・dismiss・accept 契約を維持した
 - [ ] **D5: rule query operations を分離する** — 難易度 3
   - query 実行、saved query、query projection を所有する
   - 完了条件: rule query が search/emergence 実装へ依存しない
@@ -103,7 +112,7 @@ workspace/change）を分けて少しずつ進める。
   - 完了条件: facade に ranking、graph traversal、永続化判断が残っていない
   - 依存: D2〜D5
 
-## P0: App Composition
+## A: App Composition
 
 対象: `src/ui/App.svelte`（約 2,960 行）
 
@@ -131,7 +140,7 @@ workspace/change）を分けて少しずつ進める。
   - 完了条件: View、Controller、Service の依存方向が一方向で、残存責務を文書化している
   - 依存: A1〜A4
 
-## P1: Memory/JSON Storage
+## S: Memory/JSON Storage
 
 対象: `src/storage/memory_store.ts`（約 793 行）、`src/storage/json_store.ts`（約 554 行）
 
@@ -147,13 +156,14 @@ Surreal 側で確定した feature port を基準にする。共有配列を複�
   - 依存: S1
 - [ ] **S3: JSON codec と version guard を分離する** — 難易度 3
   - parse/serialize、schema version 判定、旧版入力保護をファイル I/O から切り離す
+  - [x] 版別 migration 前に重複しているバックアップファイル作成を、一つの内部処理へ集約する
   - 完了条件: fixture だけで codec と各 version guard を直接テストできる
 - [ ] **S4: JSON persistence policy を分離する** — 難易度 4
   - mutation 後の persist、rollback、atomic write の責務を集約する
   - 完了条件: 各 override が同じ保存手順を重複実装せず、失敗時の状態が契約テストで固定される
   - 依存: S2、S3
 
-## P1: Tree UI / Layout
+## T: Tree UI / Layout
 
 対象: `src/ui/PhylogeneticTree.svelte`（約 688 行）、`src/ui/GlobalLineage.svelte`（約 649 行）、
 `src/ui/tree_layout.ts`（約 703 行）
@@ -173,14 +183,16 @@ Surreal 側で確定した feature port を基準にする。共有配列を複�
   - 完了条件: 分離 View はレイアウト計算や store を参照しない
   - 依存: T3
 
-## P2: Inline Semantic Link Parser
+## P: Inline Semantic Link Parser
 
 対象: `src/services/inline_semantic_link.ts`（約 636 行）
 
 - [ ] **P1: parser の characterization test を補強する** — 難易度 3
   - escape、未完入力、曖昧な token、範囲位置、複数 error の現行挙動を固定する
+  - `markdown_parser.ts` との重複部分について、入力・source range・error 契約が同一かを先に比較する
 - [ ] **P2: scanner/tokenizer を分離する** — 難易度 3
   - 文字列走査と source range の生成だけを担当する
+  - 両 parser の契約が同一と確認できた字句走査だけを共有し、文法や診断は共通化しない
   - 依存: P1
 - [ ] **P3: grammar/parser を分離する** — 難易度 4
   - token 列から意味リンク表現を組み立て、UI や診断文言に依存しない
@@ -189,7 +201,28 @@ Surreal 側で確定した feature port を基準にする。共有配列を複�
   - parse error、notice、候補提示用情報への変換を担当する
   - 依存: P3
 
-## P2: Styles
+## G: Graph Snapshot Validation
+
+対象: `src/storage/graph_state_validation.ts`
+
+- [ ] **G1: snapshot validation の characterization test を責務別に補強する** — 難易度 3
+  - top-level shape、各 record、参照整合性、重複、不正 ID の現行 error を固定する
+- [ ] **G2: record validation と cross-record validation を分離する** — 難易度 4
+  - `validatedGraphStateSnapshot` は検証順序と結果組み立てだけを所有する
+  - 完了条件: 各 record validator と参照整合性を小さな fixture で直接テストできる
+  - 依存: G1
+
+## O: OPML Parser
+
+対象: `src/services/opml.ts`
+
+- [ ] **O1: element parser の characterization test を補強する** — 難易度 2
+  - namespace、属性、入れ子、空要素、不正 XML の現行挙動を固定する
+- [ ] **O2: element 走査と outline 変換を分離する** — 難易度 3
+  - XML element の走査と Radiora の import model への変換を別の純粋処理にする
+  - 依存: O1
+
+## C: Styles
 
 対象: `src/ui/styles.css`（約 2,866 行）
 
@@ -208,12 +241,33 @@ Surreal 側で確定した feature port を基準にする。共有配列を複�
 
 - [ ] **R1: `editor_controller.svelte.ts`（約 572 行）をレビュー** — 難易度 2
   - autosave、resume position、inline link completion の state ownership が一つで妥当か確認する
+  - completion と autosave が独立した変更理由を持つ場合だけ、内部 module へ分離する
 - [ ] **R2: `branch_service.ts`（約 448 行）をレビュー** — 難易度 2
   - branch、working copy、revision、recovery の transaction 境界を確認する
 - [ ] **R3: `occurrence_operations.ts`（約 363 行）をレビュー** — 難易度 1
   - 長さではなく、移動・複製・削除の不変条件が一責務としてまとまっているか確認する
 - [ ] **R4: `models.ts`（約 397 行）をレビュー** — 難易度 1
   - 型カタログであるだけなら維持し、循環依存や feature 間漏洩がある場合のみ分割する
+- [x] **R5: Today/Unplaced の filter bar をレビュー** — 難易度 1
+  - 入力項目、文言、無効条件が同じ場合だけ小さな View として共有し、一覧の絞り込み処理は各 feature
+    に残す
+  - 実績: `OutlineFilterBar.svelte` へ表示と入力だけを移し、filter計算とstate
+    ownershipは親Viewに維持した
+- [ ] **R6: `surreal_work_repository.ts` の merge validation 重複をレビュー** — 難易度 2
+  - legacy migration で現在も通る経路だけを対象にし、将来用の抽象化は追加しない
+  - 共通化する場合は Memory Store 実装へ依存させず、merge の不変条件を所有する小さな domain module
+    に置く
+- [ ] **R7: Markdown export と sparse outline の複雑度をレビュー** — 難易度 2
+  - tree traversal
+    と表示形式、祖先復元と採用条件が独立した変更理由かを確認し、同居が妥当なら維持する
+- [ ] **R8: Markdown editor adapter の自己重複をレビュー** — 難易度 1
+  - OverType adapter と fallback adapter が共有する selection/scroll 復元を、既存 interface
+    を広げず内部 helper にできるか確認する
+
+`advanced_link_resolver.ts`、`date_projection.ts`、Markdown/OPML export にある Map
+構築は、現時点では
+それぞれの処理に近い単純な実装として維持する。共通の不変条件が見つからない限り、汎用 collection
+module には昇格しない。
 
 ## 共通の完了条件
 
@@ -222,5 +276,6 @@ Surreal 側で確定した feature port を基準にする。共有配列を複�
 - feature ごとの state ownership が一箇所である
 - 新しい純粋ロジックには直接テストがある
 - 対象の契約テストを新しいファイル境界へ追随させている
+- 対象に対応する duplicate/complexity/line baseline が増加せず、解消した登録は削除されている
 - `$effect` を追加・移動した場合、目的、依存、cleanup の要否をレビューしている
 - `deno task verify` が成功する
