@@ -29,6 +29,7 @@
 		onInspectorCollapsedChange,
 		onInspectorWidthChange,
 		onPersistQuickCapturePreference,
+		onOpenTrash,
 		onOpenLicenses,
 	}: {
 		markdownExportPreference: MarkdownExportPreference;
@@ -55,6 +56,7 @@
 		onInspectorCollapsedChange: (collapsed: boolean) => void;
 		onInspectorWidthChange: (width: number) => void;
 		onPersistQuickCapturePreference: () => void;
+		onOpenTrash: () => void | Promise<void>;
 		onOpenLicenses: () => void | Promise<void>;
 	} = $props();
 
@@ -200,6 +202,14 @@
 					<option value="unplaced">{vocabulary.quickCaptureDestinationUnplaced}</option>
 				</select>
 			</label>
+		</section>
+
+		<section class="option-card" aria-labelledby="option-items-title">
+			<h2 id="option-items-title">項目</h2>
+			<p>削除した項目を確認して、アウトラインへ戻せます。</p>
+			<div class="option-actions">
+				<button onclick={onOpenTrash}>項目を復元する</button>
+			</div>
 		</section>
 
 		<section class="option-card" aria-labelledby="option-licenses-title">

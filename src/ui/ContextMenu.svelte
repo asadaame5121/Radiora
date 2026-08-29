@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { ContextMenu as BitsContextMenu } from "bits-ui";
-	import type { ContextMenuItem } from "./context_menu";
+	import type { ContextMenuItem } from "./context_menu.ts";
 
 	const COLLISION_PADDING = 8;
 
@@ -22,9 +22,25 @@
 	} = $props();
 
 	let open = $state(true);
-	let anchorElement = $state<HTMLDivElement | null>(null);
 	let contentElement = $state<HTMLDivElement | null>(null);
 	let closeNotified = false;
+
+	const virtualAnchor = $derived({
+		getBoundingClientRect: () =>
+			typeof DOMRect !== "undefined"
+				? DOMRect.fromRect({ x, y, width: 0, height: 0 })
+				: ({
+						x,
+						y,
+						top: y,
+						left: x,
+						bottom: y,
+						right: x,
+						width: 0,
+						height: 0,
+						toJSON: () => ({}),
+					} as DOMRect),
+	});
 
 	function handleOpenChange(nextOpen: boolean): void {
 		open = nextOpen;
@@ -68,67 +84,54 @@
 	onOpenChange={handleOpenChange}
 	onOpenChangeComplete={handleOpenChangeComplete}
 >
-	<div
-		bind:this={anchorElement}
-		class="context-menu-anchor"
-		aria-hidden="true"
-		style:left={`${x}px`}
-		style:top={`${y}px`}
-	></div>
 	<BitsContextMenu.Content
-		customAnchor={anchorElement}
+		customAnchor={virtualAnchor}
 		strategy="fixed"
 		avoidCollisions={true}
 		collisionPadding={COLLISION_PADDING}
-		side="right"
-		sideOffset={0}
+		side="bottom"
+		sideOffset={2}
 		align="start"
 		onOpenAutoFocus={handleOpenAutoFocus}
 		onCloseAutoFocus={handleCloseAutoFocus}
 	>
-		{#snippet child({ props })}
-			<div bind:this={contentElement} {...props} class="context-menu">
-				{#each items as item (item.id)}
-					{#if item.separatorBefore}
-						<BitsContextMenu.Separator>
-							{#snippet child({ props: separatorProps })}
-								<div {...separatorProps} class="context-menu-separator"></div>
+		{#snippet child({ props, wrapperProps })}
+			<div {...wrapperProps}>
+				<div bind:this={contentElement} {...props} class="context-menu">
+					{#each items as item (item.id)}
+						{#if item.separatorBefore}
+							<BitsContextMenu.Separator>
+								{#snippet child({ props: separatorProps })}
+									<div {...separatorProps} class="context-menu-separator"></div>
+								{/snippet}
+							</BitsContextMenu.Separator>
+						{/if}
+						<BitsContextMenu.Item
+							disabled={item.disabled}
+							onSelect={() => handleItemSelect(item.id)}
+						>
+							{#snippet child({ props: itemProps })}
+								<button
+									{...itemProps}
+									class:danger={item.danger}
+									class="context-menu-item"
+									disabled={item.disabled}
+									title={item.disabled && item.reason ? item.reason : undefined}
+									type="button"
+								>
+									{item.label}
+								</button>
 							{/snippet}
-						</BitsContextMenu.Separator>
-					{/if}
-					<BitsContextMenu.Item
-						disabled={item.disabled}
-						onSelect={() => handleItemSelect(item.id)}
-					>
-						{#snippet child({ props: itemProps })}
-							<button
-								{...itemProps}
-								class:danger={item.danger}
-								class="context-menu-item"
-								disabled={item.disabled}
-								title={item.disabled && item.reason ? item.reason : undefined}
-								type="button"
-							>
-								{item.label}
-							</button>
-						{/snippet}
-					</BitsContextMenu.Item>
-				{/each}
+						</BitsContextMenu.Item>
+					{/each}
+				</div>
 			</div>
 		{/snippet}
 	</BitsContextMenu.Content>
 </BitsContextMenu.Root>
 
 <style>
-	.context-menu-anchor {
-		position: fixed;
-		width: 0;
-		height: 0;
-		pointer-events: none;
-	}
-
 	.context-menu {
-		position: fixed;
 		z-index: 1000;
 		min-width: 13rem;
 		max-width: min(22rem, calc(100vw - 1rem));

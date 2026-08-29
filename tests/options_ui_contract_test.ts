@@ -10,13 +10,25 @@ const view = await Deno.readTextFile(new URL("../src/ui/OptionsView.svelte", imp
 Deno.test("Option is a dedicated management view and the toolbar keeps only direct actions", () => {
 	assertMatch(viewMode, /\| "options";/);
 	assertMatch(navigation, /activeView === "options"/);
-	assertMatch(navigation, /onclick=\{onOpenOptions\}>Option<\/button>/);
+	assertMatch(navigation, /aria-label="Option"[\s\S]*?onclick=\{onOpenOptions\}>⚙<\/button>/);
+	assertMatch(navigation, /aria-label="ヘルプ"[\s\S]*?onclick=\{onOpenHelp\}>\?<\/button>/);
+	assertMatch(navigation, /class="nav-icon-row"/);
+	assertNotMatch(navigation, />ゴミ箱<\/button>/);
 	assertMatch(app, /viewMode === "options"/);
 	assertMatch(app, /<OptionsView/);
 	assertMatch(view, /<section class="options-panel"/);
 	assertNotMatch(app, /<details class="toolbar-menu">/);
 	assertMatch(view, /onclick=\{onExportMarkdown\}/);
 	assertMatch(app, /onOpenOptions=\{\(\) => \(viewMode = "options"\)\}/);
+	assertMatch(view, /onclick=\{onOpenTrash\}>項目を復元する<\/button>/);
+	assertMatch(app, /onOpenTrash=\{\(\) => void openTrash\(\)\}/);
+});
+
+Deno.test("top bar does not duplicate navigation and command actions", async () => {
+	const topBar = await Deno.readTextFile(new URL("../src/ui/AppTopBar.svelte", import.meta.url));
+	assertNotMatch(topBar, />Option<\/button>/);
+	assertNotMatch(topBar, />ヘルプ<\/button>/);
+	assertNotMatch(topBar, /markdownExportAction/);
 });
 
 Deno.test("Option groups export, exchange, backup, and live display settings", () => {

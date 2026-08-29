@@ -7,10 +7,17 @@ const tree = await Deno.readTextFile(
 const inspector = await Deno.readTextFile(
 	new URL("../src/ui/InspectorView.svelte", import.meta.url),
 );
+const historyTab = await Deno.readTextFile(
+	new URL("../src/ui/InspectorHistoryTab.svelte", import.meta.url),
+);
+
+const outlineRowItem = await Deno.readTextFile(
+	new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
+);
 
 Deno.test("outline and tree share the occurrence context menu without intercepting editors", () => {
 	assertMatch(app, /<ContextMenu/);
-	assertMatch(app, /openOccurrenceContextMenu\(row\.item\.id, "outline", event\)/);
+	assertMatch(outlineRowItem, /openOccurrenceContextMenu\(row\.item\.id, "outline", event\)/);
 	assertMatch(app, /if \(source === "outline" && isEditableTarget\(event\.target\)\) return/);
 	assertMatch(
 		app,
@@ -45,13 +52,13 @@ Deno.test("context actions reuse commands and confirmation-gated destructive pat
 });
 
 Deno.test("persistent row and inspector destructive buttons moved into the context menu", () => {
-	const outline = app.slice(
-		app.indexOf('<div class="rows">'),
-		app.indexOf('{:else if viewMode === "today"}'),
+	assertNotMatch(
+		outlineRowItem,
+		/class="delete" title=\{`この\$\{vocabulary\.occurrence\}を外す`\}/,
 	);
-	assertNotMatch(outline, /class="delete" title=\{`この\$\{vocabulary\.occurrence\}を外す`\}/);
 	assertNotMatch(inspector, /onclick=\{duplicateSelectedOccurrence\}/);
 	assertNotMatch(inspector, /onclick=\{trashSelectedWork\}/);
-	assertMatch(inspector, /onclick=\{\(\) => void onCreateBranch\(\)\}/);
+	assertMatch(historyTab, /onclick=\{\(\) => void onCreateBranch\(\)\}/);
+	assertMatch(inspector, /onCreateBranch=\{props\.onCreateBranch\}/);
 	assertMatch(app, /onCreateBranch=\{\(\) => executeCommand\("createBranch"\)\}/);
 });

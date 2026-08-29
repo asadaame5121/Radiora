@@ -15,5 +15,5 @@ Deno.test("version comparison UI keeps arbitrary selectors and independent scrol
 	assertMatch(pane, /selectRight\(event\.currentTarget\.value\)/);
 	assert(pane.includes('data-comparison-pane="left"'));
 	assert(pane.includes('data-comparison-pane="right"'));
-	assertMatch(styles, /\.comparison-scroll\s*\{[^}]*overflow:\s*auto/s);
+	assertMatch(pane, /\.comparison-scroll\s*\{[^}]*overflow:\s*auto/s);
 });

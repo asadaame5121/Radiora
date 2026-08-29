@@ -205,3 +205,142 @@
 		</div>
 	{/if}
 </section>
+
+<style>
+	.revision-comparison {
+		display: grid;
+		grid-template-rows: auto minmax(0, 1fr);
+		gap: 18px;
+		height: 100%;
+		min-width: 0;
+		padding: 24px 28px;
+		overflow: hidden;
+	}
+	.comparison-heading {
+		display: flex;
+		align-items: end;
+		justify-content: space-between;
+		gap: 24px;
+	}
+	.comparison-heading h1 {
+		margin: 4px 0 0;
+		font-family: var(--font-serif);
+		font-size: 21px;
+		font-weight: normal;
+		color: #edf9fa;
+	}
+	.comparison-context {
+		display: flex;
+		flex-direction: column;
+		align-items: end;
+		gap: 3px;
+		color: var(--muted);
+		font-size: 10px;
+	}
+	.comparison-context strong {
+		color: var(--cyan);
+		font-weight: normal;
+	}
+	.comparison-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 12px;
+		min-height: 0;
+	}
+	.comparison-side {
+		display: grid;
+		grid-template-rows: auto auto auto minmax(0, 1fr);
+		min-width: 0;
+		min-height: 0;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--surface);
+		overflow: hidden;
+	}
+	.comparison-side label {
+		padding: 10px 12px 4px;
+		color: var(--cyan);
+		font-size: 10px;
+		letter-spacing: .1em;
+	}
+	.comparison-side select {
+		margin: 0 10px 10px;
+		min-width: 0;
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		padding: 7px;
+		background: #04080d;
+		color: var(--text);
+	}
+	.comparison-source-label {
+		margin: 0 10px 10px;
+		padding: 7px;
+		border: 1px solid var(--border);
+		border-radius: 5px;
+		color: var(--text);
+		background: #04080d;
+		font-size: 11px;
+	}
+	.comparison-side > small {
+		padding: 0 12px 8px;
+		color: var(--muted);
+		font-size: 9px;
+	}
+	.comparison-scroll {
+		min-height: 0;
+		overflow: auto;
+		border-top: 1px solid var(--border);
+		background: #050a10;
+	}
+	.comparison-scroll pre {
+		margin: 0;
+		padding: 12px;
+		color: #c4d3d9;
+		font-family: var(--font-mono);
+		font-size: 11px;
+		line-height: 1.65;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.diff-line {
+		display: grid;
+		grid-template-columns: 42px minmax(0, 1fr);
+		min-height: 25px;
+		border-bottom: 1px solid rgb(28 52 66 / 45%);
+		line-height: 1.65;
+	}
+	.diff-line > span {
+		padding: 3px 8px;
+		border-right: 1px solid var(--border);
+		color: var(--muted);
+		text-align: right;
+		font: 10px/1.65 var(--font-mono);
+		user-select: none;
+	}
+	.diff-line code {
+		display: block;
+		padding: 3px 9px;
+		color: #c4d3d9;
+		font-family: var(--font-mono);
+		font-size: 11px;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.diff-line.add {
+		background: rgb(44 129 86 / 18%);
+		box-shadow: inset 3px 0 #45b87c;
+	}
+	.diff-line.remove {
+		background: rgb(156 62 73 / 18%);
+		box-shadow: inset 3px 0 #c65d69;
+	}
+	.diff-line.equal {
+		background: transparent;
+	}
+	.comparison-empty {
+		align-self: center;
+		justify-self: center;
+		color: var(--muted);
+		font-size: 12px;
+	}
+</style>

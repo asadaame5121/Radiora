@@ -12,14 +12,24 @@ const navigationController = await Deno.readTextFile(
 	new URL("../src/ui/navigation_controller.svelte.ts", import.meta.url),
 );
 const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
+const markdownEditor = await Deno.readTextFile(
+	new URL("../src/ui/MarkdownEditor.svelte", import.meta.url),
+);
 const overtype = await Deno.readTextFile(
 	new URL("../src/ui/overtype_markdown_editor_adapter.ts", import.meta.url),
 );
 
+const topBar = await Deno.readTextFile(
+	new URL("../src/ui/AppTopBar.svelte", import.meta.url),
+);
+
 Deno.test("Omniwindow shares the quick-capture command value with search", () => {
 	assertNotMatch(app, /let searchQuery/);
-	assertMatch(app, /bind:value=\{navigationController\.quickCaptureText\}/);
-	assertMatch(app, /oninput=\{\(\) => navigationController\.queueSearch\(\)\}/);
+	assertMatch(topBar, /value=\{quickCaptureText\}/);
+	assertMatch(
+		topBar,
+		/oninput=\{\(event\) => onQuickCaptureInput\(event\.currentTarget\.value\)\}/,
+	);
 	assertMatch(app, /suggestItems: \(prefix, limit\) => api\.suggestItems\(prefix, limit\)/);
 	assertMatch(app, /searchItems: \(request\) => api\.searchItems\(request\)/);
 	assertMatch(app, /getSelectedId: \(\) => selectedId/);
@@ -30,7 +40,7 @@ Deno.test("Omniwindow shares the quick-capture command value with search", () =>
 	assertMatch(app, /event\.isComposing/);
 	assertMatch(app, /const exactMatchIndex = searchEntries\.findIndex/);
 	assertMatch(app, /navigationController\.moveSearchActiveIndex\(delta\)/);
-	assertMatch(app, /searchActiveIndex === searchEntries\.length/);
+	assertMatch(topBar, /searchActiveIndex === searchEntriesLength/);
 	assertMatch(app, /executeCommand\("quickCapture"\)/);
 	assertMatch(app, /quickCaptureDestinationLabel/);
 	assertMatch(app, /vocabulary\.quickCaptureDestinationRoot/);
@@ -55,12 +65,11 @@ Deno.test("Omniwindow shares the quick-capture command value with search", () =>
 });
 
 Deno.test("shell keeps global navigation, contextual inspector, and dedicated full-width views separate", () => {
-	for (const label of ["作業", "探索", "管理", "ツール"]) {
+	for (const label of ["作業", "探索", "ツール"]) {
 		assert(navigation.includes(label));
 	}
-	for (const label of ["アウトライン", "ゴミ箱"]) {
-		assert(app.includes(label));
-	}
+	assert(topBar.includes("アウトライン"));
+	assertNotMatch(navigation, />ゴミ箱<\/button>/);
 	for (const tab of [">概要</button>", ">関係</button>", ">履歴</button>"]) {
 		assert(inspector.includes(tab));
 	}
@@ -70,7 +79,7 @@ Deno.test("shell keeps global navigation, contextual inspector, and dedicated fu
 	assertMatch(app, /\{#if !dedicatedView\}\s*<InspectorView/);
 	assertMatch(inspector, /<aside bind:this=\{inspectorElement\} class="inspector">/);
 	assertMatch(app, /<div class="work-lineage-workspace">/);
-	assertMatch(styles, /\.shell > \.top-bar/);
+	assertMatch(topBar, /\.top-bar \{/);
 	assertMatch(styles, /\.app-main > \.inspector/);
 	assertNotMatch(styles, /^header\s*\{/m);
 	assertNotMatch(styles, /^aside\s*\{/m);
@@ -90,22 +99,34 @@ Deno.test("left and right sidebars are collapsible", () => {
 		/saveUiLayoutPreference\(\{ navCollapsed, inspectorCollapsed, inspectorWidth \}\)/,
 	);
 	assertMatch(styles, /\.shell\.nav-collapsed \{\s*grid-template-columns: 42px minmax\(0, 1fr\);/);
+	assertMatch(styles, /\.app-main\.inspector-collapsed > \.inspector \{\s*display: none;/);
+	assertMatch(
+		styles,
+		/grid-template-columns: minmax\(420px, 1fr\) var\(--inspector-width, 280px\);/,
+	);
 	assertMatch(
 		navigationStyles,
 		/\.primary-nav\.nav-collapsed \.brand,\s*\.primary-nav\.nav-collapsed section \{\s*display: none;/,
 	);
-	assertMatch(inspector, /inspector-close/);
+	assertNotMatch(inspector, /inspector-close/);
 	assertMatch(app, /inspectorCollapsed = true/);
-	assertMatch(app, /class="inspector-jump"/);
-	assertMatch(app, /aria-expanded=\{!inspectorCollapsed\}/);
-	assertMatch(app, /onclick=\{toggleInspector\}/);
-	assertMatch(app, /\{inspectorCollapsed \? "«" : "»"\}/);
-	assertMatch(styles, /\.inspector-jump \{\s*display: block;/);
+	assertMatch(topBar, /class="inspector-jump"/);
+	assertMatch(topBar, /aria-expanded=\{!inspectorCollapsed\}/);
+	assertMatch(topBar, /onclick=\{onToggleInspector\}/);
+	assertMatch(topBar, /\{inspectorCollapsed \? "«" : "»"\}/);
+	assertMatch(
+		topBar,
+		/\.inspector-jump \{\s*display: grid;[\s\S]*?width: 36px;[\s\S]*?height: 36px;/,
+	);
+	assertMatch(
+		navigation,
+		/\.primary-nav \.nav-collapse-toggle \{[\s\S]*?width: 36px;[\s\S]*?height: 36px;/,
+	);
 });
 
 Deno.test("outline editors use an explicit dark Overtype theme and compact idle rows", () => {
 	assertMatch(overtype, /theme: "cave"/);
-	assertMatch(styles, /\.markdown-editor-host\s*\{[\s\S]*?height: 34px/);
-	assertMatch(styles, /\.row\.selected \.markdown-editor-host/);
-	assert(styles.includes("background: transparent !important"));
+	assertMatch(markdownEditor, /\.markdown-editor-host\s*\{[\s\S]*?height: 34px/);
+	assertMatch(markdownEditor, /:global\(\.row\.selected\) \.markdown-editor-host/);
+	assert(markdownEditor.includes("background: transparent !important"));
 });

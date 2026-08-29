@@ -100,7 +100,7 @@
 											: pending.action === "merge-duplicate"
 											? vocabulary.duplicateMergeConfirm
 											: pending.action === "cancel-longform"
-											? "長文編集をキャンセルしますか？"
+											? "原稿の編集をキャンセルしますか？"
 											: "完全消去しますか？"}
 									</h2>
 								{/snippet}
@@ -189,8 +189,54 @@
 		position: fixed;
 		top: 50%;
 		left: 50%;
-		z-index: 1000;
-		margin: 0;
 		transform: translate(-50%, -50%);
+		z-index: 1000;
+		width: min(440px, calc(100vw - 48px));
+		background: var(--surface-raised);
+		border: 1px solid var(--border-bright);
+		border-radius: 10px;
+		box-shadow: 0 24px 80px #000c;
+	}
+
+	.confirmation-dialog__content {
+		padding: 20px 24px 24px;
+	}
+
+	.confirmation-dialog h2 {
+		margin: 8px 0 12px;
+		font-family: var(--font-serif);
+		font-size: 20px;
+		font-weight: normal;
+		color: #edf9fa;
+	}
+
+	.confirmation-dialog p:not(.eyebrow) {
+		margin: 0;
+		color: #afc1c9;
+		font-size: 13px;
+		line-height: 1.65;
+	}
+
+	.confirmation-dialog__actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 8px;
+		margin-top: 22px;
+	}
+
+	.confirmation-dialog__actions button {
+		padding: 8px 12px;
+	}
+
+	.confirmation-dialog__actions .delete {
+		color: #ffd2cd;
+		border-color: #773942;
+		background: #4b2028;
+		opacity: 1;
+	}
+
+	.confirmation-dialog__actions button:disabled {
+		cursor: wait;
+		opacity: .6;
 	}
 </style>

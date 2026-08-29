@@ -211,6 +211,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.24.x"
+          cache: false
 
       - name: Build Windows GUI sidecar
         working-directory: tools/surreal-sidecar
@@ -241,6 +242,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: "1.24.x"
+          cache: false
 
       - name: Download and verify SurrealDB CLI
         shell: pwsh
