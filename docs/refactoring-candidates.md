@@ -68,7 +68,7 @@ workspace/change）を分けて少しずつ進める。
 
 ## P0: Discovery Operations
 
-対象: `src/services/discovery_operations.ts`（約 542 行）
+対象: `src/services/discovery_operations.ts`（約 243 行）
 
 検索、prefix suggestion、alias、emergence suggestion、feedback、rule query、query projection が
 同居している。外向け API を保つ薄い facade を残し、次の順で分ける。
@@ -78,14 +78,18 @@ workspace/change）を分けて少しずつ進める。
   - 完了条件: 分割後にどのテストを移すか判断でき、主要な異常系が固定されている
   - 実績: test support を共有しつつ3責務の契約テストへ分け、無効入力、stale suggestion、 missing
     saved query と失敗時に永続化されないことを固定した
-- [ ] **D2: search operations を分離する** — 難易度 3
+- [x] **D2: search operations を分離する** — 難易度 3
   - prefix suggestion、lexical search、alias 展開・保存を所有する
   - 完了条件: search が `DiscoveryStorePort` と必要最小限の参照 port のみに依存する
   - 依存: D1
-- [ ] **D3: emergence suggestion 計算を分離する** — 難易度 4
+  - 実績: I/O を `search_operations.ts`、alias 展開と ranking を純粋な `search_ranking.ts`
+    へ分け、互換 facade と store なしの直接テストを維持した
+- [x] **D3: emergence suggestion 計算を分離する** — 難易度 4
   - neighbor、ancestor、候補 ranking などの純粋計算と、データ取得を分ける
   - 完了条件: 候補計算を store なしで直接テストできる
   - 依存: D1、D2 の search API
+  - 実績: 永続化前の候補計算と最終 ranking を `emergence_suggestion_calculator.ts` へ分け、3候補種と
+    pinned/score/limit 順序を直接テストした
 - [ ] **D4: emergence persistence/resolution を分離する** — 難易度 3
   - feedback、accept/dismiss/pin、asserted link 作成のトランザクション境界を所有する
   - 完了条件: 候補計算と更新コマンドが互いの内部状態を共有しない
