@@ -4,6 +4,8 @@
 	import WorkingCopySaveStatus from "./WorkingCopySaveStatus.svelte";
 	import type { WorkingCopySaveStatus as WorkingCopySaveStatusValue } from "../services/working_copy_autosave.ts";
 	import type { CommandId } from "./command_service.ts";
+	import ThemeSwitcher from "./ThemeSwitcher.svelte";
+	import type { ThemePreference } from "./theme_preference.ts";
 
 	let {
 		viewMode,
@@ -21,6 +23,7 @@
 		bookmarks,
 		inspectorCollapsed,
 		workingCopySaveStatus,
+		themePreference = "auto",
 		onSetViewMode,
 		onQuickCaptureInput,
 		onQuickCaptureKeydown,
@@ -32,6 +35,7 @@
 		onRemoveBookmark,
 		onToggleInspector,
 		onRetryWorkingCopySave,
+		onThemePreferenceChange,
 		titleFor,
 	}: {
 		viewMode: string;
@@ -49,6 +53,7 @@
 		bookmarks: readonly Bookmark[];
 		inspectorCollapsed: boolean;
 		workingCopySaveStatus: WorkingCopySaveStatusValue | null;
+		themePreference?: ThemePreference;
 		onSetViewMode: (mode: "outline" | "globalLineage") => void;
 		onQuickCaptureInput: (text: string) => void;
 		onQuickCaptureKeydown: (event: KeyboardEvent) => void;
@@ -60,6 +65,7 @@
 		onRemoveBookmark: (id: string) => void;
 		onToggleInspector: () => void;
 		onRetryWorkingCopySave: () => void;
+		onThemePreferenceChange?: (preference: ThemePreference) => void;
 		titleFor: (item: OutlineItem) => string;
 	} = $props();
 
@@ -160,6 +166,9 @@
 				<button type="button" aria-label={`${vocabulary.bookmark}を削除`} onclick={() => onRemoveBookmark(bookmark.id)}>×</button>
 			</span>
 		{/each}
+		{#if onThemePreferenceChange}
+			<ThemeSwitcher {themePreference} {onThemePreferenceChange} />
+		{/if}
 		<button
 			class="inspector-jump"
 			type="button"
@@ -188,7 +197,7 @@
 		gap: 16px;
 		padding: 0 20px;
 		border-bottom: 1px solid var(--border);
-		background: rgb(5 9 15 / 92%);
+		background: color-mix(in srgb, var(--bg) 92%, transparent);
 		backdrop-filter: blur(14px);
 	}
 	.current-location {
@@ -209,7 +218,7 @@
 		padding: 3px;
 		border: 1px solid var(--border);
 		border-radius: 8px;
-		background: #04080d;
+		background: var(--surface);
 	}
 	.view-switcher button {
 		border: 0;
@@ -224,9 +233,9 @@
 		color: var(--text);
 	}
 	.view-switcher button.active {
-		background: #0d6675;
-		color: white;
-		box-shadow: 0 0 18px rgb(37 198 209 / 18%);
+		background: var(--cyan);
+		color: var(--cyan-fg, var(--bg));
+		box-shadow: 0 0 18px color-mix(in srgb, var(--cyan) 18%, transparent);
 	}
 	.view-switcher button:disabled {
 		cursor: not-allowed;
@@ -242,7 +251,7 @@
 		border: 1px solid var(--border-bright);
 		border-radius: 9px;
 		padding: 10px 13px;
-		background: #04080d;
+		background: var(--surface);
 		color: var(--text);
 		outline: none;
 	}
@@ -292,7 +301,7 @@
 	.search-section {
 		margin: 0;
 		padding: 7px 12px;
-		background: #07121c;
+		background: var(--surface-raised);
 		color: var(--cyan);
 		font-size: 8px;
 		letter-spacing: .15em;
@@ -320,7 +329,7 @@
 		border-radius: 6px;
 		padding: 6px 8px;
 		background: transparent;
-		color: #aebdc5;
+		color: var(--muted);
 		font-size: 10px;
 		text-align: left;
 		white-space: nowrap;

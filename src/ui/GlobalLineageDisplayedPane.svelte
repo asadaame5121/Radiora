@@ -37,10 +37,11 @@
 
 <style>
 	.sidebar-pane { min-width: 0; }
-	.pane-heading h2 { margin: 3px 0 12px; color: #dce7ec; font-size: 13px; }
-	.empty, .muted { color: #657681; font-size: 11px; line-height: 1.6; }
-	.promoted-lineage article { margin-bottom: 10px; padding: 11px; border: 1px solid #17313e; border-radius: 7px; background: #07121a; }
+	.pane-heading h2 { margin: 3px 0 12px; color: var(--text); font-size: 13px; }
+	.eyebrow { margin: 0; color: var(--cyan-soft); font-size: 9px; letter-spacing: .16em; }
+	.empty, .muted { color: var(--muted); font-size: 11px; line-height: 1.6; }
+	.promoted-lineage article { margin-bottom: 10px; padding: 11px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-raised); }
 	.promoted-lineage article div { display: flex; align-items: center; gap: 8px; }
-	.promoted-lineage article p { margin: 8px 0 0; color: #9fb3bc; font-size: 11px; }
-	.lineage-kind { padding: 2px 5px; border: 1px solid #28546a; border-radius: 4px; color: #73dce3; font-size: 9px; }
+	.promoted-lineage article p { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
+	.lineage-kind { padding: 2px 5px; border: 1px solid var(--border-bright); border-radius: 4px; color: var(--cyan-soft); font-size: 9px; }
 </style>

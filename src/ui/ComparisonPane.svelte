@@ -269,7 +269,7 @@
 		border: 1px solid var(--border);
 		border-radius: 5px;
 		padding: 7px;
-		background: #04080d;
+		background: var(--surface);
 		color: var(--text);
 	}
 	.comparison-source-label {
@@ -278,7 +278,7 @@
 		border: 1px solid var(--border);
 		border-radius: 5px;
 		color: var(--text);
-		background: #04080d;
+		background: var(--surface);
 		font-size: 11px;
 	}
 	.comparison-side > small {
@@ -290,12 +290,12 @@
 		min-height: 0;
 		overflow: auto;
 		border-top: 1px solid var(--border);
-		background: #050a10;
+		background: var(--surface-raised);
 	}
 	.comparison-scroll pre {
 		margin: 0;
 		padding: 12px;
-		color: #c4d3d9;
+		color: var(--text);
 		font-family: var(--font-mono);
 		font-size: 11px;
 		line-height: 1.65;
@@ -306,7 +306,7 @@
 		display: grid;
 		grid-template-columns: 42px minmax(0, 1fr);
 		min-height: 25px;
-		border-bottom: 1px solid rgb(28 52 66 / 45%);
+		border-bottom: 1px solid var(--border);
 		line-height: 1.65;
 	}
 	.diff-line > span {
@@ -320,7 +320,7 @@
 	.diff-line code {
 		display: block;
 		padding: 3px 9px;
-		color: #c4d3d9;
+		color: var(--text);
 		font-family: var(--font-mono);
 		font-size: 11px;
 		white-space: pre-wrap;

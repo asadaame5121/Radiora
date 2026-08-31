@@ -149,7 +149,7 @@
 		gap: 6px;
 		padding: 6px 8px;
 		border-bottom: 1px solid var(--border);
-		background: #04080d;
+		background: var(--surface);
 		color: var(--cyan);
 	}
 	.inline-link-omniwindow__search > span {

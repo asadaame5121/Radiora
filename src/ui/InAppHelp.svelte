@@ -275,8 +275,9 @@
 	.help-card ul {
 		display: grid;
 		gap: 8px;
+		margin: 0;
 		padding-left: 20px;
-		color: #afc1c9;
+		color: var(--muted);
 		font-size: 12px;
 		line-height: 1.65;
 	}
@@ -289,8 +290,8 @@
 		padding: 1px 5px;
 		border: 1px solid var(--border-bright);
 		border-radius: 4px;
-		background: #04080d;
-		color: var(--cyan-soft);
+		background: var(--surface-raised);
+		color: var(--cyan);
 		font-family: inherit;
 		font-size: .9em;
 		white-space: nowrap;

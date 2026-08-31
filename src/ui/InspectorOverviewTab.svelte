@@ -105,7 +105,7 @@
 		border: 1px solid var(--border);
 		border-radius: 5px;
 		padding: 7px 8px;
-		background: #04080d;
+		background: var(--surface);
 		color: var(--text);
 		font-size: 11px;
 	}
@@ -196,7 +196,7 @@
 		color: var(--muted);
 	}
 	.thought-meta time {
-		color: #b9cbd2;
+		color: var(--text);
 	}
 	.hint {
 		color: var(--muted);
