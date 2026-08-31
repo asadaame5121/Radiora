@@ -214,7 +214,7 @@
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		padding: 6px 8px;
-		background: #04080d;
+		background: var(--surface);
 		color: var(--text);
 		font-size: 10px;
 	}

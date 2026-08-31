@@ -129,22 +129,23 @@
 
 <style>
 	.sidebar-pane { min-width: 0; }
-	.pane-heading h2 { margin: 3px 0 12px; color: #dce7ec; font-size: 13px; }
-	.pane-heading button { margin-bottom: 10px; border: 1px solid #28546a; border-radius: 5px; background: #0d1b26; color: #b6c9d1; font-size: 10px; line-height: 26px; cursor: pointer; }
-	.pane-heading button:hover { border-color: #25c6d1; color: #eafcfd; }
-	.pane-empty { color: #657681; font-size: 11px; line-height: 1.6; }
+	.pane-heading h2 { margin: 3px 0 12px; color: var(--text); font-size: 13px; }
+	.eyebrow { margin: 0; color: var(--cyan-soft); font-size: 9px; letter-spacing: .16em; }
+	.pane-heading button { margin-bottom: 10px; border: 1px solid var(--border-bright); border-radius: 5px; background: var(--surface-raised); color: var(--muted); font-size: 10px; line-height: 26px; cursor: pointer; }
+	.pane-heading button:hover { border-color: var(--cyan); color: var(--text); }
+	.pane-empty { color: var(--muted); font-size: 11px; line-height: 1.6; }
 	.cluster-members { margin: 0; padding: 0; list-style: none; }
-	.cluster-members li { position: relative; margin-bottom: 8px; padding: 10px; border: 1px solid #17313e; border-radius: 7px; background: #07121a; cursor: pointer; outline: none; }
-	.cluster-members li:hover, .cluster-members li:has(.member-main:hover), .cluster-members li:has(.member-main:focus), .cluster-members li.selected { border-color: #25c6d1; background: #0c1c27; }
+	.cluster-members li { position: relative; margin-bottom: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-raised); cursor: pointer; outline: none; }
+	.cluster-members li:hover, .cluster-members li:has(.member-main:hover), .cluster-members li:has(.member-main:focus), .cluster-members li.selected { border-color: var(--cyan); background: var(--surface-hover); }
 	.cluster-members li.selected { box-shadow: inset 0 0 0 1px rgb(242 169 59 / 55%); }
-	.member-label { margin: 0; color: #dce7ec; font-size: 12px; line-height: 1.5; }
+	.member-label { margin: 0; color: var(--text); font-size: 12px; line-height: 1.5; }
 	.member-links { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; padding: 0; border: 0; min-inline-size: 0; }
-	.link-chip, .link-stub { padding: 2px 6px; border: 1px solid #28546a; border-radius: 4px; color: #9fb3bc; font-size: 9px; }
-	.link-chip.type-from { border-color: #25c6d1; color: #73dce3; }
-	.link-chip.type-like { border-color: #a855f7; color: #c9a1f2; }
-	.link-chip.type-fix { border-color: #f2a93b; color: #f2c17e; }
-	.link-chip.type-vs { border-color: #ef5b5b; color: #f2a0a0; }
+	.link-chip, .link-stub { padding: 2px 6px; border: 1px solid var(--border-bright); border-radius: 4px; color: var(--muted); font-size: 9px; }
+	.link-chip.type-from { border-color: var(--cyan); color: var(--cyan-soft); }
+	.link-chip.type-like { border-color: var(--violet); color: var(--violet); }
+	.link-chip.type-fix { border-color: var(--amber); color: var(--amber); }
+	.link-chip.type-vs { border-color: var(--red); color: var(--red); }
 	.link-stub { border-style: dashed; opacity: .7; }
-	.open-member { margin-top: 8px; border: 1px solid #28546a; border-radius: 4px; background: #0d1b26; color: #b6c9d1; font-size: 10px; line-height: 24px; cursor: pointer; }
-	.open-member:hover { border-color: #25c6d1; color: #eafcfd; }
+	.open-member { margin-top: 8px; border: 1px solid var(--border-bright); border-radius: 4px; background: var(--surface-raised); color: var(--muted); font-size: 10px; line-height: 24px; cursor: pointer; }
+	.open-member:hover { border-color: var(--cyan); color: var(--text); }
 </style>

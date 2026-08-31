@@ -150,8 +150,8 @@
 		inset: 0 0 0 auto;
 		width: 320px;
 		padding: 22px 16px;
-		border-left: 1px solid #17313e;
-		background: rgb(8 16 26 / 96%);
+		border-left: 1px solid var(--border);
+		background: color-mix(in srgb, var(--surface) 96%, transparent);
 		overflow: auto;
 	}
 	.sidebar-tabs {
@@ -159,7 +159,7 @@
 		gap: 6px;
 		margin-bottom: 16px;
 		padding: 3px;
-		border: 1px solid #28546a;
+		border: 1px solid var(--border);
 		border-radius: 7px;
 	}
 	.sidebar-tabs button {
@@ -168,17 +168,17 @@
 		border: 0;
 		border-radius: 4px;
 		background: transparent;
-		color: #7f949e;
+		color: var(--muted);
 		font-size: 11px;
 		cursor: pointer;
 	}
 	.sidebar-tabs button:hover {
-		color: #dce7ec;
+		color: var(--text);
 	}
 	.sidebar-tabs button[data-state="active"] {
-		background: #12303d;
-		color: #eafcfd;
-		box-shadow: inset 0 0 0 1px rgb(37 198 209 / 42%);
+		background: var(--surface-hover);
+		color: var(--text);
+		box-shadow: inset 0 0 0 1px var(--cyan);
 	}
 	.sidebar-close {
 		display: none;
@@ -192,10 +192,10 @@
 			display: block;
 			height: 30px;
 			padding: 0 12px;
-			border: 1px solid #28546a;
+			border: 1px solid var(--border-bright);
 			border-radius: 6px;
-			background: rgb(5 10 16 / 88%);
-			color: #dce7ec;
+			background: color-mix(in srgb, var(--surface) 88%, transparent);
+			color: var(--text);
 			font-size: 11px;
 			cursor: pointer;
 		}
@@ -222,10 +222,10 @@
 			display: block;
 			width: 28px;
 			height: 28px;
-			border: 1px solid #28546a;
+			border: 1px solid var(--border-bright);
 			border-radius: 5px;
-			background: #0d1b26;
-			color: #dce7ec;
+			background: var(--surface-raised);
+			color: var(--text);
 			font-size: 15px;
 			cursor: pointer;
 		}

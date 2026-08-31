@@ -234,7 +234,7 @@
 	}
 	.view-switcher button.active {
 		background: var(--cyan);
-		color: var(--bg);
+		color: var(--cyan-fg, var(--bg));
 		box-shadow: 0 0 18px color-mix(in srgb, var(--cyan) 18%, transparent);
 	}
 	.view-switcher button:disabled {
