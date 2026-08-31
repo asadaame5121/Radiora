@@ -88,6 +88,13 @@
 		saveUiLayoutPreference,
 	} from "./ui_layout_preference";
 	import {
+		applyThemeToDocument,
+		listenSystemThemeChange,
+		loadThemePreference,
+		saveThemePreference,
+		type ThemePreference,
+	} from "./theme_preference";
+	import {
 		loadTreeProjectionPreference,
 		saveTreeProjectionPreference,
 	} from "./tree_projection_preference";
@@ -226,6 +233,7 @@
 	let markdownExportNotice = $state("");
 	let markdownExportPreference = $state(loadMarkdownExportPreference());
 	let quickCapturePreference = $state(loadQuickCapturePreference());
+	let themePreference = $state<ThemePreference>(loadThemePreference());
 	let opmlNotice = $state("");
 	let jsonBackupNotice = $state("");
 	const initialUiLayoutPreference = loadUiLayoutPreference();
@@ -508,6 +516,12 @@
 	});
 
 	onMount(() => {
+		applyThemeToDocument(themePreference);
+		const unlistenSystemTheme = listenSystemThemeChange(() => {
+			if (themePreference === "auto") {
+				applyThemeToDocument("auto");
+			}
+		});
 		let cancelled = false;
 		async function restoreStartupSnapshotCache(): Promise<void> {
 			try {
@@ -613,6 +627,7 @@
 		void monitorStartup();
 		return () => {
 			cancelled = true;
+			unlistenSystemTheme();
 			persistStartupSnapshotCache();
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
 			document.removeEventListener("visibilitychange", flushWhenHidden);
@@ -875,6 +890,12 @@
 	function setTreeProjectionPreference(next: TreeProjection): void {
 		treeProjectionPreference = next;
 		saveTreeProjectionPreference(next);
+	}
+
+	function setThemePreference(next: ThemePreference): void {
+		themePreference = next;
+		saveThemePreference(next);
+		applyThemeToDocument(next);
 	}
 
 	function startInspectorResize(event: PointerEvent): void {
@@ -2188,6 +2209,7 @@
 		{bookmarks}
 		{inspectorCollapsed}
 		{workingCopySaveStatus}
+		{themePreference}
 		onSetViewMode={(mode) => (viewMode = mode)}
 		onQuickCaptureInput={(val) => {
 			navigationController.quickCaptureText = val;
@@ -2202,6 +2224,7 @@
 		onRemoveBookmark={removeBookmark}
 		onToggleInspector={toggleInspector}
 		onRetryWorkingCopySave={retryWorkingCopySave}
+		onThemePreferenceChange={setThemePreference}
 		{titleFor}
 	/>
 
@@ -2336,6 +2359,7 @@
 				{navCollapsed}
 				{inspectorCollapsed}
 				{inspectorWidth}
+				{themePreference}
 				onPersistMarkdownExportPreference={persistMarkdownExportPreference}
 				onExportMarkdown={exportMarkdown}
 				onImportOpml={importOpmlFile}
@@ -2346,6 +2370,7 @@
 				onNavigationCollapsedChange={setNavigationCollapsed}
 				onInspectorCollapsedChange={setInspectorCollapsed}
 				onInspectorWidthChange={setInspectorWidth}
+				onThemePreferenceChange={setThemePreference}
 				onPersistQuickCapturePreference={persistQuickCapturePreference}
 				onOpenTrash={() => void openTrash()}
 				onOpenLicenses={openLicenses}
