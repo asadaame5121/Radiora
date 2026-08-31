@@ -269,7 +269,7 @@
 		border: 1px solid var(--border);
 		border-radius: 5px;
 		padding: 7px;
-		background: var(--surface);
+		background: var(--surface-raised);
 		color: var(--text);
 	}
 	.comparison-source-label {
@@ -278,7 +278,7 @@
 		border: 1px solid var(--border);
 		border-radius: 5px;
 		color: var(--text);
-		background: var(--surface);
+		background: var(--surface-raised);
 		font-size: 11px;
 	}
 	.comparison-side > small {
@@ -290,7 +290,7 @@
 		min-height: 0;
 		overflow: auto;
 		border-top: 1px solid var(--border);
-		background: var(--surface-raised);
+		background: var(--bg);
 	}
 	.comparison-scroll pre {
 		margin: 0;
@@ -306,7 +306,7 @@
 		display: grid;
 		grid-template-columns: 42px minmax(0, 1fr);
 		min-height: 25px;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
 		line-height: 1.65;
 	}
 	.diff-line > span {

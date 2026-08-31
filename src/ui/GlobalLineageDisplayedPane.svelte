@@ -38,10 +38,9 @@
 <style>
 	.sidebar-pane { min-width: 0; }
 	.pane-heading h2 { margin: 3px 0 12px; color: var(--text); font-size: 13px; }
-	.eyebrow { margin: 0; color: var(--cyan-soft); font-size: 9px; letter-spacing: .16em; }
 	.empty, .muted { color: var(--muted); font-size: 11px; line-height: 1.6; }
-	.promoted-lineage article { margin-bottom: 10px; padding: 11px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-raised); }
+	.promoted-lineage article { margin-bottom: 10px; padding: 11px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
 	.promoted-lineage article div { display: flex; align-items: center; gap: 8px; }
 	.promoted-lineage article p { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
-	.lineage-kind { padding: 2px 5px; border: 1px solid var(--border-bright); border-radius: 4px; color: var(--cyan-soft); font-size: 9px; }
+	.lineage-kind { padding: 2px 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--cyan); background: var(--surface-raised); font-size: 9px; }
 </style>

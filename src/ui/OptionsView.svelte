@@ -3,7 +3,7 @@
 	import type { QuickCapturePreference } from "./quick_capture_preference.ts";
 	import type { TreeProjection } from "./tree_layout.ts";
 	import { useUiVocabulary } from "./ui_vocabulary_context.ts";
-	import type { ThemePreference } from "./theme_preference.ts";
+	import { isThemePreference, type ThemePreference } from "./theme_preference.ts";
 
 	let {
 		markdownExportPreference = $bindable<MarkdownExportPreference>(),
@@ -48,7 +48,7 @@
 		navCollapsed: boolean;
 		inspectorCollapsed: boolean;
 		inspectorWidth: number;
-		themePreference?: ThemePreference;
+		themePreference: ThemePreference;
 		onPersistMarkdownExportPreference: () => void;
 		onExportMarkdown: () => void | Promise<void>;
 		onImportOpml: (file: File) => void | Promise<void>;
@@ -59,7 +59,7 @@
 		onNavigationCollapsedChange: (collapsed: boolean) => void;
 		onInspectorCollapsedChange: (collapsed: boolean) => void;
 		onInspectorWidthChange: (width: number) => void;
-		onThemePreferenceChange?: (preference: ThemePreference) => void;
+		onThemePreferenceChange: (preference: ThemePreference) => void;
 		onPersistQuickCapturePreference: () => void;
 		onOpenTrash: () => void | Promise<void>;
 		onOpenLicenses: () => void | Promise<void>;
@@ -120,6 +120,13 @@
 		const destination = event.currentTarget.value === "unplaced" ? "unplaced" : "root";
 		quickCapturePreference = { ...quickCapturePreference, destination };
 		onPersistQuickCapturePreference();
+	}
+
+	function updateThemePreference(event: Event & { currentTarget: HTMLSelectElement }): void {
+		const value = event.currentTarget.value;
+		if (isThemePreference(value)) {
+			onThemePreferenceChange(value);
+		}
 	}
 </script>
 
@@ -182,7 +189,7 @@
 			<h2 id="option-display-title">表示</h2>
 			<label>
 				<span>カラーテーマ</span>
-				<select value={themePreference} onchange={(event) => onThemePreferenceChange?.(event.currentTarget.value as ThemePreference)}>
+				<select value={themePreference} onchange={updateThemePreference}>
 					<option value="auto">Auto (システム設定に従う)</option>
 					<option value="dark">Dark (ダーク)</option>
 					<option value="light">Light (ライト)</option>

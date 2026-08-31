@@ -40,7 +40,7 @@
 		<div class="help-heading__title">
 			<div>
 				<h1 id="help-title">Radioraの使い方</h1>
-				<p>思考のアウトライン作成・系統管理・意味関係の連携を、必要なときに確認できます。</p>
+				<p>よく使う操作を、必要なときにすぐ確認できます。</p>
 			</div>
 			<div class="help-key" aria-label="F1でヘルプを開く">
 				<kbd>F1</kbd>
@@ -51,27 +51,23 @@
 
 	<div class="help-grid" aria-label="ヘルプのトピック">
 		<article class="help-card help-card--accent">
-			<p class="help-card__label">START & CAPTURE</p>
-			<h2>アウトラインとクイック入力</h2>
+			<p class="help-card__label">START HERE</p>
+			<h2>アウトラインに項目を追加する</h2>
 			<ol>
-				<li>アウトライン末尾の入力行から項目を追加し、<kbd>Enter</kbd>で兄弟、<kbd>Tab</kbd>で階層化します。</li>
-				<li>「クイック入力」で、思いついたテキストをすぐ記録できます。</li>
-				<li>クイック入力の保存先は、Option画面から「ルート直下」または「未配置箱」を選択できます。</li>
+				<li>アウトライン末尾の入力行から、本文をその場で追加します。</li>
+				<li>画面上部の入力欄は検索が中心です。候補を <kbd>Enter</kbd> で開けます。</li>
+				<li>新しい本文を上部から作る場合は <kbd>Shift</kbd> + <kbd>Enter</kbd> を使い、保存先はOptionで選びます。</li>
 			</ol>
 			<div class="help-actions">
 				<button type="button" onclick={onOpenOutline}>アウトラインを開く</button>
-				<button type="button" onclick={onOpenUnplaced}>未配置箱を見る</button>
+				<button type="button" onclick={onOpenOptions}>入力先を設定</button>
 			</div>
 		</article>
 
 		<article class="help-card">
-			<p class="help-card__label">VIEW & EDIT</p>
-			<h2>日々の確認と長文執筆</h2>
+			<p class="help-card__label">ORGANIZE</p>
+			<h2>アウトラインを育てる</h2>
 			<ul>
-				<li>「今日」ビューで日々の更新履歴やタイムラインを確認できます。</li>
-				<li>重要な項目には「栞」を挟んで素早くアクセスできます。</li>
-				<li>最後に作業していた「再開位置」は自動保持され、作業をスムーズに再開できます。</li>
-				<li>集中執筆用の「長文編集モード」でアウトラインと行き来しながら編集できます。</li>
 				<li><kbd>Enter</kbd>で兄弟、<kbd>Shift</kbd> + <kbd>Enter</kbd>で本文中の改行を入力します。</li>
 				<li><kbd>Tab</kbd> / <kbd>Shift</kbd> + <kbd>Tab</kbd>で階層を移動できます。</li>
 				<li>項目を選ぶと、右側の詳細ペインから配置・関係・履歴を確認できます。</li>
@@ -83,48 +79,24 @@
 		</article>
 
 		<article class="help-card">
-			<p class="help-card__label">CONNECT & REFERENCE</p>
-			<h2>参照と意味関係</h2>
+			<p class="help-card__label">CONNECT</p>
+			<h2>見つけて、つなぐ</h2>
 			<ul>
-				<li>本文中で <kbd>[[</kbd> を入力すると、既存の項目や版への「内部参照」（Work/Revisionリンク）を作成します。</li>
-				<li>本文中で <kbd>@</kbd> を入力すると、項目間の連想をつなぐ「意味関係検索」を実行します（内部参照ではありません）。</li>
-				<li>詳細ペインから意味関係（<code>DEF</code> 定義関係など、起点・種別・終点）を明示的に結べます。</li>
 				<li>本文中で <kbd>@</kbd> を入力すると、別の項目へのリンクを作れます。</li>
 				<li>選択した項目から関連を追加すると、リンク元・種類・リンク先を確認して保存できます。</li>
 				<li><code>DEF</code>（定義）は、リンク元がリンク先の概念や用語を定義する有向関係です。</li>
 				<li>タグ管理や重複候補は左のナビゲーションから開き、候補を確認してから操作します。</li>
 			</ul>
-			<p class="help-note">意味関係や参照リンクは自動確定されません。内容を確認してから保存してください。</p>
+			<p class="help-note">関係や重複候補は自動で確定されません。内容を確認してから採用してください。</p>
 		</article>
 
 		<article class="help-card">
-			<p class="help-card__label">LINEAGE & REVISION</p>
-			<h2>版・別稿・系統と復元</h2>
+			<p class="help-card__label">PRESERVE</p>
+			<h2>保存と持ち出し</h2>
 			<ul>
-				<li>作業中の本文を「版として残す」で確定し、新しい「別稿（Branch）」として分岐できます。</li>
-				<li>自動記録される「復旧履歴（Recovery Snapshot）」から、過去の編集状態へ安全に復帰できます。</li>
-				<li>「比較」ペインで2つの版や作業コピーの差分（追加・削除・変更なし）を確認できます。</li>
-				<li>「全体系統」と「版系統」で関係履歴を確認でき、Tree表示ではChronology/Lineageを切り替えられます。</li>
-			</ul>
-		</article>
-
-		<article class="help-card">
-			<p class="help-card__label">DISCOVERY & STUB</p>
-			<h2>発見・Query・重複候補</h2>
-			<ul>
-				<li>「Query」を実行し、条件に一致する項目を投影表示できます。</li>
-				<li>「Stub一覧」でリンク先が未作成の項目を一覧し、作成文脈を確認して実体化できます。</li>
-				<li>「重複候補」からタイトルや意味関係の一致を根拠に、統合・関連付け・却下を判断できます。</li>
-			</ul>
-		</article>
-
-		<article class="help-card">
-			<p class="help-card__label">STORAGE & PRESERVE</p>
-			<h2>保存・移行・バックアップ</h2>
-			<ul>
-				<li>データはローカルの <strong>SQLite</strong> に安全に保存されます。旧SurrealDBデータをお持ちの場合は、READMEの移行手順をご確認ください。</li>
-				<li>Markdown書き出しはRadiora形式・ポータブル形式・Obsidian Wikiリンク形式に対応しています。</li>
-				<li>OPML（階層交換）の取り込み/書き出し、および完全JSONバックアップからの復元に対応しています。</li>
+				<li>Markdownは現在のアウトラインを文章として書き出します。</li>
+				<li>OPMLは階層と本文の交換用、JSONバックアップはRadioraの状態全体の保存用です。</li>
+				<li>バックアップからの復元は現在の状態を置き換えるため、実行前に内容を確認してください。</li>
 			</ul>
 			<div class="help-actions">
 				<button type="button" onclick={onOpenOptions}>Optionを開く</button>
@@ -264,7 +236,7 @@
 		font-family: var(--font-serif);
 		font-size: 20px;
 		font-weight: normal;
-		color: #edf9fa;
+		color: var(--text);
 	}
 	.help-card__label {
 		color: var(--cyan);
@@ -275,9 +247,8 @@
 	.help-card ul {
 		display: grid;
 		gap: 8px;
-		margin: 0;
 		padding-left: 20px;
-		color: var(--muted);
+		color: var(--text);
 		font-size: 12px;
 		line-height: 1.65;
 	}
@@ -290,8 +261,8 @@
 		padding: 1px 5px;
 		border: 1px solid var(--border-bright);
 		border-radius: 4px;
-		background: var(--surface-raised);
-		color: var(--cyan);
+		background: var(--surface);
+		color: var(--cyan-soft);
 		font-family: inherit;
 		font-size: .9em;
 		white-space: nowrap;

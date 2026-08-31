@@ -87,13 +87,7 @@
 		loadUiLayoutPreference,
 		saveUiLayoutPreference,
 	} from "./ui_layout_preference";
-	import {
-		applyThemeToDocument,
-		listenSystemThemeChange,
-		loadThemePreference,
-		saveThemePreference,
-		type ThemePreference,
-	} from "./theme_preference";
+	import { createThemeController } from "./theme_controller.svelte.ts";
 	import {
 		loadTreeProjectionPreference,
 		saveTreeProjectionPreference,
@@ -233,7 +227,6 @@
 	let markdownExportNotice = $state("");
 	let markdownExportPreference = $state(loadMarkdownExportPreference());
 	let quickCapturePreference = $state(loadQuickCapturePreference());
-	let themePreference = $state<ThemePreference>(loadThemePreference());
 	let opmlNotice = $state("");
 	let jsonBackupNotice = $state("");
 	const initialUiLayoutPreference = loadUiLayoutPreference();
@@ -244,6 +237,7 @@
 	let treeProjectionPreference = $state<TreeProjection>(loadTreeProjectionPreference());
 	let treeFilter = $state<GlobalLineageFilter>(loadTreeFilterPreference());
 	let globalLineageRequest = 0;
+	const themeController = createThemeController();
 	const workController = createWorkController({
 		api,
 		getSnapshot: () => snapshot,
@@ -516,12 +510,7 @@
 	});
 
 	onMount(() => {
-		applyThemeToDocument(themePreference);
-		const unlistenSystemTheme = listenSystemThemeChange(() => {
-			if (themePreference === "auto") {
-				applyThemeToDocument("auto");
-			}
-		});
+		const cleanupTheme = themeController.init();
 		let cancelled = false;
 		async function restoreStartupSnapshotCache(): Promise<void> {
 			try {
@@ -627,7 +616,7 @@
 		void monitorStartup();
 		return () => {
 			cancelled = true;
-			unlistenSystemTheme();
+			cleanupTheme();
 			persistStartupSnapshotCache();
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
 			document.removeEventListener("visibilitychange", flushWhenHidden);
@@ -890,12 +879,6 @@
 	function setTreeProjectionPreference(next: TreeProjection): void {
 		treeProjectionPreference = next;
 		saveTreeProjectionPreference(next);
-	}
-
-	function setThemePreference(next: ThemePreference): void {
-		themePreference = next;
-		saveThemePreference(next);
-		applyThemeToDocument(next);
 	}
 
 	function startInspectorResize(event: PointerEvent): void {
@@ -1515,12 +1498,13 @@
 
 	function openRecentNavigationItem(item: RecentNavigationItem): void {
 		const outlineItem = itemById.get(item.id);
-if (outlineItem) void openRecentItem(outlineItem);
+		if (outlineItem) void openRecentItem(outlineItem);
 	}
 
 	function openHelp(): void {
 		viewMode = "help";
 	}
+
 	async function loadEmergence(id: string): Promise<void> {
 		await emergenceController.load(id);
 	}
@@ -1613,7 +1597,6 @@ if (outlineItem) void openRecentItem(outlineItem);
 	}
 
 	async function removeLink(link: OutlineLink): Promise<void> {
-		if (link.origin === "derived") return;
 		await api.deleteLink(link.fromId, link.toId, link.type);
 		await load();
 	}
@@ -2209,7 +2192,7 @@ if (outlineItem) void openRecentItem(outlineItem);
 		{bookmarks}
 		{inspectorCollapsed}
 		{workingCopySaveStatus}
-		{themePreference}
+		themePreference={themeController.preference}
 		onSetViewMode={(mode) => (viewMode = mode)}
 		onQuickCaptureInput={(val) => {
 			navigationController.quickCaptureText = val;
@@ -2224,7 +2207,7 @@ if (outlineItem) void openRecentItem(outlineItem);
 		onRemoveBookmark={removeBookmark}
 		onToggleInspector={toggleInspector}
 		onRetryWorkingCopySave={retryWorkingCopySave}
-		onThemePreferenceChange={setThemePreference}
+		onThemePreferenceChange={(preference) => themeController.setPreference(preference)}
 		{titleFor}
 	/>
 
@@ -2359,7 +2342,7 @@ if (outlineItem) void openRecentItem(outlineItem);
 				{navCollapsed}
 				{inspectorCollapsed}
 				{inspectorWidth}
-				{themePreference}
+				themePreference={themeController.preference}
 				onPersistMarkdownExportPreference={persistMarkdownExportPreference}
 				onExportMarkdown={exportMarkdown}
 				onImportOpml={importOpmlFile}
@@ -2370,7 +2353,7 @@ if (outlineItem) void openRecentItem(outlineItem);
 				onNavigationCollapsedChange={setNavigationCollapsed}
 				onInspectorCollapsedChange={setInspectorCollapsed}
 				onInspectorWidthChange={setInspectorWidth}
-				onThemePreferenceChange={setThemePreference}
+				onThemePreferenceChange={(preference) => themeController.setPreference(preference)}
 				onPersistQuickCapturePreference={persistQuickCapturePreference}
 				onOpenTrash={() => void openTrash()}
 				onOpenLicenses={openLicenses}
@@ -2456,14 +2439,13 @@ if (outlineItem) void openRecentItem(outlineItem);
 				{/key}
 			{:else}
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.work}を選択してください。</p></section>
-				{/if}
+			{/if}
 		{:else if globalLineage}
 			<GlobalLineage
 				projection={globalLineage}
 				filter={activeGlobalLineageFilter}
 				onFilterChange={handleGlobalLineageFilterChange}
 				{selectedId}
-				selectedWorkId={selectedItem?.workId ?? null}
 				onSelect={(id) => selectOccurrence(id)}
 				onOpen={(id) => void openTreeOccurrence(id)}
 				onContextMenu={(id, event) => openOccurrenceContextMenu(id, "tree", event)}

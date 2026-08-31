@@ -118,8 +118,8 @@
 		overflow: auto;
 		padding: 28px clamp(24px, 5vw, 72px) 60px;
 		background:
-			radial-gradient(circle at 18% 10%, rgb(37 198 209 / 6%), transparent 36%),
-			#07101a;
+			radial-gradient(circle at 18% 10%, color-mix(in srgb, var(--cyan) 6%, transparent) 0, transparent 36%),
+			var(--bg);
 	}
 	header {
 		display: flex;
@@ -127,7 +127,7 @@
 		justify-content: space-between;
 		gap: 30px;
 		padding-bottom: 18px;
-		border-bottom: 1px solid #17313e;
+		border-bottom: 1px solid var(--border);
 	}
 	header p,
 	header h1 {
@@ -135,7 +135,7 @@
 	}
 	header h1 {
 		margin-top: 4px;
-		color: #eafcfd;
+		color: var(--text);
 		font: 25px var(--font-serif);
 	}
 	.back-button {
@@ -143,13 +143,13 @@
 		padding: 0;
 		border: 0;
 		background: transparent;
-		color: #9fb3bc;
+		color: var(--muted);
 		cursor: pointer;
 	}
-	.back-button:hover { color: #eafcfd; }
+	.back-button:hover { color: var(--text); }
 	header > p {
 		max-width: 420px;
-		color: #7f949e;
+		color: var(--muted);
 		font-size: 11px;
 		line-height: 1.6;
 		text-align: right;
@@ -167,7 +167,7 @@
 		bottom: 0;
 		left: 16px;
 		width: 1px;
-		background: #28546a;
+		background: var(--border);
 		content: "";
 	}
 	.revision-lineage li {
@@ -180,22 +180,22 @@
 		left: 11px;
 		width: 11px;
 		height: 11px;
-		border: 2px solid #25c6d1;
+		border: 2px solid var(--cyan);
 		border-radius: 50%;
-		background: #07101a;
-		box-shadow: 0 0 8px rgb(37 198 209 / 60%);
+		background: var(--bg);
+		box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 60%, transparent);
 		content: "";
 	}
 	.revision-lineage li.merge::before {
-		border-color: #f2a93b;
+		border-color: var(--amber);
 		border-radius: 2px;
 		transform: rotate(45deg);
 	}
 	.revision-card {
 		padding: 15px 16px;
-		border: 1px solid #17313e;
+		border: 1px solid var(--border);
 		border-radius: 8px;
-		background: rgb(8 18 28 / 92%);
+		background: var(--surface);
 	}
 	.revision-title {
 		display: grid;
@@ -206,17 +206,17 @@
 	.revision-title > span,
 	.branch-heads span {
 		padding: 2px 6px;
-		border: 1px solid #28546a;
+		border: 1px solid var(--border);
 		border-radius: 4px;
-		color: #73dce3;
+		color: var(--cyan);
 		font-size: 9px;
 	}
 	.revision-title strong {
-		color: #dce7ec;
+		color: var(--text);
 		font-size: 13px;
 	}
 	.revision-title time {
-		color: #657681;
+		color: var(--muted);
 		font-size: 10px;
 	}
 	.branch-heads {
@@ -234,61 +234,61 @@
 		align-items: center;
 		gap: 7px;
 		margin-top: 12px;
-		color: #7f949e;
+		color: var(--muted);
 		font-size: 10px;
 	}
 	.revision-parents code {
 		padding: 3px 6px;
 		border-radius: 4px;
-		background: #0d1b26;
-		color: #b6c9d1;
+		background: var(--surface-raised);
+		color: var(--text);
 	}
 	.revision-parents em {
 		font-style: normal;
 	}
 	.revision-card button {
 		margin-top: 12px;
-		border: 1px solid #28546a;
+		border: 1px solid var(--border);
 		border-radius: 5px;
-		background: #0d1b26;
-		color: #b6c9d1;
+		background: var(--surface-raised);
+		color: var(--text);
 		font-size: 10px;
 		line-height: 27px;
 		cursor: pointer;
 	}
 	.revision-card button:hover {
-		border-color: #25c6d1;
-		color: #eafcfd;
+		border-color: var(--cyan);
+		color: var(--cyan);
 	}
 	.unconfirmed-branches {
 		max-width: 820px;
 		margin: 0 auto;
 		padding-top: 18px;
-		border-top: 1px solid #17313e;
+		border-top: 1px solid var(--border);
 	}
 	.unconfirmed-branches h2 {
 		margin: 0 0 10px;
-		color: #b6c9d1;
+		color: var(--muted);
 		font-size: 12px;
 	}
 	.unconfirmed-branches p:not(.lineage-empty) {
 		display: flex;
 		justify-content: space-between;
 		margin: 6px 0;
-		color: #dce7ec;
+		color: var(--text);
 		font-size: 11px;
 	}
 	.unconfirmed-branches button {
-		border: 1px solid #28546a;
+		border: 1px solid var(--border);
 		border-radius: 5px;
-		background: #0d1b26;
-		color: #b6c9d1;
+		background: var(--surface-raised);
+		color: var(--text);
 		font-size: 10px;
 		cursor: pointer;
 	}
 	.unconfirmed-branches span,
 	.lineage-empty {
-		color: #657681;
+		color: var(--muted);
 	}
 	.lineage-empty {
 		margin: 36px auto;

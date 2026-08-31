@@ -53,7 +53,7 @@
 		bookmarks: readonly Bookmark[];
 		inspectorCollapsed: boolean;
 		workingCopySaveStatus: WorkingCopySaveStatusValue | null;
-		themePreference?: ThemePreference;
+		themePreference: ThemePreference;
 		onSetViewMode: (mode: "outline" | "globalLineage") => void;
 		onQuickCaptureInput: (text: string) => void;
 		onQuickCaptureKeydown: (event: KeyboardEvent) => void;
@@ -65,7 +65,7 @@
 		onRemoveBookmark: (id: string) => void;
 		onToggleInspector: () => void;
 		onRetryWorkingCopySave: () => void;
-		onThemePreferenceChange?: (preference: ThemePreference) => void;
+		onThemePreferenceChange: (preference: ThemePreference) => void;
 		titleFor: (item: OutlineItem) => string;
 	} = $props();
 
@@ -166,9 +166,7 @@
 				<button type="button" aria-label={`${vocabulary.bookmark}を削除`} onclick={() => onRemoveBookmark(bookmark.id)}>×</button>
 			</span>
 		{/each}
-		{#if onThemePreferenceChange}
-			<ThemeSwitcher {themePreference} {onThemePreferenceChange} />
-		{/if}
+		<ThemeSwitcher {themePreference} {onThemePreferenceChange} />
 		<button
 			class="inspector-jump"
 			type="button"
@@ -233,9 +231,9 @@
 		color: var(--text);
 	}
 	.view-switcher button.active {
-		background: var(--cyan);
-		color: var(--cyan-fg, var(--bg));
-		box-shadow: 0 0 18px color-mix(in srgb, var(--cyan) 18%, transparent);
+		background: var(--view-switcher-active-bg, #0d6675);
+		color: var(--view-switcher-active-text, #ffffff);
+		box-shadow: 0 0 18px var(--view-switcher-active-shadow, rgb(37 198 209 / 18%));
 	}
 	.view-switcher button:disabled {
 		cursor: not-allowed;

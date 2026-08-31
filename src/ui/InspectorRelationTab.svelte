@@ -201,7 +201,7 @@
 	}
 	.discoveries article p,
 	.discoveries article ol {
-		color: #9aadb6;
+		color: var(--muted);
 		font-size: 10px;
 		line-height: 1.5;
 	}
@@ -214,7 +214,7 @@
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		padding: 6px 8px;
-		background: var(--surface);
+		background: var(--surface-raised);
 		color: var(--text);
 		font-size: 10px;
 	}

@@ -130,22 +130,21 @@
 <style>
 	.sidebar-pane { min-width: 0; }
 	.pane-heading h2 { margin: 3px 0 12px; color: var(--text); font-size: 13px; }
-	.eyebrow { margin: 0; color: var(--cyan-soft); font-size: 9px; letter-spacing: .16em; }
-	.pane-heading button { margin-bottom: 10px; border: 1px solid var(--border-bright); border-radius: 5px; background: var(--surface-raised); color: var(--muted); font-size: 10px; line-height: 26px; cursor: pointer; }
-	.pane-heading button:hover { border-color: var(--cyan); color: var(--text); }
+	.pane-heading button { margin-bottom: 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-raised); color: var(--text); font-size: 10px; line-height: 26px; cursor: pointer; }
+	.pane-heading button:hover { border-color: var(--cyan); color: var(--cyan); }
 	.pane-empty { color: var(--muted); font-size: 11px; line-height: 1.6; }
 	.cluster-members { margin: 0; padding: 0; list-style: none; }
-	.cluster-members li { position: relative; margin-bottom: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-raised); cursor: pointer; outline: none; }
+	.cluster-members li { position: relative; margin-bottom: 8px; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); cursor: pointer; outline: none; }
 	.cluster-members li:hover, .cluster-members li:has(.member-main:hover), .cluster-members li:has(.member-main:focus), .cluster-members li.selected { border-color: var(--cyan); background: var(--surface-hover); }
-	.cluster-members li.selected { box-shadow: inset 0 0 0 1px rgb(242 169 59 / 55%); }
+	.cluster-members li.selected { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 55%, transparent); }
 	.member-label { margin: 0; color: var(--text); font-size: 12px; line-height: 1.5; }
 	.member-links { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; padding: 0; border: 0; min-inline-size: 0; }
-	.link-chip, .link-stub { padding: 2px 6px; border: 1px solid var(--border-bright); border-radius: 4px; color: var(--muted); font-size: 9px; }
-	.link-chip.type-from { border-color: var(--cyan); color: var(--cyan-soft); }
+	.link-chip, .link-stub { padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font-size: 9px; }
+	.link-chip.type-from { border-color: var(--cyan); color: var(--cyan); }
 	.link-chip.type-like { border-color: var(--violet); color: var(--violet); }
 	.link-chip.type-fix { border-color: var(--amber); color: var(--amber); }
 	.link-chip.type-vs { border-color: var(--red); color: var(--red); }
 	.link-stub { border-style: dashed; opacity: .7; }
-	.open-member { margin-top: 8px; border: 1px solid var(--border-bright); border-radius: 4px; background: var(--surface-raised); color: var(--muted); font-size: 10px; line-height: 24px; cursor: pointer; }
-	.open-member:hover { border-color: var(--cyan); color: var(--text); }
+	.open-member { margin-top: 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-raised); color: var(--text); font-size: 10px; line-height: 24px; cursor: pointer; }
+	.open-member:hover { border-color: var(--cyan); color: var(--cyan); }
 </style>

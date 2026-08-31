@@ -41,11 +41,10 @@
 <style>
 	.sidebar-pane { min-width: 0; }
 	.pane-heading h2 { margin: 3px 0 12px; color: var(--text); font-size: 13px; }
-	.eyebrow { margin: 0; color: var(--cyan-soft); font-size: 9px; letter-spacing: .16em; }
 	.filter-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; color: var(--text); font-size: 12px; cursor: pointer; }
 	.filter-toggle input { accent-color: var(--cyan); }
 	.filter-types { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-	.filter-actions { display: flex; gap: 6px; margin-top: 14px; }
-	.filter-actions button { border: 1px solid var(--border-bright); border-radius: 5px; background: var(--surface-raised); color: var(--muted); font-size: 10px; line-height: 26px; cursor: pointer; }
-	.filter-actions button:hover { border-color: var(--cyan); color: var(--text); }
+	.filter-actions { display: flex; gap: 8px; margin-top: 12px; }
+	.filter-actions button { border: 1px solid var(--border); border-radius: 5px; background: var(--surface-raised); color: var(--text); font-size: 10px; line-height: 26px; cursor: pointer; }
+	.filter-actions button:hover { border-color: var(--cyan); color: var(--cyan); }
 </style>

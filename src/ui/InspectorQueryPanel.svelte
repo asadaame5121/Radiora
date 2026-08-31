@@ -149,7 +149,7 @@
 		border: 1px solid var(--border-bright);
 		border-radius: 6px;
 		padding: 6px 8px;
-		background: #02060a;
+		background: var(--surface-raised);
 		color: var(--text);
 		font-family: var(--font-mono);
 		font-size: 10px;
@@ -172,7 +172,7 @@
 	}
 	.query-error {
 		margin: 0;
-		color: #ff9f92;
+		color: var(--red);
 		font-size: 10px;
 		white-space: pre-wrap;
 	}

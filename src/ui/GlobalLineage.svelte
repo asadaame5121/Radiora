@@ -11,7 +11,6 @@
 	let {
 		projection,
 		selectedId = null,
-		selectedWorkId = null,
 		filter,
 		onFilterChange,
 		onSelect,
@@ -21,7 +20,6 @@
 	}: {
 		projection: GlobalLineageProjection;
 		selectedId?: string | null;
-		selectedWorkId?: string | null;
 		filter: GlobalLineageFilter;
 		onFilterChange: (filter: GlobalLineageFilter) => void;
 		onSelect: (id: string | null) => void;
@@ -87,7 +85,6 @@
 			bind:this={treeElement}
 			snapshot={projection.snapshot}
 			{selectedId}
-			{selectedWorkId}
 			{onSelect}
 			{onOpen}
 			{onContextMenu}
@@ -118,7 +115,6 @@
 		min-height: 0;
 		overflow: hidden;
 		background: var(--bg);
-		color: var(--text);
 	}
 	.lineage-heading {
 		position: absolute;
@@ -135,11 +131,6 @@
 	.lineage-heading p,
 	.lineage-heading h1 {
 		margin: 0;
-	}
-	.lineage-heading .eyebrow {
-		color: var(--cyan-soft);
-		font-size: 9px;
-		letter-spacing: .16em;
 	}
 	.lineage-heading h1 {
 		margin-top: 3px;

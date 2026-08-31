@@ -176,7 +176,7 @@
 		color: var(--text);
 	}
 	.sidebar-tabs button[data-state="active"] {
-		background: var(--surface-hover);
+		background: var(--surface-raised);
 		color: var(--text);
 		box-shadow: inset 0 0 0 1px var(--cyan);
 	}
@@ -192,7 +192,7 @@
 			display: block;
 			height: 30px;
 			padding: 0 12px;
-			border: 1px solid var(--border-bright);
+			border: 1px solid var(--border);
 			border-radius: 6px;
 			background: color-mix(in srgb, var(--surface) 88%, transparent);
 			color: var(--text);
@@ -222,7 +222,7 @@
 			display: block;
 			width: 28px;
 			height: 28px;
-			border: 1px solid var(--border-bright);
+			border: 1px solid var(--border);
 			border-radius: 5px;
 			background: var(--surface-raised);
 			color: var(--text);
