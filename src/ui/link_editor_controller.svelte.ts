@@ -138,7 +138,10 @@ export class LinkEditorController {
 	}
 
 	async reverseLink(link: OutlineLink): Promise<void> {
-		if (this.activeLinkId || this.submitting || isSymmetricLinkType(link.type) || link.origin === "derived") return;
+		if (
+			this.activeLinkId || this.submitting || isSymmetricLinkType(link.type) ||
+			link.origin === "derived"
+		) return;
 		try {
 			this.activeLinkId = link.id;
 			this.searchError = "";
