@@ -194,7 +194,7 @@
 			padding: 0 12px;
 			border: 1px solid var(--border);
 			border-radius: 6px;
-			background: color-mix(in srgb, var(--surface) 88%, transparent);
+			background: var(--surface-raised);
 			color: var(--text);
 			font-size: 11px;
 			cursor: pointer;
