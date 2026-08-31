@@ -42,5 +42,5 @@
 	.promoted-lineage article { margin-bottom: 10px; padding: 11px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
 	.promoted-lineage article div { display: flex; align-items: center; gap: 8px; }
 	.promoted-lineage article p { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
-	.lineage-kind { padding: 2px 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--cyan); background: var(--surface-raised); font-size: 9px; }
+	.lineage-kind { padding: 2px 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--text); background: var(--surface-raised); font-size: 9px; }
 </style>

@@ -44,9 +44,9 @@
 		--amber: #c27803;
 		--violet: #7e22ce;
 		--red: #d63b2c;
-		--view-switcher-active-bg: #d63b2c;
-		--view-switcher-active-text: #f4f0e6;
-		--view-switcher-active-shadow: rgb(214 59 44 / 18%);
+		--view-switcher-active-bg: #c93426;
+		--view-switcher-active-text: #ffffff;
+		--view-switcher-active-shadow: rgb(201 52 38 / 18%);
 		color-scheme: light;
 	}
 }
@@ -65,9 +65,9 @@
 	--amber: #c27803;
 	--violet: #7e22ce;
 	--red: #d63b2c;
-	--view-switcher-active-bg: #d63b2c;
-	--view-switcher-active-text: #f4f0e6;
-	--view-switcher-active-shadow: rgb(214 59 44 / 18%);
+	--view-switcher-active-bg: #c93426;
+	--view-switcher-active-text: #ffffff;
+	--view-switcher-active-shadow: rgb(201 52 38 / 18%);
 	color-scheme: light;
 }
 

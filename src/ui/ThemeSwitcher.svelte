@@ -69,8 +69,8 @@
 		background: var(--surface-hover);
 	}
 	.theme-switcher button.active {
-		background: var(--cyan);
-		color: var(--bg);
+		background: var(--view-switcher-active-bg);
+		color: var(--view-switcher-active-text);
 		font-weight: 600;
 	}
 	@media (max-width: 640px) {
