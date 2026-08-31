@@ -22,7 +22,8 @@
 		"test:mutation:projections": "stryker run stryker.projections.config.mjs",
 		"test:mutation:domain": "stryker run stryker.domain.config.mjs",
 		"test:mutation:storage": "stryker run stryker.storage.config.mjs",
-		"test:mutation:controllers": "stryker run stryker.config.mjs"
+		"test:mutation:controllers": "stryker run stryker.config.mjs",
+		"prepare": "husky"
 	},
 	"dependencies": {
 		"bits-ui": "2.18.1",
@@ -49,7 +50,9 @@
 		"@vitest/browser-playwright": "4.1.10",
 		"@vitest/coverage-v8": "4.1.10",
 		"commonmark": "0.31.2",
+		"husky": "^9.1.7",
 		"jscpd": "5.0.12",
+		"lint-staged": "^17.4.1",
 		"playwright": "1.58.2",
 		"storybook": "10.5.7",
 		"surrealdb": "^2.0.8",
