@@ -177,7 +177,7 @@
 		overflow: hidden !important;
 	}
 	:global(.row:not(.selected):not(:focus-within)) .markdown-editor-host :global(.overtype-preview) {
-		color: #9aabb2 !important;
+		color: var(--theme-muted, #9aabb2) !important;
 	}
 	:global(.row.has-body:not(.selected):not(:focus-within)) .markdown-editor-host :global(.overtype-preview > div) {
 		overflow: hidden !important;
@@ -188,7 +188,7 @@
 		color: var(--text) !important;
 	}
 	:global(.row.has-body:not(.selected):not(:focus-within)) .markdown-editor-host :global(.overtype-preview > div:nth-child(n + 2)) {
-		color: #718894 !important;
+		color: var(--theme-muted, #718894) !important;
 	}
 	:global(.row.has-body:not(.selected):not(:focus-within)) .markdown-editor-host :global(.overtype-preview > div:nth-child(n + 3)) {
 		display: none !important;

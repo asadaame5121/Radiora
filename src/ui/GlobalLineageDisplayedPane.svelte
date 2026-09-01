@@ -38,9 +38,9 @@
 <style>
 	.sidebar-pane { min-width: 0; }
 	.pane-heading h2 { margin: 3px 0 12px; color: var(--text); font-size: 13px; }
-	.empty, .muted { color: var(--muted); font-size: 11px; line-height: 1.6; }
-	.promoted-lineage article { margin-bottom: 10px; padding: 11px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); }
+	.empty, .muted { color: var(--theme-muted, #657681); font-size: 11px; line-height: 1.6; }
+	.promoted-lineage article { margin-bottom: 10px; padding: 11px; border: 1px solid var(--theme-border, #17313e); border-radius: 7px; background: var(--theme-surface, #07121a); }
 	.promoted-lineage article div { display: flex; align-items: center; gap: 8px; }
-	.promoted-lineage article p { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
-	.lineage-kind { padding: 2px 5px; border: 1px solid var(--border); border-radius: 4px; color: var(--text); background: var(--surface-raised); font-size: 9px; }
+	.promoted-lineage article p { margin: 8px 0 0; color: var(--theme-muted, #9fb3bc); font-size: 11px; }
+	.lineage-kind { padding: 2px 5px; border: 1px solid var(--border-bright); border-radius: 4px; color: var(--theme-text, #73dce3); font-size: 9px; }
 </style>

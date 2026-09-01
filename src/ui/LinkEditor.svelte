@@ -265,8 +265,8 @@
 		color: var(--text);
 	}
 	.link-editor-link-actions button.danger:hover:not(:disabled) {
-		border-color: #71433d;
-		color: #ffb8af;
+		border-color: var(--theme-error-border, #71433d);
+		color: var(--theme-error-text, #ffb8af);
 	}
 	.link-editor-form-row {
 		display: grid;
@@ -312,7 +312,7 @@
 		padding: 6px 8px;
 		border-left: 2px solid var(--red);
 		background: var(--surface-hover);
-		color: #ffb8af;
+		color: var(--theme-error-text, #ffb8af);
 	}
 	.link-editor-results {
 		max-height: 190px;

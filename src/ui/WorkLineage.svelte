@@ -118,8 +118,8 @@
 		overflow: auto;
 		padding: 28px clamp(24px, 5vw, 72px) 60px;
 		background:
-			radial-gradient(circle at 18% 10%, color-mix(in srgb, var(--cyan) 6%, transparent) 0, transparent 36%),
-			var(--bg);
+			radial-gradient(circle at 18% 10%, color-mix(in srgb, var(--cyan) 6%, transparent), transparent 36%),
+			var(--theme-bg, #07101a);
 	}
 	header {
 		display: flex;
@@ -127,7 +127,7 @@
 		justify-content: space-between;
 		gap: 30px;
 		padding-bottom: 18px;
-		border-bottom: 1px solid var(--border);
+		border-bottom: 1px solid var(--theme-border, #17313e);
 	}
 	header p,
 	header h1 {
@@ -135,7 +135,7 @@
 	}
 	header h1 {
 		margin-top: 4px;
-		color: var(--text);
+		color: var(--theme-text, #eafcfd);
 		font: 25px var(--font-serif);
 	}
 	.back-button {
@@ -143,13 +143,13 @@
 		padding: 0;
 		border: 0;
 		background: transparent;
-		color: var(--muted);
+		color: var(--theme-muted, #9fb3bc);
 		cursor: pointer;
 	}
-	.back-button:hover { color: var(--text); }
+	.back-button:hover { color: var(--theme-text, #eafcfd); }
 	header > p {
 		max-width: 420px;
-		color: var(--muted);
+		color: var(--theme-muted, #7f949e);
 		font-size: 11px;
 		line-height: 1.6;
 		text-align: right;
@@ -167,7 +167,7 @@
 		bottom: 0;
 		left: 16px;
 		width: 1px;
-		background: var(--border);
+		background: var(--border-bright);
 		content: "";
 	}
 	.revision-lineage li {
@@ -182,7 +182,7 @@
 		height: 11px;
 		border: 2px solid var(--cyan);
 		border-radius: 50%;
-		background: var(--bg);
+		background: var(--theme-bg, #07101a);
 		box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 60%, transparent);
 		content: "";
 	}
@@ -193,9 +193,9 @@
 	}
 	.revision-card {
 		padding: 15px 16px;
-		border: 1px solid var(--border);
+		border: 1px solid var(--theme-border, #17313e);
 		border-radius: 8px;
-		background: var(--surface);
+		background: var(--theme-surface, rgb(8 18 28 / 92%));
 	}
 	.revision-title {
 		display: grid;
@@ -206,9 +206,9 @@
 	.revision-title > span,
 	.branch-heads span {
 		padding: 2px 6px;
-		border: 1px solid var(--border);
+		border: 1px solid var(--border-bright);
 		border-radius: 4px;
-		color: var(--cyan);
+		color: var(--theme-cyan, #73dce3);
 		font-size: 9px;
 	}
 	.revision-title strong {
@@ -216,7 +216,7 @@
 		font-size: 13px;
 	}
 	.revision-title time {
-		color: var(--muted);
+		color: var(--theme-muted, #657681);
 		font-size: 10px;
 	}
 	.branch-heads {
@@ -234,41 +234,41 @@
 		align-items: center;
 		gap: 7px;
 		margin-top: 12px;
-		color: var(--muted);
+		color: var(--theme-muted, #7f949e);
 		font-size: 10px;
 	}
 	.revision-parents code {
 		padding: 3px 6px;
 		border-radius: 4px;
-		background: var(--surface-raised);
-		color: var(--text);
+		background: var(--theme-surface-raised, #0d1b26);
+		color: var(--theme-text, #b6c9d1);
 	}
 	.revision-parents em {
 		font-style: normal;
 	}
 	.revision-card button {
 		margin-top: 12px;
-		border: 1px solid var(--border);
+		border: 1px solid var(--border-bright);
 		border-radius: 5px;
-		background: var(--surface-raised);
-		color: var(--text);
+		background: var(--theme-surface-raised, #0d1b26);
+		color: var(--theme-text, #b6c9d1);
 		font-size: 10px;
 		line-height: 27px;
 		cursor: pointer;
 	}
 	.revision-card button:hover {
 		border-color: var(--cyan);
-		color: var(--cyan);
+		color: var(--theme-cyan, #eafcfd);
 	}
 	.unconfirmed-branches {
 		max-width: 820px;
 		margin: 0 auto;
 		padding-top: 18px;
-		border-top: 1px solid var(--border);
+		border-top: 1px solid var(--theme-border, #17313e);
 	}
 	.unconfirmed-branches h2 {
 		margin: 0 0 10px;
-		color: var(--muted);
+		color: var(--theme-muted, #b6c9d1);
 		font-size: 12px;
 	}
 	.unconfirmed-branches p:not(.lineage-empty) {
@@ -279,16 +279,16 @@
 		font-size: 11px;
 	}
 	.unconfirmed-branches button {
-		border: 1px solid var(--border);
+		border: 1px solid var(--border-bright);
 		border-radius: 5px;
-		background: var(--surface-raised);
-		color: var(--text);
+		background: var(--theme-surface-raised, #0d1b26);
+		color: var(--theme-text, #b6c9d1);
 		font-size: 10px;
 		cursor: pointer;
 	}
 	.unconfirmed-branches span,
 	.lineage-empty {
-		color: var(--muted);
+		color: var(--theme-muted, #657681);
 	}
 	.lineage-empty {
 		margin: 36px auto;

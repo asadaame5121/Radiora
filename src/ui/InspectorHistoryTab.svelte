@@ -61,7 +61,7 @@
 		border-radius: 6px;
 		padding: 7px 9px;
 		background: transparent;
-		color: #aebdc5;
+		color: var(--text-secondary);
 		text-align: left;
 		cursor: pointer;
 		font-size: 11px;

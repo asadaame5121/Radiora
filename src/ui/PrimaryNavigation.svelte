@@ -114,7 +114,7 @@
 		min-height: 100vh;
 		padding: 16px 11px;
 		border-right: 1px solid var(--border);
-		background: color-mix(in srgb, var(--surface) 97%, transparent);
+		background: var(--theme-nav-bg, rgb(5 10 16 / 97%));
 	}
 	.primary-nav .brand {
 		min-width: 0;
@@ -177,7 +177,7 @@
 		border-radius: 6px;
 		padding: 7px 9px;
 		background: transparent;
-		color: var(--muted);
+		color: var(--text-secondary);
 		text-align: left;
 		cursor: pointer;
 	}

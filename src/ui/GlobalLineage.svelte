@@ -11,6 +11,7 @@
 	let {
 		projection,
 		selectedId = null,
+		selectedWorkId = null,
 		filter,
 		onFilterChange,
 		onSelect,
@@ -20,6 +21,7 @@
 	}: {
 		projection: GlobalLineageProjection;
 		selectedId?: string | null;
+		selectedWorkId?: string | null;
 		filter: GlobalLineageFilter;
 		onFilterChange: (filter: GlobalLineageFilter) => void;
 		onSelect: (id: string | null) => void;
@@ -85,6 +87,7 @@
 			bind:this={treeElement}
 			snapshot={projection.snapshot}
 			{selectedId}
+			{selectedWorkId}
 			{onSelect}
 			{onOpen}
 			{onContextMenu}
@@ -114,7 +117,7 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
-		background: var(--bg);
+		background: var(--theme-bg, #050a10);
 	}
 	.lineage-heading {
 		position: absolute;
@@ -123,9 +126,9 @@
 		left: 22px;
 		max-width: 390px;
 		padding: 12px 14px;
-		border: 1px solid var(--border);
+		border: 1px solid var(--theme-border, #17313e);
 		border-radius: 8px;
-		background: color-mix(in srgb, var(--surface) 88%, transparent);
+		background: var(--theme-lineage-overlay, rgb(5 10 16 / 88%));
 		pointer-events: none;
 	}
 	.lineage-heading p,
@@ -134,12 +137,12 @@
 	}
 	.lineage-heading h1 {
 		margin-top: 3px;
-		color: var(--text);
+		color: var(--theme-text, #eafcfd);
 		font: 22px var(--font-serif);
 	}
 	.lineage-heading > p:last-child {
 		margin-top: 5px;
-		color: var(--muted);
+		color: var(--theme-muted, #7f949e);
 		font-size: 11px;
 		line-height: 1.6;
 	}

@@ -142,7 +142,7 @@
 		font-family: var(--font-serif);
 		font-size: clamp(24px, 3vw, 34px);
 		font-weight: normal;
-		color: #edf9fa;
+		color: var(--theme-text, #edf9fa);
 	}
 	.tag-browser__heading p:not(.eyebrow),
 	.tag-browser__prompt,
@@ -160,7 +160,7 @@
 		border: 1px solid var(--border);
 		border-radius: 9px;
 		background: radial-gradient(circle at 50% 0, rgb(37 198 209 / 7%), transparent 62%),
-			var(--surface);
+		var(--surface);
 	}
 	.tag-browser__cloud button {
 		display: inline-flex;
@@ -170,7 +170,7 @@
 		border-radius: 999px;
 		padding: 5px 9px;
 		background: transparent;
-		color: #aebdc5;
+		color: var(--text-secondary);
 		line-height: 1.2;
 		cursor: pointer;
 	}
@@ -178,7 +178,7 @@
 	.tag-browser__cloud button.active {
 		border-color: var(--cyan);
 		background: rgb(37 198 209 / 10%);
-		color: #e5fcff;
+		color: var(--theme-text, #e5fcff);
 	}
 	.tag-browser__cloud small {
 		color: var(--muted);

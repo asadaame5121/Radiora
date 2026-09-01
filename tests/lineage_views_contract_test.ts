@@ -48,6 +48,19 @@ Deno.test("global tree clears selection, opens real nodes, and restores its proj
 	assert(app.includes("requestFocus(id)"));
 });
 
+Deno.test("global tree preserves Work-based selection and closure highlighting", async () => {
+	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const global = await readUi("GlobalLineage.svelte");
+	const tree = await readUi("PhylogeneticTree.svelte");
+
+	assert(app.includes("selectedWorkId={selectedItem?.workId ?? null}"));
+	assert(global.includes("selectedWorkId = null"));
+	assert(global.includes("{selectedWorkId}"));
+	assert(tree.includes("resolveTreeSelectionId(snapshot, selectedId, selectedWorkId)"));
+	assert(tree.includes("buildTreeHighlightSet(snapshot, selectionId, hoveredId)"));
+	assert(tree.includes("highlightedIds.has(id)"));
+});
+
 Deno.test("cluster inspection opens the sidebar without moving the central camera", async () => {
 	const tree = await Deno.readTextFile(
 		new URL("../src/ui/PhylogeneticTree.svelte", import.meta.url),

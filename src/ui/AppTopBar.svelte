@@ -195,7 +195,7 @@
 		gap: 16px;
 		padding: 0 20px;
 		border-bottom: 1px solid var(--border);
-		background: color-mix(in srgb, var(--bg) 92%, transparent);
+		background: var(--theme-topbar-bg, rgb(5 9 15 / 92%));
 		backdrop-filter: blur(14px);
 	}
 	.current-location {
@@ -216,7 +216,7 @@
 		padding: 3px;
 		border: 1px solid var(--border);
 		border-radius: 8px;
-		background: var(--surface);
+		background: var(--theme-surface, #04080d);
 	}
 	.view-switcher button {
 		border: 0;
@@ -249,13 +249,13 @@
 		border: 1px solid var(--border-bright);
 		border-radius: 9px;
 		padding: 10px 13px;
-		background: var(--surface);
+		background: var(--theme-surface, #04080d);
 		color: var(--text);
 		outline: none;
 	}
 	.omniwindow > input:focus {
 		border-color: var(--cyan);
-		box-shadow: 0 0 0 2px rgb(37 198 209 / 12%);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--cyan) 12%, transparent);
 	}
 	.search-results {
 		position: absolute;
@@ -299,7 +299,7 @@
 	.search-section {
 		margin: 0;
 		padding: 7px 12px;
-		background: var(--surface-raised);
+		background: var(--theme-surface-raised, #07121c);
 		color: var(--cyan);
 		font-size: 8px;
 		letter-spacing: .15em;
@@ -327,7 +327,7 @@
 		border-radius: 6px;
 		padding: 6px 8px;
 		background: transparent;
-		color: var(--muted);
+		color: var(--text-secondary);
 		font-size: 10px;
 		text-align: left;
 		white-space: nowrap;

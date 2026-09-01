@@ -169,7 +169,7 @@
 	}
 	.backlink-entry span {
 		font-size: 10px;
-		color: #8fa0a8;
+		color: var(--theme-muted, #8fa0a8);
 	}
 	.discoveries {
 		display: grid;
@@ -201,7 +201,7 @@
 	}
 	.discoveries article p,
 	.discoveries article ol {
-		color: var(--muted);
+		color: var(--theme-muted, #9aadb6);
 		font-size: 10px;
 		line-height: 1.5;
 	}
@@ -214,7 +214,7 @@
 		border: 1px solid var(--border);
 		border-radius: 4px;
 		padding: 6px 8px;
-		background: var(--surface-raised);
+		background: var(--theme-surface-raised, #04080d);
 		color: var(--text);
 		font-size: 10px;
 	}

@@ -52,7 +52,7 @@
 		color: var(--amber);
 	}
 	.working-copy-save-status.failed {
-		color: #ffb8af;
+		color: var(--theme-red, #ffb8af);
 	}
 	.working-copy-save-status button {
 		border: 1px solid currentcolor;

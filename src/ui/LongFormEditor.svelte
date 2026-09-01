@@ -128,7 +128,7 @@
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: 6px;
-		color: #afc1c9;
+		color: var(--theme-muted, #afc1c9);
 		font-family: var(--font-serif);
 		font-size: 14px;
 		line-height: 1.75;
