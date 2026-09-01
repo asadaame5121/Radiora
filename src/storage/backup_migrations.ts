@@ -7,6 +7,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
 	ResumePosition,
 	Revision,
 	SavedRuleQuery,
@@ -15,6 +16,7 @@ import type {
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
+import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 
 interface LegacyItem {
 	id: string;
@@ -119,6 +121,7 @@ export interface BackupV5 {
 
 export interface StoredGraphV6 extends StoredGraphV5 {
 	emergenceSuggestions: EmergenceSuggestion[];
+	relationTypeDefinitions?: RelationTypeDefinition[];
 }
 
 export interface BackupV6 {
@@ -128,6 +131,28 @@ export interface BackupV6 {
 	appVersion: string;
 	source: { storageSchemaVersion: 6 };
 	data: StoredGraphV6;
+}
+
+export interface StoredGraphV7 extends StoredGraphV6 {
+	relationTypeDefinitions: RelationTypeDefinition[];
+}
+
+export interface BackupV7 {
+	format: "radiora-backup";
+	schemaVersion: 7;
+	exportedAt: string;
+	appVersion: string;
+	source: { storageSchemaVersion: 7 };
+	data: StoredGraphV7;
+}
+
+export function migrateBackupV6(data: StoredGraphV6): StoredGraphV7 {
+	return {
+		...data,
+		relationTypeDefinitions: data.relationTypeDefinitions
+			? structuredClone(data.relationTypeDefinitions)
+			: BUILT_IN_RELATION_TYPES.map((def) => ({ ...def })),
+	};
 }
 
 export function migrateBackupV5(data: StoredGraphV5): StoredGraphV6 {

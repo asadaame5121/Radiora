@@ -2,7 +2,7 @@ import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import type { GraphStateSnapshot } from "../storage/graph_store.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
-import { JsonBackupService, type JsonBackupV6 } from "./json_backup.ts";
+import { JsonBackupService, type JsonBackupV7 } from "./json_backup.ts";
 
 Deno.test("JSON backup exports every graph entity collection without mutating the store", async () => {
 	const store = new MemoryGraphStore();
@@ -47,11 +47,11 @@ Deno.test("JSON backup exports every graph entity collection without mutating th
 	const source = await new JsonBackupService(store).export(
 		new Date("2026-07-30T09:00:00.000Z"),
 	);
-	const parsed = JSON.parse(source) as JsonBackupV6;
+	const parsed = JSON.parse(source) as JsonBackupV7;
 	assertEquals(parsed.format, "radiora-backup");
-	assertEquals(parsed.schemaVersion, 6);
+	assertEquals(parsed.schemaVersion, 7);
 	assertEquals(parsed.exportedAt, "2026-07-30T09:00:00.000Z");
-	assertEquals(parsed.source, { storageSchemaVersion: 6 });
+	assertEquals(parsed.source, { storageSchemaVersion: 7 });
 	assertEquals(
 		Object.keys(parsed.data).sort(),
 		[
@@ -65,6 +65,7 @@ Deno.test("JSON backup exports every graph entity collection without mutating th
 			"occurrences",
 			"purgeManifests",
 			"recoverySnapshots",
+			"relationTypeDefinitions",
 			"resumePosition",
 			"revisions",
 			"savedRuleQueries",
@@ -100,7 +101,7 @@ Deno.test("current JSON backup restores only after complete validation", async (
 	assertEquals(await targetStore.exportGraphState(), await sourceStore.exportGraphState());
 	assertEquals(source, originalInput);
 
-	const malformed = JSON.parse(source) as JsonBackupV6;
+	const malformed = JSON.parse(source) as JsonBackupV7;
 	malformed.data.branches[0].workId = "missing-work";
 	const before = await targetStore.exportGraphState();
 	await assertRejects(
@@ -144,7 +145,7 @@ Deno.test("future backup versions are rejected before any store write", async ()
 	const current = JSON.parse(
 		await new JsonBackupService(store).export(new Date("2026-07-30T09:00:00.000Z")),
 	) as Record<string, unknown>;
-	current.schemaVersion = 7;
+	current.schemaVersion = 8;
 
 	await assertRejects(
 		() => new JsonBackupService(store).restore(JSON.stringify(current)),
@@ -153,4 +154,54 @@ Deno.test("future backup versions are rejected before any store write", async ()
 	);
 	assertEquals(store.restoreCalls, 0);
 	assertEquals(await store.exportGraphState(), before);
+});
+
+Deno.test("V7 JSON backup restores and round-trips custom relation type definitions", async () => {
+	const sourceStore = new MemoryGraphStore();
+	const base = await sourceStore.exportGraphState();
+	const customDef = {
+		name: "CUSTOM_REL",
+		direction: "directed" as const,
+		builtIn: false,
+		createdAt: "2026-09-01T00:00:00.000Z",
+	};
+	await sourceStore.restoreGraphState({
+		...base,
+		relationTypeDefinitions: [...(base.relationTypeDefinitions ?? []), customDef],
+	});
+
+	const source = await new JsonBackupService(sourceStore).export(
+		new Date("2026-09-01T09:00:00.000Z"),
+	);
+
+	const targetStore = new MemoryGraphStore();
+	const service = new JsonBackupService(targetStore);
+	await service.restore(source);
+
+	const targetState = await targetStore.exportGraphState();
+	assertEquals(
+		targetState.relationTypeDefinitions?.some((def) => def.name === "CUSTOM_REL"),
+		true,
+	);
+});
+
+Deno.test("V7 JSON backup rejects payload missing relationTypeDefinitions before store write", async () => {
+	const store = new MemoryGraphStore();
+	const validExport = JSON.parse(
+		await new JsonBackupService(store).export(new Date("2026-09-01T09:00:00.000Z")),
+	) as Record<string, unknown>;
+
+	const dataWithoutCatalog = { ...(validExport.data as Record<string, unknown>) };
+	delete dataWithoutCatalog.relationTypeDefinitions;
+
+	const invalidV7 = {
+		...validExport,
+		data: dataWithoutCatalog,
+	};
+
+	await assertRejects(
+		() => new JsonBackupService(store).restore(JSON.stringify(invalidV7)),
+		Error,
+		"relationTypeDefinitions",
+	);
 });

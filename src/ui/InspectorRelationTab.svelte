@@ -4,6 +4,7 @@
 		EmergenceSuggestion,
 		OutlineItem,
 		OutlineLink,
+		RelationTypeDefinition,
 		SearchRequest,
 		SearchResult,
 	} from "../domain/models.ts";
@@ -23,6 +24,7 @@
 		emergenceSuggestions: readonly EmergenceSuggestion[];
 		emergenceResolutionReasons: Readonly<Record<string, string>>;
 		emergenceLoading: boolean;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		titleFor: (item: OutlineItem) => string;
 		titleForId: (id: string) => string;
 		titleForWork: (id: string) => string;
@@ -49,6 +51,7 @@
 		emergenceSuggestions,
 		emergenceResolutionReasons,
 		emergenceLoading,
+		relationTypeDefinitions,
 		titleFor,
 		titleForId,
 		titleForWork,
@@ -70,6 +73,7 @@
 			selectedDisplayName={titleFor(selectedItem)}
 			links={selectedLinks}
 			titleForWork={titleForWork}
+			relationTypeDefinitions={relationTypeDefinitions}
 			onConfirm={onConfirmLink}
 			onDelete={onDeleteLink}
 			onReverse={onReverseLink}

@@ -62,3 +62,38 @@ Deno.test("emergence contract: missing contexts and stale resolutions do not mut
 	);
 	assertEquals(await store.listLinks(), []);
 });
+
+Deno.test("emergence contract: accepting suggestion with custom symmetric type canonicalizes endpoints", async () => {
+	const store = new MemoryGraphStore();
+	await store.createRelationTypeDefinition({
+		name: "COLLABORATES",
+		direction: "symmetric",
+		builtIn: false,
+		createdAt: "2026-09-01T00:00:00.000Z",
+	});
+
+	const operations = new DiscoveryOperations(store);
+	const suggestion = {
+		id: "sug-custom",
+		kind: "latent-relation" as const,
+		title: "共同執筆の可能性",
+		contextItemId: "occ-z",
+		contextWorkId: "z-work",
+		targetItemId: "occ-a",
+		targetWorkId: "a-work",
+		proposedLinkType: "COLLABORATES" as const,
+		score: 1,
+		explanation: "共同執筆の可能性",
+		evidence: [],
+		persistenceStatus: "pending" as const,
+		createdAt: "2026-09-01T00:00:00.000Z",
+		updatedAt: "2026-09-01T00:00:00.000Z",
+	};
+	await store.upsertEmergenceSuggestion(suggestion);
+	await operations.resolveEmergenceSuggestion(suggestion.id, "accept", "承認");
+	const links = await store.listLinks();
+	const accepted = links.find((l) => l.origin === "suggestion");
+	assert(accepted);
+	assertEquals(accepted.fromId, "a-work");
+	assertEquals(accepted.toId, "z-work");
+});

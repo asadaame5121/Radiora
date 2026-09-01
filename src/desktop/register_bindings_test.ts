@@ -1,4 +1,5 @@
 import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
+import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 import { OutlineService } from "../services/outline_service.ts";
 import { RevisionService } from "../services/revision_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
@@ -154,6 +155,20 @@ Deno.test("desktop bindings validate the global lineage filter at the IPC bounda
 		).filteredWorkCount,
 		0,
 	);
+	await handlers.createRelationTypeDefinition({
+		name: "CAUSES",
+		direction: "directed",
+	});
+	assertEquals(
+		(
+			await handlers.listGlobalLineage({
+				includeIsolated: true,
+				linkTypes: ["CAUSES"],
+				includeWorkIds: [],
+			})
+		).filteredWorkCount,
+		0,
+	);
 	await assertRejects(
 		() =>
 			handlers.listGlobalLineage(
@@ -171,4 +186,33 @@ Deno.test("desktop bindings validate the global lineage filter at the IPC bounda
 		Error,
 		"Invalid GlobalLineageFilter",
 	);
+});
+
+Deno.test("desktop bindings expose relation type catalog and allow custom creation", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const ready: StartupStatus = { phase: "ready", message: "ready" };
+	const handlers = createBindingHandlers({
+		getService: () => service,
+		getStartupStatus: () => ready,
+		retryStartup: () => Promise.resolve(ready),
+		rewriteAsNewBranch: () => {
+			throw new Error("unreachable");
+		},
+	});
+
+	const initial = await handlers.listRelationTypeDefinitions();
+	assertEquals(initial, BUILT_IN_RELATION_TYPES);
+
+	const created = await handlers.createRelationTypeDefinition({
+		name: " custom_rel ",
+		direction: "directed",
+	});
+	assertEquals(created.name, "CUSTOM_REL");
+	assertEquals(created.direction, "directed");
+	assertEquals(created.builtIn, false);
+	assertEquals(typeof created.createdAt, "string");
+
+	const list = await handlers.listRelationTypeDefinitions();
+	assertEquals(list, [...BUILT_IN_RELATION_TYPES, created]);
 });

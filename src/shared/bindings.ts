@@ -11,6 +11,8 @@ import type {
 	OutlineSnapshot,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
+	RelationTypeDirection,
 	ResolvedBookmark,
 	ResolvedResumePosition,
 	ResumePosition,
@@ -30,6 +32,8 @@ import type {
 	TrashEntry,
 	UnplacedWork,
 } from "../domain/models.ts";
+
+export type { RelationTypeDefinition, RelationTypeDirection };
 import type { GlobalLineageProjection, WorkLineageProjection } from "../services/branch_service.ts";
 import type { GlobalLineageFilter } from "../services/global_lineage_filter.ts";
 import type { DateProjection, DateRange } from "../services/date_projection.ts";
@@ -71,6 +75,11 @@ export interface RadioraBindings {
 		snapshot: OutlineSnapshot,
 		location: StartupSnapshotLocation,
 	): Promise<void>;
+	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]>;
+	createRelationTypeDefinition(input: {
+		name: string;
+		direction: RelationTypeDirection;
+	}): Promise<RelationTypeDefinition>;
 	listOutline(): Promise<OutlineSnapshot>;
 	projectDates(range: DateRange): Promise<DateProjection>;
 	projectManuscript(rootOccurrenceId: string): Promise<ManuscriptSection[]>;

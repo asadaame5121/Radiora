@@ -146,3 +146,78 @@ Deno.test("SemanticLinkOperations retracts symmetric links when deleting through
 	await operations.deleteLink(beta.occurrence.id, alpha.occurrence.id, "RELATED");
 	assertEquals((await store.listLinks())[0].status, "retracted");
 });
+
+Deno.test("SemanticLinkOperations uses dynamic relation type catalog for direction and rejection", async () => {
+	const store = new MemoryGraphStore();
+	await store.createRelationTypeDefinition({
+		name: "CUSTOM_DIRECTED",
+		direction: "directed",
+		builtIn: false,
+		createdAt: NOW,
+	});
+	await store.createRelationTypeDefinition({
+		name: "CUSTOM_SYMMETRIC",
+		direction: "symmetric",
+		builtIn: false,
+		createdAt: NOW,
+	});
+
+	const alpha = await addWork(store, "alpha");
+	const beta = await addWork(store, "beta");
+	const operations = new SemanticLinkOperations(store);
+
+	// 未知型 reject
+	await assertRejects(
+		() =>
+			operations.createLink({
+				fromId: "alpha",
+				toId: "beta",
+				type: "UNKNOWN_TYPE" as unknown as "RELATED",
+			}),
+		Error,
+		"Unsupported link type: UNKNOWN_TYPE",
+	);
+	await assertRejects(
+		() => operations.deleteLink("alpha", "beta", "UNKNOWN_TYPE" as unknown as "RELATED"),
+		Error,
+		"Unsupported link type: UNKNOWN_TYPE",
+	);
+
+	// 有向（CUSTOM_DIRECTED）: 順序保持
+	await operations.createLink({
+		fromId: beta.occurrence.id,
+		toId: alpha.occurrence.id,
+		type: "CUSTOM_DIRECTED" as unknown as "RELATED",
+	});
+	let links = await store.listLinks();
+	const directedLink = links.find((l) => l.type === "CUSTOM_DIRECTED");
+	assertEquals(directedLink?.fromId, "beta");
+	assertEquals(directedLink?.toId, "alpha");
+
+	// 対称（CUSTOM_SYMMETRIC）: 逆順重複を1件に正規化
+	await operations.createLink({
+		fromId: beta.occurrence.id,
+		toId: alpha.occurrence.id,
+		type: "CUSTOM_SYMMETRIC" as unknown as "RELATED",
+	});
+	await operations.createLink({
+		fromId: alpha.occurrence.id,
+		toId: beta.occurrence.id,
+		type: "CUSTOM_SYMMETRIC" as unknown as "RELATED",
+	});
+	links = await store.listLinks();
+	const symmetricLinks = links.filter((l) => l.type === "CUSTOM_SYMMETRIC");
+	assertEquals(symmetricLinks.length, 1);
+	assertEquals(symmetricLinks[0].fromId, "alpha");
+	assertEquals(symmetricLinks[0].toId, "beta");
+
+	// 対称（CUSTOM_SYMMETRIC）: 逆向き delete で retracted
+	await operations.deleteLink(
+		beta.occurrence.id,
+		alpha.occurrence.id,
+		"CUSTOM_SYMMETRIC" as unknown as "RELATED",
+	);
+	links = await store.listLinks();
+	const retractedSymmetric = links.find((l) => l.type === "CUSTOM_SYMMETRIC");
+	assertEquals(retractedSymmetric?.status, "retracted");
+});

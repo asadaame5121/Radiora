@@ -10,10 +10,12 @@ import type {
 	Suggestion,
 	TransientProjectionNode,
 } from "../domain/models.ts";
+import { isRelationTypeSymmetric } from "../domain/relation_type.ts";
 import type {
 	DiscoveryStorePort,
 	OutlineStorePort,
 	RelationStorePort,
+	RelationTypeDefinitionStorePort,
 } from "../storage/graph_store.ts";
 import { ancestorsOf } from "./discovery_helpers.ts";
 import { EmergencePersistence } from "./emergence_persistence.ts";
@@ -27,7 +29,11 @@ import { SearchOperations } from "./search_operations.ts";
 import { titleOf } from "./search_text.ts";
 import { buildSparseOutline } from "./sparse_outline.ts";
 
-type DiscoveryOperationsStore = DiscoveryStorePort & OutlineStorePort & RelationStorePort;
+type DiscoveryOperationsStore =
+	& DiscoveryStorePort
+	& OutlineStorePort
+	& RelationStorePort
+	& Partial<RelationTypeDefinitionStorePort>;
 
 /** Search, suggestion, and rule-query operations backed by feature-specific store ports. */
 export class DiscoveryOperations {

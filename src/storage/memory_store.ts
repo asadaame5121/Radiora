@@ -12,6 +12,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
 	ResumePosition,
 	Revision,
 	SavedRuleQuery,
@@ -20,7 +21,11 @@ import type {
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
-import { isSymmetricLinkType } from "../domain/models.ts";
+import {
+	BUILT_IN_RELATION_TYPES,
+	isRelationTypeSymmetric,
+	validateRelationTypeDefinitions,
+} from "../domain/relation_type.ts";
 import {
 	type GraphStateSnapshot,
 	type GraphStore,
@@ -62,6 +67,9 @@ export class MemoryGraphStore implements GraphStore {
 	protected emergenceSuggestions: EmergenceSuggestion[] = [];
 	protected savedRuleQueries: SavedRuleQuery[] = [];
 	protected purgeManifests: PurgeManifest[] = [];
+	protected relationTypeDefinitions: RelationTypeDefinition[] = BUILT_IN_RELATION_TYPES.map((
+		def,
+	) => ({ ...def }));
 
 	initialize(): Promise<void> {
 		return Promise.resolve();
@@ -89,6 +97,7 @@ export class MemoryGraphStore implements GraphStore {
 			recoverySnapshots: this.recoverySnapshots,
 			bookmarks: this.bookmarks,
 			resumePosition: this.resumePosition,
+			relationTypeDefinitions: this.relationTypeDefinitions,
 		}));
 	}
 
@@ -115,6 +124,27 @@ export class MemoryGraphStore implements GraphStore {
 		this.recoverySnapshots = state.recoverySnapshots;
 		this.bookmarks = state.bookmarks;
 		this.resumePosition = state.resumePosition;
+		this.relationTypeDefinitions = state.relationTypeDefinitions
+			? structuredClone(state.relationTypeDefinitions)
+			: BUILT_IN_RELATION_TYPES.map((def) => ({ ...def }));
+		return Promise.resolve();
+	}
+
+	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]> {
+		return Promise.resolve(structuredClone(this.relationTypeDefinitions));
+	}
+
+	createRelationTypeDefinition(definition: RelationTypeDefinition): Promise<void> {
+		let validated: RelationTypeDefinition[];
+		try {
+			validated = validateRelationTypeDefinitions([
+				...this.relationTypeDefinitions,
+				definition,
+			]);
+		} catch (error) {
+			return Promise.reject(error);
+		}
+		this.relationTypeDefinitions = validated;
 		return Promise.resolve();
 	}
 
@@ -191,7 +221,7 @@ export class MemoryGraphStore implements GraphStore {
 			link.fromId = link.from.workId;
 			link.toId = link.to.workId;
 		}
-		retractDuplicateActiveLinks(next.links);
+		retractDuplicateActiveLinks(next.links, this.relationTypeDefinitions);
 		for (const relation of next.systemRelations) {
 			if (relation.fromWorkId === input.sourceWorkId) {
 				relation.fromWorkId = input.survivorWorkId;
@@ -725,9 +755,10 @@ export class MemoryGraphStore implements GraphStore {
 					new Error("Accepted emergence suggestion requires an asserted suggestion link"),
 				);
 			}
+			const isSymmetric = isRelationTypeSymmetric(link.type, this.relationTypeDefinitions);
 			const endpointsMatch = (link.from.workId === current.contextWorkId &&
 				link.to.workId === current.targetWorkId) ||
-				(isSymmetricLinkType(link.type) &&
+				(isSymmetric &&
 					link.from.workId === current.targetWorkId &&
 					link.to.workId === current.contextWorkId);
 			if (!endpointsMatch || link.type !== current.proposedLinkType) {
@@ -741,7 +772,7 @@ export class MemoryGraphStore implements GraphStore {
 				candidate.type === link.type &&
 				((candidate.from.workId === link.from.workId &&
 					candidate.to.workId === link.to.workId) ||
-					(isSymmetricLinkType(link.type) &&
+					(isSymmetric &&
 						candidate.from.workId === link.to.workId &&
 						candidate.to.workId === link.from.workId))
 			);

@@ -1,6 +1,7 @@
 import { assertEquals, assertMatch } from "jsr:@std/assert@1";
-import { OutlineService } from "./outline_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
+import { previewDirection } from "./advanced_link_resolver.ts";
+import { OutlineService } from "./outline_service.ts";
 
 Deno.test("Advanced Link resolves exact names, search aliases, short IDs, and unplaced Works", async () => {
 	const store = new MemoryGraphStore();
@@ -113,5 +114,46 @@ Deno.test("Advanced Link preview follows canonical directed and symmetric semant
 	assertEquals(
 		(await service.resolveAdvancedLink("Source :: RELATED :: Target")).preview,
 		"「Source」と「Target」は関連します。",
+	);
+	assertEquals(
+		previewDirection("Source", "CUSTOM", "Target"),
+		"「Source」は「Target」と CUSTOM 関係です。",
+	);
+});
+
+Deno.test("Advanced Link resolves custom directed and symmetric relations with preview direction", async () => {
+	const store = new MemoryGraphStore();
+	await store.createRelationTypeDefinition({
+		name: "CUSTOM_DIR",
+		direction: "directed",
+		builtIn: false,
+		createdAt: "2026-09-01T00:00:00.000Z",
+	});
+	await store.createRelationTypeDefinition({
+		name: "CUSTOM_SYM",
+		direction: "symmetric",
+		builtIn: false,
+		createdAt: "2026-09-01T00:00:00.000Z",
+	});
+
+	const service = new OutlineService(store);
+	await service.createItem({ text: "Source", parentId: null });
+	await service.createItem({ text: "Target", parentId: null });
+
+	const resolvedDirected = await service.resolveAdvancedLink("Source :: custom_dir :: Target");
+	assertEquals(resolvedDirected.type.value, "CUSTOM_DIR");
+	assertEquals(
+		resolvedDirected.preview,
+		"「Source」は「Target」へ CUSTOM_DIR 関係（有向）です。",
+	);
+
+	const resolvedSymmetric = await service.resolveAdvancedLink(
+		'Source :: CUSTOM_SYM("理由") :: Target',
+	);
+	assertEquals(resolvedSymmetric.type.value, "CUSTOM_SYM");
+	assertEquals(resolvedSymmetric.reason, "理由");
+	assertEquals(
+		resolvedSymmetric.preview,
+		"「Source」と「Target」は CUSTOM_SYM 関係（双方向）です。",
 	);
 });

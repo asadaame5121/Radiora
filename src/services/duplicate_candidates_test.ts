@@ -332,3 +332,30 @@ Deno.test("listCandidates is read-only: store state is unchanged", async () => {
 	assertEquals(linksBefore, linksAfter);
 	assertEquals(aliasesBefore, aliasesAfter);
 });
+
+Deno.test("custom symmetric link produces link reason in duplicate candidates", async () => {
+	const store = new MemoryGraphStore();
+	await store.createRelationTypeDefinition({
+		name: "COLLABORATES",
+		direction: "symmetric",
+		builtIn: false,
+		createdAt: CREATED_AT,
+	});
+
+	await addWork(store, "work-a", "Work A\n#tag");
+	await addWork(store, "work-b", "Work B\n#tag");
+	await addWork(store, "work-target", "Work Target");
+
+	await addLink(store, "work-a", "work-target", "COLLABORATES");
+	await addLink(store, "work-target", "work-b", "COLLABORATES");
+
+	const service = new DuplicateCandidateService(store);
+	const candidates = await service.listCandidates();
+
+	const candidate = candidates.find((c) =>
+		(c.workA.workId === "work-a" && c.workB.workId === "work-b") ||
+		(c.workA.workId === "work-b" && c.workB.workId === "work-a")
+	);
+	assertEquals(Boolean(candidate), true);
+	assertEquals(candidate?.reasons.some((r) => r.kind === "link"), true);
+});

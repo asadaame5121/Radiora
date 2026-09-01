@@ -22,20 +22,25 @@ export interface FilteredGlobalLineage {
 	links: OutlineLink[];
 }
 
-export function defaultGlobalLineageFilter(): GlobalLineageFilter {
+export function defaultGlobalLineageFilter(
+	allowedTypes: readonly LinkType[] = LINK_TYPES,
+): GlobalLineageFilter {
 	return {
 		includeIsolated: true,
-		linkTypes: [...LINK_TYPES],
+		linkTypes: [...allowedTypes],
 		includeWorkIds: [],
 	};
 }
 
-export function isValidGlobalLineageFilter(value: unknown): value is GlobalLineageFilter {
+export function isValidGlobalLineageFilter(
+	value: unknown,
+	allowedTypes: readonly string[] = LINK_TYPES,
+): value is GlobalLineageFilter {
 	if (typeof value !== "object" || value === null) return false;
 	const candidate = value as Partial<GlobalLineageFilter>;
 	if (typeof candidate.includeIsolated !== "boolean") return false;
 	if (!Array.isArray(candidate.linkTypes)) return false;
-	const validTypes = new Set<string>(LINK_TYPES);
+	const validTypes = new Set<string>(allowedTypes);
 	if (!candidate.linkTypes.every((type) => typeof type === "string" && validTypes.has(type))) {
 		return false;
 	}

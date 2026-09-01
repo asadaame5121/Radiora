@@ -1,8 +1,10 @@
-import type { GraphStore } from "./graph_store.ts";
+import type { GraphStore, RelationTypeDefinitionStorePort } from "./graph_store.ts";
 import { JsonGraphStore } from "./json_store.ts";
 import { SqliteGraphStore } from "./sqlite_store.ts";
 import { isLegacyStorageMigrationComplete } from "./turso_migration.ts";
 import { storagePathExists } from "./migration_backup.ts";
+
+export type BootstrappedGraphStore = GraphStore & RelationTypeDefinitionStorePort;
 
 export interface StorageBootstrapLogger {
 	info(event: string, fields?: Record<string, unknown>): void;
@@ -16,7 +18,7 @@ export interface StorageBootstrapOptions {
 }
 
 export interface StorageBootstrapSession {
-	store: GraphStore;
+	store: BootstrappedGraphStore;
 	storageMode: string;
 	stop(): Promise<void>;
 }
@@ -35,7 +37,7 @@ export async function bootstrapStorage(
 	const storageMode = rawMode ?? "sqlite";
 	const logger = options.logger;
 
-	let activeStore: GraphStore | null = null;
+	let activeStore: BootstrappedGraphStore | null = null;
 
 	const stop = async (): Promise<void> => {
 		const st = activeStore;
@@ -46,7 +48,7 @@ export async function bootstrapStorage(
 	};
 
 	try {
-		let nextStore: GraphStore;
+		let nextStore: BootstrappedGraphStore;
 
 		if (storageMode === "json") {
 			nextStore = new JsonGraphStore(`${dataDir}\\radiora-v2.json`);

@@ -2,16 +2,18 @@ import type {
 	Branch,
 	LinkType,
 	OutlineLink,
+	RelationTypeDefinition,
 	ScopedTagSet,
 	SearchAlias,
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
-import { isSymmetricLinkType } from "../domain/models.ts";
+import { isRelationTypeSymmetric } from "../domain/relation_type.ts";
 import type {
 	DiscoveryStorePort,
 	OutlineStorePort,
 	RelationStorePort,
+	RelationTypeDefinitionStorePort,
 	WorkStorePort,
 } from "../storage/graph_store.ts";
 import { normalizeSearchText, titleFromText } from "./search_text.ts";
@@ -21,7 +23,8 @@ type DuplicateCandidateStore =
 	& DiscoveryStorePort
 	& OutlineStorePort
 	& RelationStorePort
-	& WorkStorePort;
+	& WorkStorePort
+	& Partial<RelationTypeDefinitionStorePort>;
 
 export interface DuplicateWorkRef {
 	workId: string;
@@ -59,13 +62,16 @@ export class DuplicateCandidateService {
 	constructor(private readonly store: DuplicateCandidateStore) {}
 
 	async listCandidates(limit = 50): Promise<DuplicateCandidate[]> {
-		const [works, branches, copies, links, aliases, scopedTags] = await Promise.all([
+		const [works, branches, copies, links, aliases, scopedTags, defs] = await Promise.all([
 			this.store.listWorks(true),
 			this.store.listBranches(),
 			this.store.listWorkingCopies(),
 			this.store.listLinks(),
 			this.store.listAliases(),
 			new TagService(this.store).listScopedTags(),
+			this.store.listRelationTypeDefinitions
+				? this.store.listRelationTypeDefinitions()
+				: Promise.resolve([]),
 		]);
 
 		const activeWorks = works.filter((work) => !work.deletedAt && !work.mergedIntoWorkId);
@@ -73,7 +79,7 @@ export class DuplicateCandidateService {
 		const titleByWorkId = new Map(
 			activeWorks.map((work) => [work.id, this.resolveTitle(work, branches, copies)]),
 		);
-		const candidates = this.computeCandidates(contexts, links, aliases, titleByWorkId);
+		const candidates = this.computeCandidates(contexts, links, aliases, titleByWorkId, defs);
 
 		return candidates.slice(0, limit);
 	}
@@ -133,8 +139,9 @@ export class DuplicateCandidateService {
 		links: OutlineLink[],
 		aliases: SearchAlias[],
 		titleByWorkId: Map<string, string>,
+		definitions: readonly RelationTypeDefinition[] = [],
 	): DuplicateCandidate[] {
-		this.populateLinkKeys(contexts, links);
+		this.populateLinkKeys(contexts, links, definitions);
 
 		const sorted = [...contexts].sort((left, right) =>
 			left.title.localeCompare(right.title) || left.work.id.localeCompare(right.work.id)
@@ -169,7 +176,11 @@ export class DuplicateCandidateService {
 		);
 	}
 
-	private populateLinkKeys(contexts: WorkContext[], links: OutlineLink[]): void {
+	private populateLinkKeys(
+		contexts: WorkContext[],
+		links: OutlineLink[],
+		definitions?: readonly RelationTypeDefinition[],
+	): void {
 		const contextByWorkId = new Map(contexts.map((context) => [context.work.id, context]));
 
 		for (const link of links) {
@@ -177,8 +188,9 @@ export class DuplicateCandidateService {
 
 			const fromContext = contextByWorkId.get(link.fromId);
 			const toContext = contextByWorkId.get(link.toId);
+			const isSymmetric = isRelationTypeSymmetric(link.type, definitions);
 
-			if (isSymmetricLinkType(link.type)) {
+			if (isSymmetric) {
 				if (fromContext) {
 					fromContext.linkKeys.add(`${link.type}:${link.toId}`);
 				}

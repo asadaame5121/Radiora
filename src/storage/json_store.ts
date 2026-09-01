@@ -9,6 +9,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
 	ResumePosition,
 	Revision,
 	SavedRuleQuery,
@@ -17,8 +18,14 @@ import type {
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
+import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
-import type { GraphStateSnapshot, MergeWorksInput, WorkBundle } from "./graph_store.ts";
+import {
+	type GraphStateSnapshot,
+	type MergeWorksInput,
+	validatedGraphStateSnapshot,
+	type WorkBundle,
+} from "./graph_store.ts";
 import {
 	type BackupV0,
 	type BackupV1,
@@ -27,13 +34,15 @@ import {
 	type BackupV4,
 	type BackupV5,
 	type BackupV6,
+	type BackupV7,
 	migrateBackupV0,
 	migrateBackupV1,
 	migrateBackupV2,
 	migrateBackupV3,
 	migrateBackupV4,
 	migrateBackupV5,
-	type StoredGraphV6,
+	migrateBackupV6,
+	type StoredGraphV7,
 } from "./backup_migrations.ts";
 
 export { migrateBackupV0 } from "./backup_migrations.ts";
@@ -67,10 +76,15 @@ export class JsonGraphStore extends MemoryGraphStore {
 				| BackupV3
 				| BackupV4
 				| BackupV5
-				| BackupV6;
-			const data = "schemaVersion" in parsed ? this.readVersioned(parsed) : migrateBackupV5(
-				migrateBackupV4(
-					migrateBackupV3(migrateBackupV2(migrateBackupV1(migrateBackupV0(parsed)))),
+				| BackupV6
+				| BackupV7;
+			const data = "schemaVersion" in parsed ? this.readVersioned(parsed) : migrateBackupV6(
+				migrateBackupV5(
+					migrateBackupV4(
+						migrateBackupV3(
+							migrateBackupV2(migrateBackupV1(migrateBackupV0(parsed))),
+						),
+					),
 				),
 			);
 			this.load(data);
@@ -90,6 +104,9 @@ export class JsonGraphStore extends MemoryGraphStore {
 				await this.protectVersionInput(parsed.schemaVersion);
 				await this.persist();
 			} else if (parsed.schemaVersion === 5) {
+				await this.protectVersionInput(parsed.schemaVersion);
+				await this.persist();
+			} else if (parsed.schemaVersion === 6) {
 				await this.protectVersionInput(parsed.schemaVersion);
 				await this.persist();
 			}
@@ -375,52 +392,87 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await this.persist();
 	}
 
+	override async createRelationTypeDefinition(definition: RelationTypeDefinition): Promise<void> {
+		const before = this.relationTypeDefinitions;
+		try {
+			await super.createRelationTypeDefinition(definition);
+			await this.persist();
+		} catch (cause) {
+			this.relationTypeDefinitions = before;
+			throw cause;
+		}
+	}
+
 	private readVersioned(
-		parsed: BackupV1 | BackupV2 | BackupV3 | BackupV4 | BackupV5 | BackupV6,
-	): StoredGraphV6 {
+		parsed: BackupV1 | BackupV2 | BackupV3 | BackupV4 | BackupV5 | BackupV6 | BackupV7,
+	): StoredGraphV7 {
 		if (parsed.format !== "radiora-backup") {
 			throw new Error(`Unsupported backup format: ${String(parsed.format)}`);
 		}
 		if (parsed.schemaVersion === 1) {
-			return migrateBackupV5(
-				migrateBackupV4(migrateBackupV3(migrateBackupV2(migrateBackupV1(parsed.data)))),
+			return migrateBackupV6(
+				migrateBackupV5(
+					migrateBackupV4(migrateBackupV3(migrateBackupV2(migrateBackupV1(parsed.data)))),
+				),
 			);
 		}
 		if (parsed.schemaVersion === 2) {
-			return migrateBackupV5(migrateBackupV4(migrateBackupV3(migrateBackupV2(parsed.data))));
-		}
-		if (parsed.schemaVersion === 3) {
-			return migrateBackupV5(migrateBackupV4(migrateBackupV3(parsed.data)));
-		}
-		if (parsed.schemaVersion === 4) return migrateBackupV5(migrateBackupV4(parsed.data));
-		if (parsed.schemaVersion === 5) return migrateBackupV5(parsed.data);
-		if (parsed.schemaVersion !== 6) {
-			throw new Error(
-				`Unsupported backup schema version: ${
-					String((parsed as { schemaVersion: unknown }).schemaVersion)
-				}`,
+			return migrateBackupV6(
+				migrateBackupV5(migrateBackupV4(migrateBackupV3(migrateBackupV2(parsed.data)))),
 			);
 		}
-		return parsed.data;
+		if (parsed.schemaVersion === 3) {
+			return migrateBackupV6(
+				migrateBackupV5(migrateBackupV4(migrateBackupV3(parsed.data))),
+			);
+		}
+		if (parsed.schemaVersion === 4) {
+			return migrateBackupV6(migrateBackupV5(migrateBackupV4(parsed.data)));
+		}
+		if (parsed.schemaVersion === 5) {
+			return migrateBackupV6(migrateBackupV5(parsed.data));
+		}
+		if (parsed.schemaVersion === 6) {
+			return migrateBackupV6(parsed.data);
+		}
+		if (parsed.schemaVersion === 7) {
+			const data = parsed.data;
+			if (
+				typeof data !== "object" || data === null || Array.isArray(data) ||
+				!("relationTypeDefinitions" in data)
+			) {
+				throw new Error("Invalid V7 backup data: missing relationTypeDefinitions");
+			}
+			return data;
+		}
+		throw new Error(
+			`Unsupported backup schema version: ${
+				String((parsed as { schemaVersion: unknown }).schemaVersion)
+			}`,
+		);
 	}
 
-	private load(data: StoredGraphV6): void {
-		this.works = data.works ?? [];
-		this.branches = data.branches ?? [];
-		this.workingCopies = data.workingCopies ?? [];
-		this.occurrences = data.occurrences ?? [];
-		this.links = data.links ?? [];
-		this.systemRelations = data.systemRelations ?? [];
-		this.knots = data.knots ?? [];
-		this.aliases = data.aliases ?? [];
-		this.emergenceFeedback = data.emergenceFeedback ?? {};
-		this.emergenceSuggestions = data.emergenceSuggestions ?? [];
-		this.savedRuleQueries = data.savedRuleQueries ?? [];
-		this.purgeManifests = data.purgeManifests ?? [];
-		this.revisions = data.revisions ?? [];
-		this.recoverySnapshots = data.recoverySnapshots ?? [];
-		this.bookmarks = data.bookmarks ?? [];
-		this.resumePosition = data.resumePosition ?? null;
+	private load(data: StoredGraphV7): void {
+		const validated = validatedGraphStateSnapshot(data);
+		this.works = validated.works;
+		this.branches = validated.branches;
+		this.workingCopies = validated.workingCopies;
+		this.occurrences = validated.occurrences;
+		this.links = validated.links;
+		this.systemRelations = validated.systemRelations;
+		this.knots = validated.knots;
+		this.aliases = validated.aliases;
+		this.emergenceFeedback = validated.emergenceFeedback;
+		this.emergenceSuggestions = validated.emergenceSuggestions;
+		this.savedRuleQueries = validated.savedRuleQueries;
+		this.purgeManifests = validated.purgeManifests;
+		this.revisions = validated.revisions;
+		this.recoverySnapshots = validated.recoverySnapshots;
+		this.bookmarks = validated.bookmarks;
+		this.resumePosition = validated.resumePosition;
+		this.relationTypeDefinitions = validated.relationTypeDefinitions
+			? structuredClone(validated.relationTypeDefinitions)
+			: BUILT_IN_RELATION_TYPES.map((def) => ({ ...def }));
 	}
 
 	private async persist(): Promise<void> {
@@ -428,14 +480,14 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await Deno.writeTextFile(this.path, JSON.stringify(backup, null, 2));
 	}
 
-	private currentBackup(data: GraphStateSnapshot): BackupV6 {
+	private currentBackup(data: GraphStateSnapshot): BackupV7 {
 		return {
 			format: "radiora-backup",
-			schemaVersion: 6,
+			schemaVersion: 7,
 			exportedAt: new Date().toISOString(),
 			appVersion: "0.1.0",
-			source: { storageSchemaVersion: 6 },
-			data,
+			source: { storageSchemaVersion: 7 },
+			data: data as StoredGraphV7,
 		};
 	}
 
@@ -453,6 +505,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 			systemRelations: this.systemRelations,
 			aliases: this.aliases,
 			emergenceSuggestions: this.emergenceSuggestions,
+			relationTypeDefinitions: this.relationTypeDefinitions,
 		});
 	}
 

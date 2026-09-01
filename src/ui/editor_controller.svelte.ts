@@ -68,6 +68,8 @@ export type EditorControllerPorts = {
 	reportError(cause: unknown): void;
 	errorMessage(cause: unknown): string;
 	persistSnapshotCache(): void;
+	relationTypeNames?: () => readonly LinkType[];
+	isSymmetricRelationType?: (type: LinkType) => boolean;
 	vocabulary: {
 		work: string;
 		occurrence: string;
@@ -84,6 +86,25 @@ export function createEditorController(ports: EditorControllerPorts) {
 	let internalReferenceNotice = $state("");
 	let internalReferenceCompletionRequest = 0;
 	let inlineLinkCompletionRequest = 0;
+
+	function getRelationTypeNames(): readonly LinkType[] {
+		const names = ports.relationTypeNames ? ports.relationTypeNames() : LINK_TYPES;
+		return names.length > 0 ? names : LINK_TYPES;
+	}
+
+	function defaultRelationType(): LinkType {
+		const names = ports.relationTypeNames ? ports.relationTypeNames() : LINK_TYPES;
+		if (names.includes("RELATED" as LinkType)) return "RELATED" as LinkType;
+		if (names.length > 0) return names[0];
+		return "RELATED" as LinkType;
+	}
+
+	function isSymmetricType(type: LinkType): boolean {
+		if (ports.isSymmetricRelationType) {
+			return ports.isSymmetricRelationType(type);
+		}
+		return isSymmetricLinkType(type);
+	}
 
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => ports.api.updateItemText(occurrenceId, text),
@@ -268,7 +289,7 @@ export function createEditorController(ports: EditorControllerPorts) {
 				...inlineLinkCompletion,
 				phase: "type",
 				selectedCandidate: inlineLinkCandidateFromCreated(created),
-				selectedType: "RELATED",
+				selectedType: defaultRelationType(),
 				direction: "forward",
 				searching: false,
 				creating: false,
@@ -289,7 +310,7 @@ export function createEditorController(ports: EditorControllerPorts) {
 			...state,
 			phase: "type",
 			selectedCandidate: candidate,
-			selectedType: "RELATED",
+			selectedType: defaultRelationType(),
 			direction: "forward",
 		};
 	}
@@ -299,7 +320,7 @@ export function createEditorController(ports: EditorControllerPorts) {
 		if (!state || state.itemId !== itemId || !state.selectedCandidate || !state.selectedType) {
 			return;
 		}
-		if (isSymmetricLinkType(state.selectedType)) {
+		if (isSymmetricType(state.selectedType)) {
 			void commitInlineLink(itemId);
 			return;
 		}
@@ -355,9 +376,12 @@ export function createEditorController(ports: EditorControllerPorts) {
 		}
 		if (state.phase === "type" && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
 			event.preventDefault();
-			const current = state.selectedType ? LINK_TYPES.indexOf(state.selectedType) : 0;
-			state.selectedType = LINK_TYPES[
-				(current + (event.key === "ArrowDown" ? 1 : -1) + LINK_TYPES.length) % LINK_TYPES.length
+			const names = getRelationTypeNames();
+			const current = state.selectedType
+				? Math.max(0, names.findIndex((type) => type === state.selectedType))
+				: 0;
+			state.selectedType = names[
+				(current + (event.key === "ArrowDown" ? 1 : -1) + names.length) % names.length
 			];
 			return;
 		}

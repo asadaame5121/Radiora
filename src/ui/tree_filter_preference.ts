@@ -1,3 +1,4 @@
+import type { LinkType } from "../domain/models.ts";
 import { LINK_TYPES } from "../domain/models.ts";
 import type { GlobalLineageFilter } from "../services/global_lineage_filter.ts";
 import { defaultGlobalLineageFilter } from "../services/global_lineage_filter.ts";
@@ -20,9 +21,10 @@ export interface StoredTreeFilter {
  */
 export function loadTreeFilterPreference(
 	storage: TreeFilterStorage | null = browserStorage(),
+	allowedTypes: readonly LinkType[] = LINK_TYPES,
 ): GlobalLineageFilter {
-	const defaults = defaultGlobalLineageFilter();
-	const stored = readStoredFilter(storage);
+	const defaults = defaultGlobalLineageFilter(allowedTypes);
+	const stored = readStoredFilter(storage, allowedTypes);
 	return stored === null ? defaults : {
 		includeIsolated: stored.includeIsolated,
 		linkTypes: stored.linkTypes as GlobalLineageFilter["linkTypes"],
@@ -51,7 +53,10 @@ export function saveTreeFilterPreference(
  * Invalid or outdated payloads fall back to the defaults: isolated Works shown
  * and every link type enabled.
  */
-function readStoredFilter(storage: TreeFilterStorage | null): StoredTreeFilter | null {
+function readStoredFilter(
+	storage: TreeFilterStorage | null,
+	allowedTypes: readonly LinkType[] = LINK_TYPES,
+): StoredTreeFilter | null {
 	if (storage === null) return null;
 	let parsed: unknown;
 	try {
@@ -65,7 +70,7 @@ function readStoredFilter(storage: TreeFilterStorage | null): StoredTreeFilter |
 	const candidate = parsed as Partial<StoredTreeFilter>;
 	if (typeof candidate.includeIsolated !== "boolean") return null;
 	if (!Array.isArray(candidate.linkTypes)) return null;
-	const validTypes = new Set<string>(LINK_TYPES);
+	const validTypes = new Set<string>(allowedTypes);
 	if (!candidate.linkTypes.every((type) => typeof type === "string" && validTypes.has(type))) {
 		return null;
 	}

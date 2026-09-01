@@ -1,4 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
+import { LINK_TYPES } from "../domain/models.ts";
 import { parseInlineSemanticLinks } from "./inline_semantic_link.ts";
 
 Deno.test("inline semantic links parse Japanese fields, reason, and source ranges", () => {
@@ -156,4 +157,23 @@ Deno.test("inline semantic links diagnose an unclosed opening marker", () => {
 			range: { start: 2, end: source.length },
 		},
 	]);
+});
+
+Deno.test("inline semantic links parse custom relation types when explicitly allowed and report UNKNOWN_TYPE otherwise", () => {
+	const source = "[[A::causes::B]] と [[C::unknown::D]]";
+	const customAllowed = [...LINK_TYPES, "CAUSES"] as const;
+
+	// 1. allowedTypes=[...LINK_TYPES, 'CAUSES'] で causes が候補 type: "CAUSES" になる
+	const customResult = parseInlineSemanticLinks(source, customAllowed);
+	assertEquals(customResult.candidates.length, 1);
+	assertEquals(customResult.candidates[0].type, "CAUSES");
+	assertEquals(customResult.candidates[0].source, "A");
+	assertEquals(customResult.candidates[0].target, "B");
+	assertEquals(customResult.diagnostics.length, 1);
+	assertEquals(customResult.diagnostics[0].code, "UNKNOWN_TYPE");
+
+	// 2. デフォルト（未許可型）では causes も unknown も UNKNOWN_TYPE
+	const defaultResult = parseInlineSemanticLinks(source);
+	assertEquals(defaultResult.candidates, []);
+	assertEquals(defaultResult.diagnostics.map((d) => d.code), ["UNKNOWN_TYPE", "UNKNOWN_TYPE"]);
 });

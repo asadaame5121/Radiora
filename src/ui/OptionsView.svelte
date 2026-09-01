@@ -1,6 +1,11 @@
 <script lang="ts">
+	import type {
+		RelationTypeDefinition,
+		RelationTypeDirection,
+	} from "../domain/models.ts";
 	import type { MarkdownExportPreference } from "./markdown_export_preference.ts";
 	import type { QuickCapturePreference } from "./quick_capture_preference.ts";
+	import RelationTypeSettings from "./RelationTypeSettings.svelte";
 	import type { TreeProjection } from "./tree_layout.ts";
 	import { useUiVocabulary } from "./ui_vocabulary_context.ts";
 	import { isThemePreference, type ThemePreference } from "./theme_preference.ts";
@@ -20,6 +25,8 @@
 		inspectorCollapsed,
 		inspectorWidth,
 		themePreference = "auto",
+		relationTypeDefinitions,
+		onCreateRelationTypeDefinition,
 		onPersistMarkdownExportPreference,
 		onExportMarkdown,
 		onImportOpml,
@@ -49,6 +56,11 @@
 		inspectorCollapsed: boolean;
 		inspectorWidth: number;
 		themePreference: ThemePreference;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
+		onCreateRelationTypeDefinition?: (input: {
+			name: string;
+			direction: RelationTypeDirection;
+		}) => Promise<void>;
 		onPersistMarkdownExportPreference: () => void;
 		onExportMarkdown: () => void | Promise<void>;
 		onImportOpml: (file: File) => void | Promise<void>;
@@ -231,6 +243,12 @@
 				<button onclick={onOpenTrash}>項目を復元する</button>
 			</div>
 		</section>
+
+		<RelationTypeSettings
+			{relationTypeDefinitions}
+			{startupReady}
+			{onCreateRelationTypeDefinition}
+		/>
 
 		<section class="option-card" aria-labelledby="option-licenses-title">
 			<h2 id="option-licenses-title">ライセンス</h2>

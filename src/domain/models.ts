@@ -1,23 +1,15 @@
-export const LINK_TYPES = [
-	"RELATED",
-	"FROM",
-	"LIKE",
-	"SUPPORT",
-	"DEF",
-	"VS",
-	"FIX",
-	"CITE",
-] as const;
-export type LinkType = (typeof LINK_TYPES)[number];
-export const SYMMETRIC_LINK_TYPES = [
-	"RELATED",
-	"LIKE",
-	"VS",
-] as const satisfies readonly LinkType[];
+export {
+	type BuiltInRelationTypeName,
+	isSymmetricLinkType,
+	LINK_TYPES,
+	type RelationTypeDefinition,
+	type RelationTypeDirection,
+	type RelationTypeName,
+	SYMMETRIC_LINK_TYPES,
+} from "./relation_type.ts";
+import type { RelationTypeName } from "./relation_type.ts";
 
-export function isSymmetricLinkType(type: LinkType): boolean {
-	return (SYMMETRIC_LINK_TYPES as readonly LinkType[]).includes(type);
-}
+export type LinkType = RelationTypeName;
 
 export type LinkStatus = "provisional" | "asserted" | "retracted";
 export type PersistedLinkOrigin = "human" | "suggestion" | "import";

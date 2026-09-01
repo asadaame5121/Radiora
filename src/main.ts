@@ -9,7 +9,7 @@ import { OutlineService } from "./services/outline_service.ts";
 import { RevisionService } from "./services/revision_service.ts";
 import { Logger } from "./services/logger.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
-import type { GraphStore } from "./storage/graph_store.ts";
+import type { GraphStore, RelationTypeDefinitionStorePort } from "./storage/graph_store.ts";
 import { bootstrapStorage, type StorageBootstrapSession } from "./storage/storage_bootstrap.ts";
 
 const hmrUiOrigin = developmentUiOrigin(Deno.env.get("RADIORA_HMR_UI_ORIGIN"));
@@ -58,7 +58,7 @@ let startupStatus: StartupStatus = {
 };
 let currentSession: StorageBootstrapSession | null = null;
 let service: OutlineService | null = null;
-let store: GraphStore | null = null;
+let store: (GraphStore & RelationTypeDefinitionStorePort) | null = null;
 let bootstrapPromise: Promise<StartupStatus> | null = null;
 
 async function stopBackend(): Promise<void> {

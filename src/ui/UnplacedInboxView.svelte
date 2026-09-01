@@ -1,5 +1,10 @@
 <script lang="ts">
-	import { LINK_TYPES, type LinkType, type UnplacedWork } from "../domain/models.ts";
+	import type {
+		LinkType,
+		RelationTypeDefinition,
+		UnplacedWork,
+	} from "../domain/models.ts";
+	import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 	import {
 		matchesOutlineFilter,
 		type OutlineFilter,
@@ -20,6 +25,7 @@
 		unplacedLinkTargets = $bindable(),
 		unplacedLinkDirections = $bindable(),
 		unplacedLinkType = $bindable(),
+		relationTypeDefinitions,
 		onUpdateText,
 		onPlace,
 		onLink,
@@ -33,6 +39,7 @@
 		unplacedLinkTargets: Record<string, string>;
 		unplacedLinkDirections: Record<string, "from" | "to">;
 		unplacedLinkType: LinkType;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		onUpdateText: (work: UnplacedWork, text: string) => void | Promise<void>;
 		onPlace: (workId: string, parentId: string | null) => void | Promise<void>;
 		onLink: (workId: string) => void | Promise<void>;
@@ -41,6 +48,7 @@
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
+	const definitions = $derived(relationTypeDefinitions ?? BUILT_IN_RELATION_TYPES);
 	const filteredWorks = $derived(
 		works.filter((work) => matchesOutlineFilter(work.text, outlineFilter)),
 	);
@@ -93,7 +101,7 @@
 						{/each}
 					</select>
 					<select aria-label={`${vocabulary.semanticLink}種別`} bind:value={unplacedLinkType}>
-						{#each LINK_TYPES as type}<option value={type}>{type}</option>{/each}
+						{#each definitions as def (def.name)}<option value={def.name}>{def.name}</option>{/each}
 					</select>
 					<button onclick={() => onLink(work.workId)}>{vocabulary.semanticLink}作成</button>
 				</div>

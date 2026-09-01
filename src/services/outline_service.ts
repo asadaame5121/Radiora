@@ -11,6 +11,8 @@ import type {
 	OutlineSnapshot,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
+	RelationTypeDirection,
 	ResolvedBookmark,
 	ResolvedResumePosition,
 	ResumePosition,
@@ -30,11 +32,16 @@ import type {
 	TrashEntry,
 	UnplacedWork,
 } from "../domain/models.ts";
+import {
+	BUILT_IN_RELATION_TYPES,
+	createCustomRelationTypeDefinition,
+} from "../domain/relation_type.ts";
 import type {
 	BackupStorePort,
 	DiscoveryStorePort,
 	OutlineStorePort,
 	RelationStorePort,
+	RelationTypeDefinitionStorePort,
 	WorkStorePort,
 } from "../storage/graph_store.ts";
 import {
@@ -83,7 +90,8 @@ type OutlineServiceStore =
 	& OutlineStorePort
 	& WorkStorePort
 	& RelationStorePort
-	& DiscoveryStorePort;
+	& DiscoveryStorePort
+	& Partial<RelationTypeDefinitionStorePort>;
 
 /** Compatibility façade for the desktop binding contract. */
 export class OutlineService {
@@ -91,6 +99,27 @@ export class OutlineService {
 
 	constructor(private readonly store: OutlineServiceStore) {
 		this.discovery = new DiscoveryOperations(store);
+	}
+
+	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]> {
+		if (this.store.listRelationTypeDefinitions) {
+			return this.store.listRelationTypeDefinitions();
+		}
+		return Promise.resolve(structuredClone([...BUILT_IN_RELATION_TYPES]));
+	}
+
+	async createRelationTypeDefinition(input: {
+		name: string;
+		direction: RelationTypeDirection;
+	}): Promise<RelationTypeDefinition> {
+		if (!this.store.createRelationTypeDefinition || !this.store.listRelationTypeDefinitions) {
+			throw new Error("This store does not support custom relation types.");
+		}
+
+		const current = await this.store.listRelationTypeDefinitions();
+		const definition = createCustomRelationTypeDefinition(input, current.map((d) => d.name));
+		await this.store.createRelationTypeDefinition(definition);
+		return definition;
 	}
 
 	listBookmarks(): Promise<Bookmark[]> {

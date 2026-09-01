@@ -40,6 +40,7 @@
 	import { createEditorController } from "./editor_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
+	import { RelationTypeController } from "./relation_type_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
 	import type { ContextMenuItem } from "./context_menu";
 	import { createRpcAdapter } from "./rpc_adapter";
@@ -52,6 +53,7 @@
 		OutlineLink,
 		OutlineSnapshot,
 		NavigationTarget,
+		RelationTypeDirection,
 		RuleQueryResult,
 		SavedRuleQuery,
 		SearchAlias,
@@ -62,7 +64,6 @@
 		RecoverySnapshot,
 		TransientProjectionNode,
 	} from "../domain/models";
-	import { isSymmetricLinkType, LINK_TYPES } from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
 	import type {
 		GlobalLineageProjection,
@@ -238,6 +239,7 @@
 	let treeFilter = $state<GlobalLineageFilter>(loadTreeFilterPreference());
 	let globalLineageRequest = 0;
 	const themeController = createThemeController();
+	const relationTypes = new RelationTypeController(api);
 	const workController = createWorkController({
 		api,
 		getSnapshot: () => snapshot,
@@ -275,6 +277,8 @@
 		errorMessage,
 		persistSnapshotCache: persistStartupSnapshotCache,
 		vocabulary,
+		relationTypeNames: () => relationTypes.names,
+		isSymmetricRelationType: (type) => relationTypes.isSymmetric(type),
 	});
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
@@ -357,7 +361,9 @@
 			link.fromId === selectedItem.workId || link.toId === selectedItem.workId
 		)
 		: []);
-	const semanticLinkAnnotations = $derived(projectSemanticLinkAnnotations(snapshot.items, snapshot.links));
+	const semanticLinkAnnotations = $derived(
+		projectSemanticLinkAnnotations(snapshot.items, snapshot.links, relationTypes.definitions),
+	);
 	const linkableWorks = $derived([
 		...new Map([
 			...snapshot.items.map((item) => [item.workId, { workId: item.workId, text: item.text }] as const),
@@ -643,6 +649,13 @@
 	}
 
 	async function loadStartupData(): Promise<void> {
+		await relationTypes.load();
+		const currentTreeFilter = loadTreeFilterPreference(undefined, relationTypes.names);
+		const reconciled = relationTypes.reconcileFilter(currentTreeFilter);
+		if (reconciled !== currentTreeFilter) {
+			saveTreeFilterPreference(reconciled);
+		}
+		treeFilter = reconciled;
 		const loaded = await load();
 		if (!loaded) return;
 		startupDataLoaded = true;
@@ -1601,8 +1614,20 @@
 		await load();
 	}
 
+	async function createRelationTypeDefinition(input: {
+		name: string;
+		direction: RelationTypeDirection;
+	}): Promise<void> {
+		await relationTypes.create(input);
+		const reconciled = relationTypes.reconcileFilter(treeFilter);
+		if (reconciled !== treeFilter) {
+			treeFilter = reconciled;
+			saveTreeFilterPreference(reconciled);
+		}
+	}
+
 	async function reverseLink(link: OutlineLink): Promise<void> {
-		if (link.origin === "derived" || isSymmetricLinkType(link.type)) return;
+		if (link.origin === "derived" || relationTypes.isSymmetric(link.type)) return;
 		await api.deleteLink(link.fromId, link.toId, link.type);
 		await api.createLink({
 			fromId: link.toId,
@@ -1772,7 +1797,7 @@
 	}
 
 	function inlineSemanticLinksFor(text: string) {
-		return parseInlineSemanticLinks(text);
+		return parseInlineSemanticLinks(text, relationTypes.names);
 	}
 
 	function semanticLinkAnnotationsFor(occurrenceId: string): SemanticLinkAnnotation[] {
@@ -1926,6 +1951,13 @@
 		try {
 			await editorController.flushAutosave();
 			const result = await api.restoreJsonBackup(await file.text());
+			await relationTypes.load();
+			const currentTreeFilter = loadTreeFilterPreference(undefined, relationTypes.names);
+			const reconciled = relationTypes.reconcileFilter(currentTreeFilter);
+			if (reconciled !== currentTreeFilter) {
+				saveTreeFilterPreference(reconciled);
+			}
+			treeFilter = reconciled;
 			await load();
 			jsonBackupNotice =
 				`${vocabulary.jsonBackupRestoreSuccess}: ${result.workCount}件の${vocabulary.work}。`;
@@ -2255,6 +2287,7 @@
 						{selectedId}
 						{internalReferenceCompletion}
 						{inlineLinkCompletion}
+						relationTypeDefinitions={relationTypes.definitions}
 						stashItemIdsLength={snapshot.stashItemIds.length}
 						knotsLength={snapshot.knots.length}
 						{openBreadcrumb}
@@ -2284,6 +2317,7 @@
 				works={unplacedWorks}
 				{linkableWorks}
 				{selectedId}
+				relationTypeDefinitions={relationTypes.definitions}
 				bind:outlineFilter
 				bind:unplacedLinkTargets={workController.unplacedLinkTargets}
 				bind:unplacedLinkDirections={workController.unplacedLinkDirections}
@@ -2343,6 +2377,8 @@
 				{inspectorCollapsed}
 				{inspectorWidth}
 				themePreference={themeController.preference}
+				relationTypeDefinitions={relationTypes.definitions}
+				onCreateRelationTypeDefinition={createRelationTypeDefinition}
 				onPersistMarkdownExportPreference={persistMarkdownExportPreference}
 				onExportMarkdown={exportMarkdown}
 				onImportOpml={importOpmlFile}
@@ -2444,6 +2480,7 @@
 			<GlobalLineage
 				projection={globalLineage}
 				filter={activeGlobalLineageFilter}
+				relationTypeDefinitions={relationTypes.definitions}
 				onFilterChange={handleGlobalLineageFilterChange}
 				{selectedId}
 				selectedWorkId={selectedItem?.workId ?? null}
@@ -2466,6 +2503,7 @@
 				{recoverySnapshots}
 				{commands}
 				{vocabulary}
+				relationTypeDefinitions={relationTypes.definitions}
 				inlineSemanticLinkNotice={inlineSemanticLinkNotice}
 				internalReferenceBacklinks={internalReferenceBacklinks}
 				internalReferenceNotice={internalReferenceNotice}

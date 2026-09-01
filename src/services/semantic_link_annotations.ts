@@ -1,9 +1,10 @@
 import {
-	isSymmetricLinkType,
 	type LinkType,
 	type OutlineItem,
 	type OutlineLink,
+	type RelationTypeDefinition,
 } from "../domain/models.ts";
+import { BUILT_IN_RELATION_TYPES, isRelationTypeSymmetric } from "../domain/relation_type.ts";
 import { titleFromText } from "./search_text.ts";
 
 export type SemanticLinkAnnotationDirection = "outgoing" | "incoming" | "symmetric";
@@ -37,6 +38,7 @@ export interface SemanticLinkAnnotation {
 export function projectSemanticLinkAnnotations(
 	items: readonly OutlineItem[],
 	links: readonly OutlineLink[],
+	relationTypeDefinitions: readonly RelationTypeDefinition[] = BUILT_IN_RELATION_TYPES,
 ): SemanticLinkAnnotation[] {
 	const itemsByWorkId = new Map<string, OutlineItem[]>();
 	for (const item of items) {
@@ -63,7 +65,7 @@ export function projectSemanticLinkAnnotations(
 		// current semantic-link operations. Ignore legacy data defensively.
 		if (fromWorkId === toWorkId) continue;
 
-		const symmetric = isSymmetricLinkType(link.type);
+		const symmetric = isRelationTypeSymmetric(link.type, relationTypeDefinitions);
 		appendAnnotations(
 			annotations,
 			itemsByWorkId.get(fromWorkId) ?? [],

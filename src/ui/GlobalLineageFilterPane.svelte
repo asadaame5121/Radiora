@@ -1,17 +1,23 @@
 <script lang="ts">
 	import { Tabs } from "bits-ui";
-	import { LINK_TYPES, type LinkType } from "../domain/models";
-	import type { GlobalLineageFilter } from "../services/global_lineage_filter";
-	import type { UiVocabulary } from "../shared/ui_vocabulary";
+	import type { LinkType, RelationTypeDefinition } from "../domain/models.ts";
+	import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
+	import type { GlobalLineageFilter } from "../services/global_lineage_filter.ts";
+	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 
-	let { filter, vocabulary, onFilterChange }: {
+	let { filter, vocabulary, relationTypeDefinitions, onFilterChange }: {
 		filter: GlobalLineageFilter;
 		vocabulary: UiVocabulary;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		onFilterChange: (filter: GlobalLineageFilter) => void;
 	} = $props();
 
+	const definitions = $derived(relationTypeDefinitions ?? BUILT_IN_RELATION_TYPES);
+
 	function setLinkType(type: LinkType, enabled: boolean): void {
-		const linkTypes = enabled ? [...filter.linkTypes, type] : filter.linkTypes.filter((candidate) => candidate !== type);
+		const linkTypes = enabled
+			? (filter.linkTypes.includes(type) ? filter.linkTypes : [...filter.linkTypes, type])
+			: filter.linkTypes.filter((candidate) => candidate !== type);
 		onFilterChange({ ...filter, linkTypes });
 	}
 </script>
@@ -25,13 +31,13 @@
 				孤立{vocabulary.work}を表示
 			</label>
 			<div class="filter-types">
-				{#each [...LINK_TYPES] as type (type)}
+				{#each definitions as def (def.name)}
 					<!-- biome-ignore lint/a11y/noLabelWithoutControl: The checkbox is directly nested in this label. -->
-					<label class="filter-toggle"><input type="checkbox" checked={filter.linkTypes.includes(type)} onchange={(event) => setLinkType(type, event.currentTarget.checked)} /> {type}</label>
+					<label class="filter-toggle"><input type="checkbox" checked={filter.linkTypes.includes(def.name)} onchange={(event) => setLinkType(def.name, event.currentTarget.checked)} /> {def.name}</label>
 				{/each}
 			</div>
 			<div class="filter-actions">
-				<button type="button" onclick={() => onFilterChange({ ...filter, linkTypes: [...LINK_TYPES] })}>すべて選択</button>
+				<button type="button" onclick={() => onFilterChange({ ...filter, linkTypes: definitions.map((d) => d.name) })}>すべて選択</button>
 				<button type="button" onclick={() => onFilterChange({ ...filter, linkTypes: [] })}>すべて解除</button>
 			</div>
 		</div>

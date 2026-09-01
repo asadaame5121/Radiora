@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { RelationTypeDefinition } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { VisibleRow } from "./outline_view_model.ts";
 	import type {
@@ -21,6 +22,7 @@
 		vocabulary,
 		internalReferenceCompletion,
 		inlineLinkCompletion,
+		relationTypeDefinitions,
 		handlers,
 		helpers,
 		onDragStart,
@@ -32,6 +34,7 @@
 		vocabulary: UiVocabulary;
 		internalReferenceCompletion: InternalReferenceCompletionState | null;
 		inlineLinkCompletion: InlineLinkCompletionState | null;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		handlers: OutlineRowHandlers;
 		helpers: OutlineHelpers;
 		onDragStart: (id: string) => void;
@@ -104,6 +107,7 @@
 				completion={inlineLinkCompletion}
 				itemTitle={helpers.titleFor(row.item)}
 				{vocabulary}
+				{relationTypeDefinitions}
 				onSearch={(query) => void handlers.updateInlineLinkSearch(row.item.id, query)}
 				onKeydown={(event) => handlers.handleInlineLinkOmniKeydown(event, row.item.id)}
 				onSelectCandidate={(candidate) => handlers.selectInlineLinkCandidate(row.item.id, candidate)}

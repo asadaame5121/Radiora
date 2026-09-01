@@ -1,7 +1,9 @@
 import type { LinkType, OutlineItem, SearchAlias, Work } from "../domain/models.ts";
+import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 import type {
 	DiscoveryStorePort,
 	OutlineStorePort,
+	RelationTypeDefinitionStorePort,
 	WorkStorePort,
 } from "../storage/graph_store.ts";
 import { parseAdvancedLinkInput } from "./advanced_link_parser.ts";
@@ -10,7 +12,11 @@ import { normalizeSearchText, titleFromText } from "./search_text.ts";
 export type AdvancedLinkMatchKind = "exact" | "alias" | "short-id" | "selected";
 export type AdvancedLinkResolutionStatus = "resolved" | "ambiguous" | "unresolved";
 
-type AdvancedLinkStore = OutlineStorePort & WorkStorePort & DiscoveryStorePort;
+type AdvancedLinkStore =
+	& OutlineStorePort
+	& WorkStorePort
+	& DiscoveryStorePort
+	& Partial<RelationTypeDefinitionStorePort>;
 
 export interface AdvancedLinkPlacement {
 	occurrenceId: string;
@@ -67,7 +73,14 @@ export class AdvancedLinkResolverService {
 		input: string,
 		selections: AdvancedLinkSelections = {},
 	): Promise<AdvancedLinkResolution> {
-		const parsed = parseAdvancedLinkInput(input);
+		const definitions = this.store.listRelationTypeDefinitions
+			? await this.store.listRelationTypeDefinitions()
+			: BUILT_IN_RELATION_TYPES;
+		const parsed = parseAdvancedLinkInput(
+			input,
+			definitions.map((d) => d.name),
+		);
+		const matchingDefinition = definitions.find((d) => d.name === parsed.type);
 		const [works, items, branches, workingCopies, aliases] = await Promise.all([
 			this.store.listWorks(),
 			this.store.listItems(),
@@ -89,6 +102,7 @@ export class AdvancedLinkResolverService {
 						source.candidates[0].displayName,
 						parsed.type,
 						target.candidates[0].displayName,
+						matchingDefinition?.direction,
 					),
 				}
 				: {}),
@@ -226,7 +240,12 @@ function toCandidate(
 	};
 }
 
-export function previewDirection(source: string, type: LinkType, target: string): string {
+export function previewDirection(
+	source: string,
+	type: LinkType,
+	target: string,
+	direction?: "directed" | "symmetric",
+): string {
 	switch (type) {
 		case "FROM":
 			return `「${source}」は「${target}」から派生します。`;
@@ -244,5 +263,13 @@ export function previewDirection(source: string, type: LinkType, target: string)
 			return `「${source}」と「${target}」は類似します。`;
 		case "VS":
 			return `「${source}」と「${target}」は対立します。`;
+		default:
+			if (direction === "symmetric") {
+				return `「${source}」と「${target}」は ${type} 関係（双方向）です。`;
+			}
+			if (direction === "directed") {
+				return `「${source}」は「${target}」へ ${type} 関係（有向）です。`;
+			}
+			return `「${source}」は「${target}」と ${type} 関係です。`;
 	}
 }
