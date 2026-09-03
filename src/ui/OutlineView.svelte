@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { OutlineItem } from "../domain/models.ts";
+	import type { OutlineItem, RelationTypeDefinition } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { VisibleRow } from "./outline_view_model.ts";
 	import type {
@@ -27,6 +27,7 @@
 		selectedId,
 		internalReferenceCompletion,
 		inlineLinkCompletion,
+		relationTypeDefinitions,
 		stashItemIdsLength,
 		knotsLength,
 		openBreadcrumb,
@@ -48,6 +49,7 @@
 		selectedId: string | null;
 		internalReferenceCompletion: InternalReferenceCompletionState | null;
 		inlineLinkCompletion: InlineLinkCompletionState | null;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		stashItemIdsLength: number;
 		knotsLength: number;
 		openBreadcrumb: (id: string) => void;
@@ -105,6 +107,7 @@
 				{vocabulary}
 				{internalReferenceCompletion}
 				{inlineLinkCompletion}
+				{relationTypeDefinitions}
 				{handlers}
 				{helpers}
 				onDragStart={(id) => (draggedId = id)}

@@ -18,6 +18,7 @@ export type LinkEditorControllerPorts = {
 	onReverse: (link: OutlineLink) => void | Promise<void>;
 	onCompare?: (link: OutlineLink) => void | Promise<void>;
 	onSearch: (request: SearchRequest | string) => Promise<SearchResult[]>;
+	isSymmetricRelationType?: (type: LinkType) => boolean;
 };
 
 export class LinkEditorController {
@@ -138,8 +139,11 @@ export class LinkEditorController {
 	}
 
 	async reverseLink(link: OutlineLink): Promise<void> {
+		const isSymmetric = this.ports.isSymmetricRelationType
+			? this.ports.isSymmetricRelationType(link.type)
+			: isSymmetricLinkType(link.type);
 		if (
-			this.activeLinkId || this.submitting || isSymmetricLinkType(link.type) ||
+			this.activeLinkId || this.submitting || isSymmetric ||
 			link.origin === "derived"
 		) return;
 		try {

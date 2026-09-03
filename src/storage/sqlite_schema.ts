@@ -17,6 +17,7 @@ export const SQLITE_RECORD_TABLES = [
 	"purge_manifest",
 	"bookmark",
 	"resume_position",
+	"relation_type_definition",
 ] as const;
 
 const RECORD_TABLE_DDL = SQLITE_RECORD_TABLES.map((table) => `

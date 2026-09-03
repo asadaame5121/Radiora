@@ -2,6 +2,7 @@
 // @ts-nocheck
 import { assertEquals } from "jsr:@std/assert@1";
 import { LINK_TYPES } from "../domain/models.ts";
+import { defaultGlobalLineageFilter } from "../services/global_lineage_filter.ts";
 import {
 	loadTreeFilterPreference,
 	saveTreeFilterPreference,
@@ -71,4 +72,23 @@ Deno.test("save and load tolerate an unavailable storage", () => {
 	const loaded = loadTreeFilterPreference(null);
 	assertEquals(loaded.includeIsolated, true);
 	assertEquals([...loaded.linkTypes], [...LINK_TYPES]);
+});
+
+Deno.test("loadTreeFilterPreference loads custom allowed link types and falls back on unallowed types", () => {
+	const customAllowed = [...LINK_TYPES, "CAUSES"] as const;
+	const storage = new MemoryStorage();
+	storage.setItem(
+		TREE_FILTER_STORAGE_KEY,
+		JSON.stringify({ includeIsolated: false, linkTypes: ["CAUSES"] }),
+	);
+
+	const loadedCustom = loadTreeFilterPreference(storage, customAllowed);
+	assertEquals(loadedCustom, {
+		includeIsolated: false,
+		linkTypes: ["CAUSES"],
+		includeWorkIds: [],
+	});
+
+	const loadedDefault = loadTreeFilterPreference(storage);
+	assertEquals(loadedDefault, defaultGlobalLineageFilter());
 });

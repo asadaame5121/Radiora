@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import type { LinkType, OutlineItem, OutlineLink } from "../domain/models.ts";
+import { LINK_TYPES, type LinkType, type OutlineItem, type OutlineLink } from "../domain/models.ts";
 import {
 	applyGlobalLineageFilter,
 	defaultGlobalLineageFilter,
@@ -155,4 +155,20 @@ Deno.test("filter validation rejects malformed input and accepts valid input", (
 	);
 	assertEquals(isValidGlobalLineageFilter(null), false);
 	assertEquals(isValidGlobalLineageFilter("filter"), false);
+});
+
+Deno.test("filter validation accepts custom link types when explicitly allowed and rejects otherwise", () => {
+	const customAllowed = [...LINK_TYPES, "CAUSES"] as const;
+	const filterWithCustom = {
+		includeIsolated: true,
+		linkTypes: ["CAUSES"],
+		includeWorkIds: [],
+	};
+
+	assertEquals(isValidGlobalLineageFilter(filterWithCustom, customAllowed), true);
+	assertEquals(isValidGlobalLineageFilter(filterWithCustom), false);
+
+	const customDefault = defaultGlobalLineageFilter(customAllowed as readonly LinkType[]);
+	assertEquals(customDefault.linkTypes.includes("CAUSES"), true);
+	assertEquals(customDefault.linkTypes.length, customAllowed.length);
 });

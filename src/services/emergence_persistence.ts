@@ -4,20 +4,25 @@ import type {
 	EmergenceSuggestion,
 	OutlineLink,
 } from "../domain/models.ts";
-import { isSymmetricLinkType } from "../domain/models.ts";
-import type { DiscoveryStorePort } from "../storage/graph_store.ts";
+import { isRelationTypeSymmetric } from "../domain/relation_type.ts";
+import type {
+	DiscoveryStorePort,
+	RelationTypeDefinitionStorePort,
+} from "../storage/graph_store.ts";
 import {
 	type EmergenceCandidate,
 	emergenceSuggestionFingerprint,
 } from "./emergence_suggestion_calculator.ts";
 
-type EmergencePersistenceStore = Pick<
-	DiscoveryStorePort,
-	| "getEmergenceFeedback"
-	| "listEmergenceSuggestions"
-	| "resolveEmergenceSuggestion"
-	| "upsertEmergenceSuggestion"
->;
+type EmergencePersistenceStore =
+	& Pick<
+		DiscoveryStorePort,
+		| "getEmergenceFeedback"
+		| "listEmergenceSuggestions"
+		| "resolveEmergenceSuggestion"
+		| "upsertEmergenceSuggestion"
+	>
+	& Partial<Pick<RelationTypeDefinitionStorePort, "listRelationTypeDefinitions">>;
 
 function statusFromFeedback(
 	feedback: "accept" | "dismiss" | "pin" | null,
@@ -95,8 +100,12 @@ export class EmergencePersistence {
 		if (!suggestion.proposedLinkType) throw new Error("リンク種別のない提案は採用できません。");
 		let fromWorkId = suggestion.contextWorkId;
 		let toWorkId = suggestion.targetWorkId;
+		const definitions = this.store.listRelationTypeDefinitions
+			? await this.store.listRelationTypeDefinitions()
+			: undefined;
 		if (
-			isSymmetricLinkType(suggestion.proposedLinkType) && fromWorkId.localeCompare(toWorkId) > 0
+			isRelationTypeSymmetric(suggestion.proposedLinkType, definitions) &&
+			fromWorkId.localeCompare(toWorkId) > 0
 		) [fromWorkId, toWorkId] = [toWorkId, fromWorkId];
 		const link: OutlineLink = {
 			id: crypto.randomUUID(),

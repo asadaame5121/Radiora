@@ -3,6 +3,7 @@
 	import { onMount } from "svelte";
 	import type { GlobalLineageProjection } from "../services/branch_service";
 	import type { GlobalLineageFilter } from "../services/global_lineage_filter";
+	import type { RelationTypeDefinition } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary";
 	import GlobalLineageDisplayedPane from "./GlobalLineageDisplayedPane.svelte";
 	import GlobalLineageFilterPane from "./GlobalLineageFilterPane.svelte";
@@ -19,6 +20,7 @@
 		inspectCluster,
 		activeTab,
 		vocabulary,
+		relationTypeDefinitions,
 		onTabChange,
 		onFilterChange,
 		onSelect,
@@ -31,6 +33,7 @@
 		inspectCluster: TreeLayoutNode | null;
 		activeTab: SidebarTab;
 		vocabulary: UiVocabulary;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		onTabChange: (tab: SidebarTab) => void;
 		onFilterChange: (filter: GlobalLineageFilter) => void;
 		onSelect: (id: string | null) => void;
@@ -132,7 +135,7 @@
 			{onZoomToCluster}
 		/>
 		<GlobalLineageDisplayedPane {projection} {vocabulary} />
-		<GlobalLineageFilterPane {filter} {vocabulary} {onFilterChange} />
+		<GlobalLineageFilterPane {filter} {vocabulary} {onFilterChange} {relationTypeDefinitions} />
 	</Tabs.Root>
 	<button class="sidebar-close" type="button" aria-label="閉じる" onclick={closeDrawer}>×</button>
 </aside>

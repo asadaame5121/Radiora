@@ -190,6 +190,42 @@ Deno.test("semantic link annotation projection is read-only and does not persist
 	assertEquals(first[0].reason, "説明");
 });
 
+Deno.test("semantic link annotations use relationTypeDefinitions for custom directed and symmetric types", () => {
+	const items = [
+		outlineItem("occ-1", "work-1", "Work 1"),
+		outlineItem("occ-2", "work-2", "Work 2"),
+	];
+	const links = [
+		semanticLink("custom-sym", "work-1", "work-2", "COLLABORATES", "共同執筆"),
+		semanticLink("custom-dir", "work-1", "work-2", "CAUSES", "原因と結果"),
+	];
+	const customDefs = [
+		{
+			name: "COLLABORATES",
+			direction: "symmetric" as const,
+			builtIn: false,
+			createdAt: NOW,
+		},
+		{
+			name: "CAUSES",
+			direction: "directed" as const,
+			builtIn: false,
+			createdAt: NOW,
+		},
+	];
+
+	const projected = projectSemanticLinkAnnotations(items, links, customDefs);
+	const collabs = projected.filter((p) => p.type === "COLLABORATES");
+	assertEquals(collabs.length, 2);
+	assertEquals(collabs[0].direction, "symmetric");
+	assertEquals(collabs[1].direction, "symmetric");
+
+	const causes = projected.filter((p) => p.type === "CAUSES");
+	assertEquals(causes.length, 2);
+	assertEquals(causes.find((p) => p.occurrenceId === "occ-1")?.direction, "outgoing");
+	assertEquals(causes.find((p) => p.occurrenceId === "occ-2")?.direction, "incoming");
+});
+
 function outlineItem(
 	id: string,
 	workId: string,

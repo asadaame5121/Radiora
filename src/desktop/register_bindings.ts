@@ -13,7 +13,7 @@ import type {
 	StartupSnapshotCache,
 	StartupSnapshotLocation,
 } from "../services/startup_snapshot_cache.ts";
-import type { OutlineSnapshot } from "../domain/models.ts";
+import { LINK_TYPES, type OutlineSnapshot } from "../domain/models.ts";
 
 export interface BindingContext {
 	getService(): OutlineService | null;
@@ -45,6 +45,8 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		saveStartupSnapshotCache: async (snapshot, location) => {
 			await context.saveStartupSnapshotCache?.(snapshot, location);
 		},
+		listRelationTypeDefinitions: () => service().listRelationTypeDefinitions(),
+		createRelationTypeDefinition: (input) => service().createRelationTypeDefinition(input),
 		listOutline: () => service().listOutline(),
 		projectDates: (range) => service().projectDates(range),
 		projectManuscript: (rootOccurrenceId) => service().projectManuscript(rootOccurrenceId),
@@ -74,10 +76,16 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 				confirmation,
 				message,
 			),
-		listGlobalLineage: async (filter) =>
-			service().listGlobalLineage(
-				filter === undefined ? defaultGlobalLineageFilter() : validateFilter(filter),
-			),
+		listGlobalLineage: async (filter) => {
+			const current = service();
+			const defs = await current.listRelationTypeDefinitions();
+			const allowedNames = defs.map((d) => d.name);
+			return current.listGlobalLineage(
+				filter === undefined
+					? defaultGlobalLineageFilter(allowedNames)
+					: validateFilter(filter, allowedNames),
+			);
+		},
 		listWorkLineage: (workId) => service().listWorkLineage(workId),
 		rewriteAsNewBranch: (sourceBranchId, newBranchName, confirmation) => {
 			service();
@@ -141,8 +149,11 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 	};
 }
 
-export function validateFilter(input: unknown): GlobalLineageFilter {
-	if (isValidGlobalLineageFilter(input)) return input;
+export function validateFilter(
+	input: unknown,
+	allowedTypes: readonly string[] = LINK_TYPES,
+): GlobalLineageFilter {
+	if (isValidGlobalLineageFilter(input, allowedTypes)) return input;
 	throw new Error(
 		"Invalid GlobalLineageFilter: expected includeIsolated, linkTypes, and includeWorkIds",
 	);

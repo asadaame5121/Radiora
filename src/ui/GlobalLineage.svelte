@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { LINK_TYPES } from "../domain/models";
+	import type { RelationTypeDefinition } from "../domain/models.ts";
+	import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 	import type { GlobalLineageProjection } from "../services/branch_service";
 	import type { GlobalLineageFilter } from "../services/global_lineage_filter";
 	import type { TreeBounds } from "./tree_camera";
@@ -13,6 +14,7 @@
 		selectedId = null,
 		selectedWorkId = null,
 		filter,
+		relationTypeDefinitions,
 		onFilterChange,
 		onSelect,
 		onOpen,
@@ -23,6 +25,7 @@
 		selectedId?: string | null;
 		selectedWorkId?: string | null;
 		filter: GlobalLineageFilter;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		onFilterChange: (filter: GlobalLineageFilter) => void;
 		onSelect: (id: string | null) => void;
 		onOpen: (id: string) => void;
@@ -31,6 +34,7 @@
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
+	const definitions = $derived(relationTypeDefinitions ?? BUILT_IN_RELATION_TYPES);
 
 	type SidebarTab = "inspect" | "displayed" | "filter";
 	let activeTab = $state<SidebarTab>("displayed");
@@ -38,7 +42,7 @@
 	let treeElement: PhylogeneticTree | null = null;
 
 	const activeConditionCount = $derived(
-		(LINK_TYPES.length - filter.linkTypes.length) + (filter.includeIsolated ? 0 : 1),
+		(definitions.length - filter.linkTypes.length) + (filter.includeIsolated ? 0 : 1),
 	);
 	const isFilterActive = $derived(
 		projection.filteredWorkCount < projection.totalWorkCount || activeConditionCount > 0,
@@ -103,6 +107,7 @@
 		{inspectCluster}
 		{activeTab}
 		vocabulary={vocabulary}
+		relationTypeDefinitions={definitions}
 		onTabChange={(tab) => (activeTab = tab)}
 		{onFilterChange}
 		{onSelect}

@@ -1,4 +1,5 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 import { OutlineService } from "./outline_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 
@@ -524,4 +525,93 @@ Deno.test("repairing a cycle removes the stale knot and stash projection", async
 	assertEquals(repaired.knots, []);
 	assertEquals(repaired.stashItemIds, []);
 	assertEquals(repaired.items.find((item) => item.id === b.id)?.parentId, a.id);
+});
+
+Deno.test("OutlineService listRelationTypeDefinitions returns built-ins", async () => {
+	const service = new OutlineService(new MemoryGraphStore());
+	const list = await service.listRelationTypeDefinitions();
+	assertEquals(list, BUILT_IN_RELATION_TYPES);
+});
+
+Deno.test("OutlineService createRelationTypeDefinition normalizes name and creates custom definition", async () => {
+	const service = new OutlineService(new MemoryGraphStore());
+	const created = await service.createRelationTypeDefinition({
+		name: " custom_rel ",
+		direction: "directed",
+	});
+	assertEquals(created.name, "CUSTOM_REL");
+	assertEquals(created.direction, "directed");
+	assertEquals(created.builtIn, false);
+	assertEquals(typeof created.createdAt, "string");
+
+	const list = await service.listRelationTypeDefinitions();
+	assertEquals(list, [...BUILT_IN_RELATION_TYPES, created]);
+});
+
+Deno.test("OutlineService createRelationTypeDefinition rejects invalid inputs, built-ins, and duplicates", async () => {
+	const service = new OutlineService(new MemoryGraphStore());
+
+	// Invalid input shape
+	await assertRejects(
+		() =>
+			service.createRelationTypeDefinition(
+				null as unknown as { name: string; direction: "directed" },
+			),
+		Error,
+	);
+	await assertRejects(
+		() =>
+			service.createRelationTypeDefinition({
+				name: 123 as unknown as string,
+				direction: "directed",
+			}),
+		Error,
+	);
+
+	// Built-in name collision
+	await assertRejects(
+		() =>
+			service.createRelationTypeDefinition({
+				name: "RELATED",
+				direction: "symmetric",
+			}),
+		Error,
+	);
+
+	// Invalid direction
+	await assertRejects(
+		() =>
+			service.createRelationTypeDefinition({
+				name: "CUSTOM_DIR",
+				direction: "both" as unknown as "directed",
+			}),
+		Error,
+	);
+
+	// Invalid name (characters)
+	await assertRejects(
+		() =>
+			service.createRelationTypeDefinition({
+				name: "INVALID/NAME",
+				direction: "directed",
+			}),
+		Error,
+	);
+
+	// Valid creation
+	const created = await service.createRelationTypeDefinition({
+		name: "CUSTOM_ONE",
+		direction: "directed",
+	});
+	assertEquals(created.name, "CUSTOM_ONE");
+
+	// Duplicate creation
+	await assertRejects(
+		() =>
+			service.createRelationTypeDefinition({
+				name: "custom_one",
+				direction: "directed",
+			}),
+		Error,
+	);
 });

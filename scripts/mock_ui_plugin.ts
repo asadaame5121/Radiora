@@ -3,9 +3,11 @@ import type {
 	OutlineItem,
 	OutlineLink,
 	OutlineSnapshot,
+	RelationTypeDefinition,
 	Revision,
 	ScopedTagSet,
 } from "../src/domain/models.ts";
+import { BUILT_IN_RELATION_TYPES } from "../src/domain/relation_type.ts";
 
 type MockNode = {
 	id: string;
@@ -282,6 +284,9 @@ export function mockUiPlugin(): Plugin {
 		}>
 	>();
 	const tagScopes = mockTagScopes(snapshot);
+	const relationTypes: RelationTypeDefinition[] = BUILT_IN_RELATION_TYPES.map((def) => ({
+		...def,
+	}));
 	return {
 		name: "radiora-mock-ui-api",
 		configureServer(server) {
@@ -310,6 +315,23 @@ export function mockUiPlugin(): Plugin {
 					case "retryStartup":
 						result = { phase: "ready", message: "Radiora is ready." };
 						break;
+					case "listRelationTypeDefinitions":
+						result = relationTypes;
+						break;
+					case "createRelationTypeDefinition": {
+						const input = args[0] as { name?: string; direction?: string };
+						const name = String(input?.name ?? "").toUpperCase();
+						const direction = input?.direction === "symmetric" ? "symmetric" : "directed";
+						const created: RelationTypeDefinition = {
+							name,
+							direction,
+							builtIn: false,
+							createdAt: new Date().toISOString(),
+						};
+						relationTypes.push(created);
+						result = created;
+						break;
+					}
 					case "listOutline":
 						result = snapshot;
 						break;

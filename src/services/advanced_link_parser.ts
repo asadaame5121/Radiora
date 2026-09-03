@@ -41,7 +41,10 @@ export interface AdvancedLinkInput {
  *
  * An optional reason may follow the link type: `TYPE("説明文")`.
  */
-export function parseAdvancedLinkInput(input: string): AdvancedLinkInput {
+export function parseAdvancedLinkInput(
+	input: string,
+	allowedTypes: readonly string[] = LINK_TYPES,
+): AdvancedLinkInput {
 	const source = readField(input, 0, "source");
 	if (!source.hasDelimiter) throw missingDelimiter("source", source.end);
 
@@ -58,7 +61,8 @@ export function parseAdvancedLinkInput(input: string): AdvancedLinkInput {
 	}
 
 	const reason = extractReason(type.value, type.start);
-	const normalizedType = LINK_TYPES.find((candidate) => candidate === reason.type.toUpperCase());
+	const normalizedInputType = reason.type.trim().toUpperCase();
+	const normalizedType = allowedTypes.find((candidate) => candidate === normalizedInputType);
 	if (!normalizedType) {
 		throw new AdvancedLinkParseError(
 			"UNKNOWN_LINK_TYPE",
@@ -70,7 +74,7 @@ export function parseAdvancedLinkInput(input: string): AdvancedLinkInput {
 
 	const result: AdvancedLinkInput = {
 		source: source.value,
-		type: normalizedType,
+		type: normalizedType as LinkType,
 		target: target.value,
 	};
 	if (reason.reason !== undefined) result.reason = reason.reason;

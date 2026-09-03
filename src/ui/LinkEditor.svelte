@@ -4,10 +4,12 @@
 		CreateLinkInput,
 		OutlineItem,
 		OutlineLink,
+		RelationTypeDefinition,
 		SearchRequest,
 		SearchResult,
 	} from "../domain/models.ts";
-	import { isSymmetricLinkType, LINK_TYPES } from "../domain/models.ts";
+	import { isSymmetricLinkType } from "../domain/models.ts";
+	import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 	import { isComparableLinkType } from "../services/comparison_service.ts";
 	import {
 		LinkEditorController,
@@ -20,17 +22,27 @@
 		selectedDisplayName?: string;
 		links: readonly OutlineLink[];
 		titleForWork: (workId: string) => string;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 	};
 
 	let props: LinkEditorProps = $props();
 
 	const vocabulary = useUiVocabulary();
+	const definitions = $derived(props.relationTypeDefinitions ?? BUILT_IN_RELATION_TYPES);
+	const definitionMap = $derived(new Map(definitions.map((def) => [def.name, def])));
+
+	function isSymmetricType(type: string): boolean {
+		const def = definitionMap.get(type);
+		return def ? def.direction === "symmetric" : isSymmetricLinkType(type);
+	}
+
 	const controller = new LinkEditorController({
 		onConfirm: (input) => props.onConfirm(input),
 		onDelete: (link) => props.onDelete(link),
 		onReverse: (link) => props.onReverse(link),
 		onCompare: (link) => props.onCompare?.(link),
 		onSearch: (req) => props.onSearch(req),
+		isSymmetricRelationType: (type) => isSymmetricType(type),
 	});
 
 	let initializedWorkId = "";
@@ -62,7 +74,7 @@
 	}
 
 	function linkDirection(link: OutlineLink): string {
-		if (isSymmetricLinkType(link.type)) return "↔";
+		if (isSymmetricType(link.type)) return "↔";
 		return link.fromId === props.selectedWorkId ? "→" : "←";
 	}
 
@@ -96,8 +108,8 @@
 							{/if}
 							<button
 								type="button"
-								disabled={Boolean(controller.activeLinkId) || controller.submitting || isSymmetricLinkType(link.type) || link.origin === "derived"}
-								title={link.origin === "derived" ? "アウトライン階層から導出された関係のため直接変更できません" : isSymmetricLinkType(link.type) ? "対称な関係には向きがありません" : "向きを反転"}
+								disabled={Boolean(controller.activeLinkId) || controller.submitting || isSymmetricType(link.type) || link.origin === "derived"}
+								title={link.origin === "derived" ? "アウトライン階層から導出された関係のため直接変更できません" : isSymmetricType(link.type) ? "対称な関係には向きがありません" : "向きを反転"}
 								onclick={() => void controller.reverseLink(link)}
 							>反転</button>
 							<button
@@ -120,8 +132,8 @@
 			<label>
 				<span>{vocabulary.linkType}</span>
 				<select bind:value={controller.selectedType} disabled={controller.submitting} aria-label={`${vocabulary.semanticLink}種別`}>
-					{#each LINK_TYPES as type}
-						<option value={type}>{type}</option>
+					{#each definitions as def (def.name)}
+						<option value={def.name}>{def.name}</option>
 					{/each}
 				</select>
 			</label>
@@ -133,7 +145,7 @@
 				</select>
 			</label>
 		</div>
-		{#if isSymmetricLinkType(controller.selectedType)}
+		{#if isSymmetricType(controller.selectedType)}
 			<p class="link-editor-hint">{controller.selectedType}は対称な関係のため、保存時に向きは正規化されます。</p>
 		{/if}
 		<label>

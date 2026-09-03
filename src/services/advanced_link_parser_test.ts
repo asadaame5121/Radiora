@@ -95,3 +95,26 @@ for (
 		assertEquals(typeof error.position, "number");
 	});
 }
+
+Deno.test("Advanced Link parser accepts allowed custom link types and rejects unregistered types by default", () => {
+	const allowed = ["FROM", "SUPPORT", "CUSTOM_DIR", "CUSTOM_SYM"] as const;
+
+	assertEquals(parseAdvancedLinkInput("source :: custom_dir :: target", allowed), {
+		source: "source",
+		type: "CUSTOM_DIR",
+		target: "target",
+	});
+
+	assertEquals(parseAdvancedLinkInput('source :: CUSTOM_SYM("理由") :: target', allowed), {
+		source: "source",
+		type: "CUSTOM_SYM",
+		target: "target",
+		reason: "理由",
+	});
+
+	const error = assertThrows(
+		() => parseAdvancedLinkInput("source :: custom_dir :: target"),
+		AdvancedLinkParseError,
+	);
+	assertEquals(error.code, "UNKNOWN_LINK_TYPE");
+});

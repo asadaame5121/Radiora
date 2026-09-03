@@ -4,12 +4,13 @@ import type {
 	OutlineItem,
 	OutlineLink,
 	RecoverySnapshot,
+	RelationTypeDefinition,
 	Revision,
 	SearchAlias,
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
-import { isSymmetricLinkType } from "../domain/models.ts";
+import { BUILT_IN_RELATION_TYPES, isRelationTypeSymmetric } from "../domain/relation_type.ts";
 import type { MergeWorksInput } from "./graph_store.ts";
 
 export function validateMergeInput(
@@ -54,10 +55,15 @@ export function mergedBranchName(
 	return candidate;
 }
 
-export function replaceEndpointWork(endpoint: LinkEndpoint, input: MergeWorksInput): LinkEndpoint {
-	return endpoint.workId === input.sourceWorkId
-		? { ...endpoint, workId: input.survivorWorkId }
-		: endpoint;
+export function replaceEndpointWork(
+	endpoint: LinkEndpoint,
+	input: MergeWorksInput,
+): LinkEndpoint {
+	if (endpoint.workId !== input.sourceWorkId) return endpoint;
+	return {
+		...endpoint,
+		workId: input.survivorWorkId,
+	};
 }
 
 export function endpointKey(endpoint: LinkEndpoint): string {
@@ -66,16 +72,18 @@ export function endpointKey(endpoint: LinkEndpoint): string {
 		: `work:${endpoint.workId}`;
 }
 
-export function retractDuplicateActiveLinks(links: OutlineLink[]): void {
+export function retractDuplicateActiveLinks(
+	links: OutlineLink[],
+	relationTypeDefinitions: readonly RelationTypeDefinition[] = BUILT_IN_RELATION_TYPES,
+): void {
 	const seen = new Set<string>();
 	for (const link of links) {
 		if (link.status === "retracted") continue;
 		const left = endpointKey(link.from);
 		const right = endpointKey(link.to);
 		const self = left === right;
-		const endpoints = isSymmetricLinkType(link.type) && left > right
-			? `${right}|${left}`
-			: `${left}|${right}`;
+		const isSymmetric = isRelationTypeSymmetric(link.type, relationTypeDefinitions);
+		const endpoints = isSymmetric && left > right ? `${right}|${left}` : `${left}|${right}`;
 		const key = `${link.type}|${endpoints}`;
 		if (self || seen.has(key)) link.status = "retracted";
 		else seen.add(key);

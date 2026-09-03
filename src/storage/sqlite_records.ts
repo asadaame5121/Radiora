@@ -121,6 +121,7 @@ export const TABLE_FOR_STATE: Record<
 	savedRuleQueries: "saved_rule_query",
 	purgeManifests: "purge_manifest",
 	bookmarks: "bookmark",
+	relationTypeDefinitions: "relation_type_definition",
 };
 
 export const ARRAY_STATE_KEYS = Object.keys(TABLE_FOR_STATE) as Array<
@@ -136,9 +137,15 @@ export function hasPersistedState(state: GraphStateSnapshot): boolean {
 		Object.keys(state.emergenceFeedback).length > 0 || state.resumePosition !== null;
 }
 
+export function recordIdentityKey(table: RecordTable): string {
+	if (table === "working_copy") return "branchId";
+	if (table === "relation_type_definition") return "name";
+	return "id";
+}
+
 export function recordId(table: RecordTable, value: unknown): string {
 	if (!isRecord(value)) throw new Error(`Invalid SQLite ${table} payload`);
-	const key = table === "working_copy" ? "branchId" : "id";
+	const key = recordIdentityKey(table);
 	const id = value[key];
 	if (typeof id !== "string" || !id) throw new Error(`Invalid SQLite ${table} ID`);
 	return id;
@@ -168,7 +175,7 @@ function assertRecordIdentity(
 	index: number,
 ): void {
 	if (table === "emergence_feedback" || table === "resume_position") return;
-	const key = table === "working_copy" ? "branchId" : "id";
+	const key = recordIdentityKey(table);
 	if (!isRecord(payload) || payload[key] !== id) {
 		throw new Error(`Invalid SQLite ${table} identity at index ${index}`);
 	}
@@ -196,6 +203,9 @@ export function readSqliteState(db: SqliteDatabase): GraphStateSnapshot {
 	for (const key of ARRAY_STATE_KEYS) {
 		const table = TABLE_FOR_STATE[key];
 		const rows: unknown[] = db.all(`SELECT id, payload FROM ${table} ORDER BY position, id`);
+		if (key === "relationTypeDefinitions" && rows.length === 0) {
+			continue;
+		}
 		state[key] = rows.map((row, index) => parseStoredRecord(table, row, index).payload);
 	}
 	const feedbackRows: unknown[] = db.all(
@@ -305,7 +315,9 @@ export function calculateSqliteDiff(
 	const diff: SqliteDiffOperations = { deletes: [], upserts: [] };
 	for (const key of ARRAY_STATE_KEYS) {
 		const table = TABLE_FOR_STATE[key];
-		diffArrayTable(table, before ? before[key] : [], after[key], diff);
+		const beforeList = before?.[key] ?? [];
+		const afterList = after[key] ?? [];
+		diffArrayTable(table, beforeList, afterList, diff);
 	}
 	appendFeedbackDiff(before, after, diff);
 	appendResumeDiff(before, after, diff);

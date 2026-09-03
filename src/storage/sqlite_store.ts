@@ -9,6 +9,7 @@ import type {
 	OutlineLink,
 	PurgeManifest,
 	RecoverySnapshot,
+	RelationTypeDefinition,
 	ResumePosition,
 	Revision,
 	SavedRuleQuery,
@@ -20,7 +21,6 @@ import type { GraphStateSnapshot, MergeWorksInput, WorkBundle } from "./graph_st
 import { MemoryGraphStore } from "./memory_store.ts";
 import { SQLITE_SCHEMA_SQL, SQLITE_STORAGE_SCHEMA_VERSION } from "./sqlite_schema.ts";
 import {
-	hasPersistedState,
 	isRecord,
 	NodeSqliteDatabaseAdapter,
 	persistSqliteDiff,
@@ -78,8 +78,16 @@ export class SqliteGraphStore extends MemoryGraphStore {
 			this.db = db;
 			this.initialized = true;
 			const state = this.readState();
-			if (hasPersistedState(state)) await super.restoreGraphState(state);
-			else persistSqliteDiff(null, await super.exportGraphState(), db);
+			if (metadata !== undefined) {
+				await super.restoreGraphState(state);
+				persistSqliteDiff(
+					{ ...state, relationTypeDefinitions: [] },
+					state,
+					db,
+				);
+			} else {
+				persistSqliteDiff(null, await super.exportGraphState(), db);
+			}
 		} catch (cause) {
 			this.db = null;
 			this.initialized = false;
@@ -303,6 +311,10 @@ export class SqliteGraphStore extends MemoryGraphStore {
 
 	override deleteSavedRuleQuery(id: string): Promise<void> {
 		return this.mutate(() => super.deleteSavedRuleQuery(id));
+	}
+
+	override createRelationTypeDefinition(definition: RelationTypeDefinition): Promise<void> {
+		return this.mutate(() => super.createRelationTypeDefinition(definition));
 	}
 
 	private async mutate<T>(operation: () => Promise<T>): Promise<T> {

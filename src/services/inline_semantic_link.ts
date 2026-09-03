@@ -84,7 +84,10 @@ type BodyParseResult =
  * diagnostics. Endpoint resolution and any creation of Works, Stubs, or Links
  * belong to later layers.
  */
-export function parseInlineSemanticLinks(source: string): InlineSemanticLinkParseResult {
+export function parseInlineSemanticLinks(
+	source: string,
+	allowedTypes: readonly string[] = LINK_TYPES,
+): InlineSemanticLinkParseResult {
 	const candidates: InlineSemanticLinkCandidate[] = [];
 	const diagnostics: InlineSemanticLinkDiagnostic[] = [];
 	let index = 0;
@@ -132,6 +135,7 @@ export function parseInlineSemanticLinks(source: string): InlineSemanticLinkPars
 				const attempt = parseBody(
 					source.slice(index + 2, possibleClosing),
 					index + 2,
+					allowedTypes,
 				);
 				if (attempt.kind === "success") {
 					parsed = attempt;
@@ -207,13 +211,17 @@ export function parseInlineSemanticLinks(source: string): InlineSemanticLinkPars
 /** Short alias for callers that prefer the candidate-oriented name. */
 export const parseInlineSemanticLinkCandidates = parseInlineSemanticLinks;
 
-function parseBody(body: string, offset: number): BodyParseResult {
+function parseBody(
+	body: string,
+	offset: number,
+	allowedTypes: readonly string[] = LINK_TYPES,
+): BodyParseResult {
 	let cursor = 0;
 	const source = readEndpoint(body, cursor, offset, "source", true);
 	if (source.kind === "failure") return source;
 	cursor = source.value.next;
 
-	const type = readType(body, cursor, offset);
+	const type = readType(body, cursor, offset, allowedTypes);
 	if (type.kind === "failure") return type;
 	cursor = type.value.next;
 	if (!type.value.value) {
@@ -340,6 +348,7 @@ function readType(
 	input: string,
 	cursor: number,
 	offset: number,
+	allowedTypes: readonly string[] = LINK_TYPES,
 ):
 	| { kind: "success"; value: ParsedType }
 	| { kind: "failure"; failure: ParseFailure } {
@@ -412,7 +421,9 @@ function readType(
 	}
 
 	const normalized = input.slice(typeStart, typeEnd).toUpperCase();
-	const value = LINK_TYPES.find((candidate) => candidate === normalized) ?? null;
+	const value = (allowedTypes.find((candidate) => candidate === normalized) ?? null) as
+		| LinkType
+		| null;
 	return {
 		kind: "success",
 		value: {

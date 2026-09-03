@@ -1,14 +1,14 @@
 {
 	"scripts/desktop_cdp_audit.ts": 409,
-	"scripts/mock_ui_plugin.ts": 491,
+	"scripts/mock_ui_plugin.ts": 513,
 	"src/services/discovery_operations.ts": 518,
-	"src/services/inline_semantic_link.ts": 571,
-	"src/storage/json_store.ts": 499,
-	"src/storage/memory_store.ts": 748,
+	"src/services/inline_semantic_link.ts": 582,
+	"src/storage/json_store.ts": 563,
+	"src/storage/memory_store.ts": 777,
 	"src/ui/App.svelte": 2816,
 	"src/ui/GlobalLineage.svelte": 624,
 	"src/ui/PhylogeneticTree.svelte": 653,
-	"src/ui/editor_controller.svelte.ts": 542,
+	"src/ui/editor_controller.svelte.ts": 559,
 	"src/ui/styles.css": 2704,
 	"src/ui/tree_layout.ts": 614
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { LINK_TYPES, type LinkType } from "../domain/models.ts";
+	import type { LinkType, RelationTypeDefinition } from "../domain/models.ts";
+	import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 	import { previewDirection } from "../services/advanced_link_resolver.ts";
 	import ReferenceCandidateList from "./ReferenceCandidateList.svelte";
 	import type {
@@ -13,6 +14,7 @@
 		completion,
 		itemTitle,
 		vocabulary,
+		relationTypeDefinitions,
 		onSearch,
 		onKeydown,
 		onSelectCandidate,
@@ -24,6 +26,7 @@
 		completion: InlineLinkCompletionState;
 		itemTitle: string;
 		vocabulary: UiVocabulary;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		onSearch: (query: string) => void;
 		onKeydown: (event: KeyboardEvent) => void;
 		onSelectCandidate: (candidate: InternalReferenceCompletion) => void;
@@ -32,6 +35,12 @@
 		onSetDirection: (direction: InlineLinkDirection) => void;
 		onCommit: () => void;
 	} = $props();
+
+	const definitions = $derived(relationTypeDefinitions ?? BUILT_IN_RELATION_TYPES);
+	const definitionMap = $derived(new Map(definitions.map((def) => [def.name, def])));
+	const selectedDefinition = $derived(
+		completion.selectedType ? definitionMap.get(completion.selectedType) : undefined,
+	);
 </script>
 
 <div class="inline-link-completions inline-link-omniwindow" role="dialog"
@@ -88,13 +97,13 @@
 			</div>
 			{#if completion.phase === "type"}
 				<section class="inline-link-types" aria-label={vocabulary.linkType}>
-					{#each LINK_TYPES as type}
+					{#each definitions as def (def.name)}
 						<button
 							type="button"
-							class:active={completion.selectedType === type}
+							class:active={completion.selectedType === def.name}
 							onmousedown={(event) => event.preventDefault()}
-							onclick={() => onSelectType(type)}
-						>{type}</button>
+							onclick={() => onSelectType(def.name)}
+						>{def.name}</button>
 					{/each}
 				</section>
 			{:else}
@@ -114,8 +123,18 @@
 				</section>
 				<p class="inline-link-preview" role="status">
 					{completion.direction === "forward"
-						? previewDirection(itemTitle, completion.selectedType ?? "RELATED", completion.selectedCandidate.displayName)
-						: previewDirection(completion.selectedCandidate.displayName, completion.selectedType ?? "RELATED", itemTitle)}
+						? previewDirection(
+							itemTitle,
+							completion.selectedType ?? "RELATED",
+							completion.selectedCandidate.displayName,
+							selectedDefinition?.direction,
+						)
+						: previewDirection(
+							completion.selectedCandidate.displayName,
+							completion.selectedType ?? "RELATED",
+							itemTitle,
+							selectedDefinition?.direction,
+						)}
 				</p>
 				<button type="button" onclick={onCommit}>この方向で{vocabulary.semanticLink}</button>
 			{/if}

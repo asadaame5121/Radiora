@@ -9,7 +9,10 @@ import type {
 	WorkingCopy,
 	WorkStub,
 } from "../domain/models.ts";
-import { LINK_TYPES } from "../domain/models.ts";
+import {
+	BUILT_IN_RELATION_TYPES,
+	validateRelationTypeDefinitions,
+} from "../domain/relation_type.ts";
 import type { GraphStateSnapshot, WorkBundle } from "./graph_store.ts";
 import { isValidWorkStub } from "./graph_mutation_validation.ts";
 
@@ -53,6 +56,12 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 	}
 
 	const state = structuredClone(value) as GraphStateSnapshot;
+	if (!("relationTypeDefinitions" in source)) {
+		state.relationTypeDefinitions = BUILT_IN_RELATION_TYPES.map((def) => ({ ...def }));
+	} else {
+		state.relationTypeDefinitions = validateRelationTypeDefinitions(source.relationTypeDefinitions);
+	}
+	const relationTypeNames = new Set(state.relationTypeDefinitions.map((def) => def.name));
 	const workById = uniqueById(state.works, "Work");
 	const branchById = uniqueById(state.branches, "Branch");
 	const occurrenceById = uniqueById(state.occurrences, "Occurrence");
@@ -196,7 +205,7 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 			throw new Error(`Invalid Link endpoint IDs: ${link.id}`);
 		}
 		if (
-			!(LINK_TYPES as readonly string[]).includes(link.type) ||
+			!relationTypeNames.has(link.type) ||
 			!["provisional", "asserted", "retracted"].includes(link.status) ||
 			!["human", "suggestion", "import"].includes(link.origin) ||
 			!isIsoInstant(link.createdAt)
