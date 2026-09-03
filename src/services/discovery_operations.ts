@@ -10,17 +10,15 @@ import type {
 	Suggestion,
 	TransientProjectionNode,
 } from "../domain/models.ts";
-import { isSymmetricLinkType } from "../domain/models.ts";
 import type {
 	DiscoveryStorePort,
 	OutlineStorePort,
 	RelationStorePort,
 } from "../storage/graph_store.ts";
 import { ancestorsOf } from "./discovery_helpers.ts";
+import { EmergencePersistence } from "./emergence_persistence.ts";
 import {
 	calculateEmergenceCandidates,
-	type EmergenceCandidate,
-	emergenceSuggestionFingerprint,
 	rankEmergenceSuggestions,
 } from "./emergence_suggestion_calculator.ts";
 import { fetchActiveMergedLinks } from "./implicit_relation.ts";
@@ -33,11 +31,12 @@ type DiscoveryOperationsStore = DiscoveryStorePort & OutlineStorePort & Relation
 
 /** Search, suggestion, and rule-query operations backed by feature-specific store ports. */
 export class DiscoveryOperations {
-	private readonly suggestionCache = new Map<string, EmergenceSuggestion>();
 	private readonly search: SearchOperations;
+	private readonly emergencePersistence: EmergencePersistence;
 
 	constructor(private readonly store: DiscoveryOperationsStore) {
 		this.search = new SearchOperations(store);
+		this.emergencePersistence = new EmergencePersistence(store);
 	}
 
 	async suggestItems(prefix: string, limit = 8): Promise<Suggestion[]> {
@@ -76,53 +75,8 @@ export class DiscoveryOperations {
 			limit: 20,
 		});
 		const candidates = calculateEmergenceCandidates({ context, items, links, searchResults });
-		const visible = await this.materializeEmergenceCandidates(candidates);
+		const visible = await this.emergencePersistence.materialize(candidates);
 		return rankEmergenceSuggestions(visible, limit);
-	}
-
-	private async materializeEmergenceCandidates(
-		candidates: readonly EmergenceCandidate[],
-	): Promise<EmergenceSuggestion[]> {
-		const persisted = new Map(
-			(await this.store.listEmergenceSuggestions()).map((
-				suggestion,
-			) => [suggestion.id, suggestion]),
-		);
-		const visible: EmergenceSuggestion[] = [];
-		for (const candidate of candidates) {
-			const materialized = await this.materializeEmergenceCandidate(
-				candidate,
-				persisted.get(candidate.id),
-			);
-			if (materialized) visible.push(materialized);
-		}
-		return visible;
-	}
-
-	private async materializeEmergenceCandidate(
-		candidate: EmergenceCandidate,
-		existing: EmergenceSuggestion | undefined,
-	): Promise<EmergenceSuggestion | null> {
-		const legacyId = emergenceSuggestionFingerprint(
-			`${candidate.kind}:${candidate.contextItemId}:${candidate.targetItemId}`,
-		);
-		const feedback = existing ? null : await this.store.getEmergenceFeedback(candidate.id) ??
-			await this.store.getEmergenceFeedback(legacyId);
-		const persistenceStatus = existing?.persistenceStatus ?? statusForFeedback(feedback);
-		const now = new Date().toISOString();
-		const materialized: EmergenceSuggestion = {
-			...candidate,
-			persistenceStatus,
-			createdAt: existing?.createdAt ?? now,
-			updatedAt: now,
-			...(existing?.resolvedAt ? { resolvedAt: existing.resolvedAt } : {}),
-			...(existing?.resolutionReason ? { resolutionReason: existing.resolutionReason } : {}),
-			...(persistenceStatus === "held" ? { status: "pinned" as const } : {}),
-		};
-		await this.store.upsertEmergenceSuggestion(materialized);
-		if (persistenceStatus === "dismissed" || persistenceStatus === "accepted") return null;
-		this.suggestionCache.set(candidate.id, materialized);
-		return materialized;
 	}
 
 	async resolveEmergenceSuggestion(
@@ -130,30 +84,7 @@ export class DiscoveryOperations {
 		action: EmergenceAction,
 		reason?: string,
 	): Promise<void> {
-		const suggestion = this.suggestionCache.get(id);
-		if (!suggestion) throw new Error("提案が古くなりました。再読み込みしてください。");
-		if (action === "accept") {
-			if (!suggestion.proposedLinkType) throw new Error("リンク種別のない提案は採用できません。");
-			let fromWorkId = suggestion.contextWorkId;
-			let toWorkId = suggestion.targetWorkId;
-			if (
-				isSymmetricLinkType(suggestion.proposedLinkType) && fromWorkId.localeCompare(toWorkId) > 0
-			) [fromWorkId, toWorkId] = [toWorkId, fromWorkId];
-			await this.store.resolveEmergenceSuggestion(id, action, {
-				id: crypto.randomUUID(),
-				fromId: fromWorkId,
-				toId: toWorkId,
-				from: { scope: "work", workId: fromWorkId },
-				to: { scope: "work", workId: toWorkId },
-				type: suggestion.proposedLinkType,
-				status: "asserted",
-				origin: "suggestion",
-				reason: suggestion.explanation,
-				createdAt: new Date().toISOString(),
-			}, reason);
-			return;
-		}
-		await this.store.resolveEmergenceSuggestion(id, action, undefined, reason);
+		return this.emergencePersistence.resolve(id, action, reason);
 	}
 
 	async runRuleQuery(source: string, limit = 500): Promise<RuleQueryResult> {
@@ -231,13 +162,4 @@ export class DiscoveryOperations {
 	private listActiveLinks(): Promise<OutlineLink[]> {
 		return fetchActiveMergedLinks(this.store);
 	}
-}
-
-function statusForFeedback(
-	feedback: "accept" | "dismiss" | "pin" | null,
-): EmergenceSuggestion["persistenceStatus"] {
-	if (feedback === "accept") return "accepted";
-	if (feedback === "dismiss") return "dismissed";
-	if (feedback === "pin") return "held";
-	return "pending";
 }

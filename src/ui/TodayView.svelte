@@ -5,6 +5,7 @@
 		matchesOutlineFilter,
 		type OutlineFilter,
 	} from "../services/outline_filter.ts";
+	import OutlineFilterBar from "./OutlineFilterBar.svelte";
 	import { useUiVocabulary } from "./ui_vocabulary_context.ts";
 
 	let {
@@ -38,9 +39,6 @@
 	const vocabulary = useUiVocabulary();
 	const filteredCreated = $derived(filterEntries(projection?.created ?? []));
 	const filteredUpdated = $derived(filterEntries(projection?.updated ?? []));
-	const filterActive = $derived(
-		Boolean(outlineFilter.freeText || outlineFilter.tagsAll || outlineFilter.tagsNone),
-	);
 
 	function filterEntries(entries: DateProjectionEntry[]): DateProjectionEntry[] {
 		return entries.filter((entry) =>
@@ -67,28 +65,7 @@
 		<label>終了（含まない） <input type="date" bind:value={dateEnd} /></label>
 		<button onclick={onLoad}>表示</button>
 	</div>
-	<p class="filter-hint">自由語は部分一致 · タグはすべて含む（AND） · NOTタグは除外 · この表示だけに適用</p>
-	<div class="filter-bar">
-		<input
-			class="filter-input"
-			aria-label="テキストで絞り込み"
-			placeholder="テキストで絞り込み…"
-			bind:value={outlineFilter.freeText}
-		/>
-		<input
-			class="filter-input"
-			aria-label="タグ AND"
-			placeholder="#タグ AND"
-			bind:value={outlineFilter.tagsAll}
-		/>
-		<input
-			class="filter-input"
-			aria-label="タグ NOT"
-			placeholder="#除外 NOT"
-			bind:value={outlineFilter.tagsNone}
-		/>
-		<button onclick={onClearFilter} disabled={!filterActive}>解除</button>
-	</div>
+	<OutlineFilterBar bind:outlineFilter onClear={onClearFilter} />
 	{#if loading}
 		<p class="empty">読み込み中…</p>
 	{:else if projection}
