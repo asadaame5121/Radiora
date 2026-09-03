@@ -132,13 +132,13 @@
 	.licenses-dialog__header h2 {
 		margin: 8px 0;
 		font: normal 20px/1.4 var(--font-serif);
-		color: #edf9fa;
+		color: var(--theme-text, #edf9fa);
 	}
 
 	.licenses-dialog__header p:not(.eyebrow) {
 		margin: 0;
 		font-size: 13px;
-		color: #afc1c9;
+		color: var(--theme-muted, #afc1c9);
 		line-height: 1.6;
 	}
 
@@ -187,7 +187,7 @@
 	}
 
 	.licenses-dialog__list small {
-		color: #afc1c9;
+		color: var(--theme-muted, #afc1c9);
 	}
 
 	.licenses-dialog__detail {
@@ -209,17 +209,17 @@
 		word-break: break-word;
 		font-size: 12px;
 		line-height: 1.55;
-		color: #c7d5da;
+		color: var(--theme-muted, #c7d5da);
 	}
 
 	.licenses-dialog__hint {
 		margin: 0;
-		color: #afc1c9;
+		color: var(--theme-muted, #afc1c9);
 		font-size: 13px;
 	}
 
 	.licenses-dialog__error {
-		color: #ffd2cd;
+		color: var(--theme-red, #ffd2cd);
 	}
 
 	.licenses-dialog__actions {

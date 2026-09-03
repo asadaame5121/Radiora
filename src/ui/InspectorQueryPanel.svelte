@@ -149,7 +149,7 @@
 		border: 1px solid var(--border-bright);
 		border-radius: 6px;
 		padding: 6px 8px;
-		background: #02060a;
+		background: var(--theme-surface-raised, #02060a);
 		color: var(--text);
 		font-family: var(--font-mono);
 		font-size: 10px;
@@ -172,7 +172,7 @@
 	}
 	.query-error {
 		margin: 0;
-		color: #ff9f92;
+		color: var(--theme-red, #ff9f92);
 		font-size: 10px;
 		white-space: pre-wrap;
 	}
@@ -261,7 +261,7 @@
 		padding: 6px;
 		border: 1px solid var(--border);
 		border-radius: 4px;
-		color: #9aadb6;
+		color: var(--theme-muted, #9aadb6);
 		font-size: 9px;
 	}
 </style>

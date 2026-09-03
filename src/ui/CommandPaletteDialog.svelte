@@ -145,7 +145,7 @@
 		width: 100%;
 		border: 0;
 		border-bottom: 1px solid var(--border);
-		background: #04080d;
+		background: var(--theme-surface, #04080d);
 		color: var(--text);
 		padding: 14px;
 		outline: none;

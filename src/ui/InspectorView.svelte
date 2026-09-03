@@ -189,7 +189,7 @@
 	.inspector {
 		position: relative;
 		border-left: 1px solid var(--border);
-		background: rgb(8 16 26 / 92%);
+		background: var(--theme-surface, rgb(8 16 26 / 92%));
 		padding: 26px 22px;
 		overflow: auto;
 		min-width: 0;
@@ -245,7 +245,7 @@
 		font-size: 18px;
 		line-height: 1.5;
 		font-weight: normal;
-		color: #edf9fa;
+		color: var(--theme-text, #edf9fa);
 		word-break: break-word;
 	}
 	.inspector-heading {

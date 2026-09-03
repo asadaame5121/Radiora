@@ -272,7 +272,7 @@
 	}
 	.semantic-link-annotations small {
 		font-style: italic;
-		color: #9aaeb7;
+		color: var(--theme-muted, #9aaeb7);
 	}
 	:global(.disclosure) {
 		border: 0;

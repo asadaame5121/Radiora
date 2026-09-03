@@ -207,12 +207,12 @@
 		font-family: var(--font-serif);
 		font-size: 20px;
 		font-weight: normal;
-		color: #edf9fa;
+		color: var(--theme-text, #edf9fa);
 	}
 
 	.confirmation-dialog p:not(.eyebrow) {
 		margin: 0;
-		color: #afc1c9;
+		color: var(--theme-muted, #afc1c9);
 		font-size: 13px;
 		line-height: 1.65;
 	}

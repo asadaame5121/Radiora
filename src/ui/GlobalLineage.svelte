@@ -117,7 +117,7 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
-		background: #050a10;
+		background: var(--theme-bg, #050a10);
 	}
 	.lineage-heading {
 		position: absolute;
@@ -126,9 +126,9 @@
 		left: 22px;
 		max-width: 390px;
 		padding: 12px 14px;
-		border: 1px solid #17313e;
+		border: 1px solid var(--theme-border, #17313e);
 		border-radius: 8px;
-		background: rgb(5 10 16 / 88%);
+		background: var(--theme-lineage-overlay, rgb(5 10 16 / 88%));
 		pointer-events: none;
 	}
 	.lineage-heading p,
@@ -137,18 +137,18 @@
 	}
 	.lineage-heading h1 {
 		margin-top: 3px;
-		color: #eafcfd;
+		color: var(--theme-text, #eafcfd);
 		font: 22px var(--font-serif);
 	}
 	.lineage-heading > p:last-child {
 		margin-top: 5px;
-		color: #7f949e;
+		color: var(--theme-muted, #7f949e);
 		font-size: 11px;
 		line-height: 1.6;
 	}
 	.lineage-heading .filter-summary {
 		margin-top: 6px;
-		color: #f2a93b;
+		color: var(--amber);
 		font-size: 10px;
 	}
 	.global-tree {

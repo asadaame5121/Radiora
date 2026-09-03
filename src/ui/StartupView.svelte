@@ -40,7 +40,7 @@
 		font-family: var(--font-serif);
 		font-size: 25px;
 		font-weight: normal;
-		color: #edf9fa;
+		color: var(--theme-text, #edf9fa);
 	}
 	.startup-indicator {
 		width: 12px;
@@ -52,7 +52,7 @@
 		animation: startup-pulse 1.4s infinite;
 	}
 	.startup-indicator.failed {
-		background: #d77b6d;
+		background: var(--theme-red, #d77b6d);
 		animation: none;
 	}
 	.startup-detail {

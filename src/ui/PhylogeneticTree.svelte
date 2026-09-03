@@ -4,7 +4,6 @@
 	import type { OutlineSnapshot } from "../domain/models";
 	import { buildTreeHighlightSet, resolveTreeSelectionId } from "./tree_highlight";
 	import {
-		buildDirectNeighborSet,
 		calculateLineageProjection,
 		calculateTreeLayout,
 		type TreeLayoutEdge,
@@ -480,8 +479,8 @@
 		inset: 0;
 		overflow: hidden;
 		background:
-			radial-gradient(circle at 50% 45%, rgb(37 198 209 / 5%), transparent 44%),
-			#050a10;
+			radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--cyan) 5%, transparent), transparent 44%),
+			var(--theme-bg, #050a10);
 	}
 	svg {
 		display: block;
@@ -494,38 +493,38 @@
 		cursor: grabbing;
 	}
 	.time-grid line {
-		stroke: #17313e;
+		stroke: var(--theme-border, #17313e);
 		stroke-width: 1;
 		stroke-dasharray: 3 5;
 		opacity: .65;
 	}
 	.time-grid text {
-		fill: #657681;
+		fill: var(--theme-muted, #657681);
 		font: 11px var(--font-ui);
 		letter-spacing: .08em;
 	}
 	.time-grid .knot-mark {
-		stroke: #ef5b5b;
+		stroke: var(--red);
 	}
 	.tree-edge {
 		fill: none;
-		stroke: #25c6d1;
+		stroke: var(--cyan);
 		stroke-linecap: round;
 		stroke-linejoin: round;
 		opacity: .42;
 		transition: opacity .14s ease, filter .14s ease;
 	}
 	.tree-edge.type-like {
-		stroke: #a855f7;
+		stroke: var(--violet);
 	}
 	.tree-edge.type-fix {
-		stroke: #f2a93b;
+		stroke: var(--amber);
 	}
 	.tree-edge.type-vs {
-		stroke: #ef5b5b;
+		stroke: var(--red);
 	}
 	.tree-edge.type-in {
-		stroke: #92a2ad;
+		stroke: var(--theme-muted, #92a2ad);
 		stroke-dasharray: 5 5;
 	}
 	.tree-edge.dimmed {
@@ -544,12 +543,12 @@
 		opacity: .16;
 	}
 	.node-safety {
-		fill: #050a10;
+		fill: var(--theme-bg, #050a10);
 		stroke: none;
 	}
 	.node-core {
-		fill: #25c6d1;
-		filter: drop-shadow(0 0 5px rgb(37 198 209 / 78%));
+		fill: var(--cyan);
+		filter: drop-shadow(0 0 5px color-mix(in srgb, var(--cyan) 78%, transparent));
 	}
 	.node-selection {
 		fill: none;
@@ -559,38 +558,38 @@
 	.tree-node:hover .node-core,
 	.tree-node:focus .node-core,
 	.tree-node.emphasized .node-core {
-		fill: #eafcfd;
-		filter: drop-shadow(0 0 7px #25c6d1);
+		fill: var(--theme-text, #eafcfd);
+		filter: drop-shadow(0 0 7px var(--cyan));
 	}
 	.tree-node.selected .node-selection {
-		stroke: #f2a93b;
-		filter: drop-shadow(0 0 6px rgb(242 169 59 / 65%));
+		stroke: var(--amber);
+		filter: drop-shadow(0 0 6px color-mix(in srgb, var(--amber) 65%, transparent));
 	}
 	.node-knot-outer,
 	.node-knot-inner {
-		fill: #050a10;
-		stroke: #ef5b5b;
+		fill: var(--theme-bg, #050a10);
+		stroke: var(--red);
 		stroke-width: 2;
-		filter: drop-shadow(0 0 5px rgb(239 91 91 / 45%));
+		filter: drop-shadow(0 0 5px color-mix(in srgb, var(--red) 45%, transparent));
 	}
 	.node-knot-inner {
-		fill: rgb(239 91 91 / 28%);
+		fill: color-mix(in srgb, var(--red) 28%, transparent);
 		stroke-width: 1;
 	}
 	.node-cluster {
-		fill: #07121a;
-		stroke: #25c6d1;
+		fill: var(--theme-surface, #07121a);
+		stroke: var(--cyan);
 		stroke-width: 2;
-		filter: drop-shadow(0 0 6px rgb(37 198 209 / 55%));
+		filter: drop-shadow(0 0 6px color-mix(in srgb, var(--cyan) 55%, transparent));
 	}
 	.cluster-count {
-		fill: #eafcfd;
+		fill: var(--theme-text, #eafcfd);
 		font: 10px var(--font-ui);
 		pointer-events: none;
 	}
 	.node-label {
-		fill: #dce7ec;
-		stroke: #050a10;
+		fill: var(--text);
+		stroke: var(--theme-bg, #050a10);
 		stroke-width: 6px;
 		paint-order: stroke fill;
 		font: 12px var(--font-serif);
@@ -611,9 +610,9 @@
 		right: 22px;
 		display: flex;
 		padding: 3px;
-		border: 1px solid #28546a;
+		border: 1px solid var(--border-bright);
 		border-radius: 7px;
-		background: rgb(5 10 16 / 88%);
+		background: var(--theme-lineage-overlay, rgb(5 10 16 / 88%));
 		box-shadow: 0 8px 22px rgb(0 0 0 / 28%);
 	}
 	.tree-projection button {
@@ -622,26 +621,26 @@
 		border: 0;
 		border-radius: 4px;
 		background: transparent;
-		color: #7f949e;
+		color: var(--theme-muted, #7f949e);
 		font: 11px var(--font-ui);
 		letter-spacing: .03em;
 		cursor: pointer;
 	}
 	.tree-projection button:hover {
-		color: #dce7ec;
+		color: var(--text);
 	}
 	.tree-projection button.active {
-		background: #12303d;
-		color: #eafcfd;
-		box-shadow: inset 0 0 0 1px rgb(37 198 209 / 42%);
+		background: var(--theme-surface-raised, #12303d);
+		color: var(--theme-text, #eafcfd);
+		box-shadow: var(--control-active-shadow);
 	}
 	.tree-controls button,
 	.tree-controls span {
 		height: 36px;
-		border: 1px solid #28546a;
+		border: 1px solid var(--border-bright);
 		border-radius: 6px;
-		background: rgb(5 10 16 / 88%);
-		color: #dce7ec;
+		background: var(--theme-lineage-overlay, rgb(5 10 16 / 88%));
+		color: var(--text);
 		box-shadow: 0 8px 22px rgb(0 0 0 / 28%);
 	}
 	.tree-controls button {
@@ -650,8 +649,8 @@
 		cursor: pointer;
 	}
 	.tree-controls button:hover {
-		border-color: #25c6d1;
-		background: #0c1c27;
+		border-color: var(--cyan);
+		background: var(--theme-surface-hover, #0c1c27);
 	}
 	.tree-controls span {
 		display: flex;
@@ -659,15 +658,15 @@
 		gap: 8px;
 		margin-left: 10px;
 		padding: 0 12px;
-		color: #b6c9d1;
+		color: var(--theme-muted, #b6c9d1);
 		font-size: 11px;
 	}
 	.tree-controls i {
 		width: 7px;
 		height: 7px;
 		border-radius: 50%;
-		background: #25c6d1;
-		box-shadow: 0 0 7px #25c6d1;
+		background: var(--cyan);
+		box-shadow: 0 0 7px var(--cyan);
 	}
 	.tree-empty {
 		position: absolute;
@@ -676,15 +675,15 @@
 		display: grid;
 		place-content: center;
 		justify-items: center;
-		color: #657681;
+		color: var(--theme-muted, #657681);
 		font-size: 12px;
 		pointer-events: none;
 	}
 	.tree-empty span {
 		width: 12px;
 		height: 12px;
-		border: 2px solid #25c6d1;
+		border: 2px solid var(--cyan);
 		border-radius: 50%;
-		box-shadow: 0 0 16px #25c6d1;
+		box-shadow: 0 0 16px var(--cyan);
 	}
 </style>

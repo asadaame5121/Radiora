@@ -146,7 +146,7 @@
 		font-size: clamp(20px, 2.5vw, 30px);
 		font-weight: normal;
 		line-height: 1.25;
-		color: #edf9fa;
+		color: var(--theme-text, #edf9fa);
 		word-break: break-word;
 	}
 	.outline-context__breadcrumb,
@@ -180,7 +180,7 @@
 		color: var(--text);
 	}
 	.outline-context__meta {
-		color: #9aaeb7;
+		color: var(--theme-muted, #9aaeb7);
 	}
 	.outline-actions {
 		flex: none;
@@ -205,7 +205,7 @@
 		margin-top: 42px;
 		border-top: 1px solid var(--border);
 		padding-top: 18px;
-		color: #dd8d84;
+		color: var(--theme-red, #dd8d84);
 	}
 	.stash-title small {
 		letter-spacing: normal;

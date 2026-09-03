@@ -1,0 +1,5 @@
+{
+	"*.{ts,js,svelte,json,jsonc,css,md}": [
+		"deno fmt"
+	]
+}

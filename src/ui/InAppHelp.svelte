@@ -264,7 +264,7 @@
 		font-family: var(--font-serif);
 		font-size: 20px;
 		font-weight: normal;
-		color: #edf9fa;
+		color: var(--theme-text, #edf9fa);
 	}
 	.help-card__label {
 		color: var(--cyan);
@@ -276,7 +276,7 @@
 		display: grid;
 		gap: 8px;
 		padding-left: 20px;
-		color: #afc1c9;
+		color: var(--theme-text, #afc1c9);
 		font-size: 12px;
 		line-height: 1.65;
 	}
@@ -289,7 +289,7 @@
 		padding: 1px 5px;
 		border: 1px solid var(--border-bright);
 		border-radius: 4px;
-		background: #04080d;
+		background: var(--theme-surface, #04080d);
 		color: var(--cyan-soft);
 		font-family: inherit;
 		font-size: .9em;
