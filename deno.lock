@@ -3693,6 +3693,7 @@
         "npm:svelte-check@^4.7.5",
         "npm:svelte@^5.56.8",
         "npm:typescript@^5.9.3",
+        "npm:valibot@^1.4.2",
         "npm:vite@^7.3.6",
         "npm:vitest@^4.1.10"
       ],

@@ -1,56 +1,68 @@
-export type QuickCaptureDestination = "root" | "unplaced";
+import { type InferOutput, picklist, object, safeParse } from "valibot";
 
-export const QUICK_CAPTURE_PREFERENCE_STORAGE_KEY = "radiora.quickCapturePreference";
+export type QuickCaptureDestination = InferOutput<
+  typeof QuickCaptureDestinationSchema
+>;
 
-export interface QuickCapturePreference {
-	readonly destination: QuickCaptureDestination;
-}
+export const QuickCaptureDestinationSchema = picklist(["root", "unplaced"]);
 
-export interface QuickCapturePreferenceStorage {
-	getItem(key: string): string | null;
-	setItem(key: string, value: string): void;
-}
-
-export const DEFAULT_QUICK_CAPTURE_PREFERENCE: QuickCapturePreference = Object.freeze({
-	destination: "root",
+export const QuickCapturePreferenceSchema = object({
+  destination: QuickCaptureDestinationSchema,
 });
 
+export const QUICK_CAPTURE_PREFERENCE_STORAGE_KEY =
+  "radiora.quickCapturePreference";
+
+export type QuickCapturePreference = Readonly<
+  InferOutput<typeof QuickCapturePreferenceSchema>
+>;
+
+export interface QuickCapturePreferenceStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+export const DEFAULT_QUICK_CAPTURE_PREFERENCE: QuickCapturePreference =
+  Object.freeze({
+    destination: "root",
+  });
+
 export function loadQuickCapturePreference(
-	storage: QuickCapturePreferenceStorage | null = browserStorage(),
+  storage: QuickCapturePreferenceStorage | null = browserStorage(),
 ): QuickCapturePreference {
-	try {
-		const raw = storage?.getItem(QUICK_CAPTURE_PREFERENCE_STORAGE_KEY);
-		if (!raw) return { ...DEFAULT_QUICK_CAPTURE_PREFERENCE };
-		const value: unknown = JSON.parse(raw);
-		if (!isQuickCapturePreference(value)) return { ...DEFAULT_QUICK_CAPTURE_PREFERENCE };
-		return { destination: value.destination };
-	} catch {
-		return { ...DEFAULT_QUICK_CAPTURE_PREFERENCE };
-	}
+  try {
+    const raw = storage?.getItem(QUICK_CAPTURE_PREFERENCE_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_QUICK_CAPTURE_PREFERENCE };
+    const result = safeParse(QuickCapturePreferenceSchema, JSON.parse(raw));
+    return result.success
+      ? result.output
+      : { ...DEFAULT_QUICK_CAPTURE_PREFERENCE };
+  } catch {
+    return { ...DEFAULT_QUICK_CAPTURE_PREFERENCE };
+  }
 }
 
 export function saveQuickCapturePreference(
-	preference: QuickCapturePreference,
-	storage: QuickCapturePreferenceStorage | null = browserStorage(),
+  preference: QuickCapturePreference,
+  storage: QuickCapturePreferenceStorage | null = browserStorage(),
 ): void {
-	try {
-		storage?.setItem(QUICK_CAPTURE_PREFERENCE_STORAGE_KEY, JSON.stringify(preference));
-		// biome-ignore lint/plugin/noSwallowedRejection: Quick-capture preferences are optional and storage failure must not block input.
-	} catch {
-		// Quick capture preferences are best-effort and must not block input.
-	}
-}
-
-function isQuickCapturePreference(value: unknown): value is QuickCapturePreference {
-	if (typeof value !== "object" || value === null) return false;
-	const destination = (value as Record<string, unknown>).destination;
-	return destination === "root" || destination === "unplaced";
+  try {
+    storage?.setItem(
+      QUICK_CAPTURE_PREFERENCE_STORAGE_KEY,
+      JSON.stringify(preference),
+    );
+    // biome-ignore lint/plugin/noSwallowedRejection: Quick-capture preferences are optional and storage failure must not block input.
+  } catch {
+    // Quick capture preferences are best-effort and must not block input.
+  }
 }
 
 function browserStorage(): QuickCapturePreferenceStorage | null {
-	try {
-		return typeof globalThis.localStorage === "undefined" ? null : globalThis.localStorage;
-	} catch {
-		return null;
-	}
+  try {
+    return typeof globalThis.localStorage === "undefined"
+      ? null
+      : globalThis.localStorage;
+  } catch {
+    return null;
+  }
 }
