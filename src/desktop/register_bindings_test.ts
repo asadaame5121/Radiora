@@ -216,3 +216,35 @@ Deno.test("desktop bindings expose relation type catalog and allow custom creati
 	const list = await handlers.listRelationTypeDefinitions();
 	assertEquals(list, [...BUILT_IN_RELATION_TYPES, created]);
 });
+
+Deno.test("desktop bindings validate user input payloads with Valibot schemas", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const ready: StartupStatus = { phase: "ready", message: "ready" };
+	const handlers = createBindingHandlers({
+		getService: () => service,
+		getStartupStatus: () => ready,
+		retryStartup: () => Promise.resolve(ready),
+		rewriteAsNewBranch: () => {
+			throw new Error("unreachable");
+		},
+	});
+
+	// createItem with invalid text or parentId
+	await assertRejects(() => handlers.createItem({ text: 123 as never, parentId: null }));
+	await assertRejects(() => handlers.createItem({ text: "ok", parentId: "" as never }));
+
+	// quickCapture with blank text
+	await assertRejects(() => handlers.quickCapture("   "));
+
+	// createOccurrence with invalid workId
+	await assertRejects(() => handlers.createOccurrence({ workId: "", parentId: null } as never));
+
+	// moveItem with invalid ID
+	await assertRejects(() => handlers.moveItem({ id: "", parentId: null } as never));
+
+	// createLink with invalid type
+	await assertRejects(() =>
+		handlers.createLink({ fromId: "work-1", toId: "work-2", type: "invalid-type" as never })
+	);
+});
