@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "jsr:@std/assert";
+import { assertEquals, assertThrows } from "jsr:@std/assert@1";
 import * as v from "valibot";
 import {
 	BookmarkSchema,
@@ -15,7 +15,7 @@ import {
 	UuidSchema,
 	WorkingCopySchema,
 	WorkSchema,
-} from "./schemas.ts";
+} from "../src/domain/schemas.ts";
 
 const VALID_UUID = "12345678-1234-4234-8234-1234567890ab";
 const VALID_UUID_2 = "87654321-4321-4321-9321-ba0987654321";
