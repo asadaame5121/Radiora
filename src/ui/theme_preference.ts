@@ -1,6 +1,9 @@
+import { type InferOutput, is, picklist, safeParse } from "valibot";
+
 export const THEME_PREFERENCE_STORAGE_KEY = "radiora.themePreference";
 
-export type ThemePreference = "auto" | "dark" | "light";
+export const ThemePreferenceSchema = picklist(["auto", "dark", "light"]);
+export type ThemePreference = InferOutput<typeof ThemePreferenceSchema>;
 export type ResolvedTheme = "dark" | "light";
 
 export interface ThemePreferenceStorage {
@@ -11,7 +14,7 @@ export interface ThemePreferenceStorage {
 export const DEFAULT_THEME_PREFERENCE: ThemePreference = "auto";
 
 export function isThemePreference(value: unknown): value is ThemePreference {
-	return value === "auto" || value === "dark" || value === "light";
+	return is(ThemePreferenceSchema, value);
 }
 
 export function loadThemePreference(
@@ -19,10 +22,11 @@ export function loadThemePreference(
 ): ThemePreference {
 	try {
 		const raw = storage?.getItem(THEME_PREFERENCE_STORAGE_KEY);
-		if (!raw || !isThemePreference(raw)) {
+		if (!raw) {
 			return DEFAULT_THEME_PREFERENCE;
 		}
-		return raw;
+		const result = safeParse(ThemePreferenceSchema, raw);
+		return result.success ? result.output : DEFAULT_THEME_PREFERENCE;
 	} catch {
 		return DEFAULT_THEME_PREFERENCE;
 	}

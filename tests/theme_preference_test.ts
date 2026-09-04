@@ -7,8 +7,18 @@ import {
 	resolveTheme,
 	saveThemePreference,
 	THEME_PREFERENCE_STORAGE_KEY,
+	ThemePreferenceSchema,
 	type ThemePreferenceStorage,
 } from "../src/ui/theme_preference.ts";
+import * as v from "valibot";
+
+Deno.test("ThemePreferenceSchema validates theme preference picklist", () => {
+	assertEquals(v.safeParse(ThemePreferenceSchema, "auto").success, true);
+	assertEquals(v.safeParse(ThemePreferenceSchema, "dark").success, true);
+	assertEquals(v.safeParse(ThemePreferenceSchema, "light").success, true);
+	assertEquals(v.safeParse(ThemePreferenceSchema, "solarized").success, false);
+	assertEquals(v.safeParse(ThemePreferenceSchema, 123).success, false);
+});
 
 Deno.test("theme preference defaults to auto and accepts valid preferences", () => {
 	assertEquals(DEFAULT_THEME_PREFERENCE, "auto");
