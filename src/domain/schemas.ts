@@ -9,6 +9,11 @@ export const UuidSchema = v.pipe(
 	v.regex(UUID_PATTERN, "Expected value to be a valid UUID"),
 );
 
+export const IdSchema = v.pipe(
+	v.string("Expected value to be a string"),
+	v.nonEmpty("ID must not be empty"),
+);
+
 export const RevisionKindSchema = v.picklist(["checkpoint", "edition", "merge"]);
 export const LinkStatusSchema = v.picklist(["provisional", "asserted", "retracted"]);
 export const PersistedLinkOriginSchema = v.picklist(["human", "suggestion", "import"]);
@@ -22,41 +27,41 @@ export const WorkStubSchema = v.object({
 });
 
 export const WorkSchema = v.object({
-	id: UuidSchema,
+	id: IdSchema,
 	createdAt: CreatedAtSchema,
 	updatedAt: CreatedAtSchema,
 	deletedAt: v.optional(CreatedAtSchema),
 	stub: v.optional(WorkStubSchema),
-	mergedIntoWorkId: v.optional(UuidSchema),
+	mergedIntoWorkId: v.optional(IdSchema),
 	mergedAt: v.optional(CreatedAtSchema),
 });
 
 export const BranchSchema = v.object({
-	id: UuidSchema,
-	workId: UuidSchema,
+	id: IdSchema,
+	workId: IdSchema,
 	name: v.string(),
-	headRevisionId: v.nullable(UuidSchema),
+	headRevisionId: v.nullable(IdSchema),
 	createdAt: CreatedAtSchema,
 	promotedAt: v.optional(CreatedAtSchema),
 	archivedAt: v.optional(CreatedAtSchema),
 });
 
 export const WorkingCopySchema = v.object({
-	branchId: UuidSchema,
-	workId: UuidSchema,
+	branchId: IdSchema,
+	workId: IdSchema,
 	text: v.string(),
 	updatedAt: CreatedAtSchema,
 });
 
 export const RevisionSelectorSchema = v.variant("mode", [
-	v.object({ mode: v.literal("branch"), branchId: UuidSchema }),
-	v.object({ mode: v.literal("pinned"), revisionId: UuidSchema }),
+	v.object({ mode: v.literal("branch"), branchId: IdSchema }),
+	v.object({ mode: v.literal("pinned"), revisionId: IdSchema }),
 ]);
 
 export const OccurrenceSchema = v.object({
-	id: UuidSchema,
-	workId: UuidSchema,
-	parentOccurrenceId: v.nullable(UuidSchema),
+	id: IdSchema,
+	workId: IdSchema,
+	parentOccurrenceId: v.nullable(IdSchema),
 	orderKey: v.number(),
 	collapsed: v.boolean(),
 	revisionSelector: RevisionSelectorSchema,
@@ -64,10 +69,10 @@ export const OccurrenceSchema = v.object({
 });
 
 export const RevisionSchema = v.object({
-	id: UuidSchema,
-	workId: UuidSchema,
+	id: IdSchema,
+	workId: IdSchema,
 	text: v.string(),
-	parentRevisionIds: v.array(UuidSchema),
+	parentRevisionIds: v.array(IdSchema),
 	kind: RevisionKindSchema,
 	createdAt: CreatedAtSchema,
 	message: v.optional(v.string()),
@@ -80,26 +85,26 @@ export const SnapshotProtectionSchema = v.object({
 });
 
 export const RecoverySnapshotSchema = v.object({
-	id: UuidSchema,
-	workId: UuidSchema,
-	branchId: UuidSchema,
+	id: IdSchema,
+	workId: IdSchema,
+	branchId: IdSchema,
 	text: v.string(),
 	contentHash: v.string(),
 	createdAt: CreatedAtSchema,
-	sourceRevisionId: v.nullable(UuidSchema),
+	sourceRevisionId: v.nullable(IdSchema),
 	name: v.optional(v.string()),
 	protection: v.optional(SnapshotProtectionSchema),
 });
 
 export const LinkEndpointSchema = v.variant("scope", [
-	v.object({ scope: v.literal("work"), workId: UuidSchema }),
-	v.object({ scope: v.literal("revision"), workId: UuidSchema, revisionId: UuidSchema }),
+	v.object({ scope: v.literal("work"), workId: IdSchema }),
+	v.object({ scope: v.literal("revision"), workId: IdSchema, revisionId: IdSchema }),
 ]);
 
 export const OutlineLinkSchema = v.object({
-	id: UuidSchema,
-	fromId: UuidSchema,
-	toId: UuidSchema,
+	id: IdSchema,
+	fromId: IdSchema,
+	toId: IdSchema,
 	from: LinkEndpointSchema,
 	to: LinkEndpointSchema,
 	type: RelationTypeNameSchema,
@@ -110,45 +115,45 @@ export const OutlineLinkSchema = v.object({
 });
 
 export const BookmarkSchema = v.object({
-	id: UuidSchema,
-	workId: UuidSchema,
-	occurrenceId: UuidSchema,
+	id: IdSchema,
+	workId: IdSchema,
+	occurrenceId: IdSchema,
 	createdAt: CreatedAtSchema,
 });
 
 export const ResumePositionSchema = v.object({
-	workId: UuidSchema,
-	occurrenceId: UuidSchema,
+	workId: IdSchema,
+	occurrenceId: IdSchema,
 	caretOffset: v.number(),
 	updatedAt: CreatedAtSchema,
 });
 
 export const PurgeManifestSchema = v.object({
-	id: UuidSchema,
-	workId: UuidSchema,
-	occurrenceIds: v.array(UuidSchema),
-	branchIds: v.array(UuidSchema),
-	revisionIds: v.array(UuidSchema),
-	linkIds: v.array(UuidSchema),
+	id: IdSchema,
+	workId: IdSchema,
+	occurrenceIds: v.array(IdSchema),
+	branchIds: v.array(IdSchema),
+	revisionIds: v.array(IdSchema),
+	linkIds: v.array(IdSchema),
 	purgedAt: CreatedAtSchema,
 });
 
 export const KnotSchema = v.object({
-	id: UuidSchema,
-	cycleIds: v.array(UuidSchema),
+	id: IdSchema,
+	cycleIds: v.array(IdSchema),
 	createdAt: CreatedAtSchema,
 });
 
 export const SystemRelationSchema = v.object({
-	id: UuidSchema,
-	fromWorkId: UuidSchema,
-	toWorkId: UuidSchema,
+	id: IdSchema,
+	fromWorkId: IdSchema,
+	toWorkId: IdSchema,
 	type: v.literal("IN"),
 	createdAt: CreatedAtSchema,
 });
 
 export const SearchAliasSchema = v.object({
-	id: UuidSchema,
+	id: IdSchema,
 	canonical: v.string(),
 	variants: v.array(v.string()),
 	createdAt: CreatedAtSchema,
@@ -164,18 +169,18 @@ export const EmergenceActionSchema = v.picklist(["accept", "dismiss", "pin"]);
 export const EmergenceStatusSchema = v.picklist(["pending", "accepted", "dismissed", "held"]);
 
 export const EvidenceStepSchema = v.object({
-	fromId: UuidSchema,
-	toId: UuidSchema,
+	fromId: IdSchema,
+	toId: IdSchema,
 	relation: v.string(),
 });
 
 export const EmergenceSuggestionSchema = v.object({
-	id: UuidSchema,
+	id: IdSchema,
 	kind: EmergenceKindSchema,
-	contextWorkId: UuidSchema,
-	targetWorkId: UuidSchema,
-	contextItemId: UuidSchema,
-	targetItemId: UuidSchema,
+	contextWorkId: IdSchema,
+	targetWorkId: IdSchema,
+	contextItemId: IdSchema,
+	targetItemId: IdSchema,
 	proposedLinkType: v.optional(RelationTypeNameSchema),
 	title: v.string(),
 	explanation: v.string(),
@@ -190,7 +195,7 @@ export const EmergenceSuggestionSchema = v.object({
 });
 
 export const SavedRuleQuerySchema = v.object({
-	id: UuidSchema,
+	id: IdSchema,
 	name: v.string(),
 	source: v.string(),
 	createdAt: CreatedAtSchema,

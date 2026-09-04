@@ -3,6 +3,7 @@ import * as v from "valibot";
 import {
 	BookmarkSchema,
 	BranchSchema,
+	IdSchema,
 	KnotSchema,
 	OccurrenceSchema,
 	OutlineLinkSchema,
@@ -29,6 +30,15 @@ Deno.test("UuidSchema validates valid UUID and rejects invalid string", () => {
 	assertThrows(() => v.parse(UuidSchema, 12345));
 });
 
+Deno.test("IdSchema accepts non-empty strings and rejects empty string or non-string", () => {
+	assertEquals(v.parse(IdSchema, "work-1"), "work-1");
+	assertEquals(v.parse(IdSchema, VALID_UUID), VALID_UUID);
+
+	assertThrows(() => v.parse(IdSchema, ""));
+	assertThrows(() => v.parse(IdSchema, 12345));
+	assertThrows(() => v.parse(IdSchema, null));
+});
+
 Deno.test("WorkSchema validates valid Work and rejects invalid fields", () => {
 	const validWork = {
 		id: VALID_UUID,
@@ -47,8 +57,9 @@ Deno.test("WorkSchema validates valid Work and rejects invalid fields", () => {
 	};
 	assertEquals(v.parse(WorkSchema, workWithStub), workWithStub);
 
-	// Invalid UUID
-	assertThrows(() => v.parse(WorkSchema, { ...validWork, id: "invalid" }));
+	// Invalid ID
+	assertThrows(() => v.parse(WorkSchema, { ...validWork, id: "" }));
+	assertThrows(() => v.parse(WorkSchema, { ...validWork, id: 123 }));
 	// Invalid date
 	assertThrows(() => v.parse(WorkSchema, { ...validWork, createdAt: "not-a-date" }));
 	// Invalid stub createdVia
@@ -89,7 +100,8 @@ Deno.test("WorkingCopySchema validates WorkingCopy correctly", () => {
 	};
 	assertEquals(v.parse(WorkingCopySchema, validCopy), validCopy);
 
-	assertThrows(() => v.parse(WorkingCopySchema, { ...validCopy, branchId: "bad-id" }));
+	assertThrows(() => v.parse(WorkingCopySchema, { ...validCopy, branchId: "" }));
+	assertThrows(() => v.parse(WorkingCopySchema, { ...validCopy, branchId: 123 }));
 });
 
 Deno.test("OccurrenceSchema validates branch and pinned selector occurrences", () => {

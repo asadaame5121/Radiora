@@ -1,22 +1,100 @@
+import * as v from "valibot";
 import type {
+	Bookmark,
 	Branch,
-	LinkEndpoint,
+	EmergenceSuggestion,
+	Knot,
 	Occurrence,
 	OutlineLink,
+	PurgeManifest,
+	RecoverySnapshot,
+	ResumePosition,
 	Revision,
-	StubCreationKind,
+	SavedRuleQuery,
+	SearchAlias,
+	SystemRelation,
 	Work,
 	WorkingCopy,
-	WorkStub,
 } from "../domain/models.ts";
 import {
 	BUILT_IN_RELATION_TYPES,
 	validateRelationTypeDefinitions,
 } from "../domain/relation_type.ts";
-import type { GraphStateSnapshot, WorkBundle } from "./graph_store.ts";
-import { isValidWorkStub } from "./graph_mutation_validation.ts";
+import {
+	BookmarkSchema,
+	BranchSchema,
+	EmergenceActionSchema,
+	EmergenceSuggestionSchema,
+	KnotSchema,
+	OccurrenceSchema,
+	OutlineLinkSchema,
+	PurgeManifestSchema,
+	RecoverySnapshotSchema,
+	ResumePositionSchema,
+	RevisionSchema,
+	SavedRuleQuerySchema,
+	SearchAliasSchema,
+	SystemRelationSchema,
+	WorkingCopySchema,
+	WorkSchema,
+} from "../domain/schemas.ts";
+import type { GraphStateSnapshot } from "./graph_store.ts";
 
 export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot {
+	assertSnapshotContainer(value);
+	const source = value as Record<string, unknown>;
+	const state = structuredClone(value) as GraphStateSnapshot;
+	if (!("relationTypeDefinitions" in source)) {
+		state.relationTypeDefinitions = BUILT_IN_RELATION_TYPES.map((def) => ({ ...def }));
+	} else {
+		state.relationTypeDefinitions = validateRelationTypeDefinitions(source.relationTypeDefinitions);
+	}
+	const relationTypeNames = new Set(state.relationTypeDefinitions.map((def) => def.name));
+	const workById = uniqueById(state.works, "Work");
+	const branchById = uniqueById(state.branches, "Branch");
+	const occurrenceById = uniqueById(state.occurrences, "Occurrence");
+	const revisionById = uniqueById(state.revisions, "Revision");
+	uniqueById(state.recoverySnapshots, "Recovery Snapshot");
+	uniqueById(state.links, "Link");
+	uniqueById(state.systemRelations, "System Relation");
+	uniqueById(state.knots, "Knot");
+	uniqueById(state.aliases, "Search Alias");
+	uniqueById(state.emergenceSuggestions, "Emergence Suggestion");
+	uniqueById(state.savedRuleQueries, "Saved Rule Query");
+	uniqueById(state.purgeManifests, "Purge Manifest");
+	uniqueById(state.bookmarks, "Bookmark");
+	const purgedWorkIds = new Set(state.purgeManifests.map((manifest) => manifest.workId));
+	const purgedOccurrenceIds = new Set(
+		state.purgeManifests.flatMap((manifest) => manifest.occurrenceIds),
+	);
+
+	validateWorks(state.works, workById, purgedWorkIds);
+	validateBranches(state.branches, workById, revisionById);
+	validateWorkingCopies(state.workingCopies, branchById, workById);
+	validateRevisions(state.revisions, workById, revisionById);
+	validateRecoverySnapshots(state.recoverySnapshots, workById, branchById, revisionById);
+	validateOccurrences(state.occurrences, workById, branchById, revisionById);
+	validateLinks(state.links, relationTypeNames, workById, revisionById);
+	validateSystemRelations(state.systemRelations, workById);
+	validateKnots(state.knots, occurrenceById, purgedOccurrenceIds);
+	validateAliases(state.aliases);
+	validateEmergenceSuggestions(
+		state.emergenceSuggestions,
+		workById,
+		occurrenceById,
+		purgedWorkIds,
+		purgedOccurrenceIds,
+	);
+	validateSavedRuleQueries(state.savedRuleQueries);
+	validatePurgeManifests(state.purgeManifests);
+	validateBookmarks(state.bookmarks, workById, occurrenceById);
+	validateResumePosition(state.resumePosition, workById, occurrenceById);
+	validateEmergenceFeedback(state.emergenceFeedback);
+
+	return state;
+}
+
+function assertSnapshotContainer(value: unknown): void {
 	if (!value || typeof value !== "object" || Array.isArray(value)) {
 		throw new Error("Backup data must be an object");
 	}
@@ -54,41 +132,17 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 	) {
 		throw new Error("Backup data.resumePosition must be an object or null");
 	}
+}
 
-	const state = structuredClone(value) as GraphStateSnapshot;
-	if (!("relationTypeDefinitions" in source)) {
-		state.relationTypeDefinitions = BUILT_IN_RELATION_TYPES.map((def) => ({ ...def }));
-	} else {
-		state.relationTypeDefinitions = validateRelationTypeDefinitions(source.relationTypeDefinitions);
-	}
-	const relationTypeNames = new Set(state.relationTypeDefinitions.map((def) => def.name));
-	const workById = uniqueById(state.works, "Work");
-	const branchById = uniqueById(state.branches, "Branch");
-	const occurrenceById = uniqueById(state.occurrences, "Occurrence");
-	const revisionById = uniqueById(state.revisions, "Revision");
-	uniqueById(state.recoverySnapshots, "Recovery Snapshot");
-	uniqueById(state.links, "Link");
-	uniqueById(state.systemRelations, "System Relation");
-	uniqueById(state.knots, "Knot");
-	uniqueById(state.aliases, "Search Alias");
-	uniqueById(state.emergenceSuggestions, "Emergence Suggestion");
-	uniqueById(state.savedRuleQueries, "Saved Rule Query");
-	uniqueById(state.purgeManifests, "Purge Manifest");
-	uniqueById(state.bookmarks, "Bookmark");
-	const purgedWorkIds = new Set(state.purgeManifests.map((manifest) => manifest.workId));
-	const purgedOccurrenceIds = new Set(
-		state.purgeManifests.flatMap((manifest) => manifest.occurrenceIds),
-	);
-
-	for (const work of state.works) {
-		if (
-			!isIsoInstant(work.createdAt) || !isIsoInstant(work.updatedAt) ||
-			(work.stub !== undefined && !isValidWorkStub(work.stub))
-		) {
-			throw new Error(`Invalid Work: ${work.id}`);
-		}
-		if (work.deletedAt && !isIsoInstant(work.deletedAt)) {
-			throw new Error(`Invalid Work: ${work.id}`);
+function validateWorks(
+	works: readonly Work[],
+	workById: ReadonlyMap<string, Work>,
+	purgedWorkIds: ReadonlySet<string>,
+): void {
+	for (const work of works) {
+		const parsed = v.safeParse(WorkSchema, work);
+		if (!parsed.success) {
+			throw new Error(`Invalid Work: ${work?.id}`);
 		}
 		if (
 			work.mergedIntoWorkId && !workById.has(work.mergedIntoWorkId) &&
@@ -98,18 +152,22 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 		}
 		if (
 			work.mergedIntoWorkId === work.id ||
-			(work.mergedIntoWorkId && !isIsoInstant(work.mergedAt))
+			(work.mergedIntoWorkId && !work.mergedAt)
 		) {
 			throw new Error(`Invalid Work merge provenance: ${work.id}`);
 		}
 	}
-	for (const branch of state.branches) {
-		if (
-			!workById.has(branch.workId) || !branch.name || !isIsoInstant(branch.createdAt) ||
-			(branch.promotedAt !== undefined && !isIsoInstant(branch.promotedAt)) ||
-			(branch.archivedAt !== undefined && !isIsoInstant(branch.archivedAt))
-		) {
-			throw new Error(`Invalid Branch: ${branch.id}`);
+}
+
+function validateBranches(
+	branches: readonly Branch[],
+	workById: ReadonlyMap<string, Work>,
+	revisionById: ReadonlyMap<string, Revision>,
+): void {
+	for (const branch of branches) {
+		const parsed = v.safeParse(BranchSchema, branch);
+		if (!parsed.success || !workById.has(branch.workId)) {
+			throw new Error(`Invalid Branch: ${branch?.id}`);
 		}
 		if (branch.headRevisionId) {
 			const head = revisionById.get(branch.headRevisionId);
@@ -118,27 +176,38 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 			}
 		}
 	}
+}
+
+function validateWorkingCopies(
+	workingCopies: readonly WorkingCopy[],
+	branchById: ReadonlyMap<string, Branch>,
+	workById: ReadonlyMap<string, Work>,
+): void {
 	const copyBranchIds = new Set<string>();
-	for (const copy of state.workingCopies) {
+	for (const copy of workingCopies) {
 		if (copyBranchIds.has(copy.branchId)) {
 			throw new Error(`Working Copy ID collision: ${copy.branchId}`);
 		}
 		copyBranchIds.add(copy.branchId);
 		const branch = branchById.get(copy.branchId);
+		const parsed = v.safeParse(WorkingCopySchema, copy);
 		if (
-			!branch || branch.workId !== copy.workId || !workById.has(copy.workId) ||
-			typeof copy.text !== "string" || !isIsoInstant(copy.updatedAt)
+			!parsed.success || !branch || branch.workId !== copy.workId || !workById.has(copy.workId)
 		) {
 			throw new Error(`Invalid Working Copy: ${copy.branchId}`);
 		}
 	}
-	for (const revision of state.revisions) {
-		if (
-			!workById.has(revision.workId) || typeof revision.text !== "string" ||
-			!Array.isArray(revision.parentRevisionIds) || !isIsoInstant(revision.createdAt) ||
-			!["checkpoint", "edition", "merge"].includes(revision.kind)
-		) {
-			throw new Error(`Invalid Revision: ${revision.id}`);
+}
+
+function validateRevisions(
+	revisions: readonly Revision[],
+	workById: ReadonlyMap<string, Work>,
+	revisionById: ReadonlyMap<string, Revision>,
+): void {
+	for (const revision of revisions) {
+		const parsed = v.safeParse(RevisionSchema, revision);
+		if (!parsed.success || !workById.has(revision.workId)) {
+			throw new Error(`Invalid Revision: ${revision?.id}`);
 		}
 		const parents = new Set<string>();
 		for (const parentId of revision.parentRevisionIds) {
@@ -152,38 +221,42 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 			parents.add(parentId);
 		}
 	}
-	assertRevisionDag(state.revisions);
-	for (const snapshot of state.recoverySnapshots) {
+	assertRevisionDag(revisions);
+}
+
+function validateRecoverySnapshots(
+	recoverySnapshots: readonly RecoverySnapshot[],
+	workById: ReadonlyMap<string, Work>,
+	branchById: ReadonlyMap<string, Branch>,
+	revisionById: ReadonlyMap<string, Revision>,
+): void {
+	for (const snapshot of recoverySnapshots) {
 		const branch = branchById.get(snapshot.branchId);
 		const sourceRevision = snapshot.sourceRevisionId
 			? revisionById.get(snapshot.sourceRevisionId)
 			: undefined;
+		const parsed = v.safeParse(RecoverySnapshotSchema, snapshot);
 		if (
-			!workById.has(snapshot.workId) || !branch || branch.workId !== snapshot.workId ||
-			typeof snapshot.text !== "string" || !snapshot.contentHash ||
-			!isIsoInstant(snapshot.createdAt) ||
+			!parsed.success || !workById.has(snapshot.workId) || !branch ||
+			branch.workId !== snapshot.workId ||
 			(snapshot.sourceRevisionId &&
 				(!sourceRevision || sourceRevision.workId !== snapshot.workId))
 		) {
 			throw new Error(`Invalid Recovery Snapshot: ${snapshot.id}`);
 		}
-		if (
-			snapshot.protection &&
-			(!["user", "import", "schema-migration", "revision-source"].includes(
-				snapshot.protection.reason,
-			) ||
-				!isIsoInstant(snapshot.protection.protectedAt) ||
-				(snapshot.protection.expiresAt !== undefined &&
-					!isIsoInstant(snapshot.protection.expiresAt)))
-		) {
-			throw new Error(`Invalid Recovery Snapshot protection: ${snapshot.id}`);
-		}
 	}
-	for (const occurrence of state.occurrences) {
-		if (
-			!workById.has(occurrence.workId) || !Number.isFinite(occurrence.orderKey)
-		) {
-			throw new Error(`Invalid Occurrence: ${occurrence.id}`);
+}
+
+function validateOccurrences(
+	occurrences: readonly Occurrence[],
+	workById: ReadonlyMap<string, Work>,
+	branchById: ReadonlyMap<string, Branch>,
+	revisionById: ReadonlyMap<string, Revision>,
+): void {
+	for (const occurrence of occurrences) {
+		const parsed = v.safeParse(OccurrenceSchema, occurrence);
+		if (!parsed.success || !workById.has(occurrence.workId)) {
+			throw new Error(`Invalid Occurrence: ${occurrence?.id}`);
 		}
 		if (occurrence.revisionSelector.mode === "branch") {
 			const branch = branchById.get(occurrence.revisionSelector.branchId);
@@ -192,54 +265,82 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 			}
 		} else {
 			const revision = revisionById.get(occurrence.revisionSelector.revisionId);
-
 			if (!revision || revision.workId !== occurrence.workId) {
 				throw new Error(`Invalid Occurrence Revision: ${occurrence.id}`);
 			}
 		}
 	}
-	for (const link of state.links) {
+}
+
+function validateLinks(
+	links: readonly OutlineLink[],
+	relationTypeNames: ReadonlySet<string>,
+	workById: ReadonlyMap<string, Work>,
+	revisionById: ReadonlyMap<string, Revision>,
+): void {
+	for (const link of links) {
+		const parsed = v.safeParse(OutlineLinkSchema, link);
+		if (!parsed.success || !relationTypeNames.has(link.type)) {
+			throw new Error(`Invalid Link: ${link?.id}`);
+		}
 		validateLinkEndpoint(link.from, workById, revisionById, link.id);
 		validateLinkEndpoint(link.to, workById, revisionById, link.id);
 		if (link.fromId !== link.from.workId || link.toId !== link.to.workId) {
 			throw new Error(`Invalid Link endpoint IDs: ${link.id}`);
 		}
+	}
+}
+
+function validateSystemRelations(
+	systemRelations: readonly SystemRelation[],
+	workById: ReadonlyMap<string, Work>,
+): void {
+	for (const relation of systemRelations) {
+		const parsed = v.safeParse(SystemRelationSchema, relation);
 		if (
-			!relationTypeNames.has(link.type) ||
-			!["provisional", "asserted", "retracted"].includes(link.status) ||
-			!["human", "suggestion", "import"].includes(link.origin) ||
-			!isIsoInstant(link.createdAt)
+			!parsed.success || !workById.has(relation.fromWorkId) || !workById.has(relation.toWorkId)
 		) {
-			throw new Error(`Invalid Link: ${link.id}`);
+			throw new Error(`Invalid System Relation: ${relation?.id}`);
 		}
 	}
-	for (const relation of state.systemRelations) {
+}
+
+function validateKnots(
+	knots: readonly Knot[],
+	occurrenceById: ReadonlyMap<string, Occurrence>,
+	purgedOccurrenceIds: ReadonlySet<string>,
+): void {
+	for (const knot of knots) {
+		const parsed = v.safeParse(KnotSchema, knot);
 		if (
-			!workById.has(relation.fromWorkId) || !workById.has(relation.toWorkId) ||
-			relation.type !== "IN" || !isIsoInstant(relation.createdAt)
+			!parsed.success ||
+			knot.cycleIds.some((id) => !occurrenceById.has(id) && !purgedOccurrenceIds.has(id))
 		) {
-			throw new Error(`Invalid System Relation: ${relation.id}`);
+			throw new Error(`Invalid Knot: ${knot?.id}`);
 		}
 	}
-	for (const knot of state.knots) {
-		if (
-			!Array.isArray(knot.cycleIds) ||
-			knot.cycleIds.some((id) => !occurrenceById.has(id) && !purgedOccurrenceIds.has(id)) ||
-			!isIsoInstant(knot.createdAt)
-		) {
-			throw new Error(`Invalid Knot: ${knot.id}`);
+}
+
+function validateAliases(aliases: readonly SearchAlias[]): void {
+	for (const alias of aliases) {
+		const parsed = v.safeParse(SearchAliasSchema, alias);
+		if (!parsed.success) {
+			throw new Error(`Invalid Search Alias: ${alias?.id}`);
 		}
 	}
-	for (const alias of state.aliases) {
+}
+
+function validateEmergenceSuggestions(
+	suggestions: readonly EmergenceSuggestion[],
+	workById: ReadonlyMap<string, Work>,
+	occurrenceById: ReadonlyMap<string, Occurrence>,
+	purgedWorkIds: ReadonlySet<string>,
+	purgedOccurrenceIds: ReadonlySet<string>,
+): void {
+	for (const suggestion of suggestions) {
+		const parsed = v.safeParse(EmergenceSuggestionSchema, suggestion);
 		if (
-			!alias.canonical || !Array.isArray(alias.variants) ||
-			!isIsoInstant(alias.createdAt) || !isIsoInstant(alias.updatedAt)
-		) {
-			throw new Error(`Invalid Search Alias: ${alias.id}`);
-		}
-	}
-	for (const suggestion of state.emergenceSuggestions) {
-		if (
+			!parsed.success ||
 			(!workById.has(suggestion.contextWorkId) &&
 				!purgedWorkIds.has(suggestion.contextWorkId)) ||
 			(!workById.has(suggestion.targetWorkId) &&
@@ -247,58 +348,71 @@ export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot 
 			(!purgedOccurrenceIds.has(suggestion.contextItemId) &&
 				occurrenceById.get(suggestion.contextItemId)?.workId !== suggestion.contextWorkId) ||
 			(!purgedOccurrenceIds.has(suggestion.targetItemId) &&
-				occurrenceById.get(suggestion.targetItemId)?.workId !== suggestion.targetWorkId) ||
-			!["pending", "accepted", "dismissed", "held"].includes(suggestion.persistenceStatus) ||
-			!Number.isFinite(suggestion.score) || !Array.isArray(suggestion.evidence) ||
-			!isIsoInstant(suggestion.createdAt) || !isIsoInstant(suggestion.updatedAt) ||
-			(suggestion.resolvedAt !== undefined && !isIsoInstant(suggestion.resolvedAt))
+				occurrenceById.get(suggestion.targetItemId)?.workId !== suggestion.targetWorkId)
 		) {
-			throw new Error(`Invalid Emergence Suggestion: ${suggestion.id}`);
+			throw new Error(`Invalid Emergence Suggestion: ${suggestion?.id}`);
 		}
 	}
-	for (const query of state.savedRuleQueries) {
-		if (
-			!query.name || typeof query.source !== "string" ||
-			!isIsoInstant(query.createdAt) || !isIsoInstant(query.updatedAt)
-		) {
-			throw new Error(`Invalid Saved Rule Query: ${query.id}`);
+}
+
+function validateSavedRuleQueries(savedRuleQueries: readonly SavedRuleQuery[]): void {
+	for (const query of savedRuleQueries) {
+		const parsed = v.safeParse(SavedRuleQuerySchema, query);
+		if (!parsed.success) {
+			throw new Error(`Invalid Saved Rule Query: ${query?.id}`);
 		}
 	}
-	for (const manifest of state.purgeManifests) {
-		if (
-			!manifest.workId || !Array.isArray(manifest.occurrenceIds) ||
-			!Array.isArray(manifest.branchIds) || !Array.isArray(manifest.revisionIds) ||
-			!Array.isArray(manifest.linkIds) || !isIsoInstant(manifest.purgedAt)
-		) {
-			throw new Error(`Invalid Purge Manifest: ${manifest.id}`);
+}
+
+function validatePurgeManifests(purgeManifests: readonly PurgeManifest[]): void {
+	for (const manifest of purgeManifests) {
+		const parsed = v.safeParse(PurgeManifestSchema, manifest);
+		if (!parsed.success) {
+			throw new Error(`Invalid Purge Manifest: ${manifest?.id}`);
 		}
 	}
-	for (const bookmark of state.bookmarks) {
+}
+
+function validateBookmarks(
+	bookmarks: readonly Bookmark[],
+	workById: ReadonlyMap<string, Work>,
+	occurrenceById: ReadonlyMap<string, Occurrence>,
+): void {
+	for (const bookmark of bookmarks) {
 		const occurrence = occurrenceById.get(bookmark.occurrenceId);
+		const parsed = v.safeParse(BookmarkSchema, bookmark);
 		if (
-			!workById.has(bookmark.workId) || occurrence?.workId !== bookmark.workId ||
-			!isIsoInstant(bookmark.createdAt)
+			!parsed.success || !workById.has(bookmark.workId) || occurrence?.workId !== bookmark.workId
 		) {
-			throw new Error(`Invalid Bookmark: ${bookmark.id}`);
+			throw new Error(`Invalid Bookmark: ${bookmark?.id}`);
 		}
 	}
-	if (state.resumePosition) {
-		const occurrence = occurrenceById.get(state.resumePosition.occurrenceId);
-		if (
-			!workById.has(state.resumePosition.workId) ||
-			occurrence?.workId !== state.resumePosition.workId ||
-			!Number.isInteger(state.resumePosition.caretOffset) ||
-			state.resumePosition.caretOffset < 0 || !isIsoInstant(state.resumePosition.updatedAt)
-		) {
-			throw new Error("Invalid Resume Position");
-		}
+}
+
+function validateResumePosition(
+	resumePosition: ResumePosition | null,
+	workById: ReadonlyMap<string, Work>,
+	occurrenceById: ReadonlyMap<string, Occurrence>,
+): void {
+	if (!resumePosition) return;
+	const occurrence = occurrenceById.get(resumePosition.occurrenceId);
+	const parsed = v.safeParse(ResumePositionSchema, resumePosition);
+	if (
+		!parsed.success || !workById.has(resumePosition.workId) ||
+		occurrence?.workId !== resumePosition.workId ||
+		resumePosition.caretOffset < 0
+	) {
+		throw new Error("Invalid Resume Position");
 	}
-	for (const action of Object.values(state.emergenceFeedback)) {
-		if (action !== "accept" && action !== "dismiss" && action !== "pin") {
+}
+
+function validateEmergenceFeedback(emergenceFeedback: Record<string, unknown>): void {
+	for (const action of Object.values(emergenceFeedback)) {
+		const parsed = v.safeParse(EmergenceActionSchema, action);
+		if (!parsed.success) {
 			throw new Error("Invalid emergence feedback");
 		}
 	}
-	return state;
 }
 
 function uniqueById<T extends { id: string }>(
@@ -311,12 +425,6 @@ function uniqueById<T extends { id: string }>(
 		result.set(entry.id, entry);
 	}
 	return result;
-}
-
-function isIsoInstant(value: unknown): value is string {
-	if (typeof value !== "string") return false;
-	const parsed = Date.parse(value);
-	return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
 }
 
 function assertRevisionDag(revisions: readonly Revision[]): void {
