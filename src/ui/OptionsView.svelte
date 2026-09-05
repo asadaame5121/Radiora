@@ -60,6 +60,7 @@
 		onCreateRelationTypeDefinition?: (input: {
 			name: string;
 			direction: RelationTypeDirection;
+			advancesGeneration?: boolean;
 		}) => Promise<void>;
 		onPersistMarkdownExportPreference: () => void;
 		onExportMarkdown: () => void | Promise<void>;

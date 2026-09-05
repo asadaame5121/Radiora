@@ -16,6 +16,7 @@
 		onCreateRelationTypeDefinition?: (input: {
 			name: string;
 			direction: RelationTypeDirection;
+			advancesGeneration?: boolean;
 		}) => Promise<void>;
 	} = $props();
 
@@ -24,6 +25,7 @@
 
 	let newRelationName = $state("");
 	let newRelationDirection = $state<RelationTypeDirection>("directed");
+	let newRelationAdvancesGeneration = $state(false);
 	let relationSubmitting = $state(false);
 	let relationStatusMessage = $state("");
 	let relationErrorMessage = $state("");
@@ -45,9 +47,11 @@
 			await onCreateRelationTypeDefinition({
 				name,
 				direction: newRelationDirection,
+				advancesGeneration: newRelationDirection === "directed" ? newRelationAdvancesGeneration : false,
 			});
 			newRelationName = "";
 			newRelationDirection = "directed";
+			newRelationAdvancesGeneration = false;
 			relationStatusMessage = `関係型「${name.toUpperCase()}」を追加しました。`;
 		} catch (cause) {
 			relationErrorMessage = cause instanceof Error ? cause.message : String(cause);
@@ -65,7 +69,12 @@
 		{#each definitions as def (def.name)}
 			<div class="relation-type-item">
 				<span class="relation-type-name">{def.name}</span>
-				<span class="relation-type-direction">{def.direction === "symmetric" ? "双方向 (↔)" : "有向 (→)"}</span>
+				<span class="relation-type-direction">
+					{def.direction === "symmetric" ? "双方向 (↔)" : "有向 (→)"}
+					{#if def.direction === "directed" && def.advancesGeneration}
+						<span class="relation-advances-pill" title="ツリー表示で世代を進める">世代前進 (↓)</span>
+					{/if}
+				</span>
 				<span class="relation-type-badge">{def.builtIn ? "組み込み" : "カスタム"}</span>
 			</div>
 		{/each}
@@ -106,6 +115,16 @@
 				双方向（対称）
 			</label>
 		</div>
+		{#if newRelationDirection === "directed"}
+			<label class="relation-advances-checkbox">
+				<input
+					type="checkbox"
+					bind:checked={newRelationAdvancesGeneration}
+					disabled={!startupReady || !onCreateRelationTypeDefinition || relationSubmitting}
+				/>
+				<span>世代を進める（系統樹・ツリー表示で階層を下げる）</span>
+			</label>
+		{/if}
 		<div class="option-actions">
 			<button type="submit" disabled={!canSubmitRelation}>関係型を追加</button>
 		</div>
@@ -151,8 +170,6 @@
 	.relation-type-list {
 		display: grid;
 		gap: 6px;
-		max-height: 180px;
-		overflow-y: auto;
 		padding: 8px;
 		border: 1px solid var(--border);
 		border-radius: 8px;
@@ -170,8 +187,19 @@
 		font-family: monospace;
 	}
 	.relation-type-direction {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
 		color: var(--muted);
 		font-size: 11px;
+	}
+	.relation-advances-pill {
+		font-size: 10px;
+		padding: 1px 5px;
+		border-radius: 4px;
+		background: color-mix(in srgb, var(--cyan, #25c6d1) 20%, transparent);
+		color: var(--cyan, #25c6d1);
+		font-weight: 500;
 	}
 	.relation-type-badge {
 		font-size: 10px;
@@ -194,6 +222,16 @@
 		align-items: center;
 		gap: 6px;
 		cursor: pointer;
+	}
+	.relation-advances-checkbox {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		cursor: pointer;
+	}
+	.relation-advances-checkbox span {
+		color: var(--text, #e6e6e6);
 	}
 	.relation-status-message {
 		color: var(--cyan, #25c6d1);

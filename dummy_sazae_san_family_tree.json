@@ -1,0 +1,998 @@
+{
+  "format": "radiora-backup",
+  "schemaVersion": 7,
+  "exportedAt": "2026-09-01T00:00:00.000Z",
+  "appVersion": "0.5.1",
+  "source": {
+    "storageSchemaVersion": 7
+  },
+  "data": {
+    "works": [
+      {
+        "id": "group-isono",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-namihei",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-fune",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-umihei",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-katsuo",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-wakame",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "group-fuguta",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-sazae",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-masuo",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-tarao",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "group-namino",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-norisuke",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-taiko",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-ikura",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "branches": [
+      {
+        "id": "group-isono-main",
+        "workId": "group-isono",
+        "name": "main",
+        "headRevisionId": "group-isono-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-namihei-main",
+        "workId": "person-namihei",
+        "name": "main",
+        "headRevisionId": "person-namihei-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-fune-main",
+        "workId": "person-fune",
+        "name": "main",
+        "headRevisionId": "person-fune-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-umihei-main",
+        "workId": "person-umihei",
+        "name": "main",
+        "headRevisionId": "person-umihei-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-katsuo-main",
+        "workId": "person-katsuo",
+        "name": "main",
+        "headRevisionId": "person-katsuo-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-wakame-main",
+        "workId": "person-wakame",
+        "name": "main",
+        "headRevisionId": "person-wakame-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "group-fuguta-main",
+        "workId": "group-fuguta",
+        "name": "main",
+        "headRevisionId": "group-fuguta-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-sazae-main",
+        "workId": "person-sazae",
+        "name": "main",
+        "headRevisionId": "person-sazae-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-masuo-main",
+        "workId": "person-masuo",
+        "name": "main",
+        "headRevisionId": "person-masuo-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-tarao-main",
+        "workId": "person-tarao",
+        "name": "main",
+        "headRevisionId": "person-tarao-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "group-namino-main",
+        "workId": "group-namino",
+        "name": "main",
+        "headRevisionId": "group-namino-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-norisuke-main",
+        "workId": "person-norisuke",
+        "name": "main",
+        "headRevisionId": "person-norisuke-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-taiko-main",
+        "workId": "person-taiko",
+        "name": "main",
+        "headRevisionId": "person-taiko-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-ikura-main",
+        "workId": "person-ikura",
+        "name": "main",
+        "headRevisionId": "person-ikura-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "workingCopies": [
+      {
+        "branchId": "group-isono-main",
+        "workId": "group-isono",
+        "text": "磯野家\n\n世田谷区桜新町在住の磯野家一族。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-namihei-main",
+        "workId": "person-namihei",
+        "text": "磯野波平\n\n磯野家の大黒柱。山高商事の課長。頑固だが情に厚い。フネの夫。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-fune-main",
+        "workId": "person-fune",
+        "text": "磯野フネ\n\n波平の妻。物静かで家族を温かく見守る良妻賢母。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-umihei-main",
+        "workId": "person-umihei",
+        "text": "磯野海平\n\n波平の双子の兄。福岡在住。波平との見分け方は頭頂部の髪の毛（2本）。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-katsuo-main",
+        "workId": "person-katsuo",
+        "text": "磯野カツオ\n\n磯野家の長男。小学5年3組。いたずら好きでお調子者だが機転が利く。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-wakame-main",
+        "workId": "person-wakame",
+        "text": "磯野ワカメ\n\n磯野家の次女。小学3年1組。真面目で心優しい少女。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "group-fuguta-main",
+        "workId": "group-fuguta",
+        "text": "フグ田家\n\n磯野家に同居するサザエ・マスオ・タラオの一家。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-sazae-main",
+        "workId": "person-sazae",
+        "text": "フグ田サザエ\n\n本作の主人公。波平とフネの長女。マスオの妻、タラオの母。明るく行動的。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-masuo-main",
+        "workId": "person-masuo",
+        "text": "フグ田マスオ\n\nサザエの夫。海山商事勤務。誠実で優しく、義理の実家でも円満に暮らす。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-tarao-main",
+        "workId": "person-tarao",
+        "text": "フグ田タラオ\n\nサザエとマスオの長男。3歳。好奇心旺盛で礼儀正しい。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "group-namino-main",
+        "workId": "group-namino",
+        "text": "波野家\n\n波平の甥であるノリスケの一家。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-norisuke-main",
+        "workId": "person-norisuke",
+        "text": "波野ノリスケ\n\n波平・海平の妹なぎえの息子（甥）。出版社勤務。明るく図々しい愛されキャラ。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-taiko-main",
+        "workId": "person-taiko",
+        "text": "波野タイコ\n\nノリスケの妻。上品でしっかり者。サザエとも仲が良い。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-ikura-main",
+        "workId": "person-ikura",
+        "text": "波野イクラ\n\nノリスケとタイコの長男。タラオのいとこ甥（はとこ）。「ハーイ」「チャーン」「バブー」。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "group-isono-occ",
+        "workId": "group-isono",
+        "parentOccurrenceId": null,
+        "orderKey": 1024,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "group-isono-main"
+        }
+      },
+      {
+        "id": "person-namihei-occ",
+        "workId": "person-namihei",
+        "parentOccurrenceId": "group-isono-occ",
+        "orderKey": 2048,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-namihei-main"
+        }
+      },
+      {
+        "id": "person-fune-occ",
+        "workId": "person-fune",
+        "parentOccurrenceId": "group-isono-occ",
+        "orderKey": 3072,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-fune-main"
+        }
+      },
+      {
+        "id": "person-umihei-occ",
+        "workId": "person-umihei",
+        "parentOccurrenceId": "group-isono-occ",
+        "orderKey": 4096,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-umihei-main"
+        }
+      },
+      {
+        "id": "person-katsuo-occ",
+        "workId": "person-katsuo",
+        "parentOccurrenceId": "group-isono-occ",
+        "orderKey": 5120,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-katsuo-main"
+        }
+      },
+      {
+        "id": "person-wakame-occ",
+        "workId": "person-wakame",
+        "parentOccurrenceId": "group-isono-occ",
+        "orderKey": 6144,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-wakame-main"
+        }
+      },
+      {
+        "id": "group-fuguta-occ",
+        "workId": "group-fuguta",
+        "parentOccurrenceId": null,
+        "orderKey": 7168,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "group-fuguta-main"
+        }
+      },
+      {
+        "id": "person-sazae-occ",
+        "workId": "person-sazae",
+        "parentOccurrenceId": "group-fuguta-occ",
+        "orderKey": 8192,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-sazae-main"
+        }
+      },
+      {
+        "id": "person-masuo-occ",
+        "workId": "person-masuo",
+        "parentOccurrenceId": "group-fuguta-occ",
+        "orderKey": 9216,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-masuo-main"
+        }
+      },
+      {
+        "id": "person-tarao-occ",
+        "workId": "person-tarao",
+        "parentOccurrenceId": "group-fuguta-occ",
+        "orderKey": 10240,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-tarao-main"
+        }
+      },
+      {
+        "id": "group-namino-occ",
+        "workId": "group-namino",
+        "parentOccurrenceId": null,
+        "orderKey": 11264,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "group-namino-main"
+        }
+      },
+      {
+        "id": "person-norisuke-occ",
+        "workId": "person-norisuke",
+        "parentOccurrenceId": "group-namino-occ",
+        "orderKey": 12288,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-norisuke-main"
+        }
+      },
+      {
+        "id": "person-taiko-occ",
+        "workId": "person-taiko",
+        "parentOccurrenceId": "group-namino-occ",
+        "orderKey": 13312,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-taiko-main"
+        }
+      },
+      {
+        "id": "person-ikura-occ",
+        "workId": "person-ikura",
+        "parentOccurrenceId": "group-namino-occ",
+        "orderKey": 14336,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-ikura-main"
+        }
+      }
+    ],
+    "links": [
+      {
+        "id": "link-sp-namihei-fune",
+        "fromId": "person-namihei",
+        "toId": "person-fune",
+        "from": {
+          "scope": "work",
+          "workId": "person-namihei"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-fune"
+        },
+        "type": "SPOUSE",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-sp-sazae-masuo",
+        "fromId": "person-sazae",
+        "toId": "person-masuo",
+        "from": {
+          "scope": "work",
+          "workId": "person-sazae"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-masuo"
+        },
+        "type": "SPOUSE",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-sp-norisuke-taiko",
+        "fromId": "person-norisuke",
+        "toId": "person-taiko",
+        "from": {
+          "scope": "work",
+          "workId": "person-norisuke"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-taiko"
+        },
+        "type": "SPOUSE",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-namihei-sazae",
+        "fromId": "person-namihei",
+        "toId": "person-sazae",
+        "from": {
+          "scope": "work",
+          "workId": "person-namihei"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-sazae"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-namihei-katsuo",
+        "fromId": "person-namihei",
+        "toId": "person-katsuo",
+        "from": {
+          "scope": "work",
+          "workId": "person-namihei"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-katsuo"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-namihei-wakame",
+        "fromId": "person-namihei",
+        "toId": "person-wakame",
+        "from": {
+          "scope": "work",
+          "workId": "person-namihei"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-wakame"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-masuo-tarao",
+        "fromId": "person-masuo",
+        "toId": "person-tarao",
+        "from": {
+          "scope": "work",
+          "workId": "person-masuo"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-tarao"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-norisuke-ikura",
+        "fromId": "person-norisuke",
+        "toId": "person-ikura",
+        "from": {
+          "scope": "work",
+          "workId": "person-norisuke"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-ikura"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-mo-fune-sazae",
+        "fromId": "person-fune",
+        "toId": "person-sazae",
+        "from": {
+          "scope": "work",
+          "workId": "person-fune"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-sazae"
+        },
+        "type": "MOTHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-mo-fune-katsuo",
+        "fromId": "person-fune",
+        "toId": "person-katsuo",
+        "from": {
+          "scope": "work",
+          "workId": "person-fune"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-katsuo"
+        },
+        "type": "MOTHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-mo-fune-wakame",
+        "fromId": "person-fune",
+        "toId": "person-wakame",
+        "from": {
+          "scope": "work",
+          "workId": "person-fune"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-wakame"
+        },
+        "type": "MOTHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-mo-sazae-tarao",
+        "fromId": "person-sazae",
+        "toId": "person-tarao",
+        "from": {
+          "scope": "work",
+          "workId": "person-sazae"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-tarao"
+        },
+        "type": "MOTHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-mo-taiko-ikura",
+        "fromId": "person-taiko",
+        "toId": "person-ikura",
+        "from": {
+          "scope": "work",
+          "workId": "person-taiko"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-ikura"
+        },
+        "type": "MOTHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-sb-namihei-umihei",
+        "fromId": "person-namihei",
+        "toId": "person-umihei",
+        "from": {
+          "scope": "work",
+          "workId": "person-namihei"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-umihei"
+        },
+        "type": "SIBLING",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-sb-sazae-katsuo",
+        "fromId": "person-sazae",
+        "toId": "person-katsuo",
+        "from": {
+          "scope": "work",
+          "workId": "person-sazae"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-katsuo"
+        },
+        "type": "SIBLING",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-sb-sazae-wakame",
+        "fromId": "person-sazae",
+        "toId": "person-wakame",
+        "from": {
+          "scope": "work",
+          "workId": "person-sazae"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-wakame"
+        },
+        "type": "SIBLING",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-sb-katsuo-wakame",
+        "fromId": "person-katsuo",
+        "toId": "person-wakame",
+        "from": {
+          "scope": "work",
+          "workId": "person-katsuo"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-wakame"
+        },
+        "type": "SIBLING",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-cs-sazae-norisuke",
+        "fromId": "person-sazae",
+        "toId": "person-norisuke",
+        "from": {
+          "scope": "work",
+          "workId": "person-sazae"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-norisuke"
+        },
+        "type": "COUSIN",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-cs-katsuo-norisuke",
+        "fromId": "person-katsuo",
+        "toId": "person-norisuke",
+        "from": {
+          "scope": "work",
+          "workId": "person-katsuo"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-norisuke"
+        },
+        "type": "COUSIN",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-cs-wakame-norisuke",
+        "fromId": "person-wakame",
+        "toId": "person-norisuke",
+        "from": {
+          "scope": "work",
+          "workId": "person-wakame"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-norisuke"
+        },
+        "type": "COUSIN",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-cs-tarao-ikura",
+        "fromId": "person-tarao",
+        "toId": "person-ikura",
+        "from": {
+          "scope": "work",
+          "workId": "person-tarao"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-ikura"
+        },
+        "type": "COUSIN",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "systemRelations": [],
+    "knots": [],
+    "aliases": [],
+    "emergenceFeedback": {},
+    "emergenceSuggestions": [],
+    "savedRuleQueries": [],
+    "purgeManifests": [],
+    "revisions": [
+      {
+        "id": "group-isono-rev-1",
+        "workId": "group-isono",
+        "text": "磯野家\n\n世田谷区桜新町在住の磯野家一族。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-namihei-rev-1",
+        "workId": "person-namihei",
+        "text": "磯野波平\n\n磯野家の大黒柱。山高商事の課長。頑固だが情に厚い。フネの夫。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-fune-rev-1",
+        "workId": "person-fune",
+        "text": "磯野フネ\n\n波平の妻。物静かで家族を温かく見守る良妻賢母。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-umihei-rev-1",
+        "workId": "person-umihei",
+        "text": "磯野海平\n\n波平の双子の兄。福岡在住。波平との見分け方は頭頂部の髪の毛（2本）。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-katsuo-rev-1",
+        "workId": "person-katsuo",
+        "text": "磯野カツオ\n\n磯野家の長男。小学5年3組。いたずら好きでお調子者だが機転が利く。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-wakame-rev-1",
+        "workId": "person-wakame",
+        "text": "磯野ワカメ\n\n磯野家の次女。小学3年1組。真面目で心優しい少女。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "group-fuguta-rev-1",
+        "workId": "group-fuguta",
+        "text": "フグ田家\n\n磯野家に同居するサザエ・マスオ・タラオの一家。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-sazae-rev-1",
+        "workId": "person-sazae",
+        "text": "フグ田サザエ\n\n本作の主人公。波平とフネの長女。マスオの妻、タラオの母。明るく行動的。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-masuo-rev-1",
+        "workId": "person-masuo",
+        "text": "フグ田マスオ\n\nサザエの夫。海山商事勤務。誠実で優しく、義理の実家でも円満に暮らす。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-tarao-rev-1",
+        "workId": "person-tarao",
+        "text": "フグ田タラオ\n\nサザエとマスオの長男。3歳。好奇心旺盛で礼儀正しい。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "group-namino-rev-1",
+        "workId": "group-namino",
+        "text": "波野家\n\n波平の甥であるノリスケの一家。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-norisuke-rev-1",
+        "workId": "person-norisuke",
+        "text": "波野ノリスケ\n\n波平・海平の妹なぎえの息子（甥）。出版社勤務。明るく図々しい愛されキャラ。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-taiko-rev-1",
+        "workId": "person-taiko",
+        "text": "波野タイコ\n\nノリスケの妻。上品でしっかり者。サザエとも仲が良い。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-ikura-rev-1",
+        "workId": "person-ikura",
+        "text": "波野イクラ\n\nノリスケとタイコの長男。タラオのいとこ甥（はとこ）。「ハーイ」「チャーン」「バブー」。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "recoverySnapshots": [],
+    "bookmarks": [],
+    "resumePosition": null,
+    "relationTypeDefinitions": [
+      {
+        "name": "RELATED",
+        "direction": "symmetric",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "FROM",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": true
+      },
+      {
+        "name": "LIKE",
+        "direction": "symmetric",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "SUPPORT",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "DEF",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "VS",
+        "direction": "symmetric",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "FIX",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "CITE",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "SPOUSE",
+        "direction": "symmetric",
+        "builtIn": false,
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "name": "FATHER_OF",
+        "direction": "directed",
+        "advancesGeneration": true,
+        "builtIn": false,
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "name": "MOTHER_OF",
+        "direction": "directed",
+        "advancesGeneration": true,
+        "builtIn": false,
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "name": "SIBLING",
+        "direction": "symmetric",
+        "builtIn": false,
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "name": "COUSIN",
+        "direction": "symmetric",
+        "builtIn": false,
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      }
+    ]
+  }
+}

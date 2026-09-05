@@ -36,7 +36,7 @@ function snapshot(items: OutlineItem[]): OutlineSnapshot {
 function link(
 	fromId: string,
 	toId: string,
-	type: "RELATED" | "FROM" | "LIKE",
+	type: OutlineSnapshot["links"][number]["type"],
 ): OutlineSnapshot["links"][number] {
 	return {
 		id: `${type}-${fromId}-${toId}`,
@@ -275,6 +275,66 @@ Deno.test("Lineage keeps a source with multiple FROM targets at G0", () => {
 	assertEquals(lineage.generationByWorkId.get("improvement"), 0);
 	assertEquals(lineage.generationByWorkId.get("target-a"), 1);
 	assertEquals(lineage.generationByWorkId.get("target-b"), 1);
+});
+
+Deno.test("Lineage advances generation for custom directed relations with advancesGeneration: true", () => {
+	const data = snapshot([
+		item("parent", "2026-01-01T00:00:00.000Z"),
+		item("child", "2026-01-02T00:00:00.000Z"),
+		item("grandchild", "2026-01-03T00:00:00.000Z"),
+	]);
+	data.links.push(
+		link("parent", "child", "FATHER_OF"),
+		link("child", "grandchild", "MOTHER_OF"),
+	);
+
+	const customDefinitions = [
+		{
+			name: "FATHER_OF",
+			direction: "directed" as const,
+			builtIn: false,
+			createdAt: "1970-01-01T00:00:00.000Z",
+			advancesGeneration: true,
+		},
+		{
+			name: "MOTHER_OF",
+			direction: "directed" as const,
+			builtIn: false,
+			createdAt: "1970-01-01T00:00:00.000Z",
+			advancesGeneration: true,
+		},
+	];
+
+	const lineage = calculateLineageProjection(data, customDefinitions);
+	assertEquals(lineage.generationByWorkId.get("parent"), 0);
+	assertEquals(lineage.generationByWorkId.get("child"), 1);
+	assertEquals(lineage.generationByWorkId.get("grandchild"), 2);
+	assertEquals(lineage.maxGeneration, 2);
+});
+
+Deno.test("Lineage keeps generation unchanged for directed relations with advancesGeneration: false", () => {
+	const data = snapshot([
+		item("elder", "2026-01-01T00:00:00.000Z"),
+		item("younger", "2026-01-02T00:00:00.000Z"),
+	]);
+	data.links.push(
+		link("elder", "younger", "OLDER_BROTHER_OF"),
+	);
+
+	const customDefinitions = [
+		{
+			name: "OLDER_BROTHER_OF",
+			direction: "directed" as const,
+			builtIn: false,
+			createdAt: "1970-01-01T00:00:00.000Z",
+			advancesGeneration: false,
+		},
+	];
+
+	const lineage = calculateLineageProjection(data, customDefinitions);
+	assertEquals(lineage.generationByWorkId.get("elder"), 0);
+	assertEquals(lineage.generationByWorkId.get("younger"), 0);
+	assertEquals(lineage.maxGeneration, 0);
 });
 
 Deno.test("Lineage detects FROM cycles and deterministically isolates them in a Knot band", () => {

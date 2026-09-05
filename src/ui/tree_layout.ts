@@ -1,4 +1,10 @@
-import type { LinkType, OutlineItem, OutlineSnapshot } from "../domain/models.ts";
+import type {
+	LinkType,
+	OutlineItem,
+	OutlineSnapshot,
+	RelationTypeDefinition,
+} from "../domain/models.ts";
+import { isRelationTypeAdvancesGeneration } from "../domain/relation_type.ts";
 
 export type TreeLod = "detail" | "context" | "overview";
 export type TreeLinkType = LinkType;
@@ -73,6 +79,7 @@ export interface TreeLayoutOptions {
 	projectGeneration?: (generation: number) => number;
 	/** Applied to the layout to produce screen coordinates; defaults to identity. */
 	camera?: TreeCamera;
+	relationTypeDefinitions?: readonly RelationTypeDefinition[];
 }
 
 interface RawEdge {
@@ -100,7 +107,9 @@ export function calculateTreeLayout(
 	}
 
 	const camera = options.camera ?? IDENTITY_CAMERA;
-	const lineage = options.projection === "lineage" ? calculateLineageProjection(snapshot) : null;
+	const lineage = options.projection === "lineage"
+		? calculateLineageProjection(snapshot, options.relationTypeDefinitions)
+		: null;
 	const projected = snapshot.items.map((item) => ({
 		item,
 		worldX: lineage
@@ -140,7 +149,10 @@ export function calculateTreeLayout(
 	return aggregateScreenCells(screenNodes, rawEdges(snapshot), lod, laidOut.contentHeight);
 }
 
-export function calculateLineageProjection(snapshot: OutlineSnapshot): LineageProjection {
+export function calculateLineageProjection(
+	snapshot: OutlineSnapshot,
+	relationTypeDefinitions?: readonly RelationTypeDefinition[],
+): LineageProjection {
 	const workIds = [...new Set(snapshot.items.map((item) => item.workId))].sort();
 	const visibleWorkIds = new Set(workIds);
 	const children = new Map(workIds.map((id) => [id, new Set<string>()]));
@@ -148,11 +160,11 @@ export function calculateLineageProjection(snapshot: OutlineSnapshot): LineagePr
 
 	for (const link of snapshot.links) {
 		if (
-			link.type !== "FROM" ||
+			!isRelationTypeAdvancesGeneration(link.type, relationTypeDefinitions) ||
 			!visibleWorkIds.has(link.fromId) ||
 			!visibleWorkIds.has(link.toId)
 		) continue;
-		// Lineage levels follow the asserted FROM direction so every visible
+		// Lineage levels follow the asserted generation-advancing direction so every visible
 		// source starts at G0 and each reachable target advances one generation.
 		children.get(link.fromId)?.add(link.toId);
 		parents.get(link.toId)?.add(link.fromId);

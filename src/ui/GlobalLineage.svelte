@@ -90,6 +90,7 @@
 		<PhylogeneticTree
 			bind:this={treeElement}
 			snapshot={projection.snapshot}
+			relationTypeDefinitions={definitions}
 			{selectedId}
 			{selectedWorkId}
 			{onSelect}

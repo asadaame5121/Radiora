@@ -81,6 +81,9 @@ export const RelationTypeDefinitionSchema = v.object(
 		direction: RelationTypeDirectionSchema,
 		builtIn: v.boolean("Relation type must have a boolean builtIn flag"),
 		createdAt: CreatedAtSchema,
+		advancesGeneration: v.optional(
+			v.boolean("Relation type advancesGeneration must be a boolean"),
+		),
 	},
 	"Relation type definition must be an object",
 );
@@ -92,6 +95,7 @@ export const BUILT_IN_RELATION_TYPES: readonly RelationTypeDefinition[] = LINK_T
 	direction: isSymmetricLinkType(name) ? "symmetric" : "directed",
 	builtIn: true,
 	createdAt: BUILT_IN_CREATED_AT,
+	advancesGeneration: name === "FROM",
 })) satisfies readonly RelationTypeDefinition[];
 
 export function isBuiltInRelationTypeName(name: string): boolean {
@@ -134,6 +138,7 @@ function assertBuiltInRelationDefinition(
 	direction: RelationTypeDirection,
 	builtIn: boolean,
 	createdAt: string,
+	advancesGeneration?: boolean,
 ): void {
 	if (!builtIn) {
 		throw new Error(
@@ -149,6 +154,15 @@ function assertBuiltInRelationDefinition(
 	if (createdAt !== BUILT_IN_CREATED_AT) {
 		throw new Error(
 			`Built-in relation type "${name}" must have createdAt "${BUILT_IN_CREATED_AT}"`,
+		);
+	}
+	const expectedAdvancesGeneration = name === "FROM";
+	if (
+		advancesGeneration !== undefined &&
+		advancesGeneration !== expectedAdvancesGeneration
+	) {
+		throw new Error(
+			`Built-in relation type "${name}" must have advancesGeneration set to ${expectedAdvancesGeneration}`,
 		);
 	}
 }
@@ -168,6 +182,7 @@ export function validateRelationTypeDefinition(
 			def.direction,
 			def.builtIn,
 			def.createdAt,
+			def.advancesGeneration,
 		);
 	} else if (def.builtIn) {
 		throw new Error(
@@ -217,6 +232,7 @@ export const CreateCustomRelationTypeInputSchema = v.object(
 			["directed", "symmetric"],
 			"Invalid relation type input: expected object with name string and direction",
 		),
+		advancesGeneration: v.optional(v.boolean()),
 	},
 	"Invalid relation type input: expected object with name string and direction",
 );
@@ -243,12 +259,16 @@ export function createCustomRelationTypeDefinition(
 		typed.name,
 		existingNames,
 	);
-	return {
+	const custom: RelationTypeDefinition = {
 		name: canonicalName,
 		direction: typed.direction,
 		builtIn: false,
 		createdAt: createdAtResult.output,
 	};
+	if (typed.advancesGeneration !== undefined) {
+		custom.advancesGeneration = typed.advancesGeneration;
+	}
+	return custom;
 }
 
 export function resolveRelationTypeDirection(
@@ -265,4 +285,15 @@ export function isRelationTypeSymmetric(
 	definitions?: readonly RelationTypeDefinition[],
 ): boolean {
 	return resolveRelationTypeDirection(type, definitions) === "symmetric";
+}
+
+export function isRelationTypeAdvancesGeneration(
+	type: string,
+	definitions?: readonly RelationTypeDefinition[],
+): boolean {
+	const def = definitions?.find((d) => d.name === type);
+	if (def && typeof def.advancesGeneration === "boolean") {
+		return def.advancesGeneration;
+	}
+	return type === "FROM";
 }

@@ -79,6 +79,7 @@ export interface RadioraBindings {
 	createRelationTypeDefinition(input: {
 		name: string;
 		direction: RelationTypeDirection;
+		advancesGeneration?: boolean;
 	}): Promise<RelationTypeDefinition>;
 	listOutline(): Promise<OutlineSnapshot>;
 	projectDates(range: DateRange): Promise<DateProjection>;

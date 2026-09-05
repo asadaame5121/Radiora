@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import * as d3 from "d3";
-	import type { OutlineSnapshot } from "../domain/models";
+	import type { OutlineSnapshot, RelationTypeDefinition } from "../domain/models";
 	import { buildTreeHighlightSet, resolveTreeSelectionId } from "./tree_highlight";
 	import {
 		calculateLineageProjection,
@@ -25,6 +25,7 @@
 		snapshot,
 		selectedId = null,
 		selectedWorkId = null,
+		relationTypeDefinitions,
 		onSelect,
 		onOpen,
 		onContextMenu,
@@ -34,6 +35,7 @@
 		snapshot: OutlineSnapshot;
 		selectedId?: string | null;
 		selectedWorkId?: string | null;
+		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		onSelect: (id: string | null) => void;
 		onOpen: (id: string) => void;
 		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
@@ -67,7 +69,9 @@
 		d3.scaleTime().domain(timeDomain).range([70, Math.max(71, width - 70)]),
 	);
 	const chronologyScreenScale = $derived(transform.rescaleX(chronologyBaseScale));
-	const lineageProjection = $derived.by(() => calculateLineageProjection(snapshot));
+	const lineageProjection = $derived.by(() =>
+		calculateLineageProjection(snapshot, relationTypeDefinitions)
+	);
 	const lineageDomainMax = $derived(
 		lineageProjection.knotGeneration ?? lineageProjection.maxGeneration,
 	);
@@ -83,6 +87,7 @@
 		projectX: (timestamp) => chronologyBaseScale(new Date(timestamp)),
 		projectGeneration: (generation) => lineageBaseScale(generation),
 		camera: { k: transform.k, x: transform.x, y: transform.y },
+		relationTypeDefinitions,
 	}));
 	const axisMarks = $derived.by(() => {
 		if (projection === "chronology") {
