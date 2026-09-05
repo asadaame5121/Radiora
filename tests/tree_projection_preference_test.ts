@@ -3,8 +3,16 @@ import {
 	loadTreeProjectionPreference,
 	saveTreeProjectionPreference,
 	TREE_PROJECTION_STORAGE_KEY,
+	TreeProjectionSchema,
 	type TreeProjectionStorage,
 } from "../src/ui/tree_projection_preference.ts";
+import * as v from "valibot";
+
+Deno.test("TreeProjectionSchema validates tree projection picklist", () => {
+	assertEquals(v.safeParse(TreeProjectionSchema, "lineage").success, true);
+	assertEquals(v.safeParse(TreeProjectionSchema, "chronology").success, true);
+	assertEquals(v.safeParse(TreeProjectionSchema, "unknown").success, false);
+});
 
 Deno.test("tree projection preference defaults to chronology and accepts known values", () => {
 	const storage = memoryStorage();

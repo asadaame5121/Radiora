@@ -4,8 +4,16 @@ import {
 	loadUiLayoutPreference,
 	saveUiLayoutPreference,
 	UI_LAYOUT_PREFERENCE_STORAGE_KEY,
+	UiLayoutPreferenceSchema,
 	type UiLayoutPreferenceStorage,
 } from "../src/ui/ui_layout_preference.ts";
+import * as v from "valibot";
+
+Deno.test("UiLayoutPreferenceSchema validates layout preference payloads", () => {
+	const valid = { navCollapsed: true, inspectorCollapsed: false, inspectorWidth: 480 };
+	assertEquals(v.safeParse(UiLayoutPreferenceSchema, valid).success, true);
+	assertEquals(v.safeParse(UiLayoutPreferenceSchema, { navCollapsed: "yes" }).success, false);
+});
 
 Deno.test("UI layout preference defaults safely and persists its values", () => {
 	const storage = memoryStorage();

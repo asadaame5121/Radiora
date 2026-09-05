@@ -1,12 +1,16 @@
+import { boolean, finite, type InferOutput, is, number, object, pipe, safeParse } from "valibot";
+
 export const UI_LAYOUT_PREFERENCE_STORAGE_KEY = "radiora.uiLayoutPreference";
 export const MIN_INSPECTOR_WIDTH = 240;
 export const MAX_INSPECTOR_WIDTH = 560;
 
-export interface UiLayoutPreference {
-	readonly navCollapsed: boolean;
-	readonly inspectorCollapsed: boolean;
-	readonly inspectorWidth: number;
-}
+export const UiLayoutPreferenceSchema = object({
+	navCollapsed: boolean(),
+	inspectorCollapsed: boolean(),
+	inspectorWidth: pipe(number(), finite()),
+});
+
+export type UiLayoutPreference = Readonly<InferOutput<typeof UiLayoutPreferenceSchema>>;
 
 export interface UiLayoutPreferenceStorage {
 	getItem(key: string): string | null;
@@ -19,6 +23,10 @@ export const DEFAULT_UI_LAYOUT_PREFERENCE: UiLayoutPreference = Object.freeze({
 	inspectorWidth: 320,
 });
 
+export function isLayoutPreference(value: unknown): value is UiLayoutPreference {
+	return is(UiLayoutPreferenceSchema, value);
+}
+
 export function loadUiLayoutPreference(
 	storage: UiLayoutPreferenceStorage | null = browserStorage(),
 ): UiLayoutPreference {
@@ -26,8 +34,9 @@ export function loadUiLayoutPreference(
 		const raw = storage?.getItem(UI_LAYOUT_PREFERENCE_STORAGE_KEY);
 		if (!raw) return { ...DEFAULT_UI_LAYOUT_PREFERENCE };
 		const value: unknown = JSON.parse(raw);
-		if (!isLayoutPreference(value)) return { ...DEFAULT_UI_LAYOUT_PREFERENCE };
-		return { ...value, inspectorWidth: clampInspectorWidth(value.inspectorWidth) };
+		const result = safeParse(UiLayoutPreferenceSchema, value);
+		if (!result.success) return { ...DEFAULT_UI_LAYOUT_PREFERENCE };
+		return { ...result.output, inspectorWidth: clampInspectorWidth(result.output.inspectorWidth) };
 	} catch {
 		return { ...DEFAULT_UI_LAYOUT_PREFERENCE };
 	}
@@ -53,15 +62,6 @@ export function saveUiLayoutPreference(
 
 export function clampInspectorWidth(width: number): number {
 	return Math.min(MAX_INSPECTOR_WIDTH, Math.max(MIN_INSPECTOR_WIDTH, width));
-}
-
-function isLayoutPreference(value: unknown): value is UiLayoutPreference {
-	if (typeof value !== "object" || value === null) return false;
-	const candidate = value as Record<string, unknown>;
-	return typeof candidate.navCollapsed === "boolean" &&
-		typeof candidate.inspectorCollapsed === "boolean" &&
-		typeof candidate.inspectorWidth === "number" &&
-		Number.isFinite(candidate.inspectorWidth);
 }
 
 function browserStorage(): UiLayoutPreferenceStorage | null {

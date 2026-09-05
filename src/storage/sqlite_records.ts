@@ -1,6 +1,26 @@
+import * as v from "valibot";
 import type { GraphStateSnapshot } from "./graph_store.ts";
 import { validatedGraphStateSnapshot } from "./graph_store.ts";
-import { SQLITE_RECORD_TABLES, SQLITE_STORAGE_SCHEMA_VERSION } from "./sqlite_schema.ts";
+import { type SQLITE_RECORD_TABLES, SQLITE_STORAGE_SCHEMA_VERSION } from "./sqlite_schema.ts";
+import {
+	BookmarkSchema,
+	BranchSchema,
+	EmergenceActionSchema,
+	EmergenceSuggestionSchema,
+	KnotSchema,
+	OccurrenceSchema,
+	OutlineLinkSchema,
+	PurgeManifestSchema,
+	RecoverySnapshotSchema,
+	ResumePositionSchema,
+	RevisionSchema,
+	SavedRuleQuerySchema,
+	SearchAliasSchema,
+	SystemRelationSchema,
+	WorkingCopySchema,
+	WorkSchema,
+} from "../domain/schemas.ts";
+import { RelationTypeDefinitionSchema } from "../domain/relation_type.ts";
 
 export type RecordTable = (typeof SQLITE_RECORD_TABLES)[number];
 
@@ -137,6 +157,41 @@ export function hasPersistedState(state: GraphStateSnapshot): boolean {
 		Object.keys(state.emergenceFeedback).length > 0 || state.resumePosition !== null;
 }
 
+export const RECORD_SCHEMAS: Record<RecordTable, v.GenericSchema> = {
+	work: WorkSchema,
+	branch: BranchSchema,
+	working_copy: WorkingCopySchema,
+	revision: RevisionSchema,
+	recovery_snapshot: RecoverySnapshotSchema,
+	occurrence: OccurrenceSchema,
+	semantic_link: OutlineLinkSchema,
+	system_relation: SystemRelationSchema,
+	knot: KnotSchema,
+	search_alias: SearchAliasSchema,
+	emergence_feedback: EmergenceActionSchema,
+	emergence_suggestion: EmergenceSuggestionSchema,
+	saved_rule_query: SavedRuleQuerySchema,
+	purge_manifest: PurgeManifestSchema,
+	bookmark: BookmarkSchema,
+	resume_position: ResumePositionSchema,
+	relation_type_definition: RelationTypeDefinitionSchema,
+};
+
+export function validateStoredPayload(
+	table: RecordTable,
+	payload: unknown,
+	index?: number,
+): unknown {
+	const schema = RECORD_SCHEMAS[table];
+	const result = v.safeParse(schema, payload);
+	if (!result.success) {
+		const atIndex = index !== undefined ? ` at index ${index}` : "";
+		const issue = result.issues[0]?.message ?? "Schema validation failed";
+		throw new Error(`Invalid SQLite ${table} payload${atIndex}: ${issue}`);
+	}
+	return result.output;
+}
+
 export function recordIdentityKey(table: RecordTable): string {
 	if (table === "working_copy") return "branchId";
 	if (table === "relation_type_definition") return "name";
@@ -155,7 +210,8 @@ export function parseStoredRecord(table: RecordTable, row: unknown, index: numbe
 	if (!isRecord(row) || typeof row.id !== "string" || typeof row.payload !== "string") {
 		throw new Error(`Invalid SQLite ${table} row at index ${index}`);
 	}
-	const payload = parsePayload(table, row.payload, index);
+	const rawPayload = parsePayload(table, row.payload, index);
+	const payload = validateStoredPayload(table, rawPayload, index);
 	assertRecordIdentity(table, row.id, payload, index);
 	return { id: row.id, payload };
 }

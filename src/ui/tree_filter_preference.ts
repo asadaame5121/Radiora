@@ -1,3 +1,4 @@
+import { array, boolean, check, type InferOutput, object, pipe, safeParse, string } from "valibot";
 import type { LinkType } from "../domain/models.ts";
 import { LINK_TYPES } from "../domain/models.ts";
 import type { GlobalLineageFilter } from "../services/global_lineage_filter.ts";
@@ -10,9 +11,24 @@ export interface TreeFilterStorage {
 	setItem(key: string, value: string): void;
 }
 
-export interface StoredTreeFilter {
-	includeIsolated: boolean;
-	linkTypes: string[];
+export const StoredTreeFilterSchema = object({
+	includeIsolated: boolean(),
+	linkTypes: array(string()),
+});
+
+export type StoredTreeFilter = InferOutput<typeof StoredTreeFilterSchema>;
+
+export function createTreeFilterPreferenceSchema(allowedTypes: readonly string[] = LINK_TYPES) {
+	const validTypes = new Set<string>(allowedTypes);
+	return object({
+		includeIsolated: boolean(),
+		linkTypes: array(
+			pipe(
+				string(),
+				check((type) => validTypes.has(type), "Invalid link type"),
+			),
+		),
+	});
 }
 
 /**
@@ -58,23 +74,16 @@ function readStoredFilter(
 	allowedTypes: readonly LinkType[] = LINK_TYPES,
 ): StoredTreeFilter | null {
 	if (storage === null) return null;
-	let parsed: unknown;
 	try {
 		const raw = storage.getItem(TREE_FILTER_STORAGE_KEY);
 		if (raw === null) return null;
-		parsed = JSON.parse(raw);
+		const parsed: unknown = JSON.parse(raw);
+		const schema = createTreeFilterPreferenceSchema(allowedTypes);
+		const result = safeParse(schema, parsed);
+		return result.success ? result.output : null;
 	} catch {
 		return null;
 	}
-	if (typeof parsed !== "object" || parsed === null) return null;
-	const candidate = parsed as Partial<StoredTreeFilter>;
-	if (typeof candidate.includeIsolated !== "boolean") return null;
-	if (!Array.isArray(candidate.linkTypes)) return null;
-	const validTypes = new Set<string>(allowedTypes);
-	if (!candidate.linkTypes.every((type) => typeof type === "string" && validTypes.has(type))) {
-		return null;
-	}
-	return { includeIsolated: candidate.includeIsolated, linkTypes: candidate.linkTypes };
 }
 
 function browserStorage(): TreeFilterStorage | null {

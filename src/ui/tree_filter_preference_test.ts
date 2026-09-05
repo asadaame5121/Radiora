@@ -4,11 +4,25 @@ import { assertEquals } from "jsr:@std/assert@1";
 import { LINK_TYPES } from "../domain/models.ts";
 import { defaultGlobalLineageFilter } from "../services/global_lineage_filter.ts";
 import {
+	createTreeFilterPreferenceSchema,
 	loadTreeFilterPreference,
 	saveTreeFilterPreference,
+	StoredTreeFilterSchema,
 	TREE_FILTER_STORAGE_KEY,
 	type TreeFilterStorage,
 } from "./tree_filter_preference.ts";
+import * as v from "valibot";
+
+Deno.test("StoredTreeFilterSchema and createTreeFilterPreferenceSchema validate filter structures", () => {
+	const valid = { includeIsolated: true, linkTypes: ["FROM", "VS"] };
+	assertEquals(v.safeParse(StoredTreeFilterSchema, valid).success, true);
+	const dynamicSchema = createTreeFilterPreferenceSchema(["FROM", "VS"]);
+	assertEquals(v.safeParse(dynamicSchema, valid).success, true);
+	assertEquals(
+		v.safeParse(dynamicSchema, { includeIsolated: true, linkTypes: ["INVALID"] }).success,
+		false,
+	);
+});
 
 class MemoryStorage implements TreeFilterStorage {
 	readonly map = new Map<string, string>();

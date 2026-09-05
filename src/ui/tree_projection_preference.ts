@@ -1,6 +1,11 @@
-import type { TreeProjection } from "./tree_layout.ts";
+import { type InferOutput, picklist, safeParse } from "valibot";
 
 export const TREE_PROJECTION_STORAGE_KEY = "radiora.treeProjection";
+
+export const TreeProjectionSchema = picklist(["lineage", "chronology"]);
+export type TreeProjection = InferOutput<typeof TreeProjectionSchema>;
+
+export const DEFAULT_TREE_PROJECTION: TreeProjection = "chronology";
 
 export interface TreeProjectionStorage {
 	getItem(key: string): string | null;
@@ -12,9 +17,11 @@ export function loadTreeProjectionPreference(
 ): TreeProjection {
 	try {
 		const stored = storage?.getItem(TREE_PROJECTION_STORAGE_KEY);
-		return stored === "lineage" || stored === "chronology" ? stored : "chronology";
+		if (!stored) return DEFAULT_TREE_PROJECTION;
+		const result = safeParse(TreeProjectionSchema, stored);
+		return result.success ? result.output : DEFAULT_TREE_PROJECTION;
 	} catch {
-		return "chronology";
+		return DEFAULT_TREE_PROJECTION;
 	}
 }
 

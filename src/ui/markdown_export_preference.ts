@@ -1,17 +1,27 @@
-import type {
-	MarkdownExportReferenceMode,
-	MarkdownExportScope,
-} from "../services/markdown_export.ts";
+import { boolean, type InferOutput, object, optional, picklist, safeParse } from "valibot";
 
 export const MARKDOWN_EXPORT_PREFERENCE_STORAGE_KEY = "radiora.markdownExportPreference";
 
-export interface MarkdownExportPreference {
-	readonly scope: MarkdownExportScope;
-	readonly referenceMode: MarkdownExportReferenceMode;
-	readonly includeAncestors: boolean;
-	readonly includeDescendants: boolean;
-	readonly includeSemanticNeighbors: boolean;
-}
+export const MarkdownExportScopeSchema = picklist(["all", "selected"]);
+export const MarkdownExportReferenceModeSchema = picklist(["radiora", "portable", "obsidian"]);
+
+export const MarkdownExportPreferenceSchema = object({
+	scope: MarkdownExportScopeSchema,
+	referenceMode: MarkdownExportReferenceModeSchema,
+	includeAncestors: boolean(),
+	includeDescendants: boolean(),
+	includeSemanticNeighbors: boolean(),
+});
+
+export type MarkdownExportPreference = Readonly<InferOutput<typeof MarkdownExportPreferenceSchema>>;
+
+const StoredMarkdownExportPreferenceSchema = object({
+	scope: MarkdownExportScopeSchema,
+	referenceMode: optional(MarkdownExportReferenceModeSchema),
+	includeAncestors: boolean(),
+	includeDescendants: boolean(),
+	includeSemanticNeighbors: boolean(),
+});
 
 export interface MarkdownExportPreferenceStorage {
 	getItem(key: string): string | null;
@@ -33,14 +43,12 @@ export function loadMarkdownExportPreference(
 		const raw = storage?.getItem(MARKDOWN_EXPORT_PREFERENCE_STORAGE_KEY);
 		if (!raw) return { ...DEFAULT_MARKDOWN_EXPORT_PREFERENCE };
 		const value: unknown = JSON.parse(raw);
-		if (!hasValidExportSettings(value)) return { ...DEFAULT_MARKDOWN_EXPORT_PREFERENCE };
-		if (value.referenceMode !== undefined && !isReferenceMode(value.referenceMode)) {
-			return { ...DEFAULT_MARKDOWN_EXPORT_PREFERENCE };
-		}
+		const result = safeParse(StoredMarkdownExportPreferenceSchema, value);
+		if (!result.success) return { ...DEFAULT_MARKDOWN_EXPORT_PREFERENCE };
 		return {
-			...DEFAULT_MARKDOWN_EXPORT_PREFERENCE,
-			...value,
-			referenceMode: value.referenceMode ?? DEFAULT_MARKDOWN_EXPORT_PREFERENCE.referenceMode,
+			...result.output,
+			referenceMode: result.output.referenceMode ??
+				DEFAULT_MARKDOWN_EXPORT_PREFERENCE.referenceMode,
 		};
 	} catch {
 		return { ...DEFAULT_MARKDOWN_EXPORT_PREFERENCE };
@@ -57,21 +65,6 @@ export function saveMarkdownExportPreference(
 	} catch {
 		// Export preferences are best-effort and must never prevent an export.
 	}
-}
-
-function hasValidExportSettings(
-	value: unknown,
-): value is Omit<MarkdownExportPreference, "referenceMode"> & { referenceMode?: unknown } {
-	if (typeof value !== "object" || value === null) return false;
-	const candidate = value as Record<string, unknown>;
-	return (candidate.scope === "all" || candidate.scope === "selected") &&
-		typeof candidate.includeAncestors === "boolean" &&
-		typeof candidate.includeDescendants === "boolean" &&
-		typeof candidate.includeSemanticNeighbors === "boolean";
-}
-
-function isReferenceMode(value: unknown): value is MarkdownExportReferenceMode {
-	return value === "radiora" || value === "portable" || value === "obsidian";
 }
 
 function browserStorage(): MarkdownExportPreferenceStorage | null {

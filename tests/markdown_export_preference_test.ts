@@ -3,9 +3,26 @@ import {
 	DEFAULT_MARKDOWN_EXPORT_PREFERENCE,
 	loadMarkdownExportPreference,
 	MARKDOWN_EXPORT_PREFERENCE_STORAGE_KEY,
+	MarkdownExportPreferenceSchema,
 	type MarkdownExportPreferenceStorage,
+	MarkdownExportReferenceModeSchema,
+	MarkdownExportScopeSchema,
 	saveMarkdownExportPreference,
 } from "../src/ui/markdown_export_preference.ts";
+import * as v from "valibot";
+
+Deno.test("MarkdownExportPreferenceSchema validates preference payloads", () => {
+	const valid = {
+		scope: "all",
+		referenceMode: "radiora",
+		includeAncestors: true,
+		includeDescendants: true,
+		includeSemanticNeighbors: false,
+	};
+	assertEquals(v.safeParse(MarkdownExportPreferenceSchema, valid).success, true);
+	assertEquals(v.safeParse(MarkdownExportScopeSchema, "invalid").success, false);
+	assertEquals(v.safeParse(MarkdownExportReferenceModeSchema, "invalid").success, false);
+});
 
 Deno.test("Markdown export preference defaults to the full outline", () => {
 	assertEquals(loadMarkdownExportPreference(memoryStorage()), DEFAULT_MARKDOWN_EXPORT_PREFERENCE);

@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import {
 	defaultGlobalLineageFilter,
 	type GlobalLineageFilter,
@@ -14,6 +15,13 @@ import type {
 	StartupSnapshotLocation,
 } from "../services/startup_snapshot_cache.ts";
 import { LINK_TYPES, type OutlineSnapshot } from "../domain/models.ts";
+import {
+	CreateItemInputSchema,
+	CreateLinkInputSchema,
+	CreateOccurrenceInputSchema,
+	MoveItemInputSchema,
+	QuickCaptureInputSchema,
+} from "../domain/input_schemas.ts";
 
 export interface BindingContext {
 	getService(): OutlineService | null;
@@ -91,23 +99,24 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 			service();
 			return context.rewriteAsNewBranch(sourceBranchId, newBranchName, confirmation);
 		},
-		createItem: (input) => service().createItem(input),
-		quickCapture: (text) => service().quickCapture(text),
+		createItem: async (input) => service().createItem(v.parse(CreateItemInputSchema, input)),
+		quickCapture: async (text) => service().quickCapture(v.parse(QuickCaptureInputSchema, text)),
 		listUnplacedWorks: () => service().listUnplacedWorks(),
 		updateUnplacedWorkText: (workId, text) => service().updateUnplacedWorkText(workId, text),
 		placeUnplacedWork: (input) => service().placeUnplacedWork(input),
-		createOccurrence: (input) => service().createOccurrence(input),
+		createOccurrence: async (input) =>
+			service().createOccurrence(v.parse(CreateOccurrenceInputSchema, input)),
 		updateItemText: (id, text) => service().updateItemText(id, text),
 		setContextualHeading: (id, contextualHeading) =>
 			service().setContextualHeading(id, contextualHeading),
-		moveItem: (input) => service().moveItem(input),
+		moveItem: async (input) => service().moveItem(v.parse(MoveItemInputSchema, input)),
 		deleteItem: (id) => service().deleteItem(id),
 		trashWork: (id) => service().trashWork(id),
 		listTrash: () => service().listTrash(),
 		restoreWork: (workId) => service().restoreWork(workId),
 		purgeWork: (workId) => service().purgeWork(workId),
 		setCollapsed: (id, collapsed) => service().setCollapsed(id, collapsed),
-		createLink: (input) => service().createLink(input),
+		createLink: async (input) => service().createLink(v.parse(CreateLinkInputSchema, input)),
 		resolveAdvancedLink: (input, selections) => service().resolveAdvancedLink(input, selections),
 		listInternalReferenceCompletions: (query, limit) =>
 			service().listInternalReferenceCompletions(query, limit),
