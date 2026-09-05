@@ -46,6 +46,7 @@ export class RelationTypeController {
 	async create(input: {
 		name: string;
 		direction: RelationTypeDirection;
+		advancesGeneration?: boolean;
 	}): Promise<RelationTypeDefinition> {
 		const result = await this.ports.createRelationTypeDefinition(input);
 		const created = validateRelationTypeDefinition(result);

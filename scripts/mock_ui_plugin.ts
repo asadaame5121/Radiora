@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import type { Plugin } from "vite";
 import type {
 	OutlineItem,
@@ -271,8 +272,76 @@ function mockTagScopes(snapshot: OutlineSnapshot): ScopedTagSet[] {
 	}));
 }
 
+function parseBackupSnapshot(backupSource: string | Record<string, unknown>): {
+	snapshot: OutlineSnapshot;
+	relationTypes: RelationTypeDefinition[];
+} {
+	const parsed = (typeof backupSource === "string" ? JSON.parse(backupSource) : backupSource) as {
+		data: {
+			works: Array<{ id: string }>;
+			occurrences: Array<{
+				id: string;
+				workId: string;
+				parentOccurrenceId: string | null;
+				orderKey: number;
+				collapsed: boolean;
+				revisionSelector:
+					| { mode: "branch"; branchId: string }
+					| { mode: "pinned"; revisionId: string };
+			}>;
+			links: OutlineLink[];
+			workingCopies: Array<{ workId: string; text: string }>;
+			relationTypeDefinitions?: RelationTypeDefinition[];
+		};
+	};
+
+	const items: OutlineItem[] = parsed.data.occurrences.map((occ) => {
+		const wc = parsed.data.workingCopies.find((w) => w.workId === occ.workId);
+		const createdAt = "2026-09-01T00:00:00.000Z";
+		return {
+			id: occ.id,
+			workId: occ.workId,
+			text: wc?.text ?? "",
+			parentId: occ.parentOccurrenceId,
+			orderKey: occ.orderKey,
+			collapsed: occ.collapsed,
+			revisionSelector: occ.revisionSelector,
+			createdAt,
+			updatedAt: createdAt,
+		};
+	});
+
+	const snapshot: OutlineSnapshot = {
+		items,
+		links: parsed.data.links,
+		knots: [],
+		stashItemIds: [],
+	};
+
+	const relationTypes: RelationTypeDefinition[] = parsed.data.relationTypeDefinitions
+		? [...parsed.data.relationTypeDefinitions]
+		: BUILT_IN_RELATION_TYPES.map((def) => ({ ...def }));
+
+	return { snapshot, relationTypes };
+}
+
 export function mockUiPlugin(): Plugin {
-	const snapshot = mockSnapshot();
+	let snapshot = mockSnapshot();
+	let relationTypes: RelationTypeDefinition[] = BUILT_IN_RELATION_TYPES.map((def) => ({
+		...def,
+	}));
+
+	const defaultBackupPath = "dummy_sazae_san_family_tree.json";
+	if (fs.existsSync(defaultBackupPath)) {
+		try {
+			const loaded = parseBackupSnapshot(fs.readFileSync(defaultBackupPath, "utf-8"));
+			snapshot = loaded.snapshot;
+			relationTypes = loaded.relationTypes;
+		} catch (error) {
+			console.warn("Failed to load default backup snapshot, falling back to mock:", error);
+		}
+	}
+
 	const rewriteBranches = new Map<
 		string,
 		Array<{
@@ -284,9 +353,6 @@ export function mockUiPlugin(): Plugin {
 		}>
 	>();
 	const tagScopes = mockTagScopes(snapshot);
-	const relationTypes: RelationTypeDefinition[] = BUILT_IN_RELATION_TYPES.map((def) => ({
-		...def,
-	}));
 	return {
 		name: "radiora-mock-ui-api",
 		configureServer(server) {
@@ -319,12 +385,19 @@ export function mockUiPlugin(): Plugin {
 						result = relationTypes;
 						break;
 					case "createRelationTypeDefinition": {
-						const input = args[0] as { name?: string; direction?: string };
+						const input = args[0] as {
+							name?: string;
+							direction?: string;
+							advancesGeneration?: boolean;
+						};
 						const name = String(input?.name ?? "").toUpperCase();
 						const direction = input?.direction === "symmetric" ? "symmetric" : "directed";
+						const advancesGeneration = direction === "directed" &&
+							Boolean(input?.advancesGeneration);
 						const created: RelationTypeDefinition = {
 							name,
 							direction,
+							...(advancesGeneration ? { advancesGeneration: true } : {}),
 							builtIn: false,
 							createdAt: new Date().toISOString(),
 						};
@@ -449,6 +522,19 @@ export function mockUiPlugin(): Plugin {
 						result = null;
 						break;
 					}
+					case "restoreJsonBackup": {
+						const source = String(args[0] ?? "");
+						const loaded = parseBackupSnapshot(source);
+						snapshot = loaded.snapshot;
+						relationTypes = loaded.relationTypes;
+						result = {
+							workCount: snapshot.items.length,
+							occurrenceCount: snapshot.items.length,
+							revisionCount: 0,
+							recoverySnapshotCount: 0,
+						};
+						break;
+					}
 					case "listTrash":
 						result = [];
 						break;
@@ -478,6 +564,7 @@ export function mockUiPlugin(): Plugin {
 					}
 					case "listSearchAliases":
 					case "listSavedRuleQueries":
+					case "listInternalReferenceBacklinks":
 						result = [];
 						break;
 					case "listScopedTags":

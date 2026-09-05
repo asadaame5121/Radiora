@@ -4,6 +4,7 @@ import {
 	BUILT_IN_RELATION_TYPES,
 	createCustomRelationTypeDefinition,
 	isBuiltInRelationTypeName,
+	isRelationTypeAdvancesGeneration,
 	isRelationTypeSymmetric,
 	normalizeRelationTypeName,
 	type RelationTypeDefinition,
@@ -325,4 +326,82 @@ Deno.test("validateRelationTypeDefinition validates valid definitions and reject
 		Error,
 		"canonical ISO instant",
 	);
+});
+
+Deno.test("built-in relation definitions set advancesGeneration to true only for FROM", () => {
+	for (const def of BUILT_IN_RELATION_TYPES) {
+		if (def.name === "FROM") {
+			assertEquals(def.advancesGeneration, true);
+		} else {
+			assertEquals(def.advancesGeneration, false);
+		}
+	}
+});
+
+Deno.test("createCustomRelationTypeDefinition supports optional advancesGeneration", () => {
+	const defaultDef = createCustomRelationTypeDefinition({
+		name: "PARENT_OF",
+		direction: "directed",
+	});
+	assertEquals(defaultDef.advancesGeneration, undefined);
+	assertEquals(isRelationTypeAdvancesGeneration("PARENT_OF", [defaultDef]), false);
+
+	const advancingDef = createCustomRelationTypeDefinition({
+		name: "FATHER_OF",
+		direction: "directed",
+		advancesGeneration: true,
+	});
+	assertEquals(advancingDef.advancesGeneration, true);
+	assertEquals(isRelationTypeAdvancesGeneration("FATHER_OF", [advancingDef]), true);
+});
+
+Deno.test("validateRelationTypeDefinition validates advancesGeneration invariants", () => {
+	// FROM must have advancesGeneration true
+	assertThrows(
+		() =>
+			validateRelationTypeDefinition({
+				name: "FROM",
+				direction: "directed",
+				builtIn: true,
+				createdAt: "1970-01-01T00:00:00.000Z",
+				advancesGeneration: false,
+			}),
+		Error,
+		'Built-in relation type "FROM" must have advancesGeneration set to true',
+	);
+
+	// Other built-in must have advancesGeneration false
+	assertThrows(
+		() =>
+			validateRelationTypeDefinition({
+				name: "SUPPORT",
+				direction: "directed",
+				builtIn: true,
+				createdAt: "1970-01-01T00:00:00.000Z",
+				advancesGeneration: true,
+			}),
+		Error,
+		'Built-in relation type "SUPPORT" must have advancesGeneration set to false',
+	);
+
+	// Custom type can have advancesGeneration true or false
+	const customAdvancing = validateRelationTypeDefinition({
+		name: "PARENT_OF",
+		direction: "directed",
+		builtIn: false,
+		createdAt: "2026-09-01T00:00:00.000Z",
+		advancesGeneration: true,
+	});
+	assertEquals(customAdvancing.advancesGeneration, true);
+	assertEquals(isRelationTypeAdvancesGeneration("PARENT_OF", [customAdvancing]), true);
+
+	// Backward compatibility: optional advancesGeneration
+	const customWithout = validateRelationTypeDefinition({
+		name: "PARENT_OF_OLD",
+		direction: "directed",
+		builtIn: false,
+		createdAt: "2026-09-01T00:00:00.000Z",
+	});
+	assertEquals(customWithout.advancesGeneration, undefined);
+	assertEquals(isRelationTypeAdvancesGeneration("PARENT_OF_OLD", [customWithout]), false);
 });

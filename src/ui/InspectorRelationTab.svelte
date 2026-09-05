@@ -82,8 +82,8 @@
 		/>
 		{#if inlineSemanticLinkNotice}<p class="inline-semantic-link-notice" role="status">{inlineSemanticLinkNotice}</p>{/if}
 		<section class="internal-reference-backlinks">
-			<h3>{vocabulary.backlink}<small>{internalReferenceBacklinks.length}件</small></h3>
-			{#each internalReferenceBacklinks as backlink (JSON.stringify(backlink.source))}
+			<h3>{vocabulary.backlink}<small>{(internalReferenceBacklinks ?? []).length}件</small></h3>
+			{#each internalReferenceBacklinks ?? [] as backlink (JSON.stringify(backlink.source))}
 				<button type="button" class="backlink-entry" onclick={() => void onOpenBacklink(backlink)}>
 					<strong>{backlink.displayName}</strong>
 					<span>{backlink.source.scope === "work" ? vocabulary.workingCopy : `固定${vocabulary.revision}`} · {backlink.count}箇所</span>

@@ -519,7 +519,8 @@ export function createEditorController(ports: EditorControllerPorts) {
 
 	async function loadInternalReferenceBacklinks(workId: string): Promise<void> {
 		try {
-			internalReferenceBacklinks = await ports.api.listInternalReferenceBacklinks("work", workId);
+			internalReferenceBacklinks =
+				(await ports.api.listInternalReferenceBacklinks("work", workId)) ?? [];
 		} catch (cause) {
 			internalReferenceNotice = ports.errorMessage(cause);
 		}

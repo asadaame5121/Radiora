@@ -1,0 +1,762 @@
+{
+  "format": "radiora-backup",
+  "schemaVersion": 7,
+  "exportedAt": "2026-09-01T00:00:00.000Z",
+  "appVersion": "0.5.1",
+  "source": {
+    "storageSchemaVersion": 7
+  },
+  "data": {
+    "works": [
+      {
+        "id": "group-overflow",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-tomaru",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-moeka",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-odoriko",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-manami",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-shun",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-chiho",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-makoto",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-sekai",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-kotonoha",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-setsuna",
+        "createdAt": "2026-09-01T00:00:00.000Z",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "branches": [
+      {
+        "id": "group-overflow-main",
+        "workId": "group-overflow",
+        "name": "main",
+        "headRevisionId": "group-overflow-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-tomaru-main",
+        "workId": "person-tomaru",
+        "name": "main",
+        "headRevisionId": "person-tomaru-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-moeka-main",
+        "workId": "person-moeka",
+        "name": "main",
+        "headRevisionId": "person-moeka-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-odoriko-main",
+        "workId": "person-odoriko",
+        "name": "main",
+        "headRevisionId": "person-odoriko-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-manami-main",
+        "workId": "person-manami",
+        "name": "main",
+        "headRevisionId": "person-manami-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-shun-main",
+        "workId": "person-shun",
+        "name": "main",
+        "headRevisionId": "person-shun-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-chiho-main",
+        "workId": "person-chiho",
+        "name": "main",
+        "headRevisionId": "person-chiho-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-makoto-main",
+        "workId": "person-makoto",
+        "name": "main",
+        "headRevisionId": "person-makoto-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-sekai-main",
+        "workId": "person-sekai",
+        "name": "main",
+        "headRevisionId": "person-sekai-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-kotonoha-main",
+        "workId": "person-kotonoha",
+        "name": "main",
+        "headRevisionId": "person-kotonoha-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-setsuna-main",
+        "workId": "person-setsuna",
+        "name": "main",
+        "headRevisionId": "person-setsuna-rev-1",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "workingCopies": [
+      {
+        "branchId": "group-overflow-main",
+        "workId": "group-overflow",
+        "text": "沢越家・伊藤家系譜\n\nOverflow作品群の壮絶な血縁グラフ。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-tomaru-main",
+        "workId": "person-tomaru",
+        "text": "沢越止\n\nすべての元凶。数多くの女性との間に子孫を残した始祖的存在。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-moeka-main",
+        "workId": "person-moeka",
+        "text": "伊能萌香\n\n止の娘であり、止のパートナーの一人。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-odoriko-main",
+        "workId": "person-odoriko",
+        "text": "西園寺踊子\n\n止の娘。世界の母。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-manami-main",
+        "workId": "person-manami",
+        "text": "桂真奈美\n\n止の娘。言葉と心の母。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-shun-main",
+        "workId": "person-shun",
+        "text": "間瞬\n\n止の息子。踊子との間に世界をもうける。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-chiho-main",
+        "workId": "person-chiho",
+        "text": "伊藤智歩\n\n止の娘。止との間に誠と止をもうける。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-makoto-main",
+        "workId": "person-makoto",
+        "text": "伊藤誠\n\n『School Days』主人公。沢越止と伊藤智歩の息子。止は父であり祖父。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-sekai-main",
+        "workId": "person-sekai",
+        "text": "西園寺世界\n\n『School Days』ヒロイン。間瞬と西園寺踊子の娘。誠とはいとこかつ叔父と姪。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-kotonoha-main",
+        "workId": "person-kotonoha",
+        "text": "桂言葉\n\n『School Days』メインヒロイン。桂真奈美の長女。誠とは異母姉妹の血を引く。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "branchId": "person-setsuna-main",
+        "workId": "person-setsuna",
+        "text": "清浦刹那\n\n世界の親友でいとこ（母の舞が踊子の妹）。誠に想いを寄せる。",
+        "updatedAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "group-overflow-occ",
+        "workId": "group-overflow",
+        "parentOccurrenceId": null,
+        "orderKey": 1024,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "group-overflow-main"
+        }
+      },
+      {
+        "id": "person-tomaru-occ",
+        "workId": "person-tomaru",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 2048,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-tomaru-main"
+        }
+      },
+      {
+        "id": "person-moeka-occ",
+        "workId": "person-moeka",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 3072,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-moeka-main"
+        }
+      },
+      {
+        "id": "person-odoriko-occ",
+        "workId": "person-odoriko",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 4096,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-odoriko-main"
+        }
+      },
+      {
+        "id": "person-manami-occ",
+        "workId": "person-manami",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 5120,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-manami-main"
+        }
+      },
+      {
+        "id": "person-shun-occ",
+        "workId": "person-shun",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 6144,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-shun-main"
+        }
+      },
+      {
+        "id": "person-chiho-occ",
+        "workId": "person-chiho",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 7168,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-chiho-main"
+        }
+      },
+      {
+        "id": "person-makoto-occ",
+        "workId": "person-makoto",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 8192,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-makoto-main"
+        }
+      },
+      {
+        "id": "person-sekai-occ",
+        "workId": "person-sekai",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 9216,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-sekai-main"
+        }
+      },
+      {
+        "id": "person-kotonoha-occ",
+        "workId": "person-kotonoha",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 10240,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-kotonoha-main"
+        }
+      },
+      {
+        "id": "person-setsuna-occ",
+        "workId": "person-setsuna",
+        "parentOccurrenceId": "group-overflow-occ",
+        "orderKey": 11264,
+        "collapsed": false,
+        "revisionSelector": {
+          "mode": "branch",
+          "branchId": "person-setsuna-main"
+        }
+      }
+    ],
+    "links": [
+      {
+        "id": "link-fo-tomaru-chiho",
+        "fromId": "person-tomaru",
+        "toId": "person-chiho",
+        "from": {
+          "scope": "work",
+          "workId": "person-tomaru"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-chiho"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-tomaru-odoriko",
+        "fromId": "person-tomaru",
+        "toId": "person-odoriko",
+        "from": {
+          "scope": "work",
+          "workId": "person-tomaru"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-odoriko"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-tomaru-manami",
+        "fromId": "person-tomaru",
+        "toId": "person-manami",
+        "from": {
+          "scope": "work",
+          "workId": "person-tomaru"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-manami"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-tomaru-shun",
+        "fromId": "person-tomaru",
+        "toId": "person-shun",
+        "from": {
+          "scope": "work",
+          "workId": "person-tomaru"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-shun"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-tomaru-makoto",
+        "fromId": "person-tomaru",
+        "toId": "person-makoto",
+        "from": {
+          "scope": "work",
+          "workId": "person-tomaru"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-makoto"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-fo-shun-sekai",
+        "fromId": "person-shun",
+        "toId": "person-sekai",
+        "from": {
+          "scope": "work",
+          "workId": "person-shun"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-sekai"
+        },
+        "type": "FATHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-mo-chiho-makoto",
+        "fromId": "person-chiho",
+        "toId": "person-makoto",
+        "from": {
+          "scope": "work",
+          "workId": "person-chiho"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-makoto"
+        },
+        "type": "MOTHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-mo-odoriko-sekai",
+        "fromId": "person-odoriko",
+        "toId": "person-sekai",
+        "from": {
+          "scope": "work",
+          "workId": "person-odoriko"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-sekai"
+        },
+        "type": "MOTHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-mo-manami-kotonoha",
+        "fromId": "person-manami",
+        "toId": "person-kotonoha",
+        "from": {
+          "scope": "work",
+          "workId": "person-manami"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-kotonoha"
+        },
+        "type": "MOTHER_OF",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-cs-makoto-sekai",
+        "fromId": "person-makoto",
+        "toId": "person-sekai",
+        "from": {
+          "scope": "work",
+          "workId": "person-makoto"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-sekai"
+        },
+        "type": "COUSIN",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-cs-sekai-setsuna",
+        "fromId": "person-sekai",
+        "toId": "person-setsuna",
+        "from": {
+          "scope": "work",
+          "workId": "person-sekai"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-setsuna"
+        },
+        "type": "COUSIN",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-rd-makoto-sekai",
+        "fromId": "person-makoto",
+        "toId": "person-sekai",
+        "from": {
+          "scope": "work",
+          "workId": "person-makoto"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-sekai"
+        },
+        "type": "ROMANTIC_RELATION",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-rd-makoto-kotonoha",
+        "fromId": "person-makoto",
+        "toId": "person-kotonoha",
+        "from": {
+          "scope": "work",
+          "workId": "person-makoto"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-kotonoha"
+        },
+        "type": "ROMANTIC_RELATION",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "link-rd-makoto-setsuna",
+        "fromId": "person-makoto",
+        "toId": "person-setsuna",
+        "from": {
+          "scope": "work",
+          "workId": "person-makoto"
+        },
+        "to": {
+          "scope": "work",
+          "workId": "person-setsuna"
+        },
+        "type": "ROMANTIC_RELATION",
+        "status": "asserted",
+        "origin": "human",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "systemRelations": [],
+    "knots": [],
+    "aliases": [],
+    "emergenceFeedback": {},
+    "emergenceSuggestions": [],
+    "savedRuleQueries": [],
+    "purgeManifests": [],
+    "revisions": [
+      {
+        "id": "group-overflow-rev-1",
+        "workId": "group-overflow",
+        "text": "沢越家・伊藤家系譜\n\nOverflow作品群の壮絶な血縁グラフ。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-tomaru-rev-1",
+        "workId": "person-tomaru",
+        "text": "沢越止\n\nすべての元凶。数多くの女性との間に子孫を残した始祖的存在。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-moeka-rev-1",
+        "workId": "person-moeka",
+        "text": "伊能萌香\n\n止の娘であり、止のパートナーの一人。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-odoriko-rev-1",
+        "workId": "person-odoriko",
+        "text": "西園寺踊子\n\n止の娘。世界の母。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-manami-rev-1",
+        "workId": "person-manami",
+        "text": "桂真奈美\n\n止の娘。言葉と心の母。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-shun-rev-1",
+        "workId": "person-shun",
+        "text": "間瞬\n\n止の息子。踊子との間に世界をもうける。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-chiho-rev-1",
+        "workId": "person-chiho",
+        "text": "伊藤智歩\n\n止の娘。止との間に誠と止をもうける。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-makoto-rev-1",
+        "workId": "person-makoto",
+        "text": "伊藤誠\n\n『School Days』主人公。沢越止と伊藤智歩の息子。止は父であり祖父。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-sekai-rev-1",
+        "workId": "person-sekai",
+        "text": "西園寺世界\n\n『School Days』ヒロイン。間瞬と西園寺踊子の娘。誠とはいとこかつ叔父と姪。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-kotonoha-rev-1",
+        "workId": "person-kotonoha",
+        "text": "桂言葉\n\n『School Days』メインヒロイン。桂真奈美の長女。誠とは異母姉妹の血を引く。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "id": "person-setsuna-rev-1",
+        "workId": "person-setsuna",
+        "text": "清浦刹那\n\n世界の親友でいとこ（母の舞が踊子の妹）。誠に想いを寄せる。",
+        "parentRevisionIds": [],
+        "kind": "edition",
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      }
+    ],
+    "recoverySnapshots": [],
+    "bookmarks": [],
+    "resumePosition": null,
+    "relationTypeDefinitions": [
+      {
+        "name": "RELATED",
+        "direction": "symmetric",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "FROM",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": true
+      },
+      {
+        "name": "LIKE",
+        "direction": "symmetric",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "SUPPORT",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "DEF",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "VS",
+        "direction": "symmetric",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "FIX",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "CITE",
+        "direction": "directed",
+        "builtIn": true,
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "advancesGeneration": false
+      },
+      {
+        "name": "FATHER_OF",
+        "direction": "directed",
+        "advancesGeneration": true,
+        "builtIn": false,
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "name": "MOTHER_OF",
+        "direction": "directed",
+        "advancesGeneration": true,
+        "builtIn": false,
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "name": "COUSIN",
+        "direction": "symmetric",
+        "builtIn": false,
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      },
+      {
+        "name": "ROMANTIC_RELATION",
+        "direction": "symmetric",
+        "builtIn": false,
+        "createdAt": "2026-09-01T00:00:00.000Z"
+      }
+    ]
+  }
+}
