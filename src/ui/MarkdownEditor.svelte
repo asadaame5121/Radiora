@@ -131,6 +131,7 @@
 		max-height: 140px;
 		overflow: hidden;
 		border-radius: 5px;
+		--radiora-editor-text: var(--text);
 	}
 	:global(.row.selected) .markdown-editor-host,
 	:global(.row:focus-within) .markdown-editor-host {
@@ -148,22 +149,22 @@
 		overflow: hidden !important;
 	}
 	.markdown-editor-host :global(.overtype-container) {
-		--preview-text-default: var(--text);
+		--preview-text-default: var(--radiora-editor-text);
 		--preview-bg-default: transparent;
-		--preview-h1-default: var(--text);
-		--preview-h2-default: var(--text);
-		--preview-h3-default: var(--text);
+		--preview-h1-default: var(--radiora-editor-text);
+		--preview-h2-default: var(--radiora-editor-text);
+		--preview-h3-default: var(--radiora-editor-text);
 		--preview-strong-default: var(--amber);
 		--preview-em-default: var(--cyan-soft);
 		--preview-link-default: var(--cyan-soft);
-		--preview-code-default: var(--text);
+		--preview-code-default: var(--radiora-editor-text);
 		--preview-code-bg-default: var(--surface-raised);
 		--preview-blockquote-default: var(--cyan-soft);
 		--preview-hr-default: var(--border-bright);
 	}
 	.markdown-editor-host :global(:is(.overtype-container, .overtype-wrapper, .overtype-input, .overtype-preview)) {
 		background: transparent !important;
-		color: var(--text);
+		color: var(--radiora-editor-text);
 	}
 	.markdown-editor-host :global(:is(.overtype-input, .overtype-preview)) {
 		max-height: 100% !important;
