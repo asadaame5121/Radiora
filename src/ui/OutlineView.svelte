@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	import type { OutlineItem, RelationTypeDefinition } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { VisibleRow } from "./outline_view_model.ts";
@@ -13,6 +14,9 @@
 	import OutlineRowItem from "./OutlineRowItem.svelte";
 
 	let {
+		draggedId,
+		onDragStart,
+		onDragEnd,
 		outlineContextBreadcrumb,
 		outlineContextBreadcrumbItems,
 		outlineContextTitle,
@@ -35,6 +39,9 @@
 		handlers,
 		helpers,
 	}: {
+		draggedId: string | null;
+		onDragStart: (id: string) => void;
+		onDragEnd: () => void;
 		outlineContextBreadcrumb: string;
 		outlineContextBreadcrumbItems: readonly OutlineItem[];
 		outlineContextTitle: string;
@@ -58,7 +65,7 @@
 		helpers: OutlineHelpers;
 	} = $props();
 
-	let draggedId = $state<string | null>(null);
+	onMount(() => () => onDragEnd());
 </script>
 
 <div class="outline-context">
@@ -110,8 +117,8 @@
 				{relationTypeDefinitions}
 				{handlers}
 				{helpers}
-				onDragStart={(id) => (draggedId = id)}
-				onDragEnd={() => (draggedId = null)}
+				{onDragStart}
+				{onDragEnd}
 			/>
 		{/each}
 	</div>

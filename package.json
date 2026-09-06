@@ -13,6 +13,7 @@
 		"build-storybook": "storybook build",
 		"test:storybook": "vitest run --project storybook",
 		"test:storybook:coverage": "vitest run --project storybook --coverage",
+		"test:ui": "playwright test --config playwright.ui.config.ts",
 		"test:a11y": "playwright test --config playwright.a11y.config.ts",
 		"test:visual": "playwright test --config playwright.visual.config.ts",
 		"test:visual:update": "playwright test --config playwright.visual.config.ts --update-snapshots",

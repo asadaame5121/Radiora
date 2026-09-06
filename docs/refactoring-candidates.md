@@ -1,281 +1,385 @@
 # リファクタリング・バックログ
 
-大型ファイルの責務を、挙動を維持したまま段階的に分割するためのロードマップ。
-構造変更と仕様変更は同じ差分に混ぜず、各タスクで `deno task verify` を通す。
+更新日: 2026-09-05。調査基点: `a74efc8`（調査開始時の working tree に変更なし）。
 
-行数はこのロードマップ更新時点の概数。行数だけで分割を決めず、state ownership、I/O 境界、
-変更理由の異なる責務が同居しているかを優先して判断する。
+責務、state ownership、I/O、transaction の変更理由に沿って、挙動を維持したまま整理する計画。
+ファイルを短くすること自体は目的にしない。既存のタスク ID は追跡のため維持する。
 
-2026-08-31 の静的解析 baseline 調査では、jscpd 40 clones、認知複雑度超過 44 関数、 50 行超過 36
-関数、400 実装行超過 12 ファイルを確認した。これらは優先順位付けと改善確認に使うが、
-数値を減らすためだけの共通 helper や shallow module
-は作らない。同じ不変条件・変更理由を持つ実装だけを 同じ seam の内側へ集約し、触れた範囲の baseline
-を ratchet する。
+## 今回の調査と判断
 
-## 難易度
+`src` の production TypeScript/Svelte/CSS を行数で棚卸しし、既存候補の実装、呼び出し側、
+関連テスト、storage bootstrap、quality task、Editor の mutation 調査文書を確認した。
+行数は空行・コメント・style を含む物理行数で、quality gate の実装行数とは異なる。
+全関数の精査と実行時プロファイルは調査対象外。A0 のUI操作検証は下記の今週実績を参照。
 
-| 表記      | 目安     | 判断基準                                             |
-| --------- | -------- | ---------------------------------------------------- |
-| 1: 低     | 半日以内 | 純粋な移動が中心で、公開 API と状態所有を変えない    |
-| 2: やや低 | 0.5〜1日 | 小さな境界設計と直接テストが必要                     |
-| 3: 中     | 1〜2日   | 複数の利用側、非同期処理、共有状態のいずれかに触れる |
-| 4: 高     | 2〜4日   | state ownership や永続化境界を再設計する             |
-| 5: 最高   | 4日以上  | UI・状態・I/O を横断し、段階移行が必要               |
+| 対象                                    | 現在の行数 | 実装からの判断                                                      |
+| --------------------------------------- | ---------: | ------------------------------------------------------------------- |
+| `src/ui/App.svelte`                     |      2,594 | View 分離後も起動、履歴、比較、query、tag、日付投影、操作処理が残る |
+| `src/storage/memory_store.ts`           |        824 | protected 配列群を JSON/SQLite の永続化が共有する                   |
+| `src/storage/json_store.ts`             |        547 | 版判定・旧版保護・保存・操作別 rollback が同居                      |
+| `src/storage/sqlite_store.ts`           |        361 | mutation queue と rollback が集約済み。継承元変更の回帰対象         |
+| `src/ui/tree_layout.ts`                 |        715 | lineage/cycle、lane、画面集約、edge 構築の純粋計算が同居            |
+| `src/ui/PhylogeneticTree.svelte`        |        694 | pointer/camera/描画の責務を次回分離候補に維持                       |
+| `src/ui/GlobalLineage.svelte`           |        169 | Sidebar と各 Pane は分離済み。旧649行の前提を撤回                   |
+| `src/ui/editor_controller.svelte.ts`    |        595 | autosave coordinator は既存。completion の独立性を優先調査          |
+| `src/services/inline_semantic_link.ts`  |        647 | Markdown 除外領域の走査と意味リンク文法が同居                       |
+| `src/storage/graph_state_validation.ts` |        456 | record 別関数は既存。全体を一から分割する計画は縮小                 |
+| `src/ui/styles.css`                     |        325 | 旧2,866行から大幅整理済み。残存 selector の所有確認に縮小           |
 
-難易度は工数の保証ではなく、レビュー時に必要な注意量の目安とする。
+根拠は以下の実装箇所。行番号はこの調査基点での位置とし、実施時は symbol で再確認する。
 
-## 運用方針
+- `App.svelte:203,743,1454` と `OutlineView.svelte:61,113`: `draggedId`
+  が親子それぞれにある。子で開始した drag を、親の `dropOn` が親の値で判定する。 state ownership
+  の不整合を静的に確認し、A0 でdrop後にRPCが発生しないことを再現・修正した。
+- `App.svelte:1224–1351`: revisions/work lineage/comparison に個別の request counter
+  と結果反映判定。 選択変更、応答順逆転、失敗時の扱いを保つ単位で分離する。
+- `App.svelte:518–721`: startup cache、起動監視、初期ロード、reload が同居。
+- `discovery_operations.ts` の `runRuleQuery` / `buildQueryProjectionNodes`: Work から代表
+  occurrence への変換と query 投影が残る。 `listEmergenceSuggestions`
+  も取得→計算→materialize→ranking を所有しており、D5 だけでは D6 は完了しない。
+- `storage_bootstrap.ts` の `bootstrapStorage`: 既定は SQLite。Surreal は legacy migration 側。
+  `turso_store.ts` は SQLite の互換 export であり、別の永続化実装として分割しない。
+- `sqlite_store.ts` の `mutate` / `closeDatabase`: queue、snapshot、差分保存、rollback、close
+  待機を集約済み。 `json_store.ts` は通常保存と restore で手順が異なるため、両者の policy
+  を安易に共通化しない。
+- `graph_state_validation.ts:43–95`: container 確認、既定 relation type
+  補完、重複検査、参照検査を順序付け。 各 record validator は既に private
+  関数であり、抽出のためだけに公開しない。
 
-週に1日をリファクタリング日にし、通常の機能開発とは専用の branch/worktree（Jujutsu では 専用
-workspace/change）を分けて少しずつ進める。
-
-- 1回の作業範囲は、難易度1〜2なら最大2タスク、難易度3以上なら原則1タスクとする
-- 各回は「対象確認 → characterization test → 構造変更 → `deno task verify`」まで完結させる
-- 挙動変更や新機能が必要になった場合は、その場で混ぜず別タスク・別 change に切り出す
-- 完了したタスクはチェックを付け、実測行数や新しく判明した依存関係をバックログへ反映する
-- 専用作業領域は定期的に開発元へ追随し、長期間の差分を一括で統合しない
-- 並行作業は異なるファイル境界に限定し、同じ巨大ファイルを複数担当で同時編集しない
-
-### 週次サイクル
-
-1. 今週扱うタスクを一つ選び、完了条件と変更対象を再確認する
-2. 必要なら単純な調査・テスト追加・機械的な移動をサブエージェントへ分担する
-3. state ownership、公開 API、I/O 境界に関わる設計判断を主担当でレビューする
-4. 対象テストと `deno task verify` を通し、一つの説明可能な change として区切る
-5. バックログを更新し、次回の先頭タスクを一つだけ決める
-
-最初の週は **D1: 現行契約を責務別テストで固定する** を扱う。余力があれば D2 の境界設計までに
-留め、実装範囲を無理に広げない。
-
-## 完了済み
-
-- [x] `PhylogeneticTree.svelte` からカメラ計算を `tree_camera.ts` へ分離
-- [x] `PhylogeneticTree.svelte` からラベル衝突用空間インデックスを `tree_spatial_index.ts` へ分離
-- [x] `App.svelte` から Today、Stub List、Unplaced、Tags、Trash、Options の各 View を分離
-- [x] 確認フロー、Command Palette、Licenses のダイアログ描画を分離
-- [x] `App.svelte` から editor/navigation/work 操作を feature controller へ分離
-- [x] `surreal_store.ts` を接続と repository 群を束ねる composition root へ縮小
-- [x] Surreal 永続化を outline/work/revision/relation/discovery/backup repository へ分離
-- [x] row mapper、query、migration、DDL、graph validation を独立した境界へ分離
-- [x] `memory_store.ts` から純粋ドメイン操作・投影処理を `memory_store_operations.ts` へ分離
-- [x] サービス層の依存を feature-specific store port へ縮小
+2026-08-31 の旧記録（40 clones、認知複雑度超過44関数、50行超過36関数、400実装行超過12ファイル）は
+履歴値であり、現在値ではない。初回調査では再計測していない。今週の検証値は下記に記録し、異なる指標間の改善率は算出しない。
 
 ## 推奨着手順
 
-1. Discovery Operations を分割し、analysis 系 UI が依存するサービス境界を固定する
-2. `App.svelte` の analysis、Outline、Inspector を順に分離する
-3. Memory/JSON Store を、確定済みの feature port に沿って分割する
-4. graph snapshot validation を characterization test で固定して分割する
-5. Tree UI と tree layout を純粋計算、状態、View に分ける
-6. inline semantic link parser を characterization test で固定して分割する
-7. OPML parser、CSS、追加候補を再レビューする
+1. **A0（完了）**: Outline の drag 状態不整合を再現し、専用の修正差分と回帰テストで解消した。
+2. **A1a**: 履歴・比較の状態 owner を分離する。既存の応答順制御を最初の契約にする。
+3. **D5 → D6 → A1b**: query の service と UI を順に整理する。
+4. **S0 → S1 → S2**: SQLite/JSON の永続化契約を固定してから共有 Memory 状態を整理する。
+5. **R1**: Editor の completion と既存 autosave coordinator の責務を分離する。
+6. **A4 → A1c → A5**: startup、残りの feature 状態、composition の順で整理する。
+7. **S3 → S4、T1〜T3、P1〜P4**: 当該 feature を変更する機会に一つずつ進める。
+8. **G、O、C、残る R**: 明確な変更理由が生じるまで後順位。
 
-依存しないタスクは並行実施できる。特に Storage、Tree、Parser は、Discovery/App 系と別担当で
-進められる。ただし同じファイルを触るタスクは同時に開始しない。
+A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ」依存は撤回する。 R1 と Storage は App
+と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。 今週のA0は完了。次回は
+**A1a（履歴・比較の状態所有分離）** を一作業単位にする。
+
+## 運用・難易度
+
+週に1日を目安に専用 branch/worktree（Jujutsu では workspace/change）で進める。
+難易度1〜2は最大2タスク、3以上は原則1タスク。各回、対象確認→必要な契約テスト→構造変更→検証まで完結する。
+難易度は 1=局所移動、2=小さな seam、3=複数利用側/非同期、4=状態/永続化再設計、5=段階移行必須。
+所要日数の保証はしない。仕様変更・不具合修正は構造変更と別差分にする。
+
+## 完了済み・部分完了の訂正
+
+- [x] Phylogenetic Tree の camera 計算と空間 index を `tree_camera.ts` / `tree_spatial_index.ts`
+      へ分離。
+- [x] Today/Stub/Unplaced/Tags/Trash/Options、確認/Palette/Licenses の View を分離。
+- [x] editor/navigation/work の Controller、Surreal の composition/repository/mapper/query/migration
+      を分離。
+- [x] Memory の純粋操作を `memory_store_operations.ts` へ分離し、service の依存を feature port
+      へ縮小。
+- [x] D1〜D4: search 契約と ranking、emergence 計算と persistence を分離。
+- [x] A2 の描画部分: `OutlineView.svelte` / `OutlineRowItem.svelte` に分離。 drag の状態所有は A0
+      で解消。残る Outline 操作は A2 に残す。
+- [x] A3: `InspectorView.svelte` と Overview/Relation/History/Query の View を分離。 履歴や query
+      の非同期状態は A1 の対象であり、A3 の再実装は不要。
+- [x] A1 の emergence 部分: `emergence_controller.svelte.ts` と Vitest 契約テストが存在。
+- [x] T4 の Sidebar/Inspector/Filter/Displayed 描画部分を分離。Tree 全体の状態整理は T3 に残す。
+- [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
+- [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
+
+これらは初回調査時の実装配置の確認記録。今週再実行した検証の範囲は以下に記録する。
+
+## 今週の実績（2026-09-05、A0完了）
+
+作業ブランチ:
+`codex/weekly-outline-drag`。今週の対象は、着手前に指定したA0の再現・修正・回帰テスト。
+A1a以降やF/Hの清掃には着手しておらず、Surreal削除の公開後条件とLog保持方針も維持する。
+
+- 再現: 3行の固定fixtureをAppに渡し、実際のOutlineRowItem→OutlineView→Appのイベント経路で drag
+  start/drop/endを実行。修正前は移動元の表示が変わっても `moveItem` の呼出しが0件だった。
+- 判断: 移動元IDをdrop callbackだけに渡す案では、Appの空白クリック抑止が同じ状態を見られない。
+  `outline_drag_controller.svelte.ts` を唯一のstate ownerとし、Viewへ値とstart/end
+  callbackを渡す案を採用。
+- 修正: drop時に移動元を確定してdrag状態を解除し、保存後も同じIDでreload・選択・focusを復元。
+  同一行/移動元なしのdropは保存せず、保存失敗は既存エラー表示へ渡す。 OutlineViewのunmount
+  cleanupでもdragを解除する。新規 `$effect`、DOM listener、timerは追加していない。
+- 回帰証明: `tests/ui/outline-drag.spec.ts` の4件で遅延保存、同一行・取消、空白クリック、
+  ネイティブdragでの保存失敗、画面離脱を検証。RPCと読込データはfixtureであり、DBの並べ替え自体を
+  このブラウザテストで再実装・検証してはいない。
+- Controller直接テスト: `vitest/outline_drag_controller.svelte.test.ts` の2件で、
+  保存待ち中に始まった次のdragを古い保存完了が消さないことと、失敗時の通知/非reloadを固定。
+- 継続実行: `npm run test:ui` を追加し、既存Chromium CIジョブからも実行する。
+  初回Vite/Svelteコンパイルに約36秒かかったためテスト全体の上限は60秒、個々のassertionの上限は据え置き。
+
+検証結果:
+
+| 検証                                                     | 結果                                                           |
+| -------------------------------------------------------- | -------------------------------------------------------------- |
+| `deno task verify`                                       | 成功。Deno 746件（4 steps）、Vitest 65件（9 files）、build成功 |
+| `svelte-check`（verify内）                               | 0 errors / 0 warnings                                          |
+| `npm run test:ui`                                        | Chromiumで4件成功                                              |
+| `deno task quality`（baseline更新後）                    | 208 production filesで成功                                     |
+| 文書/追加configの `deno fmt --check`、`git diff --check` | 成功                                                           |
+
+Appの実装行baselineを既存上限2,816から実測2,421へ更新した。この差全体を今週の削減量とは扱わない。
+magic-number ratchetは281 current/281 baseline、duplicate ratchetは34 current/36 baselineで成功。
+既存のlint警告とbuildのchunk size警告は残るが、今回の検証にエラーはない。
+
+## A: App の状態所有と composition
+
+- [x] **A0: Outline drag 契約の再確認** — 難易度2、最優先
+  - 対象: `App.svelte` の `dropOn` /
+    `deselectFromBlank`、`OutlineView.svelte`、`OutlineRowItem.svelte`、`outline_row_types.ts`。
+  - drag start→drop→end、同一行への drop、空白クリックを実際のイベント経路で確認する。
+  - owner を一箇所に置く案と、drop callback に移動元 ID を渡す案を比較し、最小の変更を選ぶ。
+  - 完了条件: View で開始した drag の移動元が操作側へ届き、終了時にクリアされる回帰テストがある。
+    不具合が再現した場合は修正を別差分で先行し、現在の不具合を保存すべき仕様としない。
+- [ ] **A1a: 履歴・比較の feature Controller** — 難易度4
+  - 対象: revisions/recovery/work lineage と comparison のロード処理。履歴と比較は別の state owner
+    とする。
+  - `selectedId`/snapshot を複製せず、現在の選択を getter または入力で受け取る。
+  - 完了条件: App に結果配列・loading・request counter が残らず、選択変更/逆順応答/失敗を Vitest
+    で固定。 shared counter を別々の owner に分ける際は comparison 同士の排他性を維持する。
+- [ ] **A1b: rule query Controller** — 難易度3、依存 D5
+  - source/name/result/error/saved query と sparse projection の状態遷移を所有する。
+  - 完了条件: `InspectorQueryPanel` は表示と callback のみ、query の一時ノードを永続化しない。
+- [ ] **A1c: tag・alias・日付投影の残存状態を整理** — 難易度3
+  - `saveAlias`、tag 操作、`loadDateProjection` を各既存 feature に帰属させ、一つずつ移す。
+  - 完了条件: 無関係な状態を巨大な analysis Controller に集めず、既存 emergence owner を維持する。
+- [ ] **A2: Outline 操作の残作業** — 難易度3、依存 A0
+  - indent/outdent/sibling move/drop の操作を既存 editor/navigation の責務と比較して移す。
+  - 完了条件: 選択・drag の owner が一意で、分離済み View に RPC を入れない。View
+    分割をやり直さない。
+- [x] **A3: Inspector View 分離** — 上記完了記録を参照。
+- [ ] **A4: startup lifecycle と preference I/O** — 難易度4
+  - cache 復元→起動監視→実データ読込→retry、unmount の取消を一つの startup owner にまとめる。
+  - 既存 `startup_snapshot_cache.ts` と preference helper を再利用。preference
+    は別の小さな作業単位にする。
+  - 完了条件: cache 有無/失敗、retry、unmount 後応答の契約があり、timer/listener の cleanup
+    が明示される。
+  - A1〜A3 全完了は必須ではない。App の同時編集を避けるため順に着手する。
+- [ ] **A5: composition root の最終整理** — 難易度3、依存 A1/A2/A4
+  - bootstrap、feature 接続、View 選択を残す。単なる行数目標や巨大 props bag を作らない。
+  - 完了条件: 残る `$effect` の目的・依存・cleanup と feature 間の依存方向を説明できる。
 
 ## D: Discovery Operations
 
-対象: `src/services/discovery_operations.ts`（約 243 行）
+- [x] **D1**: search/emergence/rule query の責務別契約テスト。
+- [x] **D2**: `search_operations.ts` と純粋 `search_ranking.ts`。
+- [x] **D3**: `emergence_suggestion_calculator.ts` の候補計算・ranking。
+- [x] **D4**: `emergence_persistence.ts` の materialize/resolve lifecycle。
+- [ ] **D5: rule query operations を抽出** — 難易度3
+  - `runRuleQuery`、saved query CRUD、query projection を一つの module にする。
+  - query に必要な port のみを渡し、代表 occurrence の選択順と implicit FROM link の扱いを維持する。
+  - 完了条件: `discovery_rule_query_operations_test.ts` の正常/無効入力/非永続化契約が同じ interface
+    で通る。
+- [ ] **D6: 残る emergence orchestration と facade を整理** — 難易度3、依存 D5
+  - `listEmergenceSuggestions` の取得→search→候補→materialize→rank を emergence 側へ移す。
+  - 完了条件: `DiscoveryOperations` は配線と委譲のみで、graph
+    traversal、ranking、永続化判断を持たない。
+  - 公開 binding を維持し、search/emergence の既存契約テストで代表経路を確認する。
 
-検索、prefix suggestion、alias、emergence suggestion、feedback、rule query、query projection が
-同居している。外向け API を保つ薄い facade を残し、次の順で分ける。
+## S: Memory / SQLite / JSON Storage
 
-- [x] **D1: 現行契約を責務別テストで固定する** — 難易度 2
-  - search、emergence、rule query の既存テストを分類し、各境界の入力・出力・副作用を明示する
-  - 完了条件: 分割後にどのテストを移すか判断でき、主要な異常系が固定されている
-  - 実績: test support を共有しつつ3責務の契約テストへ分け、無効入力、stale suggestion、 missing
-    saved query と失敗時に永続化されないことを固定した
-- [x] **D2: search operations を分離する** — 難易度 3
-  - prefix suggestion、lexical search、alias 展開・保存を所有する
-  - 完了条件: search が `DiscoveryStorePort` と必要最小限の参照 port のみに依存する
-  - 依存: D1
-  - 実績: I/O を `search_operations.ts`、alias 展開と ranking を純粋な `search_ranking.ts`
-    へ分け、互換 facade と store なしの直接テストを維持した
-- [x] **D3: emergence suggestion 計算を分離する** — 難易度 4
-  - neighbor、ancestor、候補 ranking などの純粋計算と、データ取得を分ける
-  - 完了条件: 候補計算を store なしで直接テストできる
-  - 依存: D1、D2 の search API
-  - 実績: 永続化前の候補計算と最終 ranking を `emergence_suggestion_calculator.ts` へ分け、3候補種と
-    pinned/score/limit 順序を直接テストした
-- [x] **D4: emergence persistence/resolution を分離する** — 難易度 3
-  - feedback、accept/dismiss/pin、asserted link 作成のトランザクション境界を所有する
-  - 完了条件: 候補計算と更新コマンドが互いの内部状態を共有しない
-  - 依存: D1
-  - 実績: 候補計算から materialize/legacy feedback/resolve lifecycle を分離し、公開 interface
-    と既存の stale・pin・dismiss・accept 契約を維持した
-- [ ] **D5: rule query operations を分離する** — 難易度 3
-  - query 実行、saved query、query projection を所有する
-  - 完了条件: rule query が search/emergence 実装へ依存しない
-  - 依存: D1
-- [ ] **D6: `DiscoveryOperations` を互換 facade に縮小する** — 難易度 2
-  - RPC/binding の公開形を維持し、分割した operation を委譲する
-  - 完了条件: facade に ranking、graph traversal、永続化判断が残っていない
-  - 依存: D2〜D5
+Surreal の repository 数を模倣せず、現在の GraphStore port と transaction を基準にする。
 
-## A: App Composition
+- [ ] **S0: 永続化契約の対応表を作る** — 難易度2、S1 の前提
+  - 全 mutation と状態フィールドについて Memory/SQLite/JSON
+    の保存・復元経路と既存テストを対応付ける。
+  - SQLite の差分保存、失敗時 rollback、並行 mutation、close 待機は
+    `tests/sqlite_store_contract_test.ts` に既存テストあり。
+  - JSON restore の write/rename 失敗は `src/storage/json_backup_restore_test.ts` に既存テストあり。
+  - 完了条件: 不足した契約だけを追加する。JSON の通常保存を SQLite と同じ保証だと仮定しない。
+- [ ] **S1: Memory state container** — 難易度4、依存 S0
+  - protected 配列群、export/restore、JSON の個別 capture/rollback の依存を同時に棚卸しする。
+  - 完了条件: 状態 owner は一つ。relation type、resume、feedback 等を含む round-trip が全 adapter
+    で維持される。
+- [ ] **S2: feature 操作の内部抽出** — 難易度4、依存 S1
+  - 変更理由が独立する操作から一つずつ抽出し、既存 `memory_store_operations.ts` を再利用する。
+  - 完了条件: 一つの mutation を複数 repository が勝手に commit せず、SQLite queue/rollback
+    を維持する。
+- [ ] **S3: JSON codec/version guard** — 難易度3、S2 から独立
+  - unknown 入力の版判定、migration、検証を I/O から分離。既存 `backup_migrations.ts` を再利用する。
+  - 完了条件: V0〜V7、未来版、壊れた入力、旧版保護の契約を fixture で検証できる。 validation
+    強化で受理入力やエラーを変える場合は別の挙動変更として扱う。
+- [ ] **S4: JSON persistence policy** — 難易度4、依存 S0/S3、S1/S2 と同時編集しない
+  - 通常保存、batch/import、atomic restore の保証を区別したまま重複手順を整理する。
+  - 完了条件: 失敗時の memory/disk/一時ファイルの契約が維持される。全面 atomic 化は別仕様とする。
+  - SQLite の既存 `mutate` を再実装せず、JSON と共通の抽象基底 class を新設しない。
 
-対象: `src/ui/App.svelte`（約 2,960 行）
+## R1: Editor completion（再レビューから実施候補へ）
 
-最終的な責務は、アプリの bootstrap、feature 間の接続、トップレベル View の選択に限定する。 共有 Rune
-の state owner は `*.svelte.ts` の Controller/ViewModel に置く。
-
-- [ ] **A1: analysis controller を分離する** — 難易度 4
-  - tags、rules、emergence、lineage、comparison、revisions の状態と操作を移す
-  - 完了条件: `App.svelte` が analysis の非同期状態遷移を直接所有しない
-  - 依存: D6
-- [ ] **A2: Outline workspace View を分離する** — 難易度 4
-  - Outline 本体、選択、drag/drop、編集イベントを明示的な props/callback にする
-  - 完了条件: 子 View に RPC/DB 呼び出しがなく、状態所有者が一意である
-  - 依存: editor/navigation controller の既存 API
-- [ ] **A3: Inspector View を分離する** — 難易度 3
-  - 選択対象の詳細、リンク、履歴等の表示とローカル入力をまとめる
-  - 完了条件: Inspector が選択状態を複製せず、外部更新は callback 経由である
-  - 依存: A2 と並行可。ただし同時編集は避ける
-- [ ] **A4: lifecycle と preference I/O を境界化する** — 難易度 4
-  - 初期ロード、再読込、local preference、cleanup を controller/adapter へ寄せる
-  - 完了条件: `$effect` ごとに目的・依存・cleanup の要否を説明できる
-  - 依存: A1〜A3 後を推奨
-- [ ] **A5: `App.svelte` を composition root として整理する** — 難易度 3
-  - 不要な中継関数と重複 derived state を除去する
-  - 完了条件: View、Controller、Service の依存方向が一方向で、残存責務を文書化している
-  - 依存: A1〜A4
-
-## S: Memory/JSON Storage
-
-対象: `src/storage/memory_store.ts`（約 793 行）、`src/storage/json_store.ts`（約 554 行）
-
-Surreal 側で確定した feature port を基準にする。共有配列を複数 repository が直接変更する形には
-せず、メモリ状態の owner は一つに保つ。
-
-- [ ] **S1: Memory Store の state container を明示する** — 難易度 4
-  - snapshot/restore と各 feature 操作が共有する状態を一つの内部コンテナにまとめる
-  - 完了条件: 状態所有は一箇所のまま、操作コードが feature 単位に分離可能である
-- [ ] **S2: Memory Store 操作を feature port 単位へ分離する** — 難易度 4
-  - outline/work/revision/relation/discovery/backup の委譲先を作る
-  - 完了条件: `MemoryGraphStore` は port の合成と state container の所有に集中する
-  - 依存: S1
-- [ ] **S3: JSON codec と version guard を分離する** — 難易度 3
-  - parse/serialize、schema version 判定、旧版入力保護をファイル I/O から切り離す
-  - [x] 版別 migration 前に重複しているバックアップファイル作成を、一つの内部処理へ集約する
-  - 完了条件: fixture だけで codec と各 version guard を直接テストできる
-- [ ] **S4: JSON persistence policy を分離する** — 難易度 4
-  - mutation 後の persist、rollback、atomic write の責務を集約する
-  - 完了条件: 各 override が同じ保存手順を重複実装せず、失敗時の状態が契約テストで固定される
-  - 依存: S2、S3
+- [ ] **R1: completion の state ownership を分離** — 難易度3
+  - 根拠: `editor_controller.svelte.ts:81–145` は保存状態、二種類の補完、backlink を同時に所有する。
+    autosave/resume は既に coordinator に委譲済みなので、保存処理の再抽出は不要。
+  - `docs/mutation-testing/editor-controller.md` の未到達箇所の指摘を起点に、completion の
+    request/cancel/commit を一つずつ抽出する。
+  - 完了条件: cancel 後・別 item 選択後の古い応答が反映されず、挿入範囲と caret、保存・resume
+    の契約が維持される。
+  - 既存 `vitest/editor_controller.svelte.test.ts` と coordinator
+    テストを使い、内部変数を公開してテストしない。 mutation score の向上は再計測後にのみ報告する。
 
 ## T: Tree UI / Layout
 
-対象: `src/ui/PhylogeneticTree.svelte`（約 688 行）、`src/ui/GlobalLineage.svelte`（約 649 行）、
-`src/ui/tree_layout.ts`（約 703 行）
+- [ ] **T1: graph projection の抽出** — 難易度4
+  - `calculateLineageProjection` / cycle 判定と lane ordering を変更理由ごとに分ける。
+  - 完了条件: `tree_layout_test.ts` と `tests/high_density_tree_layout_test.ts`
+    で循環、順序、座標/集約契約を維持。
+- [ ] **T2: hit testing / pointer interaction** — 難易度3
+  - DOM 座標変換、純粋 hit 判定、drag/pan の状態を区別。すべてを純粋関数にする旧条件は撤回する。
+  - 完了条件: 純粋判定は直接テスト、pointer capture と cleanup は実イベント経路で確認する。
+- [ ] **T3: camera/filter の owner 確認** — 難易度3
+  - GlobalLineage の filter は props/callback、cluster と sidebar tab
+    はローカル状態という既存構造を起点にする。
+  - 完了条件: camera と選択の所有が重複せず、既存 `tree_camera.ts` を再利用。万能 tree Controller
+    を作らない。
+- [x] **T4: Sidebar/Inspector/legend 周辺 View の抽出** — 描画分離済み。残る操作状態は T2/T3。
 
-- [ ] **T1: tree layout の graph projection を分離する** — 難易度 4
-  - lineage projection、component/lane ordering、raw edge 構築を独立した純粋モジュールにする
-  - 完了条件: 各アルゴリズムを小さな graph fixture で直接テストできる
-- [ ] **T2: hit testing と pointer interaction を分離する** — 難易度 3
-  - rectangle hit、selection、drag/pan 判定を View から移す
-  - 完了条件: DOM event から座標への変換以外が純粋関数としてテストされている
-- [ ] **T3: camera/controls/filter の state owner を決める** — 難易度 4
-  - Phylogenetic Tree と Global Lineage の共有可能部分と feature 固有部分を分ける
-  - 完了条件: 同じ状態を親子双方が所有せず、Rune の配置理由が明確である
-  - 依存: T1、T2 と並行可
-- [ ] **T4: Tree inspector/legend View を分離する** — 難易度 2
-  - 選択詳細、凡例、操作パネルを表示コンポーネントへ移す
-  - 完了条件: 分離 View はレイアウト計算や store を参照しない
-  - 依存: T3
+## P / G / O: Parser と検証
 
-## P: Inline Semantic Link Parser
+- [ ] **P1** — 難易度3: escape、未完入力、source range、Markdown
+      除外領域の既存テストを確認し不足だけ補強。
+- [ ] **P2** — 難易度3、依存 P1: fence/code/link/URL の走査を意味リンク文法から分離。 Markdown
+      parser と契約が一致する箇所だけ共有する。token 列の新設は必須としない。
+- [ ] **P3** — 難易度3、依存 P2: endpoint/type/reason の文法を整理。小さな scanner 関数で足りるなら
+      parser framework は作らない。
+- [ ] **P4** — 難易度2、依存 P3: diagnostics
+      の独立した変更理由が残る場合だけ抽出。公開位置・診断文言を維持。
+- [ ] **G1** — 難易度2: 既存 snapshot 検証テストに、複数不正時のエラー順・既定 relation
+      type・入力不変の不足ケースを補う。
+- [ ] **G2** — 難易度3、依存 G1: schema の形状検査と参照/DAG
+      不変条件の依存を確認し、必要な集合だけ抽出。 既存 record
+      関数を一律に個別ファイル化しない。入口の検証順と返却値を固定する。
+- [ ] **O1** — 難易度2: `opml_test.ts` の namespace/属性/入れ子/空要素/不正 XML の不足を確認。
+- [ ] **O2** — 難易度3、依存 O1: element 走査と import model
+      変換の独立した変更理由がある場合に限定して抽出。
 
-対象: `src/services/inline_semantic_link.ts`（約 636 行）
+## C: Styles（全面移行から残存確認へ縮小）
 
-- [ ] **P1: parser の characterization test を補強する** — 難易度 3
-  - escape、未完入力、曖昧な token、範囲位置、複数 error の現行挙動を固定する
-  - `markdown_parser.ts` との重複部分について、入力・source range・error 契約が同一かを先に比較する
-- [ ] **P2: scanner/tokenizer を分離する** — 難易度 3
-  - 文字列走査と source range の生成だけを担当する
-  - 両 parser の契約が同一と確認できた字句走査だけを共有し、文法や診断は共通化しない
-  - 依存: P1
-- [ ] **P3: grammar/parser を分離する** — 難易度 4
-  - token 列から意味リンク表現を組み立て、UI や診断文言に依存しない
-  - 依存: P2
-- [ ] **P4: diagnostics と補完情報を分離する** — 難易度 3
-  - parse error、notice、候補提示用情報への変換を担当する
-  - 依存: P3
+- [ ] **C1** — 難易度1: `.section-title` / `.hint` / `.empty` の利用側、 `.app-main > .inspector`
+      の親子依存、`.work-lineage-workspace` の所有を確認する。 現状の325行をすべて基盤 CSS
+      と認定しない。
+- [ ] **C2** — 難易度2、依存 C1: feature 固有分だけ所有 View へ移す。 layout の親子接続は
+      wrapper/custom property を検討し、style だけ別ファイルに出して行数を減らさない。 完了条件:
+      Outline/Inspector/Lineage の desktop/狭幅と light/dark を目視または visual test で確認する。
 
-## G: Graph Snapshot Validation
+## その他の再レビュー候補
 
-対象: `src/storage/graph_state_validation.ts`
+以下は行数だけで実施へ昇格させない。今回、詳細な分離設計までは行っていない。
 
-- [ ] **G1: snapshot validation の characterization test を責務別に補強する** — 難易度 3
-  - top-level shape、各 record、参照整合性、重複、不正 ID の現行 error を固定する
-- [ ] **G2: record validation と cross-record validation を分離する** — 難易度 4
-  - `validatedGraphStateSnapshot` は検証順序と結果組み立てだけを所有する
-  - 完了条件: 各 record validator と参照整合性を小さな fixture で直接テストできる
-  - 依存: G1
+- [ ] **R2**: `branch_service.ts` — branch/working copy/revision/recovery の transaction
+      を保てるか。
+- [ ] **R3**: `occurrence_operations.ts` — 移動/複製/削除の不変条件の独立性。
+- [ ] **R4**: `models.ts` — 型カタログだけなら維持。循環依存の証拠が出た場合のみ分割。
+- [x] **R5**: Today/Unplaced filter bar 分離済み。
+- [ ] **R6**: Surreal merge validation の個別整理は F2/F3
+      に統合。削除予定実装のリファクタリングは行わない。
+- [ ] **R7**: Markdown export / sparse outline — traversal と投影条件の分離に実益があるか。
+- [ ] **R8**: Markdown editor adapter — selection/scroll 復元の同一契約がある場合だけ内部共有。
+- [ ] **R9**: `sqlite_records.ts`（421行）— row codec/差分 plan/SQL transaction の変更理由を確認。
+      `tests/sqlite_records_test.ts` と差分 statement trace を維持し、S0 の結果を見て実施判断する。
 
-## O: OPML Parser
+Map 構築だけの汎用 helper、全 feature 共通 Controller、Surreal/SQLite/JSON 共通 repository
+framework、 Turso 互換名や保存パスの改名は今回の計画に含めない。
 
-対象: `src/services/opml.ts`
+## F: 不要ファイルと旧資産の清掃
 
-- [ ] **O1: element parser の characterization test を補強する** — 難易度 2
-  - namespace、属性、入れ子、空要素、不正 XML の現行挙動を固定する
-- [ ] **O2: element 走査と outline 変換を分離する** — 難易度 3
-  - XML element の走査と Radiora の import model への変換を別の純粋処理にする
-  - 依存: O1
+2026-09-05 の追加方針: Surreal 関連は **次バージョン公開後**に、DB
+移行用スクリプトを除いて削除する。
+v0.4以前の保有者はいないと見込む、という製品判断を前提に通常運用の互換実装を廃止する。
+利用者数を実測した事実とは扱わない。公開前は棚卸しと移行専用化を進め、削除は公開後の別差分にする。
+次バージョンの番号は実施時のリリース記録で確定する。
 
-## C: Styles
+- [ ] **F1: 削除候補と保持依存を一覧化** — 難易度2、公開前から実施可
+  - `src/storage/surreal_*.ts`、`src/desktop/surreal_process.ts`、関連 scripts/test/fixture、
+    package/lockfile、Deno task、CI、配布用 binary/ライセンス生成への参照を追跡する。
+  - 移行の入口は `scripts/migrate_legacy_surreal.ts`。現在は `legacy_surreal_exporter.ts` → 動的
+    import の `surreal_store.ts` → repository 群に依存している。
+    ファイル名の一致だけで削除を決めない。
+  - 完了条件: 各候補に通常運用用・移行専用・共有・未使用の分類、参照元、削除時期がある。
+    一時生成物や未使用 fixture も調べるが、ユーザーデータ/DB/バックアップと Log は清掃対象外。
+- [ ] **F2: 移行ツールを通常運用の Store から独立させる** — 難易度4、依存 F1
+  - exporter が必要とする旧DBの読込・snapshot 変換・process 起動/終了を移行専用の実装へ集約する。
+  - 移行用スクリプトの例外には、その実行に必要な最小の module、依存 package/binary、fixture、
+    テストと手順を含める。通常運用の全 repository を例外として残し続けない。
+  - `turso_migration.ts` の backup/marker 検証と `storage_bootstrap.ts` の旧DB検出も参照を確認する。
+    旧DBを誤って新規DBとして扱う変更や、ユーザーの旧DB削除はこの清掃に含めない。
+  - 完了条件: 実際の exporter を使う移行 fixture で snapshot/SQLite round-trip を確認し、
+    失敗時の原本保全・再実行・process cleanup を検証する。mock exporter だけでは完了としない。
+- [ ] **F3: 次バージョン公開後に Surreal 通常運用資産を削除** — 難易度3、依存 F2 と公開完了
+  - 通常運用
+    Store/repository、専用テスト、不要になった開発スクリプト・task・CI・配布処理を削除する。
+  - 移行専用に必要な package/binary はツール側に限定し、不要な依存のみ lockfile と一緒に除去する。
+  - 完了条件: 公開済みタグ/日付を記録し、通常アプリから旧 Store への import がなく、
+    移行コマンド・SQLite 起動・build・`deno task verify` が通る。削除したコードの baseline
+    も除去する。
+  - R6 の Surreal merge validation リファクタリングは取りやめ、移行に残るコードだけ F2 で扱う。
+- [ ] **F4: その他の不要ファイルを段階削除** — 難易度2、依存 F1 の棚卸し方法
+  - production/test/story/script/config の参照と生成元を照合し、置換済み実装・用途を失った fixture・
+    不要な追跡済み生成物を一種類ずつ削除する。未参照でも動的読込や配布用途があれば保持する。
+  - 完了条件: 削除理由と代替先または用途終了を記録し、対応する import/task/build/link
+    が切れていない。
 
-対象: `src/ui/styles.css`（約 2,866 行）
+アプリの v0.4 というバージョンと、backup/schema version の数値は別物。 旧JSON codec/fixture
+の廃止を番号だけで自動的に含めず、移行ツールが読む形式を F1/F2 で確定する。
 
-- [ ] **C1: selector ownership を棚卸しする** — 難易度 2
-  - feature、共有 primitive、legacy/未使用の三種に分類する
-  - 完了条件: 移動先と削除候補が一覧化され、見た目変更を伴わない
-- [ ] **C2: feature 固有 CSS を component/feature 単位へ移す** — 難易度 3
-  - 一度に全面移行せず、分離済み View ごとに小さく移す
-  - 完了条件: global selector の必要性を説明でき、主要画面を目視確認している
-  - 依存: C1。App/Tree の View 分割後が安全
+## H: docs の現行仕様への整理
 
-## 再レビュー候補
+**Log は保持する。**
+それ以外の古い文書は順次統合・更新・削除し、現行仕様を探す際の重複や矛盾を減らす。 古い文書を一律に
+Log へ移して残す運用にはしない。日付だけで仕様や将来提案の有効性を判断しない。
 
-次は行数だけでは即分割しない。先に責務と変更頻度を調べ、独立した変更理由が二つ以上ある場合に
-個別タスクへ昇格する。
+- [ ] **H1: 仕様の正本と旧文書を棚卸し** — 難易度2、今から実施可
+  - README と docs
+    のリンクを辿り、現行仕様・運用手順・未実装提案・旧計画・Log・ライセンスに分類する。 Log
+    の実際の配置と用途を確認して保持対象を明示する。
+  - 最初の対象:
+    `docs/2026-07-31_design_improve_plan.md`、`docs/2026-08-06_tree_view_improve_plam.md`、
+    `docs/2026-08-22_outline_bulk_semantic_link_selection.md`、`docs/2026-08-22_implicit_from_relations.md`、
+    `docs/design/phase-0-baseline.md`。
+  - `docs/design/product-direction.md` は draft、`docs/design/sync-storage-schema.md` は proposed。
+    現行実装の仕様と混ぜず、現在も有効な提案かを確認する。
+  - 完了条件: 各文書に保持/更新/統合/削除の判断と、必要な情報の移管先がある。
+- [ ] **H2: 旧計画・仕様の統合と削除** — 難易度2、依存 H1
+  - 完了済み計画の現行仕様は正本へ、未完了の有効な作業は現行バックログへ統合して旧文書を削除する。
+  - `docs/design/schema-evolution.md` の現行規則と旧Surreal/Phase 0の説明を区別し、
+    移行に必要な旧形式の説明は移行手順へ集約する。Surreal 廃止を前提とする更新は F3 と揃える。
+  - 完了条件: 同じ仕様の正本が複数なく、README・docs・コード/テスト内の参照を更新済み。 Log
+    の本文を改変してリンク切れを直すのではなく、必要な場合は現行側に後継先の対応を示す。
+- [ ] **H3: 継続清掃の完了条件化** — 難易度1、依存 H2
+  - feature/phase/release の完了時に、対応する非Log文書の旧計画・重複記述を見直す。
+  - mutation 調査文書は現行の改善判断に使う部分だけ更新・統合する。履歴記録としての Log は保持する。
+    `docs/licenses` と有効な配布手順は古い日付だけで削除しない。
+  - 完了条件: 仕様参照の入口から現行仕様へ辿れ、未実装案と実装済み仕様を区別できる。 変更文書の
+    format とローカルリンク/anchor を検査する。docs だけなら production test の再実行は不要。
 
-- [ ] **R1: `editor_controller.svelte.ts`（約 572 行）をレビュー** — 難易度 2
-  - autosave、resume position、inline link completion の state ownership が一つで妥当か確認する
-  - completion と autosave が独立した変更理由を持つ場合だけ、内部 module へ分離する
-- [ ] **R2: `branch_service.ts`（約 448 行）をレビュー** — 難易度 2
-  - branch、working copy、revision、recovery の transaction 境界を確認する
-- [ ] **R3: `occurrence_operations.ts`（約 363 行）をレビュー** — 難易度 1
-  - 長さではなく、移動・複製・削除の不変条件が一責務としてまとまっているか確認する
-- [ ] **R4: `models.ts`（約 397 行）をレビュー** — 難易度 1
-  - 型カタログであるだけなら維持し、循環依存や feature 間漏洩がある場合のみ分割する
-- [x] **R5: Today/Unplaced の filter bar をレビュー** — 難易度 1
-  - 入力項目、文言、無効条件が同じ場合だけ小さな View として共有し、一覧の絞り込み処理は各 feature
-    に残す
-  - 実績: `OutlineFilterBar.svelte` へ表示と入力だけを移し、filter計算とstate
-    ownershipは親Viewに維持した
-- [ ] **R6: `surreal_work_repository.ts` の merge validation 重複をレビュー** — 難易度 2
-  - legacy migration で現在も通る経路だけを対象にし、将来用の抽象化は追加しない
-  - 共通化する場合は Memory Store 実装へ依存させず、merge の不変条件を所有する小さな domain module
-    に置く
-- [ ] **R7: Markdown export と sparse outline の複雑度をレビュー** — 難易度 2
-  - tree traversal
-    と表示形式、祖先復元と採用条件が独立した変更理由かを確認し、同居が妥当なら維持する
-- [ ] **R8: Markdown editor adapter の自己重複をレビュー** — 難易度 1
-  - OverType adapter と fallback adapter が共有する selection/scroll 復元を、既存 interface
-    を広げず内部 helper にできるか確認する
+F1/H1 は他の候補と独立して開始できる。H2 は一文書群ずつ通常開発に組み込み、F3 は公開後に実施する。
+清掃は「挙動を保つ構造変更」と別の作業種別であり、F3
+で明示した旧運用の廃止は意図的な対象縮小とする。
 
-`advanced_link_resolver.ts`、`date_projection.ts`、Markdown/OPML export にある Map
-構築は、現時点では
-それぞれの処理に近い単純な実装として維持する。共通の不変条件が見つからない限り、汎用 collection
-module には昇格しない。
+## 検証と共通完了条件
 
-## 共通の完了条件
+実装時は変更対象の契約テストを先に実行し、不足する観測可能な挙動だけを追加する。
 
-- 公開されている挙動、UI 文言、保存形式を変更していない
-- RPC と永続化の呼び出し位置が意図せず View に移っていない
-- feature ごとの state ownership が一箇所である
-- 新しい純粋ロジックには直接テストがある
-- 対象の契約テストを新しいファイル境界へ追随させている
-- 対象に対応する duplicate/complexity/line baseline が増加せず、解消した登録は削除されている
-- `$effect` を追加・移動した場合、目的、依存、cleanup の要否をレビューしている
-- `deno task verify` が成功する
+- UI Controller: 対象の `vitest/*.svelte.test.ts` を `npx vitest run --project unit <path>` で実行。
+- Storage:
+  `deno test -A tests/graph_store_contract_test.ts tests/graph_store_port_contract_test.ts tests/sqlite_store_contract_test.ts src/storage/sqlite_store_test.ts src/storage/json_store_test.ts src/storage/json_backup_restore_test.ts`。
+- Discovery:
+  `deno test -A src/services/discovery_search_operations_test.ts src/services/discovery_emergence_operations_test.ts src/services/discovery_rule_query_operations_test.ts`。
+- Tree/Parser: 対応する既存の直接テストと高密度 fixture。View
+  を変える場合は実イベント・表示も確認する。
+
+各実装差分の完了条件（F/H の清掃には上記の廃止・文書統合条件を適用）:
+
+- 公開挙動、UI 文言、保存形式、エラー順序、transaction の保証を維持する。
+- state owner は feature ごとに一つで、View に RPC/DB/ファイル I/O を移さない。
+- 新しい純粋 module は interface 経由でテストする。通過だけの facade を増やさない。
+- `$effect`/timer/listener の目的・依存・cleanup と古い応答の扱いを確認する。
+- 対象の duplicate/complexity/line baseline を増やさず、解消した登録だけ削除する。
+- `deno task verify` が成功する。UI の変更では必要な visual/a11y 検証も加える。
+
+計画更新と今週のA0実装・検証を完了。`verify`
+のformat対象にはdocsが含まれないため、文書は別途確認した。

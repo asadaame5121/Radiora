@@ -37,6 +37,7 @@
 		createConfirmationController,
 		type PendingConfirmation,
 	} from "./confirmation_controller.svelte.ts";
+	import { createOutlineDragController } from "./outline_drag_controller.svelte.ts";
 	import { createEditorController } from "./editor_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
@@ -200,7 +201,6 @@
 	let sparseOutlineNodes = $state<TransientProjectionNode[]>([]);
 	let sparseOutlineQueryName = $state("");
 	let showSparseOutline = $state(false);
-	let draggedId = $state<string | null>(null);
 	let revisions = $state<Revision[]>([]);
 	let recoverySnapshots = $state<RecoverySnapshot[]>([]);
 	let revisionsLoading = $state(false);
@@ -239,6 +239,11 @@
 	let treeFilter = $state<GlobalLineageFilter>(loadTreeFilterPreference());
 	let globalLineageRequest = 0;
 	const themeController = createThemeController();
+	const outlineDrag = createOutlineDragController({
+		moveItem: (input) => api.moveItem(input),
+		reload: load,
+		reportError: (cause) => error = errorMessage(cause),
+	});
 	const relationTypes = new RelationTypeController(api);
 	const workController = createWorkController({
 		api,
@@ -740,7 +745,7 @@
 	}
 
 	function deselectFromBlank(event: MouseEvent): void {
-		if (event.button !== 0 || draggedId) return;
+		if (event.button !== 0 || outlineDrag.draggedId) return;
 		releaseEditorFocus();
 		selectOccurrence(null);
 	}
@@ -1451,14 +1456,6 @@
 		await load();
 	}
 
-	async function dropOn(target: OutlineItem): Promise<void> {
-		if (!draggedId || draggedId === target.id) return;
-		await api.moveItem({ id: draggedId, parentId: target.parentId, afterId: target.id });
-		const moved = draggedId;
-		draggedId = null;
-		await load(moved);
-	}
-
 	function handleSearchKeydown(event: KeyboardEvent): void {
 		if (event.isComposing) return;
 		if (event.key === "Escape") {
@@ -2138,7 +2135,7 @@
 		openOccurrenceContextMenu,
 		handleOccurrenceContextMenuKeydown,
 		deselectFromBlank,
-		dropOn,
+		dropOn: outlineDrag.dropOn,
 		toggle,
 		selectOccurrence,
 		hoistOccurrence,
@@ -2273,6 +2270,9 @@
 					{/if}
 				{:else}
 					<OutlineView
+						draggedId={outlineDrag.draggedId}
+						onDragStart={outlineDrag.start}
+						onDragEnd={outlineDrag.end}
 						{outlineContextBreadcrumb}
 						{outlineContextBreadcrumbItems}
 						{outlineContextTitle}
