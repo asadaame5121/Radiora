@@ -19,6 +19,18 @@ test("Outline and expanded navigation have no automated WCAG A/AA violations", a
 	await expectNoAxeViolations(page);
 });
 
+test("Light theme keeps focused Outline text on the application foreground", async ({ page }) => {
+	await openReadyApplication(page);
+	await page.getByRole("button", { name: "Light", exact: true }).click();
+	await page.getByRole("button", { name: "Markdown編集を開始" }).first().click();
+
+	const editor = page.getByRole("textbox", { name: "Markdown編集" }).first();
+	await expect(editor).toBeFocused();
+	await expect.poll(() => editor.evaluate((element) => getComputedStyle(element).color)).toBe(
+		"rgb(17, 17, 17)",
+	);
+});
+
 test("Tree view has no automated WCAG A/AA violations", async ({ page }) => {
 	await openReadyApplication(page);
 	await page.getByRole("button", { name: "ツリー", exact: true }).click();

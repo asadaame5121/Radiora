@@ -62,9 +62,17 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 		if (!instance) throw new Error("Overtype did not create an editor instance");
 		this.#instance = instance;
 		this.textarea = instance.textarea;
+		this.#bridgeRadioraTextColor(options.host);
 		this.#installPreviewAccessibility();
 		this.#installHostListeners();
 		this.#suppressChange = 0;
+	}
+
+	#bridgeRadioraTextColor(host: HTMLElement): void {
+		const container = host.querySelector<HTMLElement>(".overtype-container");
+		if (!container) return;
+		container.style.setProperty("--text", "var(--radiora-editor-text)");
+		container.style.setProperty("--text-primary", "var(--radiora-editor-text)");
 	}
 
 	getValue(): string {

@@ -40,6 +40,11 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 	assertMatch(adapter, /event\.key !== "Enter" && event\.key !== " "/);
 	assertMatch(adapter, /this\.#instance\.focus\(\)/);
 	assertMatch(adapter, /new TextareaMarkdownEditorAdapter\(options\)/);
+	assertMatch(adapter, /container\.style\.setProperty\("--text", "var\(--radiora-editor-text\)"\)/);
+	assertMatch(
+		adapter,
+		/container\.style\.setProperty\("--text-primary", "var\(--radiora-editor-text\)"\)/,
+	);
 	assertMatch(component, /\$effect\(\(\) =>/);
 	assertMatch(component, /current\.setValue\(next\)/);
 	assertMatch(component, /adapter\?\.destroy\(\)/);
@@ -53,7 +58,9 @@ Deno.test("Markdown editor adapter isolates Overtype and preserves host editing 
 		/role="tree"[\s\S]*?aria-label=\{`\$\{vocabulary\.work\}のアウトライン`\}[\s\S]*?tabindex="0"/,
 	);
 	assertMatch(component, /\.markdown-editor-host :global\(\.overtype-container\) \{/);
-	assertMatch(component, /--preview-text-default: var\(--text\)/);
+	assertMatch(component, /--radiora-editor-text: var\(--text\)/);
+	assertMatch(component, /--preview-text-default: var\(--radiora-editor-text\)/);
+	assertMatch(component, /color: var\(--radiora-editor-text\)/);
 });
 
 Deno.test("Markdown editor keeps native replacement, autosave, completion, and resolver paths", async () => {
