@@ -127,6 +127,7 @@ Deno/Vitestテスト、frontend buildを実行します。
   APIはViteの`mock`モードだけで有効になり、通常のDesktop起動と本番ビルドでは使用されません。
 - `npm run storybook` / `npm run test:storybook` —
   UI状態カタログとそのrender・interaction・a11yテスト
+- `npm run test:ui` — App全体の操作回帰テスト（Outlineのdrag/drop・選択・取消）
 - `npm run test:visual` — 代表storyの画像差分
 - `npm run test:mutation:*` — Strykerによるmutation test（parsers / projections / domain / storage /
   controllers）
