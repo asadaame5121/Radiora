@@ -109,6 +109,7 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		updateItemText: (id, text) => service().updateItemText(id, text),
 		setContextualHeading: (id, contextualHeading) =>
 			service().setContextualHeading(id, contextualHeading),
+		setWorkHistoricalTime: (workId, value) => service().setWorkHistoricalTime(workId, value),
 		moveItem: async (input) => service().moveItem(v.parse(MoveItemInputSchema, input)),
 		deleteItem: (id) => service().deleteItem(id),
 		trashWork: (id) => service().trashWork(id),

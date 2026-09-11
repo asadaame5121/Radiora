@@ -1,3 +1,4 @@
+import type { HistoricalTime } from "../domain/historical_time.ts";
 import type {
 	Bookmark,
 	Branch,
@@ -77,6 +78,11 @@ export interface OutlineStorePort {
 }
 
 export interface WorkStorePort {
+	setWorkHistoricalTime(
+		workId: string,
+		value: HistoricalTime | null,
+		updatedAt: string,
+	): Promise<void>;
 	listWorks(includeDeleted?: boolean): Promise<Work[]>;
 	listBranches(workId?: string): Promise<Branch[]>;
 	listWorkingCopies(workId?: string): Promise<WorkingCopy[]>;

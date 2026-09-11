@@ -1,3 +1,4 @@
+import type { HistoricalTime } from "../domain/historical_time.ts";
 import type {
 	Bookmark,
 	Branch,
@@ -19,6 +20,7 @@ import type {
 } from "../domain/models.ts";
 import type { GraphStateSnapshot, MergeWorksInput, WorkBundle } from "./graph_store.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
+import { migrateSqliteHistoricalTime } from "./sqlite_historical_migration.ts";
 import { SQLITE_SCHEMA_SQL, SQLITE_STORAGE_SCHEMA_VERSION } from "./sqlite_schema.ts";
 import {
 	isRecord,
@@ -72,7 +74,10 @@ export class SqliteGraphStore extends MemoryGraphStore {
 			if (metadata !== undefined && !isRecord(metadata)) {
 				throw new Error("SQLite storage metadata row is invalid");
 			}
-			if (metadata !== undefined && metadata.schema_version !== SQLITE_STORAGE_SCHEMA_VERSION) {
+			if (
+				metadata !== undefined && metadata.schema_version !== 1 &&
+				metadata.schema_version !== SQLITE_STORAGE_SCHEMA_VERSION
+			) {
 				throw new Error(`Unsupported SQLite storage schema: ${String(metadata.schema_version)}`);
 			}
 			this.db = db;
@@ -80,6 +85,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 			const state = this.readState();
 			if (metadata !== undefined) {
 				await super.restoreGraphState(state);
+				if (metadata.schema_version === 1) await migrateSqliteHistoricalTime(db, this.path, state);
 				persistSqliteDiff(
 					{ ...state, relationTypeDefinitions: [] },
 					state,
@@ -160,6 +166,14 @@ export class SqliteGraphStore extends MemoryGraphStore {
 
 	override resolveWorkStub(workId: string, updatedAt: string): Promise<void> {
 		return this.mutate(() => super.resolveWorkStub(workId, updatedAt));
+	}
+
+	override setWorkHistoricalTime(
+		workId: string,
+		value: HistoricalTime | null,
+		updatedAt: string,
+	): Promise<void> {
+		return this.mutate(() => super.setWorkHistoricalTime(workId, value, updatedAt));
 	}
 
 	override createOccurrence(occurrence: Occurrence): Promise<void> {

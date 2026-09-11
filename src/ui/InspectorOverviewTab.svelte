@@ -1,4 +1,6 @@
 <script lang="ts">
+	import HistoricalTimeEditor from "./HistoricalTimeEditor.svelte";
+	import type { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import type { OutlineItem } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { CommandAvailability, CommandId } from "./command_service.ts";
@@ -9,6 +11,7 @@
 	>;
 
 	export type InspectorOverviewTabProps = {
+		historicalTimeController?: HistoricalTimeController;
 		selectedItem: OutlineItem | null;
 		selectedPlacements: readonly OutlineItem[];
 		vocabulary: UiVocabulary;
@@ -23,6 +26,7 @@
 	};
 
 	let {
+		historicalTimeController,
 		selectedItem,
 		selectedPlacements,
 		vocabulary,
@@ -71,6 +75,7 @@
 				title={commands.startLongFormEditing.reason}
 			>{vocabulary.manuscriptOpen}</button>
 		</div>
+		{#if historicalTimeController}<HistoricalTimeEditor controller={historicalTimeController} />{/if}
 		<div class="thought-meta">
 			<div>
 				<span class="meta-label">作成日</span>

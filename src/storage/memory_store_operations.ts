@@ -118,6 +118,7 @@ export function projectOutlineItems(
 			revisionSelector: structuredClone(occurrence.revisionSelector),
 			contextualHeading: occurrence.contextualHeading,
 			createdAt: work.createdAt,
+			...(work.historicalTime ? { historicalTime: structuredClone(work.historicalTime) } : {}),
 			updatedAt: work.updatedAt,
 		}];
 	});

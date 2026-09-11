@@ -35,10 +35,16 @@ export function recoveryPromotionTransactionQuery(hasMessage: boolean): string {
 			COMMIT TRANSACTION;`;
 }
 
-export function quickCaptureTransactionQuery(hasStub = false, hasStubContext = false): string {
+export function quickCaptureTransactionQuery(
+	hasStub = false,
+	hasStubContext = false,
+	hasHistoricalTime = false,
+): string {
 	return `BEGIN TRANSACTION;
 			CREATE $work CONTENT {
 				created_at: $createdAt, updated_at: $updatedAt, deleted_at: NONE${
+		hasHistoricalTime ? ", historical_time: $historicalTime" : ""
+	}${
 		hasStub
 			? `,
 				stub: {
@@ -59,13 +65,19 @@ export function quickCaptureTransactionQuery(hasStub = false, hasStubContext = f
 }
 
 export function importWorkBundlesTransactionQuery(
-	bundles: readonly { hasParent: boolean; hasContextualHeading: boolean }[],
+	bundles: readonly {
+		hasParent: boolean;
+		hasContextualHeading: boolean;
+		hasHistoricalTime?: boolean;
+	}[],
 ): string {
 	const statements = bundles.map((bundle, index) => {
 		const parent = bundle.hasParent ? `$parent${index}` : "NONE";
 		const heading = bundle.hasContextualHeading ? `$contextualHeading${index}` : "NONE";
 		return `CREATE $work${index} CONTENT {
-				created_at: $createdAt${index}, updated_at: $updatedAt${index}, deleted_at: NONE
+				created_at: $createdAt${index}, updated_at: $updatedAt${index}, deleted_at: NONE${
+			bundle.hasHistoricalTime ? `, historical_time: $historicalTime${index}` : ""
+		}
 			};
 			CREATE $branch${index} CONTENT {
 				work: $work${index}, name: "main", head_revision: NONE,

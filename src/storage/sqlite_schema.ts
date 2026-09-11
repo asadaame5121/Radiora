@@ -1,4 +1,4 @@
-export const SQLITE_STORAGE_SCHEMA_VERSION = 1;
+export const SQLITE_STORAGE_SCHEMA_VERSION = 2;
 
 export const SQLITE_RECORD_TABLES = [
 	"work",
