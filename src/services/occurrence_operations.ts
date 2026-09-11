@@ -250,6 +250,7 @@ export class OccurrenceOperations {
 			collapsed: false,
 			revisionSelector: { mode: "branch", branchId: branch.id },
 			createdAt: work.createdAt,
+			...(work.historicalTime ? { historicalTime: structuredClone(work.historicalTime) } : {}),
 			updatedAt: copy.updatedAt,
 		};
 	}

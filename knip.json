@@ -1,0 +1,30 @@
+{
+	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"include": ["files", "dependencies", "unlisted"],
+	"ignoreDependencies": [
+		"jsr:*",
+		"@biomejs/biome",
+		"jscpd",
+		"@stryker-mutator/api/*",
+		"@stryker-mutator/command-runner"
+	],
+	"entry": [
+		"src/main.ts",
+		"scripts/**/*.ts",
+		"src/**/*_test.ts",
+		"tests/**/*.ts",
+		"vitest/**/*.ts",
+		".storybook/**/*.{ts,js}",
+		"stories/**/*.{ts,svelte}",
+		"*.config.{ts,js,mjs}"
+	],
+	"project": [
+		"src/**/*.{ts,svelte}",
+		"scripts/**/*.ts",
+		"tests/**/*.ts",
+		"vitest/**/*.ts",
+		".storybook/**/*.{ts,js}",
+		"stories/**/*.{ts,svelte}",
+		"*.{ts,js,mjs}"
+	]
+}

@@ -1,3 +1,4 @@
+import type { HistoricalTime } from "./historical_time.ts";
 export {
 	type BuiltInRelationTypeName,
 	isSymmetricLinkType,
@@ -29,6 +30,7 @@ export interface WorkStub {
 
 export interface Work {
 	id: string;
+	historicalTime?: HistoricalTime;
 	createdAt: string;
 	updatedAt: string;
 	deletedAt?: string;
@@ -150,6 +152,7 @@ export type LinkEndpoint =
 
 export interface OutlineItem {
 	id: string;
+	historicalTime?: HistoricalTime;
 	workId: string;
 	text: string;
 	parentId: string | null;

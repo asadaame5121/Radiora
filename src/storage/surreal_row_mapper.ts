@@ -1,3 +1,5 @@
+import { parse } from "valibot";
+import { HistoricalTimeSchema } from "../domain/historical_time.ts";
 import type {
 	Bookmark,
 	Branch,
@@ -71,6 +73,9 @@ export function workFromRow(row: SurrealRow): Work {
 	const stub = workStubFromRow(row);
 	return {
 		id: domainId(row.id, "id"),
+		...(row.historical_time == null
+			? {}
+			: { historicalTime: parse(HistoricalTimeSchema, row.historical_time) }),
 		createdAt: String(row.created_at ?? ""),
 		updatedAt: String(row.updated_at ?? ""),
 		deletedAt: row.deleted_at == null ? undefined : String(row.deleted_at),
@@ -86,6 +91,9 @@ export function itemFromRow(row: SurrealRow): OutlineItem {
 	const selectorMode = row.selector_mode === "pinned" ? "pinned" : "branch";
 	return {
 		id: domainId(row.id, "id"),
+		...(row.historical_time == null
+			? {}
+			: { historicalTime: parse(HistoricalTimeSchema, row.historical_time) }),
 		workId: domainId(row.work_id ?? row.id, "work_id"),
 		text: String(row.text ?? ""),
 		parentId: row.parent_id == null ? null : domainId(row.parent_id, "parent_id"),

@@ -1,3 +1,5 @@
+import type { HistoricalTime } from "../domain/historical_time.ts";
+import { setWorkHistoricalTime } from "./historical_time_service.ts";
 import type {
 	Bookmark,
 	CreateItemInput,
@@ -185,6 +187,9 @@ export class OutlineService {
 
 	listOutline(): Promise<OutlineSnapshot> {
 		return new OccurrenceOperations(this.store).listOutline();
+	}
+	setWorkHistoricalTime(workId: string, value: HistoricalTime | null): Promise<void> {
+		return setWorkHistoricalTime(this.store, workId, value);
 	}
 	listRevisions(workId: string): Promise<Revision[]> {
 		return new OccurrenceOperations(this.store).listRevisions(workId);
