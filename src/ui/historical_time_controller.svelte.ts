@@ -25,14 +25,14 @@ export class HistoricalTimeController {
 	select(next: OutlineItem | null): boolean {
 		if (next?.workId === this.item?.workId) {
 			if (!this.dirty && !this.submitting) this.reset(next);
-			else if (this.item && next) this.item = { ...item, id: next.id };
+			else if (this.item && next) this.item = { ...this.item, id: next.id };
 			return true;
 		}
 		if (this.dirty || this.submitting) {
 			this.pending = { item: next };
 			return false;
 		}
-		reset(next);
+		this.reset(next);
 		return true;
 	}
 
@@ -43,8 +43,8 @@ export class HistoricalTimeController {
 		try {
 			const value = remove ? null : parseHistoricalTimeDraft(this.draft);
 			await this.ports.save(this.item.workId, value);
-			this.item = { ...item, historicalTime: value ?? undefined };
-			reset(this.item);
+			this.item = { ...this.item, historicalTime: value ?? undefined };
+			this.reset(this.item);
 			await this.ports.reload();
 			return true;
 		} catch (cause) {
@@ -64,7 +64,7 @@ export class HistoricalTimeController {
 		const next = this.pending.item;
 		if (choice === "save" && !(await this.save())) return;
 		this.pending = null;
-		reset(next);
+		this.reset(next);
 		this.ports.select(next?.id ?? null);
 	}
 
