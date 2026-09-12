@@ -23,11 +23,12 @@ export function historicalTimelineTicks(domain: [number, number], count: number)
 	const power = 10 ** Math.floor(Math.log10(rawStride));
 	const stride = Math.max(1, Math.ceil(rawStride / power) * power);
 	const first = historicalDateFromDay(Math.max(historicalDay(-MAX_HISTORICAL_YEAR), min));
+	const firstMonth = first.year * MONTHS_PER_YEAR + first.month - 1;
 	const marks: Array<{ value: number; label: string }> = [];
 	let cursor = unit === "year"
 		? Math.ceil(first.year / stride) * stride
 		: unit === "month"
-		? first.year * MONTHS_PER_YEAR + first.month - 1
+		? Math.ceil(firstMonth / stride) * stride
 		: Math.ceil(min);
 	for (let index = 0; index < MAX_MARKS; index++, cursor += stride) {
 		const year = unit === "year" ? cursor : Math.floor(cursor / MONTHS_PER_YEAR);
