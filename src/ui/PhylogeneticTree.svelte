@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { nodeTitle } from "./tree_node_title.ts";
 	import { onMount } from "svelte";
+	import HistoricalTimeline from "./HistoricalTimeline.svelte";
 	import * as d3 from "d3";
 	import type { OutlineSnapshot, RelationTypeDefinition } from "../domain/models";
 	import { buildTreeHighlightSet, resolveTreeSelectionId } from "./tree_highlight";
@@ -49,6 +51,8 @@
 	let transform = $state<d3.ZoomTransform>(d3.zoomIdentity);
 	let hoveredId = $state<string | null>(null);
 	let projection = $state<TreeProjection>("chronology");
+	let chronologyMode = $state<"created" | "historical">("created");
+	const historical = $derived(projection === "chronology" && chronologyMode === "historical");
 	let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
 
 	const timeDomain = $derived.by((): [Date, Date] => {
@@ -349,18 +353,6 @@
 		return d3.timeFormat("%m/%d")(tick);
 	}
 
-	function nodeTitle(node: TreeLayoutNode): string {
-		if (node.aggregate) return `${node.count}件の思索。クリックで右側に表示`;
-		const parsed = new Date(node.item.createdAt);
-		const createdAt = Number.isFinite(parsed.getTime())
-			? new Intl.DateTimeFormat("ja-JP", {
-				dateStyle: "medium",
-				timeStyle: "short",
-			}).format(parsed)
-			: node.item.createdAt;
-		const knot = node.isLineageKnot ? "\nFROM循環を検出：Knot帯へ退避" : "";
-		return `${node.item.text}\n作成: ${createdAt}${knot}`;
-	}
 
 </script>
 
@@ -373,6 +365,7 @@
 	{/if}
 
 	<svg
+		style:visibility={historical ? "hidden" : "visible"}
 		bind:this={svgElement}
 		role="group"
 		aria-label="思索の系統樹"
@@ -457,12 +450,17 @@
 		</g>
 	</svg>
 
+	{#if historical}<HistoricalTimeline {snapshot} {selectedId} {selectedWorkId} {onSelect} {onOpen} {onContextMenu} />{/if}
 	<div class="tree-projection" aria-label="Treeの投影方法">
 		<button
 			class:active={projection === "chronology"}
 			aria-pressed={projection === "chronology"}
 			onclick={() => selectProjection("chronology")}
 		>Chronology</button>
+		{#if projection === "chronology"}
+			<button class:active={chronologyMode === "created"} aria-pressed={chronologyMode === "created"} onclick={() => chronologyMode = "created"}>作成日時</button>
+			<button class:active={chronologyMode === "historical"} aria-pressed={chronologyMode === "historical"} onclick={() => chronologyMode = "historical"}>年表</button>
+		{/if}
 		<button
 			class:active={projection === "lineage"}
 			aria-pressed={projection === "lineage"}
@@ -470,7 +468,7 @@
 		>Lineage</button>
 	</div>
 
-	<div class="tree-controls">
+	<div class="tree-controls" style:visibility={historical ? "hidden" : "visible"}>
 		<button aria-label="ズームアウト" title="ズームアウト" onclick={() => zoomBy(.7)}>−</button>
 		<button aria-label="ズームイン" title="ズームイン" onclick={() => zoomBy(1.4)}>＋</button>
 		<button aria-label="全体を表示" title="全体を表示" onclick={fitView}>⌗</button>
@@ -610,6 +608,7 @@
 		gap: 8px;
 	}
 	.tree-projection {
+		z-index: 1;
 		position: absolute;
 		top: 22px;
 		right: 22px;
