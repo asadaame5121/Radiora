@@ -24,6 +24,14 @@ export class HistoricalTimeController {
 		this.error = "";
 	}
 
+	setKind(kind: "point" | "period"): void {
+		if (this.draft.kind === kind) return;
+		if (this.draft.kind === "point" && kind === "period") {
+			this.draft.start.unknown = false;
+		}
+		this.draft.kind = kind;
+	}
+
 	select(next: OutlineItem | null): boolean {
 		if (next?.workId === this.item?.workId) {
 			if (!this.dirty && !this.submitting) this.reset(next);

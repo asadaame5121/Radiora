@@ -84,6 +84,67 @@ describe("HistoricalTimeController", () => {
 		expect(api.save).not.toHaveBeenCalled();
 	});
 
+	it("carries a point into a known period start when the kind changes", async () => {
+		const api = ports();
+		const controller = new HistoricalTimeController(api);
+		controller.select(item("occurrence-1"));
+		controller.draft.start.year = "1604";
+
+		controller.setKind("period");
+		controller.draft.end.year = "1867";
+		controller.draft.end.unknown = false;
+
+		await expect(controller.save()).resolves.toBe(true);
+		expect(api.save).toHaveBeenCalledWith("occurrence-1", {
+			kind: "period",
+			start: { precision: "year", year: 1604, approximate: false },
+			end: { precision: "year", year: 1867, approximate: false },
+		});
+	});
+
+	it("keeps point precision, era, approximation, and original text on conversion", async () => {
+		const api = ports();
+		const controller = new HistoricalTimeController(api);
+		controller.select(item("occurrence-1"));
+		controller.draft.start.precision = "century";
+		controller.draft.start.era = "bce";
+		controller.draft.start.century = "17";
+		controller.draft.start.approximate = true;
+		controller.draft.original = "古代の記録";
+
+		controller.setKind("period");
+		controller.draft.end.year = "1604";
+		controller.draft.end.unknown = false;
+
+		await expect(controller.save()).resolves.toBe(true);
+		expect(api.save).toHaveBeenCalledWith("occurrence-1", {
+			kind: "period",
+			start: { precision: "century", era: "bce", century: 17, approximate: true },
+			end: { precision: "year", year: 1604, approximate: false },
+			original: "古代の記録",
+		});
+	});
+
+	it("preserves explicit unknown endpoints and no-ops for the same kind", async () => {
+		const api = ports();
+		const controller = new HistoricalTimeController(api);
+		const unknownPeriod: HistoricalTime = {
+			kind: "period",
+			start: null,
+			end: null,
+		};
+		controller.select(item("occurrence-1", "work-1", unknownPeriod));
+		controller.draft.start.unknown = true;
+		controller.setKind("period");
+		expect(controller.draft.start.unknown).toBe(true);
+		await expect(controller.save()).resolves.toBe(true);
+		expect(api.save).toHaveBeenCalledWith("work-1", {
+			kind: "period",
+			start: null,
+			end: null,
+		});
+	});
+
 	it("keeps dirty input when the save API fails", async () => {
 		const api = ports(async () => {
 			throw new Error("保存に失敗しました");

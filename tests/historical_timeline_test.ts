@@ -1,6 +1,10 @@
 import { assert, assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert@1";
 import type { HistoricalTime } from "../src/domain/historical_time.ts";
-import { formatHistoricalYear, historicalDay } from "../src/domain/historical_calendar.ts";
+import {
+	formatHistoricalYear,
+	historicalDay,
+	MAX_HISTORICAL_YEAR,
+} from "../src/domain/historical_calendar.ts";
 import type { OutlineItem, OutlineLink, OutlineSnapshot } from "../src/domain/models.ts";
 import { historicalTimelineTicks } from "../src/ui/historical_timeline_axis.ts";
 import {
@@ -114,6 +118,38 @@ Deno.test("historical timeline ticks use month/day scales and never display year
 	assert(bceTicks.some((tick) => tick.label.startsWith(formatHistoricalYear(-1))));
 	assert(bceTicks.some((tick) => tick.label.startsWith(formatHistoricalYear(1))));
 	assert(bceTicks.every((tick) => !tick.label.includes("0年")));
+});
+
+Deno.test("historical timeline ticks stay inside the supported calendar range", () => {
+	const firstDay = historicalDay(-MAX_HISTORICAL_YEAR);
+	const endExclusive = historicalDay(MAX_HISTORICAL_YEAR + 1);
+	const inRange = (ticks: Array<{ value: number }>) =>
+		ticks.every((tick) => tick.value >= firstDay && tick.value < endExclusive);
+
+	const lowerBoundary = historicalTimelineTicks([firstDay - 1, firstDay + 1], 8);
+	assert(inRange(lowerBoundary));
+	assert(lowerBoundary.some((tick) => tick.value === firstDay));
+
+	const upperBoundary = historicalTimelineTicks([endExclusive - 1, endExclusive + 1], 8);
+	assert(inRange(upperBoundary));
+	assert(upperBoundary.some((tick) => tick.value === endExclusive - 1));
+
+	assertEquals(historicalTimelineTicks([firstDay - 2, firstDay - 1], 8), []);
+	assertEquals(historicalTimelineTicks([endExclusive, endExclusive + 2], 8), []);
+
+	const lastDay = historicalTimelineTicks([endExclusive - 1, endExclusive], 8);
+	assertEquals(lastDay.map((tick) => tick.value), [endExclusive - 1]);
+
+	const lowerMonthBoundary = historicalTimelineTicks(
+		[firstDay, historicalDay(-MAX_HISTORICAL_YEAR + 1)],
+		8,
+	);
+	const upperMonthBoundary = historicalTimelineTicks(
+		[historicalDay(MAX_HISTORICAL_YEAR, 12), historicalDay(MAX_HISTORICAL_YEAR + 2)],
+		8,
+	);
+	assert(inRange(lowerMonthBoundary));
+	assert(inRange(upperMonthBoundary));
 });
 
 Deno.test("all unset historical values use the outside-axis domain", () => {

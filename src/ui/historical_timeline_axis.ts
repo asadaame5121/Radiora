@@ -25,9 +25,9 @@ function calculateUnitAndStride(span: number, count: number): { unit: TimeUnit; 
 	return { unit, stride };
 }
 
-function calculateInitialCursor(unit: TimeUnit, min: number, stride: number): number {
-	if (unit === "day") return Math.ceil(min);
-	const first = historicalDateFromDay(Math.max(historicalDay(-MAX_HISTORICAL_YEAR), min));
+function calculateInitialCursor(unit: TimeUnit, start: number, stride: number): number {
+	if (unit === "day") return Math.ceil(start);
+	const first = historicalDateFromDay(start);
 	if (unit === "year") {
 		return Math.ceil(first.year / stride) * stride;
 	}
@@ -53,12 +53,17 @@ function tickValueAt(unit: TimeUnit, cursor: number): number {
 export function historicalTimelineTicks(domain: [number, number], count: number) {
 	const [min, max] = domain;
 	const { unit, stride } = calculateUnitAndStride(max - min, count);
+	const firstDay = historicalDay(-MAX_HISTORICAL_YEAR);
+	const endExclusive = historicalDay(MAX_HISTORICAL_YEAR + 1);
+	const start = Math.max(firstDay, min);
+	const end = Math.min(endExclusive - 1, max);
+	if (start > end) return [];
 	const marks: Array<{ value: number; label: string }> = [];
-	let cursor = calculateInitialCursor(unit, min, stride);
+	let cursor = calculateInitialCursor(unit, start, stride);
 	for (let index = 0; index < MAX_MARKS; index++, cursor += stride) {
 		const value = tickValueAt(unit, cursor);
-		if (value > max || value >= historicalDay(MAX_HISTORICAL_YEAR + 1)) break;
-		if (value < min) continue;
+		if (value > end || value >= endExclusive) break;
+		if (value < firstDay || value < start) continue;
 		marks.push({ value, label: formatTickLabel(unit, value) });
 	}
 	return marks;
