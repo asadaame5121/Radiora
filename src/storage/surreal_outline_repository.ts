@@ -42,6 +42,7 @@ export class SurrealOutlineRepository implements OutlineStorePort {
 					? revisionText.get(String(row.revision_id)) ?? ""
 					: copyByBranch.get(String(row.branch_id)) ?? "",
 				created_at: work.createdAt,
+				historical_time: work.historicalTime,
 				updated_at: work.updatedAt,
 			})];
 		});

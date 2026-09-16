@@ -47,6 +47,7 @@ export function buildSurrealRestoreTransaction(
 
 	for (const work of state.works) {
 		create("work", work.id, {
+			historical_time: work.historicalTime,
 			created_at: work.createdAt,
 			updated_at: work.updatedAt,
 			deleted_at: work.deletedAt,

@@ -48,6 +48,7 @@ export class SurrealGraphStore implements GraphStore {
 	readonly clearResumePosition: OutlineStorePort["clearResumePosition"];
 
 	readonly listWorks: WorkStorePort["listWorks"];
+	readonly setWorkHistoricalTime: WorkStorePort["setWorkHistoricalTime"];
 	readonly listBranches: WorkStorePort["listBranches"];
 	readonly listWorkingCopies: WorkStorePort["listWorkingCopies"];
 	readonly listRevisions: WorkStorePort["listRevisions"];
@@ -143,6 +144,7 @@ export class SurrealGraphStore implements GraphStore {
 		this.clearResumePosition = this.#outline.clearResumePosition.bind(this.#outline);
 
 		this.listWorks = this.#work.listWorks.bind(this.#work);
+		this.setWorkHistoricalTime = this.#work.setWorkHistoricalTime.bind(this.#work);
 		this.listBranches = this.#revision.listBranches.bind(this.#revision);
 		this.listWorkingCopies = this.#revision.listWorkingCopies.bind(this.#revision);
 		this.listRevisions = this.#revision.listRevisions.bind(this.#revision);

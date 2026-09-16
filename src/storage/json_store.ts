@@ -1,3 +1,4 @@
+import type { HistoricalTime } from "../domain/historical_time.ts";
 import type {
 	Bookmark,
 	Branch,
@@ -35,6 +36,7 @@ import {
 	type BackupV5,
 	type BackupV6,
 	type BackupV7,
+	type BackupV8,
 	migrateBackupV0,
 	migrateBackupV1,
 	migrateBackupV2,
@@ -77,7 +79,8 @@ export class JsonGraphStore extends MemoryGraphStore {
 				| BackupV4
 				| BackupV5
 				| BackupV6
-				| BackupV7;
+				| BackupV7
+				| BackupV8;
 			const data = "schemaVersion" in parsed ? this.readVersioned(parsed) : migrateBackupV6(
 				migrateBackupV5(
 					migrateBackupV4(
@@ -106,7 +109,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 			} else if (parsed.schemaVersion === 5) {
 				await this.protectVersionInput(parsed.schemaVersion);
 				await this.persist();
-			} else if (parsed.schemaVersion === 6) {
+			} else if (parsed.schemaVersion === 6 || parsed.schemaVersion === 7) {
 				await this.protectVersionInput(parsed.schemaVersion);
 				await this.persist();
 			}
@@ -186,6 +189,21 @@ export class JsonGraphStore extends MemoryGraphStore {
 	override async resolveWorkStub(workId: string, updatedAt: string): Promise<void> {
 		await super.resolveWorkStub(workId, updatedAt);
 		await this.persist();
+	}
+
+	override async setWorkHistoricalTime(
+		workId: string,
+		value: HistoricalTime | null,
+		updatedAt: string,
+	): Promise<void> {
+		const before = this.captureAllState();
+		try {
+			await super.setWorkHistoricalTime(workId, value, updatedAt);
+			await this.persist();
+		} catch (cause) {
+			this.restoreAllState(before);
+			throw cause;
+		}
 	}
 
 	override async mergeWorks(input: MergeWorksInput): Promise<void> {
@@ -404,7 +422,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	private readVersioned(
-		parsed: BackupV1 | BackupV2 | BackupV3 | BackupV4 | BackupV5 | BackupV6 | BackupV7,
+		parsed: BackupV1 | BackupV2 | BackupV3 | BackupV4 | BackupV5 | BackupV6 | BackupV7 | BackupV8,
 	): StoredGraphV7 {
 		if (parsed.format !== "radiora-backup") {
 			throw new Error(`Unsupported backup format: ${String(parsed.format)}`);
@@ -435,7 +453,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		if (parsed.schemaVersion === 6) {
 			return migrateBackupV6(parsed.data);
 		}
-		if (parsed.schemaVersion === 7) {
+		if (parsed.schemaVersion === 7 || parsed.schemaVersion === 8) {
 			const data = parsed.data;
 			if (
 				typeof data !== "object" || data === null || Array.isArray(data) ||
@@ -480,13 +498,13 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await Deno.writeTextFile(this.path, JSON.stringify(backup, null, 2));
 	}
 
-	private currentBackup(data: GraphStateSnapshot): BackupV7 {
+	private currentBackup(data: GraphStateSnapshot): BackupV8 {
 		return {
 			format: "radiora-backup",
-			schemaVersion: 7,
+			schemaVersion: 8,
 			exportedAt: new Date().toISOString(),
 			appVersion: "0.1.0",
-			source: { storageSchemaVersion: 7 },
+			source: { storageSchemaVersion: 8 },
 			data: data as StoredGraphV7,
 		};
 	}

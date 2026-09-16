@@ -2,7 +2,7 @@ import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import type { GraphStateSnapshot } from "../storage/graph_store.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
-import { JsonBackupService, type JsonBackupV7 } from "./json_backup.ts";
+import { JsonBackupService, type JsonBackupV8 } from "./json_backup.ts";
 
 Deno.test("JSON backup exports every graph entity collection without mutating the store", async () => {
 	const store = new MemoryGraphStore();
@@ -47,11 +47,11 @@ Deno.test("JSON backup exports every graph entity collection without mutating th
 	const source = await new JsonBackupService(store).export(
 		new Date("2026-07-30T09:00:00.000Z"),
 	);
-	const parsed = JSON.parse(source) as JsonBackupV7;
+	const parsed = JSON.parse(source) as JsonBackupV8;
 	assertEquals(parsed.format, "radiora-backup");
-	assertEquals(parsed.schemaVersion, 7);
+	assertEquals(parsed.schemaVersion, 8);
 	assertEquals(parsed.exportedAt, "2026-07-30T09:00:00.000Z");
-	assertEquals(parsed.source, { storageSchemaVersion: 7 });
+	assertEquals(parsed.source, { storageSchemaVersion: 8 });
 	assertEquals(
 		Object.keys(parsed.data).sort(),
 		[
@@ -101,7 +101,7 @@ Deno.test("current JSON backup restores only after complete validation", async (
 	assertEquals(await targetStore.exportGraphState(), await sourceStore.exportGraphState());
 	assertEquals(source, originalInput);
 
-	const malformed = JSON.parse(source) as JsonBackupV7;
+	const malformed = JSON.parse(source) as JsonBackupV8;
 	malformed.data.branches[0].workId = "missing-work";
 	const before = await targetStore.exportGraphState();
 	await assertRejects(
@@ -145,7 +145,7 @@ Deno.test("future backup versions are rejected before any store write", async ()
 	const current = JSON.parse(
 		await new JsonBackupService(store).export(new Date("2026-07-30T09:00:00.000Z")),
 	) as Record<string, unknown>;
-	current.schemaVersion = 8;
+	current.schemaVersion = 9;
 
 	await assertRejects(
 		() => new JsonBackupService(store).restore(JSON.stringify(current)),
@@ -156,7 +156,7 @@ Deno.test("future backup versions are rejected before any store write", async ()
 	assertEquals(await store.exportGraphState(), before);
 });
 
-Deno.test("V7 JSON backup restores and round-trips custom relation type definitions", async () => {
+Deno.test("V8 JSON backup restores and round-trips custom relation type definitions", async () => {
 	const sourceStore = new MemoryGraphStore();
 	const base = await sourceStore.exportGraphState();
 	const customDef = {
@@ -185,7 +185,7 @@ Deno.test("V7 JSON backup restores and round-trips custom relation type definiti
 	);
 });
 
-Deno.test("V7 JSON backup rejects payload missing relationTypeDefinitions before store write", async () => {
+Deno.test("V8 JSON backup rejects payload missing relationTypeDefinitions before store write", async () => {
 	const store = new MemoryGraphStore();
 	const validExport = JSON.parse(
 		await new JsonBackupService(store).export(new Date("2026-09-01T09:00:00.000Z")),
