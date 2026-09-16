@@ -1298,6 +1298,17 @@
 		viewMode = "comparison";
 	}
 
+	async function setSelectedOccurrenceRevision(revisionId: string | null): Promise<void> {
+		if (!selectedId) return;
+		try {
+			await editorController.flushAutosave();
+			await api.setOccurrenceRevision(selectedId, revisionId);
+			await load(selectedId);
+		} catch (cause) {
+			error = errorMessage(cause);
+		}
+	}
+
 	function openSelectedRevisionComparison(): void {
 		openRevisionComparison(
 			selectedItem?.revisionSelector.mode === "pinned"
@@ -2501,6 +2512,7 @@
 				{selectedLinks}
 				{selectedBranchId}
 				{recoverySnapshots}
+				{revisions}
 				{commands}
 				{vocabulary}
 				relationTypeDefinitions={relationTypes.definitions}
@@ -2558,6 +2570,7 @@
 				onResolveEmergence={resolveEmergence}
 				onOpenWorkLineage={() => viewMode = "workLineage"}
 				onOpenRevisionComparison={openSelectedRevisionComparison}
+				onSelectRevision={setSelectedOccurrenceRevision}
 				onCreateBranch={() => executeCommand("createBranch")}
 			/>
 		{/if}

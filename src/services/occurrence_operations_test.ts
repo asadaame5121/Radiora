@@ -258,6 +258,33 @@ Deno.test("occurrence operations edits the selected Branch and rejects pinned Re
 	);
 });
 
+Deno.test("occurrence operations switches one placement between a fixed Revision and the current main Branch", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new OccurrenceOperations(store);
+	const source = await operations.createItem({ text: "current", parentId: null });
+	const branchId = source.revisionSelector.mode === "branch"
+		? source.revisionSelector.branchId
+		: "";
+	await store.createRevision({
+		id: "older-revision",
+		workId: source.workId,
+		text: "older",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt: "2026-08-12T00:00:00.000Z",
+	}, branchId);
+
+	await operations.setOccurrenceRevision(source.id, "older-revision");
+	let selected = (await operations.listOutline()).items.find((item) => item.id === source.id);
+	assertEquals(selected?.revisionSelector, { mode: "pinned", revisionId: "older-revision" });
+	assertEquals(selected?.text, "older");
+
+	await operations.setOccurrenceRevision(source.id, null);
+	selected = (await operations.listOutline()).items.find((item) => item.id === source.id);
+	assertEquals(selected?.revisionSelector, { mode: "branch", branchId });
+	assertEquals(selected?.text, "current");
+});
+
 Deno.test("occurrence operations maintains trash guards and counts", async () => {
 	const operations = new OccurrenceOperations(new MemoryGraphStore());
 	const item = await operations.createItem({ text: "trash", parentId: null });

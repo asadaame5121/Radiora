@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { OutlineItem, RecoverySnapshot } from "../domain/models.ts";
+	import type { OutlineItem, RecoverySnapshot, Revision } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { CommandAvailability, CommandId } from "./command_service.ts";
 
@@ -12,23 +12,33 @@
 		selectedItem: OutlineItem | null;
 		selectedBranchId: string | null;
 		recoverySnapshots: readonly RecoverySnapshot[];
+		revisions: readonly Revision[];
 		vocabulary: UiVocabulary;
 		commands: HistoryCommands;
 		onCreateBranch: () => void | Promise<void>;
 		onOpenWorkLineage: () => void;
 		onOpenRevisionComparison: () => void;
+		onSelectRevision: (revisionId: string | null) => void | Promise<void>;
 	};
 
 	let {
 		selectedItem,
 		selectedBranchId,
 		recoverySnapshots,
+		revisions,
 		vocabulary,
 		commands,
 		onCreateBranch,
 		onOpenWorkLineage,
 		onOpenRevisionComparison,
+		onSelectRevision,
 	}: InspectorHistoryTabProps = $props();
+
+	const selectedRevisionId = $derived(
+		selectedItem?.revisionSelector.mode === "pinned"
+			? selectedItem.revisionSelector.revisionId
+			: "",
+	);
 </script>
 
 <div class="history-panel">
@@ -42,6 +52,19 @@
 	>新しい{vocabulary.branch}を作る</button>
 	<button type="button" class="history-btn" onclick={onOpenWorkLineage} disabled={!selectedItem}>{vocabulary.workLineage}を開く</button>
 	<button type="button" class="history-btn" onclick={onOpenRevisionComparison} disabled={!selectedItem}>{vocabulary.revision}{vocabulary.comparisonPane}を開く</button>
+	<label class="revision-selector">
+		<span>この配置で表示する{vocabulary.revision}</span>
+		<select
+			value={selectedRevisionId}
+			disabled={!selectedItem}
+			onchange={(event) => void onSelectRevision(event.currentTarget.value || null)}
+		>
+			<option value="">現在の本稿</option>
+			{#each revisions as revision (revision.id)}
+				<option value={revision.id}>{revision.message ?? `${vocabulary.fixedRevision} ${revision.id.slice(0, 8)}`}</option>
+			{/each}
+		</select>
+	</label>
 	{#if selectedBranchId}
 		<button type="button" class="history-btn" onclick={onOpenWorkLineage}>Recovery snapshotsを開く</button>
 		<small>{recoverySnapshots.length}件のRecovery snapshot</small>
@@ -85,5 +108,20 @@
 		margin-top: 4px;
 		color: var(--muted);
 		font-size: 10px;
+	}
+	.revision-selector {
+		display: grid;
+		gap: 5px;
+		margin-top: 6px;
+		color: var(--muted);
+		font-size: 10px;
+	}
+	.revision-selector select {
+		min-width: 0;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 7px;
+		background: var(--theme-surface-raised, #04080d);
+		color: var(--text);
 	}
 </style>
