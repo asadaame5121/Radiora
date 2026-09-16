@@ -1298,6 +1298,14 @@
 		viewMode = "comparison";
 	}
 
+	async function returnToSelectedOutline(): Promise<void> {
+		if (selectedId && itemById.has(selectedId)) {
+			await openTreeOccurrence(selectedId);
+			return;
+		}
+		viewMode = "outline";
+	}
+
 	function openSelectedRevisionComparison(): void {
 		openRevisionComparison(
 			selectedItem?.revisionSelector.mode === "pinned"
@@ -2419,6 +2427,7 @@
 						preferredLeftKey={comparisonDocumentKey(linkComparison.left)}
 						preferredRightKey={comparisonDocumentKey(linkComparison.right)}
 						locked
+						onBack={() => void returnToSelectedOutline()}
 					/>
 				{/key}
 			{:else if workComparison}
@@ -2428,6 +2437,7 @@
 						context={{ kind: "branch" }}
 						preferredLeftKey={workComparison.preferredLeftKey}
 						preferredRightKey={workComparison.preferredRightKey}
+						onBack={() => void returnToSelectedOutline()}
 					/>
 				{/key}
 			{:else if selectedItem}
@@ -2441,6 +2451,7 @@
 								(selectedItem.revisionSelector.mode === "pinned"
 									? selectedItem.revisionSelector.revisionId
 									: undefined)}
+							onBack={() => void returnToSelectedOutline()}
 						/>
 					{/key}
 				{/if}
