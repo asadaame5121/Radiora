@@ -1,5 +1,8 @@
 <script lang="ts">
-	import { onMount, tick } from "svelte";
+	import { formatCreatedAt, formatRecentEditAt, localDateValue, addDays, dateRangeFromInputs } from "./calendar_display.ts";
+	import { onMount, tick, untrack } from "svelte";
+	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
+	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
 	import GlobalLineage from "./GlobalLineage.svelte";
 	import RevisionComparison from "./RevisionComparison.svelte";
 	import ComparisonPane from "./ComparisonPane.svelte";
@@ -257,6 +260,21 @@
 		reloadBookmarks: async () => {
 			bookmarks = await api.listBookmarks();
 		},
+	});
+	const historicalTimeController = new HistoricalTimeController({
+		save: (workId, value) => api.setWorkHistoricalTime(workId, value),
+		reload: load,
+		select: selectOccurrence,
+	});
+	$effect(() => {
+		// Reconcile snapshot refreshes and selection paths that bypass selectOccurrence.
+		const next = selectedItem;
+		untrack(() => {
+			if (!historicalTimeController.select(next)) {
+				selectedId = historicalTimeController.item?.id ?? null;
+				navigationController.browseToOccurrence(snapshot, selectedId);
+			}
+		});
 	});
 	const emergenceController = createEmergenceController({
 		api,
@@ -726,6 +744,7 @@
 	}
 
 	function selectOccurrence(id: string | null): void {
+		if (!historicalTimeController.select(snapshot.items.find((item) => item.id === id) ?? null)) return;
 		selectedId = id;
 		navigationController.browseToOccurrence(snapshot, id);
 	}
@@ -2080,43 +2099,6 @@
 		return firstContentIndex < 0 ? "" : lines.slice(firstContentIndex + 1).join("\n").trim();
 	}
 
-	function formatCreatedAt(value: string): string {
-		const date = new Date(value);
-		return Number.isNaN(date.getTime()) ? "不明" : date.toLocaleDateString("ja-JP");
-	}
-
-	function formatRecentEditAt(value: string): string {
-		const date = new Date(value);
-		return Number.isNaN(date.getTime())
-			? "更新日時不明"
-			: date.toLocaleString("ja-JP", {
-				month: "numeric",
-				day: "numeric",
-				hour: "2-digit",
-				minute: "2-digit",
-			});
-	}
-
-	function localDateValue(date: Date): string {
-		const offset = date.getTimezoneOffset() * 60_000;
-		return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-	}
-
-	function addDays(date: Date, days: number): Date {
-		const copy = new Date(date);
-		copy.setDate(copy.getDate() + days);
-		return copy;
-	}
-
-	function dateRangeFromInputs(start: string, end: string): DateRange {
-		const startDate = new Date(`${start}T00:00:00`);
-		const endDate = new Date(`${end}T00:00:00`);
-		if (!Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime())) {
-			throw new Error("開始日と終了日を入力してください。");
-		}
-		return { startInclusive: startDate.toISOString(), endExclusive: endDate.toISOString() };
-	}
-
 	function errorMessage(cause: unknown): string {
 		if (typeof cause === "object" && cause && "message" in cause) return String(cause.message);
 		return String(cause);
@@ -2495,6 +2477,7 @@
 
 		{#if !dedicatedView}
 			<InspectorView
+				historicalTimeController={historicalTimeController}
 				{asideMode}
 				{selectedItem}
 				{selectedPlacements}
@@ -2575,6 +2558,7 @@
 	{/key}
 {/if}
 
+<HistoricalTimeSelectionDialog controller={historicalTimeController} />
 <ConfirmationDialog
 	bind:this={confirmationDialog}
 	pending={confirmationController.pending}

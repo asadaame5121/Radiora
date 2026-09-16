@@ -117,6 +117,7 @@
 				{#snippet child({ props: contentProps })}
 					<div {...contentProps}>
 						<InspectorOverviewTab
+							historicalTimeController={props.historicalTimeController}
 							selectedItem={props.selectedItem}
 							selectedPlacements={props.selectedPlacements}
 							vocabulary={props.vocabulary}
