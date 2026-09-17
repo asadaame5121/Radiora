@@ -9,6 +9,7 @@ export class HistoricalTimeController {
 	error = $state("");
 	submitting = $state(false);
 	pending = $state<{ item: OutlineItem | null } | null>(null);
+	private pendingSelectionAction: (() => void) | null = null;
 	readonly dirty = $derived(JSON.stringify(this.draft) !== this.baseline);
 	constructor(
 		private readonly ports: {
@@ -32,7 +33,7 @@ export class HistoricalTimeController {
 		this.draft.kind = kind;
 	}
 
-	select(next: OutlineItem | null): boolean {
+	select(next: OutlineItem | null, pendingAction: (() => void) | null = null): boolean {
 		if (next?.workId === this.item?.workId) {
 			if (!this.dirty && !this.submitting) this.reset(next);
 			else if (this.item && next) this.item = { ...this.item, id: next.id };
@@ -40,6 +41,7 @@ export class HistoricalTimeController {
 		}
 		if (this.dirty || this.submitting) {
 			this.pending = { item: next };
+			this.pendingSelectionAction = pendingAction;
 			return false;
 		}
 		this.reset(next);
@@ -69,12 +71,16 @@ export class HistoricalTimeController {
 		if (!this.pending || this.submitting) return;
 		if (choice === "cancel") {
 			this.pending = null;
+			this.pendingSelectionAction = null;
 			return;
 		}
 		const next = this.pending.item;
 		if (choice === "save" && !(await this.save())) return;
+		const pendingSelectionAction = this.pendingSelectionAction;
 		this.pending = null;
+		this.pendingSelectionAction = null;
 		this.reset(next);
-		this.ports.select(next?.id ?? null);
+		if (pendingSelectionAction) pendingSelectionAction();
+		else this.ports.select(next?.id ?? null);
 	}
 }

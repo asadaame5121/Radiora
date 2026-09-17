@@ -43,7 +43,8 @@ Deno.test("global tree clears selection, opens real nodes, and restores its proj
 	assert(tree.includes("loadTreeProjectionPreference()"));
 	assert(tree.includes("saveTreeProjectionPreference(next)"));
 	assert(global.includes("{onOpen}"));
-	assert(app.includes("async function openTreeOccurrence"));
+	assert(app.includes("function openTreeOccurrence"));
+	assert(app.includes("openOutlineOccurrence(id"));
 	assert(app.includes('viewMode = "outline"'));
 	assert(app.includes("requestFocus(id)"));
 });

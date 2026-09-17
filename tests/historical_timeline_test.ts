@@ -8,6 +8,7 @@ import {
 import type { OutlineItem, OutlineLink, OutlineSnapshot } from "../src/domain/models.ts";
 import { historicalTimelineTicks } from "../src/ui/historical_timeline_axis.ts";
 import {
+	historicalTimelineBelt,
 	historicalTimelineDomain,
 	layoutHistoricalTimeline,
 } from "../src/ui/historical_timeline_layout.ts";
@@ -50,6 +51,39 @@ function snapshot(items: OutlineItem[], links: OutlineLink[] = []): OutlineSnaps
 const pointYear = (year: number, approximate = false): HistoricalTime => ({
 	kind: "point",
 	date: { precision: "year", year, approximate },
+});
+
+Deno.test("historical timeline separates a known endpoint range from its unknown extension", () => {
+	assertEquals(
+		historicalTimelineBelt({
+			start: 0,
+			end: 80,
+			anchor: 80,
+			startLatest: 80,
+			endEarliest: 60,
+			unknownStart: true,
+			unknownEnd: false,
+		}),
+		{
+			known: { start: 60, end: 80 },
+			unknown: { start: 0, end: 60, edge: "start" },
+		},
+	);
+	assertEquals(
+		historicalTimelineBelt({
+			start: 20,
+			end: 100,
+			anchor: 20,
+			startLatest: 40,
+			endEarliest: 20,
+			unknownStart: false,
+			unknownEnd: true,
+		}),
+		{
+			known: { start: 20, end: 40 },
+			unknown: { start: 40, end: 100, edge: "end" },
+		},
+	);
 });
 
 Deno.test("historical timeline lays out ranges, unknown endpoints, collisions, and edges", () => {

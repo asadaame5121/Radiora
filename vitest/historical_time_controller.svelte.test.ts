@@ -163,22 +163,25 @@ describe("HistoricalTimeController", () => {
 	it("defers selection changes until dirty input is resolved", async () => {
 		const api = ports();
 		const controller = new HistoricalTimeController(api);
+		const afterSelection = vi.fn();
 		const first = item("occurrence-1", "work-1");
 		const second = item("occurrence-2", "work-2", POINT);
 		controller.select(first);
 		controller.draft.original = "未保存";
 
-		expect(controller.select(second)).toBe(false);
+		expect(controller.select(second, afterSelection)).toBe(false);
 		expect(controller.pending?.item).toBe(second);
 		await controller.resolvePending("cancel");
 		expect(controller.item).toBe(first);
 		expect(controller.dirty).toBe(true);
+		expect(afterSelection).not.toHaveBeenCalled();
 
-		expect(controller.select(second)).toBe(false);
+		expect(controller.select(second, afterSelection)).toBe(false);
 		await controller.resolvePending("discard");
 		expect(controller.item).toBe(second);
 		expect(controller.dirty).toBe(false);
-		expect(api.select).toHaveBeenCalledWith("occurrence-2");
+		expect(api.select).not.toHaveBeenCalled();
+		expect(afterSelection).toHaveBeenCalledOnce();
 
 		controller.draft.original = "保存して移動";
 		expect(controller.select(first)).toBe(false);

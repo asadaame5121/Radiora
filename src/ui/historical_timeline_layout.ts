@@ -41,6 +41,32 @@ export interface HistoricalTimelineNode {
 	y: number;
 }
 
+interface HistoricalTimelineBeltInput {
+	start: number;
+	end: number;
+	anchor: number;
+	startLatest: number;
+	endEarliest: number;
+	unknownStart: boolean;
+	unknownEnd: boolean;
+}
+
+export function historicalTimelineBelt(input: HistoricalTimelineBeltInput) {
+	if (input.unknownStart) {
+		return {
+			known: { start: input.endEarliest, end: input.anchor },
+			unknown: { start: input.start, end: input.endEarliest, edge: "start" as const },
+		};
+	}
+	if (input.unknownEnd) {
+		return {
+			known: { start: input.anchor, end: input.startLatest },
+			unknown: { start: input.startLatest, end: input.end, edge: "end" as const },
+		};
+	}
+	return { known: { start: input.start, end: input.end }, unknown: null };
+}
+
 export interface HistoricalTimelineEdge {
 	id: string;
 	source: HistoricalTimelineNode;
