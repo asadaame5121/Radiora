@@ -1,5 +1,6 @@
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 const config = {
+	plugins: ["@stryker-mutator/vitest-runner"],
 	testRunner: "vitest",
 	vitest: { configFile: "vitest.stryker.config.ts", related: true },
 	concurrency: 2,
