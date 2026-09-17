@@ -1,16 +1,20 @@
 ---
 title: アウトライン上の意味関係一括選択UI計画
 date: 2026-08-22
-status: approved
+status: proposed (unimplemented)
 tags:
   - radiora
   - ui
   - design
   - specification
+  - proposal
 description: 起点となるWorkから複数の対象Workへ、アウトラインの文脈を見ながら同じ意味関係を一括設定するUIの設計計画。
 ---
 
 # アウトライン上の意味関係一括選択UI計画
+
+> [!NOTE]
+> 本ドキュメントは将来機能の提案（Proposal）であり、現行バージョンでは未実装です。
 
 ## 1. 目標
 

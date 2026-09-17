@@ -75,8 +75,10 @@ Deno.test("historical timeline lays out ranges, unknown endpoints, collisions, a
 
 	assertEquals(result.undated.map((entry) => entry.id), ["unknown-both"]);
 	const byId = new Map(result.nodes.map((node) => [node.item.id, node]));
-	const periodNode = byId.get("period")!;
-	const unknownNode = byId.get("unknown-start")!;
+	const periodNode = byId.get("period");
+	const unknownNode = byId.get("unknown-start");
+	assert(periodNode);
+	assert(unknownNode);
 	assert(periodNode.start < periodNode.end);
 	assert(periodNode.startLatest < periodNode.endEarliest);
 	assertEquals(unknownNode.unknownStart, true);

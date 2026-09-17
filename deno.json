@@ -45,7 +45,6 @@
 		"test:svelte": "npm run test:svelte",
 		"coverage:deno": "deno test -A --coverage=reports/coverage/deno src tests scripts && deno coverage --lcov --output=reports/coverage/deno.lcov reports/coverage/deno",
 		"coverage:ratchet": "deno run --allow-read scripts/quality/coverage_ratchet.ts",
-		"test:integration": "deno run -A scripts/surreal_integration.ts",
 		"desktop": "deno task desktop:preflight && deno task build && deno task desktop:build && deno task desktop:run",
 		"desktop:json": "deno task desktop:preflight && deno task build && deno task desktop:build && deno task desktop:run:json",
 		"desktop:build": "deno run -A scripts/desktop_build.ts",

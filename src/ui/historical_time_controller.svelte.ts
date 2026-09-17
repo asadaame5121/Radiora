@@ -3,18 +3,20 @@ import type { OutlineItem } from "../domain/models.ts";
 import { historicalTimeDraft, parseHistoricalTimeDraft } from "./historical_time_form.ts";
 
 export class HistoricalTimeController {
- item = $state<OutlineItem | null>(null);
- draft = $state(historicalTimeDraft());
- private baseline = $state(JSON.stringify(this.draft));
- error = $state("");
- submitting = $state(false);
- pending = $state<{ item: OutlineItem | null } | null>(null);
- readonly dirty = $derived(JSON.stringify(this.draft) !== this.baseline);
- constructor(private readonly ports: {
-  save(workId: string, value: HistoricalTime | null): Promise<void>;
-  reload(): Promise<unknown>;
-  select(id: string | null): void;
- }) {}
+	item = $state<OutlineItem | null>(null);
+	draft = $state(historicalTimeDraft());
+	private baseline = $state(JSON.stringify(this.draft));
+	error = $state("");
+	submitting = $state(false);
+	pending = $state<{ item: OutlineItem | null } | null>(null);
+	readonly dirty = $derived(JSON.stringify(this.draft) !== this.baseline);
+	constructor(
+		private readonly ports: {
+			save(workId: string, value: HistoricalTime | null): Promise<void>;
+			reload(): Promise<unknown>;
+			select(id: string | null): void;
+		},
+	) {}
 	reset(next: OutlineItem | null = this.item): void {
 		this.item = next;
 		this.draft = historicalTimeDraft(next?.historicalTime);
@@ -67,5 +69,4 @@ export class HistoricalTimeController {
 		this.reset(next);
 		this.ports.select(next?.id ?? null);
 	}
-
 }

@@ -1,6 +1,7 @@
 import { findAvailablePort } from "../desktop/desktop_helpers.ts";
 import { SurrealProcess } from "../desktop/surreal_process.ts";
 import type { GraphStateSnapshot } from "./graph_store.ts";
+import { readLegacySurrealSnapshot } from "./legacy_surreal_migration_reader.ts";
 
 export interface LegacySurrealProcessHandle {
 	endpoint: string;
@@ -22,6 +23,7 @@ export interface LegacySurrealExporterOptions {
 		port: number,
 		onLog: (event: string, detail: unknown) => void,
 	) => LegacySurrealProcessHandle;
+	readSnapshot?: (endpoint: string) => Promise<GraphStateSnapshot>;
 	createStore?: (endpoint: string) => Promise<LegacySurrealStoreHandle>;
 	onLog?: (event: string, fields: Record<string, unknown>, cause?: unknown) => void;
 }
@@ -39,9 +41,8 @@ function defaultCreateProcess(
 	return new SurrealProcess(path, host, port, onLog);
 }
 
-async function defaultCreateStore(endpoint: string): Promise<LegacySurrealStoreHandle> {
-	const { SurrealGraphStore } = await import("./surreal_store.ts");
-	return new SurrealGraphStore(endpoint, "root", "root");
+async function defaultReadSnapshot(endpoint: string): Promise<GraphStateSnapshot> {
+	return readLegacySurrealSnapshot(endpoint);
 }
 
 /**
@@ -54,7 +55,6 @@ export async function exportLegacySnapshot(
 ): Promise<GraphStateSnapshot> {
 	const findPort = options.findPort ?? defaultFindPort;
 	const createProcess = options.createProcess ?? defaultCreateProcess;
-	const createStore = options.createStore ?? defaultCreateStore;
 	const onLog = options.onLog;
 
 	const port = await findPort();
@@ -67,9 +67,13 @@ export async function exportLegacySnapshot(
 	let legacyStore: LegacySurrealStoreHandle | null = null;
 	try {
 		await process.start();
-		legacyStore = await createStore(process.endpoint);
-		await legacyStore.initialize();
-		return await legacyStore.exportGraphState();
+		if (options.createStore) {
+			legacyStore = await options.createStore(process.endpoint);
+			await legacyStore.initialize();
+			return await legacyStore.exportGraphState();
+		}
+		const readSnapshot = options.readSnapshot ?? defaultReadSnapshot;
+		return await readSnapshot(process.endpoint);
 	} finally {
 		if (legacyStore) {
 			try {

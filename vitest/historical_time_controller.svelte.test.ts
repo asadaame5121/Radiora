@@ -24,7 +24,9 @@ function item(id: string, workId = id, historicalTime?: HistoricalTime): Outline
 	};
 }
 
-function ports(save: (workId: string, value: HistoricalTime | null) => Promise<void> = async () => {}) {
+function ports(
+	save: (workId: string, value: HistoricalTime | null) => Promise<void> = async () => undefined,
+) {
 	return {
 		save: vi.fn(save),
 		reload: vi.fn(async () => undefined),

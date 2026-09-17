@@ -19,7 +19,7 @@ Stryker は `src/ui/*_controller.svelte.ts` を mutation 対象とし、 `vitest
 | Work         |      41 |        0 |       0 |        130 |       100.00% |      23.98% |
 | Editor       |      16 |       20 |       0 |        600 |        44.44% |       2.52% |
 | Emergence    |      69 |        4 |       0 |          0 |        94.52% |      94.52% |
-| **合計**     | **303** |   **43** |   **2** |    **736** |    **87.61%** |   **27.18%** |
+| **合計**     | **303** |   **43** |   **2** |    **736** |    **87.61%** |  **27.18%** |
 
 `Covered score` はテストが到達した mutant に限った検出率であり、`Total score` は `NoCoverage` も
 含む。したがって Work の `Covered score` 100% は Controller 全体のテスト完了を意味しない。 171
