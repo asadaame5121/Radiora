@@ -8,9 +8,11 @@
 	let {
 		revisions,
 		preferredRevisionId,
+		onBack,
 	}: {
 		revisions: Revision[];
 		preferredRevisionId?: string;
+		onBack?: () => void;
 	} = $props();
 	const vocabulary = useUiVocabulary();
 
@@ -30,4 +32,5 @@
 	context={{ kind: "revision" }}
 	preferredLeftKey={initial ? `revision:${initial.leftRevisionId}` : undefined}
 	preferredRightKey={initial ? `revision:${initial.rightRevisionId}` : undefined}
+	{onBack}
 />

@@ -26,6 +26,8 @@ Deno.test("FROM FIX VS Revision and Branch use one read-only comparison pane", a
 	assertMatch(pane, /context\.type === "FIX"/);
 	assertMatch(pane, /↔ VS ↔/);
 	assertMatch(pane, /showDiff.*scope === "revision"/);
+	assertMatch(pane, /onBack.*アウトラインに戻る/s);
+	assertMatch(app, /onBack=\{\(\) => void returnToSelectedOutline\(\)\}/);
 });
 
 Deno.test("comparison entry points clear stale context and ignore stale async responses", async () => {

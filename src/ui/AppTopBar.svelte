@@ -160,6 +160,9 @@
 		<div class="toolbar-group toolbar-nav" role="toolbar" aria-label="ナビゲーション">
 			<button type="button" onclick={onResumeEditing}>{vocabulary.resumePosition}から再開</button>
 		</div>
+		{#if workingCopySaveStatus}
+			<WorkingCopySaveStatus status={workingCopySaveStatus} onRetry={onRetryWorkingCopySave} />
+		{/if}
 		{#each bookmarks as bookmark}
 			<span class="bookmark-control">
 				<button type="button" onclick={() => onOpenBookmark(bookmark.id)}>{vocabulary.bookmark} {bookmark.id.slice(0, BOOKMARK_PREFIX_LENGTH)}</button>
@@ -174,11 +177,8 @@
 			aria-label={inspectorCollapsed ? "インスペクターペインを開く" : "インスペクターペインを閉じる"}
 			title={inspectorCollapsed ? "インスペクターペインを開く" : "インスペクターペインを閉じる"}
 			onclick={onToggleInspector}
-		>{inspectorCollapsed ? "«" : "»"}</button>
+			>{inspectorCollapsed ? "«" : "»"}</button>
 	</div>
-	{#if workingCopySaveStatus}
-		<WorkingCopySaveStatus status={workingCopySaveStatus} onRetry={onRetryWorkingCopySave} />
-	{/if}
 </header>
 
 <style>

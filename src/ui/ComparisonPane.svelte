@@ -23,12 +23,14 @@
 		preferredLeftKey,
 		preferredRightKey,
 		locked = false,
+		onBack,
 	}: {
 		documents: ComparisonDocument[];
 		context: ComparisonContext;
 		preferredLeftKey?: string;
 		preferredRightKey?: string;
 		locked?: boolean;
+		onBack?: () => void;
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
@@ -123,6 +125,7 @@
 <section class="revision-comparison comparison-pane" aria-label={vocabulary.comparisonPane}>
 	<div class="comparison-heading">
 		<div>
+			{#if onBack}<button class="comparison-back" type="button" onclick={onBack}>← アウトラインに戻る</button>{/if}
 			<p class="eyebrow">COMPARISON</p>
 			<h1>{vocabulary.comparisonPane}</h1>
 		</div>
@@ -228,6 +231,19 @@
 		font-size: 21px;
 		font-weight: normal;
 		color: var(--theme-text, #edf9fa);
+	}
+	.comparison-back {
+		margin: 0 0 8px;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		padding: 6px 10px;
+		background: transparent;
+		color: var(--text-secondary);
+		cursor: pointer;
+	}
+	.comparison-back:hover {
+		background: var(--surface-hover);
+		color: var(--text);
 	}
 	.comparison-context {
 		display: flex;
