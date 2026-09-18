@@ -52,3 +52,17 @@
 - 空の `catch`、空のrejection handler、未処理Promiseを残さない。別のErrorへ変換してthrowするときは
   `{ cause }` で元の原因を保持する。
 - PostToolUseの自動修正ではBiomeのunsafe fixを適用しない。
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in this repository's GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five default triage labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses the single-context layout. See `docs/agents/domain.md`.
