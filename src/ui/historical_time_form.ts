@@ -50,13 +50,13 @@ function dateDraft(date: HistoricalDate | null = null): HistoricalDateDraft {
 		};
 	}
 	const isBce = date.year <= 0;
-	const absYear = isBce ? 1 - date.year : date.year;
+	const hasMonth = date.precision === "month" || date.precision === "day";
 	return {
 		precision: date.precision,
 		era: isBce ? "bce" : "ce",
-		year: String(absYear),
+		year: String(isBce ? 1 - date.year : date.year),
 		century: "",
-		month: date.precision === "month" || date.precision === "day" ? String(date.month) : "",
+		month: hasMonth ? String(date.month) : "",
 		day: date.precision === "day" ? String(date.day) : "",
 		approximate: date.approximate ?? false,
 		unknown: false,

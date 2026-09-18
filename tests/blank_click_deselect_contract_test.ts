@@ -11,8 +11,7 @@ const outlineRowItem = await Deno.readTextFile(
 Deno.test("blank area click deselects selection and releases editor focus", () => {
 	assertMatch(app, /function deselectFromBlank\(event: MouseEvent\): void \{/);
 	assertMatch(app, /if \(event\.button !== 0 \|\| outlineDrag\.draggedId\) return;/);
-	assertMatch(app, /releaseEditorFocus\(\);/);
-	assertMatch(app, /selectOccurrence\(null\);/);
+	assertMatch(app, /selectOccurrence\(null, releaseEditorFocus\);/);
 	assertMatch(app, /function releaseEditorFocus\(\): void \{/);
 	assertMatch(
 		app,

@@ -32,10 +32,12 @@
 	import Toast from "./Toast.svelte";
 	import IconButton from "./primitives/IconButton.svelte";
 	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
-	import LicensesDialog, {
+	import LicensesDialog from "./LicensesDialog.svelte";
+	import {
+		fetchLicenseIndex,
 		type LicenseEntry,
 		type LicenseIndex,
-	} from "./LicensesDialog.svelte";
+	} from "../services/license_index.ts";
 	import {
 		createConfirmationController,
 		type PendingConfirmation,
@@ -718,9 +720,7 @@
 			}
 			bookmarks = nextBookmarks;
 			if (focusId) {
-				selectOccurrence(focusId);
-				await tick();
-				requestFocus(focusId);
+				selectOccurrence(focusId, () => void tick().then(() => requestFocus(focusId)));
 			}
 			persistStartupSnapshotCache(snapshotForStartupCache, navigationController.browsingLocation);
 			return true;
@@ -743,10 +743,17 @@
 		});
 	}
 
-	function selectOccurrence(id: string | null): void {
-		if (!historicalTimeController.select(snapshot.items.find((item) => item.id === id) ?? null)) return;
-		selectedId = id;
-		navigationController.browseToOccurrence(snapshot, id);
+	function selectOccurrence(id: string | null, afterSelection?: () => void): boolean {
+		const commit = () => {
+			selectedId = id;
+			navigationController.browseToOccurrence(snapshot, id);
+			afterSelection?.();
+		};
+		if (!historicalTimeController.select(snapshot.items.find((item) => item.id === id) ?? null, commit)) {
+			return false;
+		}
+		commit();
+		return true;
 	}
 
 	/** The selected Work joins the filter as a transient, non-persisted exception. */
@@ -765,8 +772,7 @@
 
 	function deselectFromBlank(event: MouseEvent): void {
 		if (event.button !== 0 || outlineDrag.draggedId) return;
-		releaseEditorFocus();
-		selectOccurrence(null);
+		selectOccurrence(null, releaseEditorFocus);
 	}
 
 	function openOccurrenceContextMenu(
@@ -777,7 +783,7 @@
 		if (!itemById.has(id)) return;
 		if (source === "outline" && isEditableTarget(event.target)) return;
 		event.preventDefault();
-		selectOccurrence(id);
+		if (!selectOccurrence(id)) return;
 		const triggerElement = event.currentTarget instanceof HTMLElement || event.currentTarget instanceof SVGElement
 			? event.currentTarget
 			: null;
@@ -803,7 +809,7 @@
 	async function executeOccurrenceContextMenuAction(id: string): Promise<void> {
 		const targetId = occurrenceContextMenu?.targetId ?? selectedId;
 		if (!targetId || !itemById.has(targetId)) return;
-		selectOccurrence(targetId);
+		if (!selectOccurrence(targetId)) return;
 		switch (id) {
 			case "open-outline":
 				await openTreeOccurrence(targetId);
@@ -849,13 +855,9 @@
 		}
 	}
 
-	async function openTreeOccurrence(id: string): Promise<void> {
+	function openTreeOccurrence(id: string): void {
 		if (!itemById.has(id)) return;
-		transientExpandedIds = ancestorBreadcrumb(snapshot, id).map((item) => item.id);
-		viewMode = "outline";
-		selectOccurrence(id);
-		await tick();
-		requestFocus(id);
+		openOutlineOccurrence(id, ancestorBreadcrumb(snapshot, id).map((item) => item.id));
 	}
 	function hoistSelected(): void {
 		if (!selectedId) return;
@@ -864,8 +866,7 @@
 	}
 
 	function hoistOccurrence(id: string): void {
-		selectOccurrence(id);
-		void executeCommand("hoist");
+		selectOccurrence(id, () => void executeCommand("hoist"));
 	}
 
 	function clearHoist(): void {
@@ -942,9 +943,15 @@
 	}
 
 	function selectInspectorPlacement(id: string): void {
-		viewMode = "outline";
-		selectOccurrence(id);
-		requestFocus(id);
+		openOutlineOccurrence(id);
+	}
+
+	function openOutlineOccurrence(id: string, expandedIds = transientExpandedIds): void {
+		selectOccurrence(id, () => {
+			transientExpandedIds = expandedIds;
+			viewMode = "outline";
+			requestFocus(id);
+		});
 	}
 
 	function toggleSparseOutline(): void {
@@ -967,14 +974,21 @@
 	}
 
 	function switchBrowsingPane(paneId: string): void {
-		selectedId = navigationController.activateBrowsingPane(paneId, snapshot).selectedOccurrenceId;
-		transientExpandedIds = ancestorBreadcrumb(snapshot, selectedId).map((item) => item.id);
-		if (selectedId) requestFocus(selectedId);
+		const pane = navigationController.browsing.panes.find((candidate) => candidate.id === paneId);
+		const nextId = pane?.history[pane.historyIndex]?.selectedOccurrenceId ?? null;
+		const activate = () => {
+			selectedId = navigationController.activateBrowsingPane(paneId, snapshot).selectedOccurrenceId;
+			transientExpandedIds = ancestorBreadcrumb(snapshot, selectedId).map((item) => item.id);
+			if (selectedId) requestFocus(selectedId);
+		};
+		if (!historicalTimeController.select(itemById.get(nextId ?? "") ?? null, activate)) return;
+		activate();
 	}
 
 	function openBreadcrumb(id: string): void {
-		if (browsingLocation.hoistOccurrenceId) navigationController.clearHoist();
-		selectOccurrence(id);
+		selectOccurrence(id, () => {
+			if (browsingLocation.hoistOccurrenceId) navigationController.clearHoist();
+		});
 	}
 
 	async function createRoot(): Promise<void> {
@@ -1232,17 +1246,20 @@
 	}
 
 	async function openNavigationTarget(target: NavigationTarget, caretOffset?: number): Promise<void> {
-		viewMode = "outline";
 		const state = navigationUiState(target, caretOffset);
 		if (!state.selectedOccurrenceId) {
-			selectOccurrence(null);
-			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
+			selectOccurrence(null, () => {
+				viewMode = "outline";
+				error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
+			});
 			return;
 		}
-		transientExpandedIds = state.temporaryExpandedOccurrenceIds;
-		selectOccurrence(state.selectedOccurrenceId);
-		await load();
-		requestFocus(state.selectedOccurrenceId, state.caretOffset);
+		const occurrenceId = state.selectedOccurrenceId;
+		selectOccurrence(occurrenceId, () => {
+			viewMode = "outline";
+			transientExpandedIds = state.temporaryExpandedOccurrenceIds;
+			void load().then((loaded) => loaded && requestFocus(occurrenceId, state.caretOffset));
+		});
 	}
 
 	async function loadRevisions(workId: string): Promise<void> {
@@ -1509,20 +1526,18 @@
 		}
 	}
 
-	async function selectSearch(result: SearchResult): Promise<void> {
-		await selectItem(result.item, result.ancestorIds);
+	function selectItem(item: OutlineItem, ancestorIds: string[], afterSelection?: () => void): void {
+		selectOccurrence(item.id, () => {
+			transientExpandedIds = ancestorIds;
+			navigationController.clearOmniwindow();
+			void load(item.id);
+			afterSelection?.();
+		});
 	}
 
-	async function selectItem(item: OutlineItem, ancestorIds: string[]): Promise<void> {
-		transientExpandedIds = ancestorIds;
-		navigationController.clearOmniwindow();
-		selectOccurrence(item.id);
-		await load(item.id);
-	}
-
-	async function openRecentItem(item: OutlineItem): Promise<void> {
-		viewMode = "outline";
-		await selectItem(item, ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id));
+	function openRecentItem(item: OutlineItem): void {
+		const ancestors = ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id);
+		selectItem(item, ancestors, () => viewMode = "outline");
 	}
 
 	function openRecentNavigationItem(item: RecentNavigationItem): void {
@@ -1593,12 +1608,13 @@
 
 	async function handleSparseOutlineSelect(node: TransientProjectionNode): Promise<void> {
 		const ancestorIds = node.breadcrumb ?? [];
-		transientExpandedIds = ancestorIds;
 		const occurrenceId = node.occurrenceId;
 		if (occurrenceId && itemById.has(occurrenceId)) {
-			selectOccurrence(occurrenceId);
-			await load(occurrenceId);
-			viewMode = "outline";
+			selectOccurrence(occurrenceId, () => {
+				transientExpandedIds = ancestorIds;
+				void load(occurrenceId);
+				viewMode = "outline";
+			});
 		} else {
 			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
 		}
@@ -1687,9 +1703,7 @@
 	function openTagNode(workId: string): void {
 		const item = itemByWorkId.get(workId);
 		if (item) {
-			viewMode = "outline";
-			selectOccurrence(item.id);
-			requestFocus(item.id);
+			openOutlineOccurrence(item.id);
 			return;
 		}
 		if (unplacedWorks.some((work) => work.workId === workId)) {
@@ -1988,11 +2002,7 @@
 		licenseDetail = null;
 		licenseLoading = true;
 		try {
-			const response = await fetch("/licenses/index.json");
-			if (!response.ok) {
-				throw new Error(`ライセンス情報を読み込めませんでした (${response.status})`);
-			}
-			licenseIndex = await response.json();
+			licenseIndex = await fetchLicenseIndex();
 		} catch (cause) {
 			licenseError = errorMessage(cause);
 		} finally {
@@ -2211,7 +2221,7 @@
 		}}
 		onQuickCaptureKeydown={handleSearchKeydown}
 		onSelectSuggestion={(item, ancestorIds) => selectItem(item, ancestorIds ?? [])}
-		onSelectSearch={selectSearch}
+		onSelectSearch={(result) => selectItem(result.item, result.ancestorIds)}
 		onExecuteCommand={(cmd) => void executeCommand(cmd)}
 		onResumeEditing={resumeEditing}
 		onOpenBookmark={openBookmark}

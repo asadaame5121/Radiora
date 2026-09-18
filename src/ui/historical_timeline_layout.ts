@@ -41,6 +41,32 @@ export interface HistoricalTimelineNode {
 	y: number;
 }
 
+interface HistoricalTimelineBeltInput {
+	start: number;
+	end: number;
+	anchor: number;
+	startLatest: number;
+	endEarliest: number;
+	unknownStart: boolean;
+	unknownEnd: boolean;
+}
+
+export function historicalTimelineBelt(input: HistoricalTimelineBeltInput) {
+	if (input.unknownStart) {
+		return {
+			known: { start: input.endEarliest, end: input.anchor },
+			unknown: { start: input.start, end: input.endEarliest, edge: "start" as const },
+		};
+	}
+	if (input.unknownEnd) {
+		return {
+			known: { start: input.anchor, end: input.startLatest },
+			unknown: { start: input.startLatest, end: input.end, edge: "end" as const },
+		};
+	}
+	return { known: { start: input.start, end: input.end }, unknown: null };
+}
+
 export interface HistoricalTimelineEdge {
 	id: string;
 	source: HistoricalTimelineNode;
@@ -50,14 +76,14 @@ export interface HistoricalTimelineEdge {
 
 function createTimelineNode(
 	item: OutlineItem,
-	time: NonNullable<OutlineItem["historicalTime"]>,
-	range: [number | null, number | null],
+	time: HistoricalTime,
 	project: (day: number) => number,
-	bounds: [number, number],
-): HistoricalTimelineNode {
-	const [start, end] = range;
-	const [left, right] = bounds;
-	const anchorDay = start !== null ? start : (end !== null ? end : 0);
+	left: number,
+	right: number,
+): HistoricalTimelineNode | null {
+	const [start, end] = historicalTimeBounds(time);
+	const anchorDay = start ?? end;
+	if (anchorDay === null) return null;
 	const anchor = project(anchorDay);
 	return {
 		item,
@@ -78,6 +104,7 @@ function createTimelineNode(
 }
 
 function assignLanes(nodes: HistoricalTimelineNode[]): void {
+	nodes.sort((a, b) => a.start - b.start || a.item.id.localeCompare(b.item.id));
 	const laneEnds: number[] = [];
 	for (const node of nodes) {
 		let lane = laneEnds.findIndex((end) => end + ITEM_GAP < node.start);
@@ -87,9 +114,9 @@ function assignLanes(nodes: HistoricalTimelineNode[]): void {
 	}
 }
 
-function buildTimelineEdges(
-	links: readonly OutlineSnapshot["links"][number][],
-	nodes: readonly HistoricalTimelineNode[],
+function buildEdges(
+	links: OutlineSnapshot["links"],
+	nodes: HistoricalTimelineNode[],
 ): HistoricalTimelineEdge[] {
 	const byWork = new Map(nodes.map((node) => [node.item.workId, node]));
 	return links.flatMap((link) => {
@@ -109,15 +136,14 @@ export function layoutHistoricalTimeline(
 	const nodes: HistoricalTimelineNode[] = [];
 	for (const item of snapshot.items) {
 		const time = item.historicalTime;
-		const [start, end] = time ? historicalTimeBounds(time) : [null, null];
-		if (!time || (start === null && end === null)) {
+		const node = time ? createTimelineNode(item, time, project, left, right) : null;
+		if (node) {
+			nodes.push(node);
+		} else {
 			undated.push(item);
-			continue;
 		}
-		nodes.push(createTimelineNode(item, time, [start, end], project, [left, right]));
 	}
-	nodes.sort((a, b) => a.start - b.start || a.item.id.localeCompare(b.item.id));
 	assignLanes(nodes);
-	const edges = buildTimelineEdges(snapshot.links, nodes);
-	return { nodes, edges, undated };
+	const edges = buildEdges(snapshot.links, nodes);
+	return { nodes, undated, edges };
 }

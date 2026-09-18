@@ -40,7 +40,7 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 		new URL("../src/ui/navigation_controller.svelte.ts", import.meta.url),
 	);
 	const selectItem = app.slice(
-		app.indexOf("async function selectItem"),
+		app.indexOf("function selectItem"),
 		app.indexOf("async function loadEmergence"),
 	);
 	const browsingControls = app.slice(
@@ -83,6 +83,6 @@ Deno.test("loading a focus target selects it before restoring editor focus", asy
 
 	assertMatch(
 		load,
-		/if \(focusId\) \{\s*selectOccurrence\(focusId\);\s*await tick\(\);\s*requestFocus\(focusId\);/,
+		/if \(focusId\) \{\s*selectOccurrence\(focusId, \(\) => void tick\(\)\.then\(\(\) => requestFocus\(focusId\)\)\);/,
 	);
 });
