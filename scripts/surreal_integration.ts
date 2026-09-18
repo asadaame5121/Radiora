@@ -1,3 +1,4 @@
+import type { HistoricalTime } from "../src/domain/historical_time.ts";
 import { OutlineService } from "../src/services/outline_service.ts";
 import { SurrealGraphStore } from "../src/storage/surreal_store.ts";
 import { assertGraphStoreContract } from "../tests/support/graph_store_contract.ts";
@@ -6,6 +7,12 @@ import { Surreal } from "surrealdb";
 const port = 18012;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const endpoint = `ws://127.0.0.1:${port}`;
+const HISTORICAL_TIME = {
+	kind: "period",
+	start: { precision: "year", year: 1604, approximate: false },
+	end: { precision: "year", year: 1867, approximate: true },
+	original: "江戸時代",
+} satisfies HistoricalTime;
 const tempDir = await Deno.makeTempDir({ prefix: "radiora-v2-" });
 const databasePath = `${tempDir}${Deno.build.os === "windows" ? "\\" : "/"}test.db`;
 const appData = Deno.env.get("LOCALAPPDATA");
@@ -180,6 +187,36 @@ try {
 		explicitLinks.some((link) => link.type === "FROM")
 	) {
 		throw new Error(`Version 0 migration verification failed: ${JSON.stringify(snapshot)}`);
+	}
+	if (migratedLegacy.historicalTime !== undefined) {
+		throw new Error(
+			`Migrated Work unexpectedly has historical time: ${JSON.stringify(migratedLegacy)}`,
+		);
+	}
+	await service.setWorkHistoricalTime(migratedLegacy.workId, HISTORICAL_TIME);
+	const savedLegacy = (await store.listWorks()).find((work) => work.id === migratedLegacy.workId);
+	if (JSON.stringify(savedLegacy?.historicalTime) !== JSON.stringify(HISTORICAL_TIME)) {
+		throw new Error(`Historical time save verification failed: ${JSON.stringify(savedLegacy)}`);
+	}
+	await store.close();
+	trace("integration.historical-time.closed");
+	store = new SurrealGraphStore(endpoint, "root", "root", trace);
+	await store.initialize();
+	service = new OutlineService(store);
+	const reopenedLegacy = (await store.listWorks()).find((work) =>
+		work.id === migratedLegacy.workId
+	);
+	if (JSON.stringify(reopenedLegacy?.historicalTime) !== JSON.stringify(HISTORICAL_TIME)) {
+		throw new Error(
+			`Historical time reopen verification failed: ${JSON.stringify(reopenedLegacy)}`,
+		);
+	}
+	await service.setWorkHistoricalTime(migratedLegacy.workId, null);
+	const clearedLegacy = (await store.listWorks()).find((work) => work.id === migratedLegacy.workId);
+	if (clearedLegacy?.historicalTime !== undefined) {
+		throw new Error(
+			`Historical time deletion verification failed: ${JSON.stringify(clearedLegacy)}`,
+		);
 	}
 	const systemRelations = await store.listSystemRelations();
 	if (
