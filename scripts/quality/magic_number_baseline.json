@@ -260,6 +260,7 @@
 	"lint/style/noMagicNumbers|src/ui/PhylogeneticTree.svelte|x1: node.x + node.radius + 8,|1",
 	"lint/style/noMagicNumbers|src/ui/PhylogeneticTree.svelte|x2: node.x + node.radius + 12 + node.labelWidth,|1",
 	"lint/style/noMagicNumbers|src/ui/PhylogeneticTree.svelte|y2: node.y + 10 + Math.max(0, node.labelLines.length - 1) * 14,|1",
+	"lint/style/noMagicNumbers|src/ui/InspectorHistoryTab.svelte|<option value={revision.id}>{revision.message ?? `${vocabulary.fixedRevision} ${revision.id.slice(0, 8)}`}</option>|1",
 	"lint/style/noMagicNumbers|src/ui/PhylogeneticTree.svelte|{#if node.x >= -200 && node.x <= width + 200 && node.y >= -80 && node.y <= height + 80}|1",
 	"lint/style/noMagicNumbers|src/ui/PhylogeneticTree.svelte|{#if node.x >= -200 && node.x <= width + 200 && node.y >= -80 && node.y <= height + 80}|2",
 	"lint/style/noMagicNumbers|src/ui/PhylogeneticTree.svelte|{#if node.x >= -200 && node.x <= width + 200 && node.y >= -80 && node.y <= height + 80}|3",
