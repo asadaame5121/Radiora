@@ -10,11 +10,11 @@ const YEAR_DAYS = 366;
 const MONTH_DAYS = 31;
 const MAX_MARKS = 200;
 
-export function historicalTimelineTicks(domain: [number, number], count: number) {
-	const [min, max] = domain;
-	const span = max - min;
+type TimeUnit = "year" | "month" | "day";
+
+function calculateUnitAndStride(span: number, count: number): { unit: TimeUnit; stride: number } {
 	const step = Math.max(1, span / Math.max(2, count));
-	const unit = step >= YEAR_DAYS ? "year" : step >= MONTH_DAYS ? "month" : "day";
+	const unit: TimeUnit = step >= YEAR_DAYS ? "year" : step >= MONTH_DAYS ? "month" : "day";
 	const rawStride = unit === "year"
 		? step / YEAR_DAYS
 		: unit === "month"
@@ -22,24 +22,49 @@ export function historicalTimelineTicks(domain: [number, number], count: number)
 		: step;
 	const power = 10 ** Math.floor(Math.log10(rawStride));
 	const stride = Math.max(1, Math.ceil(rawStride / power) * power);
-	const first = historicalDateFromDay(Math.max(historicalDay(-MAX_HISTORICAL_YEAR), min));
+	return { unit, stride };
+}
+
+function calculateInitialCursor(unit: TimeUnit, start: number, stride: number): number {
+	if (unit === "day") return Math.ceil(start);
+	const first = historicalDateFromDay(start);
+	if (unit === "year") {
+		return Math.ceil(first.year / stride) * stride;
+	}
 	const firstMonth = first.year * MONTHS_PER_YEAR + first.month - 1;
+	return Math.ceil(firstMonth / stride) * stride;
+}
+
+function formatTickLabel(unit: TimeUnit, value: number): string {
+	const date = historicalDateFromDay(value);
+	const yearPart = formatHistoricalYear(date.year);
+	const monthPart = unit !== "year" ? `${date.month}月` : "";
+	const dayPart = unit === "day" ? `${date.day}日` : "";
+	return `${yearPart}${monthPart}${dayPart}`;
+}
+
+function tickValueAt(unit: TimeUnit, cursor: number): number {
+	if (unit === "day") return cursor;
+	const year = unit === "year" ? cursor : Math.floor(cursor / MONTHS_PER_YEAR);
+	const month = ((cursor % MONTHS_PER_YEAR) + MONTHS_PER_YEAR) % MONTHS_PER_YEAR + 1;
+	return historicalDay(year, unit === "month" ? month : 1);
+}
+
+export function historicalTimelineTicks(domain: [number, number], count: number) {
+	const [min, max] = domain;
+	const { unit, stride } = calculateUnitAndStride(max - min, count);
+	const firstDay = historicalDay(-MAX_HISTORICAL_YEAR);
+	const endExclusive = historicalDay(MAX_HISTORICAL_YEAR + 1);
+	const start = Math.max(firstDay, min);
+	const end = Math.min(endExclusive - 1, max);
+	if (start > end) return [];
 	const marks: Array<{ value: number; label: string }> = [];
-	let cursor = unit === "year"
-		? Math.ceil(first.year / stride) * stride
-		: unit === "month"
-		? Math.ceil(firstMonth / stride) * stride
-		: Math.ceil(min);
+	let cursor = calculateInitialCursor(unit, start, stride);
 	for (let index = 0; index < MAX_MARKS; index++, cursor += stride) {
-		const year = unit === "year" ? cursor : Math.floor(cursor / MONTHS_PER_YEAR);
-		const month = ((cursor % MONTHS_PER_YEAR) + MONTHS_PER_YEAR) % MONTHS_PER_YEAR + 1;
-		const value = unit === "day" ? cursor : historicalDay(year, unit === "month" ? month : 1);
-		if (value > max || value >= historicalDay(MAX_HISTORICAL_YEAR + 1)) break;
-		if (value < min) continue;
-		const date = historicalDateFromDay(value);
-		const label = formatHistoricalYear(date.year) + (unit !== "year" ? `${date.month}月` : "") +
-			(unit === "day" ? `${date.day}日` : "");
-		marks.push({ value, label });
+		const value = tickValueAt(unit, cursor);
+		if (value > end || value >= endExclusive) break;
+		if (value < firstDay || value < start) continue;
+		marks.push({ value, label: formatTickLabel(unit, value) });
 	}
 	return marks;
 }
