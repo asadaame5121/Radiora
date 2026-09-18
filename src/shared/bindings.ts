@@ -131,6 +131,7 @@ export interface RadioraBindings {
 	createOccurrence(input: CreateOccurrenceInput): Promise<OutlineItem>;
 	updateItemText(id: string, text: string): Promise<void>;
 	setContextualHeading(id: string, contextualHeading?: string): Promise<void>;
+	setOccurrenceRevision(id: string, revisionId: string | null): Promise<void>;
 	setWorkHistoricalTime(workId: string, value: HistoricalTime | null): Promise<void>;
 	moveItem(input: MoveItemInput): Promise<void>;
 	deleteItem(id: string): Promise<void>;

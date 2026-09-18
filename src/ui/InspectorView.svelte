@@ -168,11 +168,13 @@
 							selectedItem={props.selectedItem}
 							selectedBranchId={props.selectedBranchId}
 							recoverySnapshots={props.recoverySnapshots}
+							revisions={props.revisions}
 							vocabulary={props.vocabulary}
 							commands={props.commands}
 							onCreateBranch={props.onCreateBranch}
 							onOpenWorkLineage={props.onOpenWorkLineage}
 							onOpenRevisionComparison={props.onOpenRevisionComparison}
+							onSelectRevision={props.onSelectRevision}
 						/>
 					</div>
 				{/snippet}

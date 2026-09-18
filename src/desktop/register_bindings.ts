@@ -15,6 +15,7 @@ import type {
 	StartupSnapshotLocation,
 } from "../services/startup_snapshot_cache.ts";
 import { LINK_TYPES, type OutlineSnapshot } from "../domain/models.ts";
+import { IdSchema } from "../domain/schemas.ts";
 import {
 	CreateItemInputSchema,
 	CreateLinkInputSchema,
@@ -109,6 +110,11 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		updateItemText: (id, text) => service().updateItemText(id, text),
 		setContextualHeading: (id, contextualHeading) =>
 			service().setContextualHeading(id, contextualHeading),
+		setOccurrenceRevision: (id, revisionId) =>
+			service().setOccurrenceRevision(
+				v.parse(IdSchema, id),
+				v.parse(v.nullable(IdSchema), revisionId),
+			),
 		setWorkHistoricalTime: (workId, value) => service().setWorkHistoricalTime(workId, value),
 		moveItem: async (input) => service().moveItem(v.parse(MoveItemInputSchema, input)),
 		deleteItem: (id) => service().deleteItem(id),

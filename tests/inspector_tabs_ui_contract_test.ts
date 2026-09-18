@@ -6,6 +6,9 @@ const inspector = await Deno.readTextFile(
 const queryPanel = await Deno.readTextFile(
 	new URL("../src/ui/InspectorQueryPanel.svelte", import.meta.url),
 );
+const history = await Deno.readTextFile(
+	new URL("../src/ui/InspectorHistoryTab.svelte", import.meta.url),
+);
 
 Deno.test("Inspector uses horizontal automatic Bits Tabs for the three tab screens", () => {
 	assertMatch(inspector, /import \{ Tabs \} from "bits-ui"/);
@@ -50,4 +53,11 @@ Deno.test("App delegates Inspector state and callbacks to the extracted View", a
 	assertMatch(app, /onStartResize=\{startInspectorResize\}/);
 	assertMatch(app, /onUpdateSelectedHeading=\{updateSelectedHeading\}/);
 	assertMatch(app, /onResolveEmergence=\{resolveEmergence\}/);
+	assertMatch(app, /onSelectRevision=\{setSelectedOccurrenceRevision\}/);
+});
+
+Deno.test("Inspector history switches a placement between current text and a fixed revision", () => {
+	assertMatch(history, /この配置で表示する/);
+	assertMatch(history, /<option value="">現在の本稿<\/option>/);
+	assertMatch(history, /onSelectRevision\(event\.currentTarget\.value \|\| null\)/);
 });

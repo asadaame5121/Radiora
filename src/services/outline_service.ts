@@ -188,6 +188,9 @@ export class OutlineService {
 	listOutline(): Promise<OutlineSnapshot> {
 		return new OccurrenceOperations(this.store).listOutline();
 	}
+	setOccurrenceRevision(id: string, revisionId: string | null): Promise<void> {
+		return new OccurrenceOperations(this.store).setOccurrenceRevision(id, revisionId);
+	}
 	setWorkHistoricalTime(workId: string, value: HistoricalTime | null): Promise<void> {
 		return setWorkHistoricalTime(this.store, workId, value);
 	}

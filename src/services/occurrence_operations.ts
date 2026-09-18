@@ -7,6 +7,7 @@ import type {
 	OutlineSnapshot,
 	PurgeManifest,
 	Revision,
+	RevisionSelector,
 	TrashEntry,
 } from "../domain/models.ts";
 import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
@@ -146,6 +147,33 @@ export class OccurrenceOperations {
 			collapsed: item.collapsed,
 			revisionSelector: item.revisionSelector,
 			contextualHeading: contextualHeading?.trim() || undefined,
+		});
+	}
+
+	async setOccurrenceRevision(id: string, revisionId: string | null): Promise<void> {
+		const item = await this.requireItem(id);
+		let revisionSelector: RevisionSelector;
+		if (revisionId) {
+			const revision = (await this.store.listRevisions(item.workId)).find((candidate) =>
+				candidate.id === revisionId
+			);
+			if (!revision) throw new Error(`Revision not found for Work: ${revisionId}`);
+			revisionSelector = { mode: "pinned", revisionId };
+		} else {
+			const main = (await this.store.listBranches(item.workId)).find((branch) =>
+				branch.name === "main" && !branch.archivedAt
+			);
+			if (!main) throw new Error(`Active main Branch not found for Work: ${item.workId}`);
+			revisionSelector = { mode: "branch", branchId: main.id };
+		}
+		await this.store.updateOccurrence({
+			id: item.id,
+			workId: item.workId,
+			parentOccurrenceId: item.parentId,
+			orderKey: item.orderKey,
+			collapsed: item.collapsed,
+			revisionSelector,
+			contextualHeading: item.contextualHeading,
 		});
 	}
 
