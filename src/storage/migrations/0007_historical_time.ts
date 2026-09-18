@@ -6,7 +6,7 @@ export const historicalTimeMigration: StorageMigration = {
 	toVersion: 7,
 	async up(context) {
 		await context.execute(
-			"DEFINE FIELD IF NOT EXISTS historical_time ON work FLEXIBLE TYPE option<object>;",
+			"DEFINE FIELD IF NOT EXISTS historical_time ON work TYPE option<object> FLEXIBLE;",
 		);
 	},
 	async validate(context) {

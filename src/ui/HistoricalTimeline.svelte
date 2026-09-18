@@ -4,7 +4,7 @@
 	import type { OutlineSnapshot } from "../domain/models.ts";
 	import { formatHistoricalTime } from "../domain/historical_time.ts";
 	import { fitTreeBounds } from "./tree_camera.ts";
-	import { historicalTimelineDomain, layoutHistoricalTimeline, TIMELINE_PADDING } from "./historical_timeline_layout.ts";
+	import { historicalTimelineBelt, historicalTimelineDomain, layoutHistoricalTimeline, TIMELINE_PADDING } from "./historical_timeline_layout.ts";
 	import { historicalTimelineTicks } from "./historical_timeline_axis.ts";
 	let { snapshot, selectedId, selectedWorkId, onSelect, onOpen, onContextMenu }: {
 		snapshot: OutlineSnapshot; selectedId: string | null; selectedWorkId: string | null;
@@ -54,6 +54,7 @@
 		</g>
 		<g class="edges" aria-hidden="true">{#each layout.edges as edge (edge.id)}<path d={`M ${sx(edge.source.anchor)} ${sy(edge.source.y)} L ${sx(edge.target.anchor)} ${sy(edge.target.y)}`}><title>{edge.type}</title></path>{/each}</g>
 		{#each layout.nodes as node (node.item.id)}
+			{@const belt = historicalTimelineBelt({ start: left(node), end: right(node), anchor: sx(node.anchor), startLatest: sx(node.startLatest), endEarliest: sx(node.endEarliest), unknownStart: node.unknownStart, unknownEnd: node.unknownEnd })}
 			<!-- biome-ignore lint/a11y/useSemanticElements: SVG event marks support keyboard selection within the time axis. -->
 			<g role="button" tabindex="0" aria-label={`${title(node.item.text)} ${formatHistoricalTime(node.time)}`} aria-pressed={selectedId === node.item.id || selectedWorkId === node.item.workId}
 				class="event" class:selected={selectedId === node.item.id || selectedWorkId === node.item.workId}
@@ -63,10 +64,13 @@
 				{#if node.time.kind === "point" && node.time.date.precision === "day"}
 					<circle cx={sx(node.anchor)} cy={sy(node.y)} r={5 * camera.k} />
 				{:else}
-					<rect class="belt" class:uncertain={node.time.kind === "point" || node.unknownStart || node.unknownEnd} x={left(node)} y={sy(node.y) - 6 * camera.k} width={Math.max(2, right(node) - left(node))} height={12 * camera.k} />
+					{#if belt.unknown}<rect class="belt unknown-extension" x={belt.unknown.start} y={sy(node.y) - 6 * camera.k} width={Math.max(0, belt.unknown.end - belt.unknown.start)} height={12 * camera.k} />{/if}
+					<rect class="belt" class:uncertain={node.time.kind === "point"} x={belt.known.start} y={sy(node.y) - 6 * camera.k} width={Math.max(2, belt.known.end - belt.known.start)} height={12 * camera.k} />
 					{#if node.time.kind === "period" && !node.unknownStart && !node.unknownEnd && node.startLatest < node.endEarliest}
 						<rect class="certain" x={sx(node.startLatest)} y={sy(node.y) - 6 * camera.k} width={sx(node.endEarliest) - sx(node.startLatest)} height={12 * camera.k} />
 					{/if}
+					{#if belt.unknown?.edge === "start" && belt.unknown.start === 0}<text class="unknown-label" x="4" y={sy(node.y) - 10} text-anchor="start">不明</text>{/if}
+					{#if belt.unknown?.edge === "end" && belt.unknown.end === width}<text class="unknown-label" x={width - 4} y={sy(node.y) - 10} text-anchor="end">不明</text>{/if}
 				{/if}
 				<text x={Math.max(4, sx(node.anchor))} y={sy(node.y) + 22 * camera.k} font-size={12 * camera.k}>{title(node.item.text)} · {formatHistoricalTime(node.time)}</text>
 			</g>
@@ -84,7 +88,8 @@
 	.event { cursor: pointer; fill: var(--cyan); } .event text { fill: var(--text); }
 	.hit { fill: transparent; stroke: transparent; } .event.selected .hit, .event:focus .hit { stroke: var(--amber); }
 	.belt { fill: var(--cyan); fill-opacity: .25; stroke: var(--cyan); } .certain { fill: var(--cyan); fill-opacity: .65; }
-	.uncertain { stroke-dasharray: 4 3; fill-opacity: .1; }
+	.uncertain, .unknown-extension { stroke-dasharray: 4 3; fill-opacity: .1; }
+	.unknown-label { fill: var(--muted); font-size: 10px; }
 	.controls { position: absolute; bottom: 30px; left: 15px; display: flex; gap: 8px; align-items: center; font-size: 10px; color: var(--muted); }
 	button, .undated { background: var(--surface-raised); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 6px; }
 	.undated { position: absolute; top: 64px; left: 15px; max-height: 35%; max-width: 280px; overflow: auto; font-size: 11px; }

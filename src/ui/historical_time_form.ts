@@ -23,16 +23,17 @@ export interface HistoricalTimeDraft {
 }
 
 function dateDraft(date: HistoricalDate | null = null): HistoricalDateDraft {
-	const year = date && date.precision !== "century" ? date.year : 1;
+	const calendarDate = date?.precision === "century" ? null : date;
+	const year = calendarDate?.year ?? 1;
 	return {
 		precision: date?.precision ?? "year",
 		era: date?.precision === "century" ? date.era : year <= 0 ? "bce" : "ce",
-		year: date && date.precision !== "century" ? String(year <= 0 ? 1 - year : year) : "",
+		year: calendarDate ? String(year <= 0 ? 1 - year : year) : "",
 		century: date?.precision === "century" ? String(date.century) : "",
-		month: date && (date.precision === "month" || date.precision === "day")
-			? String(date.month)
+		month: calendarDate?.precision === "month" || calendarDate?.precision === "day"
+			? String(calendarDate.month)
 			: "",
-		day: date?.precision === "day" ? String(date.day) : "",
+		day: calendarDate?.precision === "day" ? String(calendarDate.day) : "",
 		approximate: date?.approximate ?? false,
 		unknown: date === null,
 	};

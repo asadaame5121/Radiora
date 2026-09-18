@@ -109,7 +109,7 @@ Deno.test("Surreal historical metadata is validated and migration preserves opti
 	};
 	await historicalTimeMigration.up(context);
 	await historicalTimeMigration.validate(context);
-	assert(statements[0].includes("FLEXIBLE TYPE option<object>"));
+	assert(statements[0].includes("TYPE option<object> FLEXIBLE"));
 	const work = workFromRow({
 		id: crypto.randomUUID(),
 		created_at: "2026-01-01T00:00:00.000Z",

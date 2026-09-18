@@ -1,9 +1,14 @@
-import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertExists, assertNotEquals } from "jsr:@std/assert@1";
 import type { HistoricalTime } from "../src/domain/historical_time.ts";
-import { formatHistoricalYear, historicalDay } from "../src/domain/historical_calendar.ts";
+import {
+	formatHistoricalYear,
+	historicalDay,
+	MAX_HISTORICAL_YEAR,
+} from "../src/domain/historical_calendar.ts";
 import type { OutlineItem, OutlineLink, OutlineSnapshot } from "../src/domain/models.ts";
 import { historicalTimelineTicks } from "../src/ui/historical_timeline_axis.ts";
 import {
+	historicalTimelineBelt,
 	historicalTimelineDomain,
 	layoutHistoricalTimeline,
 } from "../src/ui/historical_timeline_layout.ts";
@@ -75,8 +80,10 @@ Deno.test("historical timeline lays out ranges, unknown endpoints, collisions, a
 
 	assertEquals(result.undated.map((entry) => entry.id), ["unknown-both"]);
 	const byId = new Map(result.nodes.map((node) => [node.item.id, node]));
-	const periodNode = byId.get("period")!;
-	const unknownNode = byId.get("unknown-start")!;
+	const periodNode = byId.get("period");
+	const unknownNode = byId.get("unknown-start");
+	assertExists(periodNode);
+	assertExists(unknownNode);
 	assert(periodNode.start < periodNode.end);
 	assert(periodNode.startLatest < periodNode.endEarliest);
 	assertEquals(unknownNode.unknownStart, true);
@@ -86,6 +93,39 @@ Deno.test("historical timeline lays out ranges, unknown endpoints, collisions, a
 	assertEquals(result.edges.map((edge) => edge.id), ["dated-other"]);
 	assertEquals(result.edges[0]?.source.item.id, "dated");
 	assertEquals(result.edges[0]?.target.item.id, "other");
+});
+
+Deno.test("historical timeline separates a known endpoint range from its unknown extension", () => {
+	assertEquals(
+		historicalTimelineBelt({
+			start: 0,
+			end: 80,
+			anchor: 80,
+			startLatest: 80,
+			endEarliest: 60,
+			unknownStart: true,
+			unknownEnd: false,
+		}),
+		{
+			known: { start: 60, end: 80 },
+			unknown: { start: 0, end: 60, edge: "start" },
+		},
+	);
+	assertEquals(
+		historicalTimelineBelt({
+			start: 20,
+			end: 100,
+			anchor: 20,
+			startLatest: 40,
+			endEarliest: 20,
+			unknownStart: false,
+			unknownEnd: true,
+		}),
+		{
+			known: { start: 20, end: 40 },
+			unknown: { start: 40, end: 100, edge: "end" },
+		},
+	);
 });
 
 Deno.test("historical timeline ticks use month/day scales and never display year zero", () => {
@@ -112,6 +152,38 @@ Deno.test("historical timeline ticks use month/day scales and never display year
 	assert(bceTicks.some((tick) => tick.label.startsWith(formatHistoricalYear(-1))));
 	assert(bceTicks.some((tick) => tick.label.startsWith(formatHistoricalYear(1))));
 	assert(bceTicks.every((tick) => !tick.label.includes("0年")));
+});
+
+Deno.test("historical timeline ticks stay inside the supported calendar range", () => {
+	const firstDay = historicalDay(-MAX_HISTORICAL_YEAR);
+	const endExclusive = historicalDay(MAX_HISTORICAL_YEAR + 1);
+	const inRange = (ticks: Array<{ value: number }>) =>
+		ticks.every((tick) => tick.value >= firstDay && tick.value < endExclusive);
+
+	const lowerBoundary = historicalTimelineTicks([firstDay - 1, firstDay + 1], 8);
+	assert(inRange(lowerBoundary));
+	assert(lowerBoundary.some((tick) => tick.value === firstDay));
+
+	const upperBoundary = historicalTimelineTicks([endExclusive - 1, endExclusive + 1], 8);
+	assert(inRange(upperBoundary));
+	assert(upperBoundary.some((tick) => tick.value === endExclusive - 1));
+
+	assertEquals(historicalTimelineTicks([firstDay - 2, firstDay - 1], 8), []);
+	assertEquals(historicalTimelineTicks([endExclusive, endExclusive + 2], 8), []);
+
+	const lastDay = historicalTimelineTicks([endExclusive - 1, endExclusive], 8);
+	assertEquals(lastDay.map((tick) => tick.value), [endExclusive - 1]);
+
+	const lowerMonthBoundary = historicalTimelineTicks(
+		[firstDay, historicalDay(-MAX_HISTORICAL_YEAR + 1)],
+		8,
+	);
+	const upperMonthBoundary = historicalTimelineTicks(
+		[historicalDay(MAX_HISTORICAL_YEAR, 12), historicalDay(MAX_HISTORICAL_YEAR + 2)],
+		8,
+	);
+	assert(inRange(lowerMonthBoundary));
+	assert(inRange(upperMonthBoundary));
 });
 
 Deno.test("all unset historical values use the outside-axis domain", () => {
