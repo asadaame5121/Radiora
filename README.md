@@ -94,8 +94,9 @@ deno task desktop
 ### 既存のSurrealDBデータからの移行
 
 旧バージョン（SurrealDB）のデータをお持ちの方は、初回起動前に移行タスクを実行してください。
-移行には本リポジトリのソースコードチェックアウト、`npm install`、およびSurrealDB CLI 3.x（`PATH`
-または `%USERPROFILE%\.surrealdb` に配置）が必要です。
+移行には本リポジトリのソースコードチェックアウトおよび SurrealDB CLI 3.x（`PATH` または
+`%USERPROFILE%\.surrealdb` に配置）が必要です（外部 npm パッケージへの依存はなく、標準 Web API
+のみで動作します。設計背景は `docs/adr/0001-retire-surrealdb-runtime.md` を参照）。
 
 ```powershell
 deno task storage:migrate:legacy

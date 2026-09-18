@@ -26,7 +26,6 @@
 	"storage/backup_migrations.ts|storage/graph_store.ts|10|62",
 	"storage/json_store.ts|storage/memory_store.ts|12|69",
 	"storage/memory_store.ts|storage/memory_store.ts|9|74",
-	"storage/memory_store_operations.ts|storage/surreal_work_repository.ts|14|141",
 	"ui/ComparisonPane.svelte:html|ui/ComparisonPane.svelte:html|9|62",
 	"ui/InAppHelp.svelte:html|ui/InAppHelp.svelte:html|8|58",
 	"ui/OptionsView.svelte:css|ui/RelationTypeSettings.svelte:css|10|60",

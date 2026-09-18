@@ -31,11 +31,12 @@ Phase 0時点のPoCは次の状態にあった。
 
 この現行形式を次のように扱う。
 
-| 対象                                  | 現行形式                  |
-| ------------------------------------- | ------------------------- |
-| SurrealDB storage schema              | version `0`               |
-| versionなしJSON                       | backup schema version `0` |
-| Work / Occurrence以降の最初の正式形式 | version `1`               |
+| 対象                                  | 現行形式                             |
+| ------------------------------------- | ------------------------------------ |
+| SurrealDB storage schema（旧形式）    | version `0` 〜 `7`（廃止・移行専用） |
+| SQLite storage schema（現行形式）     | `sqlite_store.ts` / 差分更新         |
+| versionなしJSON                       | backup schema version `0`            |
+| Work / Occurrence以降の最初の正式形式 | version `1`                          |
 
 version `0`は互換入力として扱うlegacy形式であり、今後同じ形へ新規出力しない。
 
@@ -51,6 +52,13 @@ RevisionとRecovery Snapshotを空集合として追加する。
 `3`である。手動で複数残す栞と、自動更新する単一の作業再開位置を別レコードとして 永続化する。version
 `2`の内容は保持し、栞を空集合、作業再開位置を未設定として追加する。
 
+2026-08-28の v0.5.0 リリースにおいて、通常運用のストレージエンジンを
+SQLite（`sqlite_store.ts`）へ移行した。 旧 SurrealDB の通常運用資産は 2026-09-17
+に完全に廃止・削除され、v0.4 以前のデータベースからの移行は
+独立した移行ツール（`src/storage/legacy_surreal_migration_reader.ts`、標準 `fetch()` 利用）によって
+SQLite へインポートする方式へ一本化された（詳細は [[../adr/0001-retire-surrealdb-runtime]]
+を参照）。
+
 ## 3. 二つのschema version
 
 実DBと交換用JSONは別々にversionを持つ。
@@ -62,8 +70,10 @@ type BackupSchemaVersion = number;
 
 ### 3.1 Storage schema version
 
-ローカルSurrealDBのtable、field、relation、index、保存上の不変条件を表す。
-アプリ起動時のmigration判断に使用する。
+ローカルDB（現行は SQLite、旧形式は
+SurrealDB）のtable、field、relation、index、保存上の不変条件を表す。
+アプリ起動時のmigration判断に使用する。現行の SQLite では `sqlite_store.ts`
+内の定義およびステートメント追跡で 整合性を担保する。
 
 ### 3.2 Backup schema version
 

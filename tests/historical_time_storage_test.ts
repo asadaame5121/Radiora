@@ -7,9 +7,6 @@ import { MemoryGraphStore } from "../src/storage/memory_store.ts";
 import { JsonGraphStore } from "../src/storage/json_store.ts";
 import { SqliteGraphStore } from "../src/storage/sqlite_store.ts";
 import { NodeSqliteDatabaseAdapter } from "../src/storage/sqlite_records.ts";
-import { historicalTimeMigration } from "../src/storage/migrations/0007_historical_time.ts";
-import { workFromRow } from "../src/storage/surreal_row_mapper.ts";
-import { buildSurrealRestoreTransaction } from "../src/storage/surreal_backup_restore.ts";
 
 const time = parse(HistoricalTimeSchema, {
 	kind: "period",
@@ -43,12 +40,7 @@ for (const kind of ["memory", "json", "sqlite"] as const) {
 			const restored = new MemoryGraphStore();
 			await new JsonBackupService(restored).restore(backup);
 			assertEquals((await restored.listWorks())[0].historicalTime, time);
-			const transaction = buildSurrealRestoreTransaction(await store.exportGraphState());
-			assert(
-				Object.values(transaction.variables).some((value) =>
-					typeof value === "object" && value !== null && "historical_time" in value
-				),
-			);
+
 			await assertRejects(() =>
 				service.setWorkHistoricalTime(item.workId, { kind: "bad" } as never)
 			);
@@ -97,24 +89,4 @@ Deno.test("historical time migrations protect legacy JSON and SQLite state", asy
 	} finally {
 		await Deno.remove(dir, { recursive: true });
 	}
-});
-
-Deno.test("Surreal historical metadata is validated and migration preserves optionality", async () => {
-	const statements: string[] = [];
-	const context = {
-		execute: (sql: string) => {
-			statements.push(sql);
-			return Promise.resolve();
-		},
-	};
-	await historicalTimeMigration.up(context);
-	await historicalTimeMigration.validate(context);
-	assert(statements[0].includes("TYPE option<object> FLEXIBLE"));
-	const work = workFromRow({
-		id: crypto.randomUUID(),
-		created_at: "2026-01-01T00:00:00.000Z",
-		updated_at: "2026-01-01T00:00:00.000Z",
-		historical_time: time,
-	});
-	assertEquals(work.historicalTime, time);
 });

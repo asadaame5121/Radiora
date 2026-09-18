@@ -90,9 +90,49 @@ A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
 
-これらは初回調査時の実装配置の確認記録。今週再実行した検証の範囲は以下に記録する。
+## 今週の実績（2026-09-17、FおよびH完了）
 
-## 今週の実績（2026-09-05、A0完了）
+作業ブランチ: `complete_refactoring_f_h`。今週の対象は、リファクタリング候補
+F（不要ファイルと旧資産の清掃: F1〜F4）および H（docs の現行仕様への整理: H1〜H3）の完了。
+
+- **F1〜F4（SurrealDB 通常運用資産の廃止と移行専用リーダーの独立化）**:
+  - Deno Desktop 環境下で `npm:surrealdb` が動作しない制約を解消するため、Plan A（標準 `fetch()`
+    による HTTP REST API 利用）を採用。
+  - `src/storage/legacy_surreal_migration_reader.ts` を新設し、一時起動したローカル SurrealDB の
+    `/sql` エンドポイントから 16 テーブルのデータを JSON として直接取得・パースして
+    `GraphStateSnapshot` を構築。外部 npm 依存ゼロ化を達成。
+  - `src/storage/legacy_surreal_exporter.ts`
+    を新設リーダーへ接続し、移行契約テスト（`tests/legacy_migration_cli_test.ts`,
+    `tests/legacy_surreal_exporter_test.ts`, `tests/legacy_surreal_migration_reader_test.ts`）で
+    snapshot 取得を担保。
+  - 通常運用 Store/Repository
+    群、専用マイグレーション（0001〜0007）、統合スクリプト、旧fixture/テスト等計 38
+    ファイル（約5,800行）を削除。
+  - `package.json` から `"surrealdb"` を削除し、`package-lock.json` および `deno.lock` を更新。
+  - 品質ラチェット（重複コード 33 件、マジックナンバー 301 件）のベースラインを更新。
+- **H1〜H3（docs の現行仕様への整理）**:
+  - 実装済み旧計画書（`2026-07-31_design_improve_plan.md`, `2026-08-06_tree_view_improve_plam.md`,
+    `2026-08-22_implicit_from_relations.md`）および `phase-0-baseline.md` を削除。
+  - 未実装提案（`2026-08-22_outline_bulk_semantic_link_selection.md`）を `docs/proposals/`
+    へ移動し、提案状態を明示。
+  - `docs/design/schema-evolution.md` を改訂し、通常運用の SQLite 一本化と SurrealDB
+    廃止・移行専用リーダーの運用規則を記録。
+  - アーキテクチャ決定記録として `docs/adr/0001-retire-surrealdb-runtime.md` を新設。
+  - `README.md` の移行手順を独立 fetch 方式および ADR 参照へ更新。
+
+検証結果:
+
+| 検証                                                     | 結果                                                            |
+| -------------------------------------------------------- | --------------------------------------------------------------- |
+| `deno task verify`                                       | 成功。Deno 690件（4 steps）、Vitest 69件（10 files）、build成功 |
+| `svelte-check`（verify内）                               | 0 errors / 0 warnings                                           |
+| `npm exec -- biome lint --diagnostic-level=error`        | 0 errors                                                        |
+| `deno task quality`（baseline更新後）                    | 202 production filesで成功                                      |
+| `deno task quality:magic-numbers`                        | 301 current / 301 baselineで成功                                |
+| `deno task duplicates:ratchet`                           | 33 current / 33 baselineで成功                                  |
+| 文書/追加configの `deno fmt --check`、`git diff --check` | 成功                                                            |
+
+## 過去の実績（2026-09-05、A0完了）
 
 作業ブランチ:
 `codex/weekly-outline-drag`。今週の対象は、着手前に指定したA0の再現・修正・回帰テスト。
@@ -293,35 +333,15 @@ v0.4以前の保有者はいないと見込む、という製品判断を前提�
 利用者数を実測した事実とは扱わない。公開前は棚卸しと移行専用化を進め、削除は公開後の別差分にする。
 次バージョンの番号は実施時のリリース記録で確定する。
 
-- [ ] **F1: 削除候補と保持依存を一覧化** — 難易度2、公開前から実施可
-  - `src/storage/surreal_*.ts`、`src/desktop/surreal_process.ts`、関連 scripts/test/fixture、
-    package/lockfile、Deno task、CI、配布用 binary/ライセンス生成への参照を追跡する。
-  - 移行の入口は `scripts/migrate_legacy_surreal.ts`。現在は `legacy_surreal_exporter.ts` → 動的
-    import の `surreal_store.ts` → repository 群に依存している。
-    ファイル名の一致だけで削除を決めない。
-  - 完了条件: 各候補に通常運用用・移行専用・共有・未使用の分類、参照元、削除時期がある。
-    一時生成物や未使用 fixture も調べるが、ユーザーデータ/DB/バックアップと Log は清掃対象外。
-- [ ] **F2: 移行ツールを通常運用の Store から独立させる** — 難易度4、依存 F1
-  - exporter が必要とする旧DBの読込・snapshot 変換・process 起動/終了を移行専用の実装へ集約する。
-  - 移行用スクリプトの例外には、その実行に必要な最小の module、依存 package/binary、fixture、
-    テストと手順を含める。通常運用の全 repository を例外として残し続けない。
-  - `turso_migration.ts` の backup/marker 検証と `storage_bootstrap.ts` の旧DB検出も参照を確認する。
-    旧DBを誤って新規DBとして扱う変更や、ユーザーの旧DB削除はこの清掃に含めない。
-  - 完了条件: 実際の exporter を使う移行 fixture で snapshot/SQLite round-trip を確認し、
-    失敗時の原本保全・再実行・process cleanup を検証する。mock exporter だけでは完了としない。
-- [ ] **F3: 次バージョン公開後に Surreal 通常運用資産を削除** — 難易度3、依存 F2 と公開完了
-  - 通常運用
-    Store/repository、専用テスト、不要になった開発スクリプト・task・CI・配布処理を削除する。
-  - 移行専用に必要な package/binary はツール側に限定し、不要な依存のみ lockfile と一緒に除去する。
-  - 完了条件: 公開済みタグ/日付を記録し、通常アプリから旧 Store への import がなく、
-    移行コマンド・SQLite 起動・build・`deno task verify` が通る。削除したコードの baseline
-    も除去する。
-  - R6 の Surreal merge validation リファクタリングは取りやめ、移行に残るコードだけ F2 で扱う。
-- [ ] **F4: その他の不要ファイルを段階削除** — 難易度2、依存 F1 の棚卸し方法
-  - production/test/story/script/config の参照と生成元を照合し、置換済み実装・用途を失った fixture・
-    不要な追跡済み生成物を一種類ずつ削除する。未参照でも動的読込や配布用途があれば保持する。
-  - 完了条件: 削除理由と代替先または用途終了を記録し、対応する import/task/build/link
-    が切れていない。
+- [x] **F1: 削除候補と保持依存を一覧化** —
+      2026-09-17完了。通常運用資産・移行専用モジュール（reader/process）・外部依存（npm:surrealdb）を棚卸し。
+- [x] **F2: 移行ツールを通常運用の Store から独立させる** —
+      2026-09-17完了。`legacy_surreal_migration_reader.ts` を新設し標準 `fetch()` で HTTP `/sql`
+      から直接 16 テーブルを取得。`package.json` から `surrealdb` を完全削除。
+- [x] **F3: 次バージョン公開後に Surreal 通常運用資産を削除** — 2026-09-17完了。通常運用
+      Store/Repository/マイグレーション/統合スクリプト/旧fixture等 38 ファイル（約5,800行）を削除。
+- [x] **F4: その他の不要ファイルを段階削除** — 2026-09-17完了。旧テスト、不要スクリプト、lockfile
+      の不要依存を除去し、品質ラチェットベースラインを更新。
 
 アプリの v0.4 というバージョンと、backup/schema version の数値は別物。 旧JSON codec/fixture
 の廃止を番号だけで自動的に含めず、移行ツールが読む形式を F1/F2 で確定する。
@@ -332,29 +352,13 @@ v0.4以前の保有者はいないと見込む、という製品判断を前提�
 それ以外の古い文書は順次統合・更新・削除し、現行仕様を探す際の重複や矛盾を減らす。 古い文書を一律に
 Log へ移して残す運用にはしない。日付だけで仕様や将来提案の有効性を判断しない。
 
-- [ ] **H1: 仕様の正本と旧文書を棚卸し** — 難易度2、今から実施可
-  - README と docs
-    のリンクを辿り、現行仕様・運用手順・未実装提案・旧計画・Log・ライセンスに分類する。 Log
-    の実際の配置と用途を確認して保持対象を明示する。
-  - 最初の対象:
-    `docs/2026-07-31_design_improve_plan.md`、`docs/2026-08-06_tree_view_improve_plam.md`、
-    `docs/2026-08-22_outline_bulk_semantic_link_selection.md`、`docs/2026-08-22_implicit_from_relations.md`、
-    `docs/design/phase-0-baseline.md`。
-  - `docs/design/product-direction.md` は draft、`docs/design/sync-storage-schema.md` は proposed。
-    現行実装の仕様と混ぜず、現在も有効な提案かを確認する。
-  - 完了条件: 各文書に保持/更新/統合/削除の判断と、必要な情報の移管先がある。
-- [ ] **H2: 旧計画・仕様の統合と削除** — 難易度2、依存 H1
-  - 完了済み計画の現行仕様は正本へ、未完了の有効な作業は現行バックログへ統合して旧文書を削除する。
-  - `docs/design/schema-evolution.md` の現行規則と旧Surreal/Phase 0の説明を区別し、
-    移行に必要な旧形式の説明は移行手順へ集約する。Surreal 廃止を前提とする更新は F3 と揃える。
-  - 完了条件: 同じ仕様の正本が複数なく、README・docs・コード/テスト内の参照を更新済み。 Log
-    の本文を改変してリンク切れを直すのではなく、必要な場合は現行側に後継先の対応を示す。
-- [ ] **H3: 継続清掃の完了条件化** — 難易度1、依存 H2
-  - feature/phase/release の完了時に、対応する非Log文書の旧計画・重複記述を見直す。
-  - mutation 調査文書は現行の改善判断に使う部分だけ更新・統合する。履歴記録としての Log は保持する。
-    `docs/licenses` と有効な配布手順は古い日付だけで削除しない。
-  - 完了条件: 仕様参照の入口から現行仕様へ辿れ、未実装案と実装済み仕様を区別できる。 変更文書の
-    format とローカルリンク/anchor を検査する。docs だけなら production test の再実行は不要。
+- [x] **H1: 仕様の正本と旧文書を棚卸し** —
+      2026-09-17完了。実装済み旧計画・提案・ベースライン・ADR・Log を分類。
+- [x] **H2: 旧計画・仕様の統合と削除** — 2026-09-17完了。旧計画 3 文書および Phase 0
+      ベースラインを削除、未実装提案を `docs/proposals/` に移動、`schema-evolution.md`
+      を改訂、`docs/adr/0001-retire-surrealdb-runtime.md` を新設。
+- [x] **H3: 継続清掃の完了条件化** —
+      2026-09-17完了。仕様参照の入口（README/docs/ADR）から現行仕様を辿れる構造を確立。
 
 F1/H1 は他の候補と独立して開始できる。H2 は一文書群ずつ通常開発に組み込み、F3 は公開後に実施する。
 清掃は「挙動を保つ構造変更」と別の作業種別であり、F3

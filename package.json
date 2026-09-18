@@ -59,7 +59,6 @@
 		"lint-staged": "^17.4.1",
 		"playwright": "1.58.2",
 		"storybook": "10.5.7",
-		"surrealdb": "^2.0.8",
 		"svelte-check": "^4.7.5",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.6",
