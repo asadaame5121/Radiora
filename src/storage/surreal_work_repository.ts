@@ -1,4 +1,6 @@
 import { RecordId } from "surrealdb";
+import { parse } from "valibot";
+import { type HistoricalTime, HistoricalTimeSchema } from "../domain/historical_time.ts";
 import type { Branch, Occurrence, PurgeManifest, Work, WorkingCopy } from "../domain/models.ts";
 import type {
 	DiscoveryStorePort,
@@ -22,6 +24,7 @@ import { duplicateLinkIdsAfterMerge } from "./surreal_relation_operations.ts";
 export type SurrealWorkRepositoryPort = Pick<
 	WorkStorePort,
 	| "listWorks"
+	| "setWorkHistoricalTime"
 	| "createWorkBundle"
 	| "importWorkBundles"
 	| "createUnplacedWork"
@@ -48,12 +51,29 @@ export class SurrealWorkRepository implements SurrealWorkRepositoryPort {
 	async listWorks(includeDeleted = false): Promise<Work[]> {
 		const [rows] = await this.db.query<[Row[]]>(
 			`SELECT record::id(id) AS id, created_at, updated_at, deleted_at, stub,
-				merged_into_work, merged_at
+				merged_into_work, merged_at, historical_time
 				FROM work ${
 				includeDeleted ? "" : "WHERE deleted_at IS NONE AND merged_into_work IS NONE"
 			};`,
 		);
 		return rows.map(workFromRow);
+	}
+
+	async setWorkHistoricalTime(
+		workId: string,
+		value: HistoricalTime | null,
+		updatedAt: string,
+	): Promise<void> {
+		const historicalTime = value === null ? null : parse(HistoricalTimeSchema, value);
+		await this.db.query(
+			`BEGIN TRANSACTION;
+			IF array::len(SELECT id FROM $work WHERE deleted_at IS NONE AND merged_into_work IS NONE) = 0 { THROW "Work not found"; };
+			UPDATE $work SET historical_time = ${
+				value === null ? "NONE" : "$historicalTime"
+			}, updated_at = $updatedAt;
+			COMMIT TRANSACTION;`,
+			{ work: new RecordId("work", workId), historicalTime, updatedAt },
+		);
 	}
 
 	async createWorkBundle(
@@ -67,7 +87,8 @@ export class SurrealWorkRepository implements SurrealWorkRepositoryPort {
 		await this.db.query(
 			`BEGIN TRANSACTION;
 			CREATE $work CONTENT {
-				created_at: $createdAt, updated_at: $updatedAt, deleted_at: NONE
+				created_at: $createdAt, updated_at: $updatedAt, deleted_at: NONE,
+				historical_time: ${work.historicalTime ? "$historicalTime" : "NONE"}
 			};
 			CREATE $branch CONTENT {
 				work: $work, name: $name, head_revision: NONE,
@@ -96,6 +117,9 @@ export class SurrealWorkRepository implements SurrealWorkRepositoryPort {
 					? { contextualHeading: occurrence.contextualHeading }
 					: {}),
 				name: branch.name,
+				...(work.historicalTime
+					? { historicalTime: parse(HistoricalTimeSchema, work.historicalTime) }
+					: {}),
 				text: workingCopy.text,
 				createdAt: work.createdAt,
 				updatedAt: work.updatedAt,
@@ -118,6 +142,12 @@ export class SurrealWorkRepository implements SurrealWorkRepositoryPort {
 			parameters[`copy${index}`] = new RecordId("working_copy", bundle.branch.id);
 			parameters[`occurrence${index}`] = new RecordId("occurrence", bundle.occurrence.id);
 			parameters[`createdAt${index}`] = bundle.work.createdAt;
+			if (bundle.work.historicalTime) {
+				parameters[`historicalTime${index}`] = parse(
+					HistoricalTimeSchema,
+					bundle.work.historicalTime,
+				);
+			}
 			parameters[`updatedAt${index}`] = bundle.work.updatedAt;
 			parameters[`text${index}`] = bundle.workingCopy.text;
 			parameters[`orderKey${index}`] = bundle.occurrence.orderKey;
@@ -134,6 +164,7 @@ export class SurrealWorkRepository implements SurrealWorkRepositoryPort {
 		await this.db.query(
 			importWorkBundlesTransactionQuery(bundles.map((bundle) => ({
 				hasParent: bundle.occurrence.parentOccurrenceId !== null,
+				hasHistoricalTime: Boolean(bundle.work.historicalTime),
 				hasContextualHeading: Boolean(bundle.occurrence.contextualHeading),
 			}))),
 			parameters,
@@ -152,7 +183,11 @@ export class SurrealWorkRepository implements SurrealWorkRepositoryPort {
 		]);
 		validateUnplacedWorkCreation(work, branch, workingCopy, works, branches, copies);
 		await this.db.query(
-			quickCaptureTransactionQuery(Boolean(work.stub), Boolean(work.stub?.context)),
+			quickCaptureTransactionQuery(
+				Boolean(work.stub),
+				Boolean(work.stub?.context),
+				Boolean(work.historicalTime),
+			),
 			{
 				work: new RecordId("work", work.id),
 				branch: new RecordId("branch", branch.id),
@@ -166,6 +201,9 @@ export class SurrealWorkRepository implements SurrealWorkRepositoryPort {
 						stubCreatedVia: work.stub.createdVia,
 						...(work.stub.context ? { stubContext: work.stub.context } : {}),
 					}
+					: {}),
+				...(work.historicalTime
+					? { historicalTime: parse(HistoricalTimeSchema, work.historicalTime) }
 					: {}),
 			},
 		);

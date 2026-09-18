@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import type { Branch, Occurrence, Work, WorkingCopy } from "../domain/models.ts";
+import type { HistoricalTime } from "../domain/historical_time.ts";
 import type { GraphStore, WorkBundle } from "./graph_store.ts";
 import { JsonGraphStore } from "./json_store.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
@@ -37,6 +38,31 @@ async function assertAtomicImport(store: GraphStore): Promise<void> {
 	const child = bundle("子", root.occurrence.id, 1024);
 	await store.importWorkBundles([root, child]);
 	assertEquals((await store.listItems()).map((item) => item.text), ["日本語\n複数行", "子"]);
+	const historicalTime = {
+		kind: "point",
+		date: { precision: "year", year: 1604, approximate: false },
+		original: "江戸時代",
+	} satisfies HistoricalTime;
+	const historical = bundle("年代付き", null, 1536);
+	historical.work.historicalTime = historicalTime;
+	await store.importWorkBundles([historical]);
+	assertEquals(
+		(await store.listItems()).find((item) => item.text === "年代付き")?.historicalTime,
+		historicalTime,
+	);
+
+	const invalidHistorical = bundle("不正な年代", null, 1792);
+	invalidHistorical.work.historicalTime = {
+		kind: "point",
+		date: { precision: "year", year: Number.POSITIVE_INFINITY },
+	} as never;
+	const beforeInvalidImport = await store.listItems();
+	await assertRejects(
+		() => store.importWorkBundles([invalidHistorical]),
+		Error,
+		"Invalid imported Work",
+	);
+	assertEquals(await store.listItems(), beforeInvalidImport);
 
 	const colliding = bundle("衝突", null, 2048);
 	colliding.work.id = root.work.id;
@@ -66,6 +92,7 @@ Deno.test("JsonGraphStore imports and persists a complete outline atomically", a
 		assertEquals((await reopened.listItems()).map((item) => item.text), [
 			"日本語\n複数行",
 			"子",
+			"年代付き",
 		]);
 		await reopened.close();
 	} finally {

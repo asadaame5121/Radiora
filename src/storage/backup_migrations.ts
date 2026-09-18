@@ -155,6 +155,16 @@ export function migrateBackupV6(data: StoredGraphV6): StoredGraphV7 {
 	};
 }
 
+/** V8 adds optional Work historicalTime; old Works remain undated. */
+export interface BackupV8 extends Omit<BackupV7, "schemaVersion" | "source"> {
+	schemaVersion: 8;
+	source: { storageSchemaVersion: 8 };
+}
+
+export function migrateBackupV7(data: StoredGraphV7): StoredGraphV7 {
+	return structuredClone(data);
+}
+
 export function migrateBackupV5(data: StoredGraphV5): StoredGraphV6 {
 	return { ...data, emergenceSuggestions: [] };
 }
