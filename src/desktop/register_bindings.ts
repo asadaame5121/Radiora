@@ -115,6 +115,7 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 				v.parse(IdSchema, id),
 				v.parse(v.nullable(IdSchema), revisionId),
 			),
+		setWorkHistoricalTime: (workId, value) => service().setWorkHistoricalTime(workId, value),
 		moveItem: async (input) => service().moveItem(v.parse(MoveItemInputSchema, input)),
 		deleteItem: (id) => service().deleteItem(id),
 		trashWork: (id) => service().trashWork(id),

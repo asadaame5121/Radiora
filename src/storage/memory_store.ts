@@ -1,3 +1,5 @@
+import type { HistoricalTime } from "../domain/historical_time.ts";
+import { resolveWorkStub, updateHistoricalTime } from "./memory_work_metadata.ts";
 import type {
 	Bookmark,
 	Branch,
@@ -341,17 +343,16 @@ export class MemoryGraphStore implements GraphStore {
 		return Promise.resolve();
 	}
 
-	resolveWorkStub(workId: string, updatedAt: string): Promise<void> {
-		const work = this.works.find((candidate) => candidate.id === workId);
-		if (!work) return Promise.reject(new Error(`Work not found: ${workId}`));
-		if (!work.stub) return Promise.reject(new Error(`Work is not a Stub: ${workId}`));
-		this.works = this.works.map((candidate) => {
-			if (candidate.id !== workId) return candidate;
-			const resolved = { ...candidate, updatedAt };
-			delete resolved.stub;
-			return resolved;
-		});
-		return Promise.resolve();
+	async resolveWorkStub(workId: string, updatedAt: string): Promise<void> {
+		this.works = resolveWorkStub(this.works, workId, updatedAt);
+	}
+
+	async setWorkHistoricalTime(
+		workId: string,
+		value: HistoricalTime | null,
+		updatedAt: string,
+	): Promise<void> {
+		updateHistoricalTime(this.works, workId, value, updatedAt);
 	}
 
 	createOccurrence(occurrence: Occurrence): Promise<void> {

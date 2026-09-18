@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import type {
 	Branch,
 	Occurrence,
@@ -7,6 +8,7 @@ import type {
 	WorkingCopy,
 	WorkStub,
 } from "../domain/models.ts";
+import { WorkSchema } from "../domain/schemas.ts";
 import type { WorkBundle } from "./graph_store.ts";
 
 function isIsoInstant(value: unknown): value is string {
@@ -32,6 +34,9 @@ export function validateWorkBundleImport(
 	const importedOccurrenceIds = new Set(bundles.map((bundle) => bundle.occurrence.id));
 
 	for (const { work, branch, workingCopy, occurrence } of bundles) {
+		if (!v.safeParse(WorkSchema, work).success) {
+			throw new Error(`Invalid imported Work: ${work.id}`);
+		}
 		requireFreshId(work.id, workIds, "Work");
 		requireFreshId(branch.id, branchIds, "Branch");
 		requireFreshId(workingCopy.branchId, copyBranchIds, "Working Copy");

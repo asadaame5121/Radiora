@@ -1,4 +1,5 @@
 import * as v from "valibot";
+import { HistoricalTimeSchema } from "./historical_time.ts";
 import { CreatedAtSchema, RelationTypeNameSchema } from "./relation_type.ts";
 
 export const UUID_PATTERN =
@@ -28,6 +29,7 @@ export const WorkStubSchema = v.object({
 
 export const WorkSchema = v.object({
 	id: IdSchema,
+	historicalTime: v.optional(HistoricalTimeSchema),
 	createdAt: CreatedAtSchema,
 	updatedAt: CreatedAtSchema,
 	deletedAt: v.optional(CreatedAtSchema),

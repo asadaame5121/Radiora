@@ -111,13 +111,13 @@ Deno.test("scripts/desktop_msix.ts: assertCleanBundle rejects stale surreal arti
 	}
 });
 
-Deno.test("package.json: surrealdb is in devDependencies and not in runtime dependencies", async () => {
+Deno.test("package.json: surrealdb is completely removed from dependencies and devDependencies", async () => {
 	const packageJsonText = await Deno.readTextFile(
 		new URL("../package.json", import.meta.url),
 	);
 	const packageJson = JSON.parse(packageJsonText);
 	assertEquals("surrealdb" in (packageJson.dependencies ?? {}), false);
-	assertEquals("surrealdb" in (packageJson.devDependencies ?? {}), true);
+	assertEquals("surrealdb" in (packageJson.devDependencies ?? {}), false);
 });
 
 Deno.test("scripts/licenses.ts: runtimeEntries does not include SurrealDB CLI", async () => {

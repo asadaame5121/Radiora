@@ -1,3 +1,4 @@
+import type { HistoricalTime } from "../domain/historical_time.ts";
 import type {
 	Bookmark,
 	CreateItemInput,
@@ -131,6 +132,7 @@ export interface RadioraBindings {
 	updateItemText(id: string, text: string): Promise<void>;
 	setContextualHeading(id: string, contextualHeading?: string): Promise<void>;
 	setOccurrenceRevision(id: string, revisionId: string | null): Promise<void>;
+	setWorkHistoricalTime(workId: string, value: HistoricalTime | null): Promise<void>;
 	moveItem(input: MoveItemInput): Promise<void>;
 	deleteItem(id: string): Promise<void>;
 	trashWork(id: string): Promise<void>;

@@ -1,18 +1,6 @@
 <script lang="ts">
 	import { Dialog } from "bits-ui";
-
-	export type LicenseEntry = {
-		name: string;
-		version: string;
-		license: string;
-		file: string | null;
-		summary: string;
-	};
-
-	export type LicenseIndex = {
-		runtime: LicenseEntry[];
-		npm: LicenseEntry[];
-	};
+	import type { LicenseEntry, LicenseIndex } from "../services/license_index.ts";
 
 	let {
 		open = $bindable(),

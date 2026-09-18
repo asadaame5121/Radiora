@@ -19,7 +19,7 @@ Deno.test("tags are a global cloud view that projects tagged items", async () =>
 	assertMatch(view, /selectedTagNodeIds/);
 	assertMatch(view, /onclick=\{\(\) => \(selectedTag = tag\.name\)\}/);
 	assertMatch(view, /onclick=\{\(\) => onOpenTagNode\(workId\)\}/);
-	assertMatch(app, /selectOccurrence\(item\.id\)/);
+	assertMatch(app, /openOutlineOccurrence\(item\.id\)/);
 	assertMatch(app, /viewMode === "tags"/);
 	assertMatch(view, /\.tag-browser__cloud/);
 	assertMatch(view, /\.tag-browser__results/);

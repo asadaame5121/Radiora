@@ -13,6 +13,7 @@ import {
 	migrateBackupV4,
 	migrateBackupV5,
 	migrateBackupV6,
+	migrateBackupV7,
 	type StoredGraphV1,
 	type StoredGraphV2,
 	type StoredGraphV3,
@@ -22,8 +23,8 @@ import {
 	type StoredGraphV7,
 } from "../storage/backup_migrations.ts";
 
-export const CURRENT_BACKUP_SCHEMA_VERSION = 7;
-export const CURRENT_STORAGE_SCHEMA_VERSION = 7;
+export const CURRENT_BACKUP_SCHEMA_VERSION = 8;
+export const CURRENT_STORAGE_SCHEMA_VERSION = 8;
 
 export interface JsonBackupV6 {
 	format: "radiora-backup";
@@ -50,12 +51,17 @@ export interface JsonBackupRestoreResult {
 	recoverySnapshotCount: number;
 }
 
+export interface JsonBackupV8 extends Omit<JsonBackupV7, "schemaVersion" | "source"> {
+	schemaVersion: 8;
+	source: { storageSchemaVersion: 8 };
+}
+
 export class JsonBackupService {
 	constructor(private readonly store: BackupStorePort) {}
 
 	async export(now = new Date()): Promise<string> {
 		const exportedAt = now.toISOString();
-		const backup: JsonBackupV7 = {
+		const backup: JsonBackupV8 = {
 			format: "radiora-backup",
 			schemaVersion: CURRENT_BACKUP_SCHEMA_VERSION,
 			exportedAt,
@@ -155,14 +161,17 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 			migrated = migrateBackupV6(data as StoredGraphV6);
 			break;
 		case 7:
+		case 8:
 			if (!isRecord(data) || !Object.hasOwn(data, "relationTypeDefinitions")) {
 				throw new Error("バックアップデータに relationTypeDefinitions が必要です。");
 			}
-			return validatedGraphStateSnapshot(data);
+			return version === 7
+				? migrateBackupV7(validatedGraphStateSnapshot(data) as StoredGraphV7)
+				: validatedGraphStateSnapshot(data);
 		default:
 			throw new Error(`未対応のbackup schema versionです: ${version}`);
 	}
-	return validatedGraphStateSnapshot(migrated);
+	return validatedGraphStateSnapshot(migrateBackupV7(migrated));
 }
 
 function isLegacyBackupV0(

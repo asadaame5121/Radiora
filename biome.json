@@ -8,7 +8,8 @@
 			"tests/**/*.{ts,tsx,js,jsx}",
 			"vitest/**/*.{ts,tsx,js,jsx}",
 			"stories/**/*.{ts,tsx,js,jsx,svelte}",
-			".storybook/**/*.{ts,tsx,js,jsx}"
+			".storybook/**/*.{ts,tsx,js,jsx}",
+			"!output"
 		]
 	},
 	"formatter": {
