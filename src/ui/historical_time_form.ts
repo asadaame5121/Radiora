@@ -22,20 +22,44 @@ export interface HistoricalTimeDraft {
 	original: string;
 }
 
-function dateDraft(date: HistoricalDate | null = null): HistoricalDateDraft {
-	const calendarDate = date?.precision === "century" ? null : date;
-	const year = calendarDate?.year ?? 1;
+function emptyDateDraft(): HistoricalDateDraft {
 	return {
-		precision: date?.precision ?? "year",
-		era: date?.precision === "century" ? date.era : year <= 0 ? "bce" : "ce",
-		year: calendarDate ? String(year <= 0 ? 1 - year : year) : "",
-		century: date?.precision === "century" ? String(date.century) : "",
-		month: calendarDate?.precision === "month" || calendarDate?.precision === "day"
-			? String(calendarDate.month)
-			: "",
-		day: calendarDate?.precision === "day" ? String(calendarDate.day) : "",
-		approximate: date?.approximate ?? false,
-		unknown: date === null,
+		precision: "year",
+		era: "ce",
+		year: "",
+		century: "",
+		month: "",
+		day: "",
+		approximate: false,
+		unknown: true,
+	};
+}
+
+function dateDraft(date: HistoricalDate | null = null): HistoricalDateDraft {
+	if (!date) return emptyDateDraft();
+	if (date.precision === "century") {
+		return {
+			precision: "century",
+			era: date.era,
+			year: "",
+			century: String(date.century),
+			month: "",
+			day: "",
+			approximate: date.approximate ?? false,
+			unknown: false,
+		};
+	}
+	const isBce = date.year <= 0;
+	const hasMonth = date.precision === "month" || date.precision === "day";
+	return {
+		precision: date.precision,
+		era: isBce ? "bce" : "ce",
+		year: String(isBce ? 1 - date.year : date.year),
+		century: "",
+		month: hasMonth ? String(date.month) : "",
+		day: date.precision === "day" ? String(date.day) : "",
+		approximate: date.approximate ?? false,
+		unknown: false,
 	};
 }
 

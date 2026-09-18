@@ -26,7 +26,7 @@ function item(id: string, workId = id, historicalTime?: HistoricalTime): Outline
 
 function ports(
 	save: (workId: string, value: HistoricalTime | null) => Promise<void> = async () => {
-		// noop
+		/* noop */
 	},
 ) {
 	return {

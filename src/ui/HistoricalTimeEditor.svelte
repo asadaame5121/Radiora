@@ -1,12 +1,12 @@
 <script lang="ts">
-	import HistoricalDateFields from "./HistoricalDateFields.svelte";
-	import type { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
-	let { controller }: { controller: HistoricalTimeController } = $props();
-	function setKind(event: Event): void {
-		if (!(event.currentTarget instanceof HTMLSelectElement)) return;
-		const value = event.currentTarget.value;
-		if (value === "point" || value === "period") controller.setKind(value);
-	}
+import HistoricalDateFields from "./HistoricalDateFields.svelte";
+import type { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
+let { controller }: { controller: HistoricalTimeController } = $props();
+function setKind(event: Event): void {
+	if (!(event.currentTarget instanceof HTMLSelectElement)) return;
+	const value = event.currentTarget.value;
+	if (value === "point" || value === "period") controller.setKind(value);
+}
 </script>
 
 <section aria-label="年代">
@@ -26,10 +26,47 @@
 </section>
 
 <style>
-	section { border-top: 1px solid var(--border); margin-top: 16px; padding-top: 12px; font-size: 11px; }
-	h3 { font-size: 12px; } small, p { color: var(--muted); font-weight: normal; }
-	fieldset { display: grid; gap: 8px; padding: 0; margin: 0; border: 0; min-width: 0; }
-	label { display: grid; gap: 4px; }
-	input, select, button { min-width: 0; background: var(--surface-raised); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 6px; }
-	.actions { display: flex; gap: 6px; } [role="alert"] { color: var(--red); }
+section {
+	border-top: 1px solid var(--border);
+	margin-top: 16px;
+	padding-top: 12px;
+	font-size: 11px;
+}
+h3 {
+	font-size: 12px;
+}
+small,
+p {
+	color: var(--muted);
+	font-weight: normal;
+}
+fieldset {
+	display: grid;
+	gap: 8px;
+	padding: 0;
+	margin: 0;
+	border: 0;
+	min-width: 0;
+}
+label {
+	display: grid;
+	gap: 4px;
+}
+input,
+select,
+button {
+	min-width: 0;
+	background: var(--surface-raised);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	padding: 6px;
+}
+.actions {
+	display: flex;
+	gap: 6px;
+}
+[role="alert"] {
+	color: var(--red);
+}
 </style>

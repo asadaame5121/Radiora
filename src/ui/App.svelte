@@ -32,10 +32,12 @@
 	import Toast from "./Toast.svelte";
 	import IconButton from "./primitives/IconButton.svelte";
 	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
-	import LicensesDialog, {
+	import LicensesDialog from "./LicensesDialog.svelte";
+	import {
+		fetchLicenseIndex,
 		type LicenseEntry,
 		type LicenseIndex,
-	} from "./LicensesDialog.svelte";
+	} from "../services/license_index.ts";
 	import {
 		createConfirmationController,
 		type PendingConfirmation,
@@ -2000,11 +2002,7 @@
 		licenseDetail = null;
 		licenseLoading = true;
 		try {
-			const response = await fetch("/licenses/index.json");
-			if (!response.ok) {
-				throw new Error(`ライセンス情報を読み込めませんでした (${response.status})`);
-			}
-			licenseIndex = await response.json();
+			licenseIndex = await fetchLicenseIndex();
 		} catch (cause) {
 			licenseError = errorMessage(cause);
 		} finally {

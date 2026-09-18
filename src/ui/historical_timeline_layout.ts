@@ -67,6 +67,13 @@ export function historicalTimelineBelt(input: HistoricalTimelineBeltInput) {
 	return { known: { start: input.start, end: input.end }, unknown: null };
 }
 
+export interface HistoricalTimelineEdge {
+	id: string;
+	source: HistoricalTimelineNode;
+	target: HistoricalTimelineNode;
+	type: OutlineSnapshot["links"][number]["type"];
+}
+
 function createTimelineNode(
 	item: OutlineItem,
 	time: HistoricalTime,
@@ -110,7 +117,7 @@ function assignLanes(nodes: HistoricalTimelineNode[]): void {
 function buildEdges(
 	links: OutlineSnapshot["links"],
 	nodes: HistoricalTimelineNode[],
-) {
+): HistoricalTimelineEdge[] {
 	const byWork = new Map(nodes.map((node) => [node.item.workId, node]));
 	return links.flatMap((link) => {
 		const source = byWork.get(link.fromId);
@@ -130,9 +137,13 @@ export function layoutHistoricalTimeline(
 	for (const item of snapshot.items) {
 		const time = item.historicalTime;
 		const node = time ? createTimelineNode(item, time, project, left, right) : null;
-		if (node) nodes.push(node);
-		else undated.push(item);
+		if (node) {
+			nodes.push(node);
+		} else {
+			undated.push(item);
+		}
 	}
 	assignLanes(nodes);
-	return { nodes, undated, edges: buildEdges(snapshot.links, nodes) };
+	const edges = buildEdges(snapshot.links, nodes);
+	return { nodes, undated, edges };
 }

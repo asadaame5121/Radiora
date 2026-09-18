@@ -69,7 +69,7 @@
 					{#if node.time.kind === "period" && !node.unknownStart && !node.unknownEnd && node.startLatest < node.endEarliest}
 						<rect class="certain" x={sx(node.startLatest)} y={sy(node.y) - 6 * camera.k} width={sx(node.endEarliest) - sx(node.startLatest)} height={12 * camera.k} />
 					{/if}
-					{#if belt.unknown?.edge === "start" && belt.unknown.start === 0}<text class="unknown-label" x="4" y={sy(node.y) - 10} text-anchor="start">不明</text>{/if}
+					{#if belt.unknown?.edge === "start" && belt.unknown.start === 0}<text class="unknown-label" x="4" y={sy(node.y) - 10}>不明</text>{/if}
 					{#if belt.unknown?.edge === "end" && belt.unknown.end === width}<text class="unknown-label" x={width - 4} y={sy(node.y) - 10} text-anchor="end">不明</text>{/if}
 				{/if}
 				<text x={Math.max(4, sx(node.anchor))} y={sy(node.y) + 22 * camera.k} font-size={12 * camera.k}>{title(node.item.text)} · {formatHistoricalTime(node.time)}</text>
