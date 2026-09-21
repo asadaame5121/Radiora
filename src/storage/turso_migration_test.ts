@@ -57,15 +57,15 @@ Deno.test("imports a validated snapshot into a new Turso database atomically", a
 
 Deno.test("copies legacy storage and leaves the source unchanged", async () => {
 	const root = await Deno.makeTempDir({ prefix: "radiora-turso-migration-" });
-	const source = `${root}\\surreal`;
-	const sourceVersion = `${source}\\storage-schema-version`;
-	const backupRoot = `${root}\\backups`;
-	const target = `${root}\\turso\\radiora.db`;
+	const source = `${root}/surreal`;
+	const sourceVersion = `${source}/storage-schema-version`;
+	const backupRoot = `${root}/backups`;
+	const target = `${root}/turso/radiora.db`;
 	const marker = `${target}.migration.json`;
 	const state = snapshot();
 	let exportCount = 0;
 	await Deno.mkdir(source, { recursive: true });
-	await Deno.writeTextFile(`${source}\\CURRENT`, "unchanged");
+	await Deno.writeTextFile(`${source}/CURRENT`, "unchanged");
 	await Deno.writeTextFile(sourceVersion, "6\n");
 	try {
 		const result = await migrateLegacyStorageToTurso({
@@ -76,12 +76,12 @@ Deno.test("copies legacy storage and leaves the source unchanged", async () => {
 			markerPath: marker,
 			exportSnapshot: async (copyPath) => {
 				exportCount += 1;
-				assert(await Deno.stat(`${copyPath}\\CURRENT`));
+				assert(await Deno.stat(`${copyPath}/CURRENT`));
 				return state;
 			},
 		});
 		assert(result);
-		assertEquals(await Deno.readTextFile(`${source}\\CURRENT`), "unchanged");
+		assertEquals(await Deno.readTextFile(`${source}/CURRENT`), "unchanged");
 		assertEquals(JSON.parse(await Deno.readTextFile(marker)).snapshotHash, result.snapshotHash);
 		assert((await Array.fromAsync(Deno.readDir(backupRoot))).length === 1);
 		assertEquals(

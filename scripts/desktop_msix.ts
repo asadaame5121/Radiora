@@ -1,7 +1,3 @@
-if (Deno.build.os !== "windows") {
-	throw new Error("MSIXパッケージの作成はWindows PowerShellまたはNushellから実行してください。");
-}
-
 function argValue(name: string): string | null {
 	const index = Deno.args.indexOf(name);
 	return index >= 0 && index + 1 < Deno.args.length ? Deno.args[index + 1] : null;
@@ -188,6 +184,9 @@ export async function findLauncher(dir: URL): Promise<string> {
 }
 
 async function main(): Promise<void> {
+	if (Deno.build.os !== "windows") {
+		throw new Error("MSIXパッケージの作成はWindows PowerShellまたはNushellから実行してください。");
+	}
 	await assertCleanBundle(bundleDir);
 	const launcherName = await findLauncher(bundleDir);
 	const [major, minor, build, revision] = packageVersionParts(version);

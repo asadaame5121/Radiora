@@ -11,6 +11,7 @@ export default defineConfig({
 		baseURL: "http://127.0.0.1:6006",
 		browserName: "chromium",
 		headless: true,
+		colorScheme: "dark",
 		locale: "ja-JP",
 		timezoneId: "Asia/Tokyo",
 		viewport: { width: 1280, height: 800 },

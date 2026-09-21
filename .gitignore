@@ -35,8 +35,6 @@ test_result.txt
 test_*.surql
 .playwright-cli/
 output/
-reports/
-coverage/
 storybook-static/
 test-results/
 .stryker-tmp/
