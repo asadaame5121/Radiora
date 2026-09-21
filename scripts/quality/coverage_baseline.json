@@ -1,10 +1,10 @@
 {
 	"unit": {
-		"lines": 30.19,
-		"branches": 18.77
+		"lines": 77.67,
+		"branches": 56.53
 	},
 	"deno": {
-		"lines": 78.73,
-		"branches": 83.06
+		"lines": 81.71,
+		"branches": 84.62
 	}
 }

@@ -2,7 +2,9 @@ import { assertEquals } from "jsr:@std/assert@1";
 import {
 	applyThemeToDocument,
 	DEFAULT_THEME_PREFERENCE,
+	getSystemPrefersDark,
 	isThemePreference,
+	listenSystemThemeChange,
 	loadThemePreference,
 	resolveTheme,
 	saveThemePreference,
@@ -60,6 +62,30 @@ Deno.test("theme preference tolerates unavailable storage gracefully", () => {
 	};
 	assertEquals(loadThemePreference(unavailable), "auto");
 	saveThemePreference("dark", unavailable);
+
+	// null storage
+	assertEquals(loadThemePreference(null), "auto");
+	saveThemePreference("dark", null);
+
+	// default browserStorage fallback
+	if (typeof globalThis.localStorage !== "undefined") {
+		globalThis.localStorage.clear();
+		assertEquals(loadThemePreference(), "auto");
+		saveThemePreference("dark");
+		assertEquals(loadThemePreference(), "dark");
+		globalThis.localStorage.clear();
+	} else {
+		assertEquals(loadThemePreference(), "auto");
+	}
+});
+
+Deno.test("getSystemPrefersDark and listenSystemThemeChange tolerate non-browser environment", () => {
+	assertEquals(typeof getSystemPrefersDark(), "boolean");
+	const cleanup = listenSystemThemeChange(() => {
+		// intentional no-op
+	});
+	assertEquals(typeof cleanup, "function");
+	cleanup();
 });
 
 Deno.test("resolveTheme computes effective theme considering OS preference", () => {

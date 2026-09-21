@@ -43,6 +43,21 @@ Deno.test("tree projection preference tolerates unavailable storage", () => {
 
 	assertEquals(loadTreeProjectionPreference(unavailable), "chronology");
 	saveTreeProjectionPreference("lineage", unavailable);
+
+	// null storage
+	assertEquals(loadTreeProjectionPreference(null), "chronology");
+	saveTreeProjectionPreference("lineage", null);
+
+	// default browserStorage fallback
+	if (typeof globalThis.localStorage !== "undefined") {
+		globalThis.localStorage.clear();
+		assertEquals(loadTreeProjectionPreference(), "chronology");
+		saveTreeProjectionPreference("lineage");
+		assertEquals(loadTreeProjectionPreference(), "lineage");
+		globalThis.localStorage.clear();
+	} else {
+		assertEquals(loadTreeProjectionPreference(), "chronology");
+	}
 });
 
 function memoryStorage(): TreeProjectionStorage & { values: Map<string, string> } {

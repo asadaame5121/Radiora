@@ -29,3 +29,39 @@ Deno.test("invalid quick capture preference falls back to the root outline", () 
 	});
 	assertEquals(loadQuickCapturePreference(storage), DEFAULT_QUICK_CAPTURE_PREFERENCE);
 });
+
+Deno.test("quick capture preference tolerates unavailable storage gracefully", () => {
+	const throwingStorage = {
+		getItem: () => {
+			throw new Error("Storage blocked");
+		},
+		setItem: () => {
+			throw new Error("Storage blocked");
+		},
+	};
+
+	// null storage
+	assertEquals(loadQuickCapturePreference(null), DEFAULT_QUICK_CAPTURE_PREFERENCE);
+	saveQuickCapturePreference({ destination: "unplaced" }, null);
+
+	// throwing storage
+	assertEquals(loadQuickCapturePreference(throwingStorage), DEFAULT_QUICK_CAPTURE_PREFERENCE);
+	saveQuickCapturePreference({ destination: "unplaced" }, throwingStorage);
+
+	// corrupted JSON
+	const corruptedStorage = memoryStorage({
+		"radiora.quickCapturePreference": "invalid-json{",
+	});
+	assertEquals(loadQuickCapturePreference(corruptedStorage), DEFAULT_QUICK_CAPTURE_PREFERENCE);
+
+	// default browserStorage fallback
+	if (typeof globalThis.localStorage !== "undefined") {
+		globalThis.localStorage.clear();
+		assertEquals(loadQuickCapturePreference(), DEFAULT_QUICK_CAPTURE_PREFERENCE);
+		saveQuickCapturePreference({ destination: "unplaced" });
+		assertEquals(loadQuickCapturePreference(), { destination: "unplaced" });
+		globalThis.localStorage.clear();
+	} else {
+		assertEquals(loadQuickCapturePreference(), DEFAULT_QUICK_CAPTURE_PREFERENCE);
+	}
+});
