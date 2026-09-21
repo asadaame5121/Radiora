@@ -67,16 +67,13 @@ Deno.test("theme preference tolerates unavailable storage gracefully", () => {
 	assertEquals(loadThemePreference(null), "auto");
 	saveThemePreference("dark", null);
 
-	// default browserStorage fallback
-	if (typeof globalThis.localStorage !== "undefined") {
-		globalThis.localStorage.clear();
+	// default browserStorage fallback with hermetic stub
+	const stub = createFakeLocalStorage();
+	withStubbedLocalStorage(stub, () => {
 		assertEquals(loadThemePreference(), "auto");
 		saveThemePreference("dark");
 		assertEquals(loadThemePreference(), "dark");
-		globalThis.localStorage.clear();
-	} else {
-		assertEquals(loadThemePreference(), "auto");
-	}
+	});
 });
 
 Deno.test("getSystemPrefersDark and listenSystemThemeChange tolerate non-browser environment", () => {
@@ -113,6 +110,39 @@ Deno.test("applyThemeToDocument sets dataset and colorScheme on document element
 	assertEquals(doc.documentElement.style.colorScheme, "");
 });
 
+function withStubbedLocalStorage<T>(stub: Storage, fn: () => T): T {
+	const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+	try {
+		Object.defineProperty(globalThis, "localStorage", {
+			value: stub,
+			configurable: true,
+			writable: true,
+		});
+		return fn();
+	} finally {
+		if (original) {
+			Object.defineProperty(globalThis, "localStorage", original);
+		} else {
+			// @ts-expect-error cleanup undefined
+			delete globalThis.localStorage;
+		}
+	}
+}
+
+function createFakeLocalStorage(initial: Record<string, string> = {}): Storage {
+	const values = new Map(Object.entries(initial));
+	return {
+		getItem: (key: string) => values.get(key) ?? null,
+		setItem: (key: string, value: string) => values.set(key, value),
+		removeItem: (key: string) => values.delete(key),
+		clear: () => values.clear(),
+		key: (index: number) => Array.from(values.keys())[index] ?? null,
+		get length() {
+			return values.size;
+		},
+	};
+}
+
 function memoryStorage(): ThemePreferenceStorage & { values: Map<string, string> } {
 	const values = new Map<string, string>();
 	return {
@@ -135,5 +165,5 @@ function mockDocument(): Document {
 			getAttribute: (name: string) => (name === "data-theme" ? dataset.theme ?? null : null),
 		},
 	};
-	return doc as unknown as Document;
+	return doc as Document;
 }

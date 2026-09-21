@@ -85,7 +85,8 @@ if (typeof globalThis.InputEvent === "undefined") {
 			this.data = init?.data ?? "";
 		}
 	}
-	(globalThis as unknown as { InputEvent: typeof MockInputEvent }).InputEvent = MockInputEvent;
+	(globalThis as typeof globalThis & { InputEvent: typeof MockInputEvent }).InputEvent =
+		MockInputEvent;
 }
 
 function mockKeyboardEvent(
@@ -96,18 +97,26 @@ function mockKeyboardEvent(
 		shiftKey: init.shiftKey ?? false,
 		isComposing: init.isComposing ?? false,
 		preventDefault: vi.fn(),
-	} as unknown as KeyboardEvent;
+	} as KeyboardEvent;
 }
 
-function mockTextarea(value: string, selectionStart = value.length, selectionEnd = selectionStart) {
+function mockTextarea(
+	value: string,
+	selectionStart = value.length,
+	selectionEnd = selectionStart,
+): HTMLTextAreaElement {
 	const listeners: Record<string, ((event: Event) => void)[]> = {};
-	return {
+	const textarea = {
 		value,
 		selectionStart,
 		selectionEnd,
 		focus: vi.fn(),
-		setRangeText: vi.fn((replacement: string, start: number, end: number) => {
-			value = value.slice(0, start) + replacement + value.slice(end);
+		setRangeText: vi.fn((replacement: string, start?: number, end?: number) => {
+			const s = typeof start === "number" ? start : textarea.selectionStart;
+			const e = typeof end === "number" ? end : textarea.selectionEnd;
+			textarea.value = textarea.value.slice(0, s) + replacement + textarea.value.slice(e);
+			textarea.selectionStart = s + replacement.length;
+			textarea.selectionEnd = s + replacement.length;
 		}),
 		dispatchEvent: vi.fn((event: Event) => {
 			for (const listener of listeners[event.type] ?? []) listener(event);
@@ -119,7 +128,8 @@ function mockTextarea(value: string, selectionStart = value.length, selectionEnd
 		removeEventListener: (type: string, listener: (event: Event) => void) => {
 			listeners[type] = (listeners[type] ?? []).filter((l) => l !== listener);
 		},
-	} as unknown as HTMLTextAreaElement;
+	};
+	return textarea as HTMLTextAreaElement;
 }
 
 describe("editor controller", () => {
@@ -171,6 +181,54 @@ describe("editor controller", () => {
 			expect(api.updateItemText).toHaveBeenCalledWith("item-1", "updated text");
 			expect(controller.hasUnsavedChanges()).toBe(false);
 			expect(ports.persistSnapshotCache).toHaveBeenCalled();
+		});
+
+		test("updateLocalText debounces autosave and coalesces rapid edits", async () => {
+			vi.useFakeTimers();
+			try {
+				const item = {
+					id: "item-1",
+					workId: "work-1",
+					text: "initial",
+					parentId: null,
+					orderKey: 0,
+					collapsed: false,
+					revisionSelector: { mode: "branch" as const, branchId: "branch-1" },
+					createdAt: "2026-08-10T00:00:00.000Z",
+					updatedAt: "2026-08-10T00:00:00.000Z",
+				};
+				const snapshot: OutlineSnapshot = {
+					items: [item],
+					links: [],
+					knots: [],
+					stashItemIds: [],
+				};
+				const { controller, api } = createController({ snapshot });
+				const textarea1 = mockTextarea("edit 1", 6, 6);
+
+				controller.updateLocalText("item-1", textarea1);
+				expect(api.updateItemText).not.toHaveBeenCalled();
+
+				// Advance partially through the debounce interval (100ms < 250ms)
+				await vi.advanceTimersByTimeAsync(100);
+				expect(api.updateItemText).not.toHaveBeenCalled();
+
+				// Second rapid edit before first debounce fires (coalescing)
+				const textarea2 = mockTextarea("edit 2 (coalesced)", 18, 18);
+				controller.updateLocalText("item-1", textarea2);
+				expect(api.updateItemText).not.toHaveBeenCalled();
+
+				// Advance past original timer (total 250ms elapsed, but only 150ms since second edit)
+				await vi.advanceTimersByTimeAsync(150);
+				expect(api.updateItemText).not.toHaveBeenCalled();
+
+				// Advance until second timer expires (250ms from second edit)
+				await vi.advanceTimersByTimeAsync(100);
+				expect(api.updateItemText).toHaveBeenCalledTimes(1);
+				expect(api.updateItemText).toHaveBeenCalledWith("item-1", "edit 2 (coalesced)");
+			} finally {
+				vi.useRealTimers();
+			}
 		});
 
 		test("updateLocalText ignores pinned revision items", () => {
@@ -373,6 +431,8 @@ describe("editor controller", () => {
 				origin: "human",
 				status: "asserted",
 			});
+			expect(textarea.value).toBe("See  for info");
+			expect(textarea.setRangeText).toHaveBeenCalledWith("", 4, 11, "end");
 			expect(ports.reload).toHaveBeenCalledWith("item-1");
 			expect(ports.requestFocus).toHaveBeenCalled();
 			expect(controller.inlineLinkCompletion).toBeNull();
