@@ -81,13 +81,13 @@ Deno.test("scripts/desktop_msix.ts: assertCleanBundle rejects stale surreal arti
 		const rootUrl = new URL(`file:///${root.replaceAll("\\", "/")}/`);
 
 		// 1. Clean bundle with valid launcher
-		await Deno.writeTextFile(`${root}\\Radiora.exe`, "dummy launcher");
+		await Deno.writeTextFile(`${root}/Radiora.exe`, "dummy launcher");
 		await assertCleanBundle(rootUrl);
 		const launcher = await findLauncher(rootUrl);
 		assertEquals(launcher, "Radiora.exe");
 
 		// 2. Bundle with stale surreal.exe
-		await Deno.writeTextFile(`${root}\\surreal.exe`, "dummy surreal");
+		await Deno.writeTextFile(`${root}/surreal.exe`, "dummy surreal");
 		await assertRejects(
 			() => assertCleanBundle(rootUrl),
 			Error,
@@ -95,10 +95,10 @@ Deno.test("scripts/desktop_msix.ts: assertCleanBundle rejects stale surreal arti
 		);
 		// findLauncher should still defensively ignore surreal.exe
 		assertEquals(await findLauncher(rootUrl), "Radiora.exe");
-		await Deno.remove(`${root}\\surreal.exe`);
+		await Deno.remove(`${root}/surreal.exe`);
 
 		// 3. Bundle with stale radiora-surreal.exe
-		await Deno.writeTextFile(`${root}\\radiora-surreal.exe`, "dummy sidecar");
+		await Deno.writeTextFile(`${root}/radiora-surreal.exe`, "dummy sidecar");
 		await assertRejects(
 			() => assertCleanBundle(rootUrl),
 			Error,
