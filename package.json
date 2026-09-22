@@ -30,6 +30,7 @@
 	"dependencies": {
 		"bits-ui": "2.18.1",
 		"d3": "^7.9.0",
+		"neverthrow": "8.2.0",
 		"overtype": "2.4.0",
 		"svelte": "^5.56.8",
 		"valibot": "^1.4.2"

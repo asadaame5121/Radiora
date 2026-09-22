@@ -1,3 +1,5 @@
+import { errAsync, Result, ResultAsync } from "neverthrow";
+import { BackupRestoreError } from "./backup_restore_error.ts";
 import {
 	type BackupStorePort,
 	type GraphStateSnapshot,
@@ -72,27 +74,56 @@ export class JsonBackupService {
 		return JSON.stringify(backup, null, 2);
 	}
 
-	async restore(source: string): Promise<JsonBackupRestoreResult> {
-		let parsed: unknown;
-		try {
-			parsed = JSON.parse(source);
-		} catch (cause) {
-			throw new Error("バックアップJSONを解析できません。", { cause });
-		}
-		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-			throw new Error("バックアップenvelopeが必要です。");
-		}
-		const envelope = parsed as Record<string, unknown>;
-		const state = decodeBackupState(envelope);
-		await this.store.restoreGraphState(state);
-		return {
+	/** Compatibility boundary for existing service / RPC callers. */
+	restore(source: string): Promise<JsonBackupRestoreResult> {
+		return this.restoreResult(source).match(
+			(result) => result,
+			(error) => {
+				throw error;
+			},
+		);
+	}
+
+	restoreResult(source: string): ResultAsync<JsonBackupRestoreResult, BackupRestoreError> {
+		const decoded = parseBackupJson(source).andThen(decodeBackupInput);
+		if (decoded.isErr()) return errAsync(decoded.error);
+		const state = decoded.value;
+		const restore = ResultAsync.fromThrowable(
+			() => this.store.restoreGraphState(state),
+			(cause) =>
+				new BackupRestoreError(
+					"restore-failed",
+					cause instanceof Error ? cause.message : String(cause),
+					{ cause },
+				),
+		);
+		return restore().map(() => ({
 			workCount: state.works.length,
 			occurrenceCount: state.occurrences.length,
 			revisionCount: state.revisions.length,
 			recoverySnapshotCount: state.recoverySnapshots.length,
-		};
+		}));
 	}
 }
+
+const parseBackupJson = Result.fromThrowable(
+	(source: string): unknown => JSON.parse(source),
+	(cause) =>
+		new BackupRestoreError("invalid-json", "バックアップJSONを解析できません。", { cause }),
+);
+
+const decodeBackupInput = Result.fromThrowable(
+	(parsed: unknown): GraphStateSnapshot => {
+		if (!isRecord(parsed)) throw new Error("バックアップenvelopeが必要です。");
+		return decodeBackupState(parsed);
+	},
+	(cause) =>
+		cause instanceof BackupRestoreError ? cause : new BackupRestoreError(
+			"invalid-backup",
+			cause instanceof Error ? cause.message : String(cause),
+			{ cause },
+		),
+);
 
 export function decodeBackupState(envelope: Record<string, unknown>): GraphStateSnapshot {
 	if (!Object.hasOwn(envelope, "schemaVersion")) {
@@ -119,7 +150,8 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 		throw new Error(`不正なbackup schema versionです: ${version}`);
 	}
 	if ((version as number) > CURRENT_BACKUP_SCHEMA_VERSION) {
-		throw new Error(
+		throw new BackupRestoreError(
+			"unsupported-version",
 			`backup schema version ${version} はこのアプリより新しいため復元できません。`,
 		);
 	}
@@ -169,7 +201,10 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 				? migrateBackupV7(validatedGraphStateSnapshot(data) as StoredGraphV7)
 				: validatedGraphStateSnapshot(data);
 		default:
-			throw new Error(`未対応のbackup schema versionです: ${version}`);
+			throw new BackupRestoreError(
+				"unsupported-version",
+				`未対応のbackup schema versionです: ${version}`,
+			);
 	}
 	return validatedGraphStateSnapshot(migrateBackupV7(migrated));
 }

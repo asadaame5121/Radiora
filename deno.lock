@@ -26,6 +26,7 @@
     "npm:jscpd@5.0.12": "5.0.12",
     "npm:knip@^6.35.1": "6.35.1",
     "npm:lint-staged@^17.4.1": "17.4.1",
+    "npm:neverthrow@8.2.0": "8.2.0",
     "npm:overtype@2.4.0": "2.4.0",
     "npm:playwright@1.58.2": "1.58.2",
     "npm:storybook@10.5.7": "10.5.7_@types+react@19.2.18_react@19.2.8",
@@ -2992,6 +2993,12 @@
     "natural-compare@1.4.0": {
       "integrity": "sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw=="
     },
+    "neverthrow@8.2.0": {
+      "integrity": "sha512-kOCT/1MCPAxY5iUV3wytNFUMUolzuwd/VF/1KCx7kf6CutrOsTie+84zTGTpgQycjvfLdBBdvBvFLqFD2c0wkQ==",
+      "optionalDependencies": [
+        "@rollup/rollup-linux-x64-gnu"
+      ]
+    },
     "node-releases@2.0.53": {
       "integrity": "sha512-D9UOmYG3UH1V+ENW56t5QXBwJw1YEY18ruVeus89Rw+SyIgjPkCO84bRzO3uNIYosJbNwiabWVn48o3uJLjxFQ=="
     },
@@ -3805,6 +3812,7 @@
         "npm:jscpd@5.0.12",
         "npm:knip@^6.35.1",
         "npm:lint-staged@^17.4.1",
+        "npm:neverthrow@8.2.0",
         "npm:overtype@2.4.0",
         "npm:playwright@1.58.2",
         "npm:storybook@10.5.7",

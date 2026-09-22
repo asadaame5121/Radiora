@@ -364,6 +364,17 @@ F1/H1 は他の候補と独立して開始できる。H2 は一文書群ずつ�
 清掃は「挙動を保つ構造変更」と別の作業種別であり、F3
 で明示した旧運用の廃止は意図的な対象縮小とする。
 
+## E: 型付きエラーハンドリング（2026-09-22）
+
+- [x] **E1: ライブラリ選定と初期導入** — [ADR 0002](adr/0002-selective-neverthrow-errors.md) で
+      neverthrow を採用。 `JsonBackupService.restoreResult` と `BackupRestoreError` に限定し、JSON
+      解析、入力検証、 未対応版、保存失敗を code で区別する。既存 `restore`
+      は結果を消費して例外へ変換し、 RPC、UI 文言、保存形式、storage の transaction / rollback
+      を維持する。
+- [ ] **E2: 必要な境界への段階導入** — autosave / startup / import 等を変更する際、
+      呼び出し側が回復・再試行・中止を区別する必要があるかを個別に判断する。 全 CRUD の Result
+      化、Effect の併用、共通の巨大エラー階層は計画しない。
+
 ## 検証と共通完了条件
 
 実装時は変更対象の契約テストを先に実行し、不足する観測可能な挙動だけを追加する。
