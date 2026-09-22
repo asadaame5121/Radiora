@@ -187,3 +187,106 @@ Deno.test("emergence contract: repeated listings preserve original createdAt and
 	// No duplicate suggestions created in store
 	assertEquals((await store.listEmergenceSuggestions()).length, countBefore);
 });
+
+Deno.test("emergence contract: pin action transitions suggestion to held state without creating links", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new DiscoveryOperations(store);
+	const suggestion = {
+		id: "sug-pin-test",
+		kind: "latent-relation" as const,
+		title: "保留テスト",
+		contextItemId: "occ-ctx",
+		contextWorkId: "work-ctx",
+		targetItemId: "occ-tgt",
+		targetWorkId: "work-tgt",
+		proposedLinkType: "RELATED" as const,
+		score: 0.8,
+		explanation: "保留理由の説明",
+		evidence: [],
+		persistenceStatus: "pending" as const,
+		createdAt: "2026-09-01T00:00:00.000Z",
+		updatedAt: "2026-09-01T00:00:00.000Z",
+	};
+	await store.upsertEmergenceSuggestion(suggestion);
+	const linksBefore = await store.listLinks();
+
+	await operations.resolveEmergenceSuggestion(suggestion.id, "pin", "後で検討する");
+
+	// Status updated to held
+	const persisted = (await store.listEmergenceSuggestions()).find((s) => s.id === suggestion.id);
+	assertEquals(persisted?.persistenceStatus, "held");
+	assertEquals(persisted?.status, "pinned");
+	assertEquals(persisted?.resolutionReason, "後で検討する");
+
+	// Zero links created
+	assertEquals(await store.listLinks(), linksBefore);
+});
+
+Deno.test("emergence contract: suggestions without proposed link type reject acceptance and do not mutate links", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new DiscoveryOperations(store);
+	const suggestion = {
+		id: "sug-no-type",
+		kind: "cross-branch-resonance" as const,
+		title: "リンク種別なし",
+		contextItemId: "occ-ctx",
+		contextWorkId: "work-ctx",
+		targetItemId: "occ-tgt",
+		targetWorkId: "work-tgt",
+		proposedLinkType: undefined,
+		score: 0.5,
+		explanation: "語彙共鳴",
+		evidence: [],
+		persistenceStatus: "pending" as const,
+		createdAt: "2026-09-01T00:00:00.000Z",
+		updatedAt: "2026-09-01T00:00:00.000Z",
+	};
+	await store.upsertEmergenceSuggestion(suggestion);
+	const linksBefore = await store.listLinks();
+
+	await assertRejects(
+		() => operations.resolveEmergenceSuggestion(suggestion.id, "accept"),
+		Error,
+		"リンク種別のない提案は採用できません。",
+	);
+
+	// Zero links created (side-effect free)
+	assertEquals(await store.listLinks(), linksBefore);
+});
+
+Deno.test("emergence contract: resolving already resolved suggestions fails with stale error and leaves links unchanged", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new DiscoveryOperations(store);
+	const suggestion = {
+		id: "sug-double-resolve",
+		kind: "latent-relation" as const,
+		title: "重複解決テスト",
+		contextItemId: "occ-ctx",
+		contextWorkId: "work-ctx",
+		targetItemId: "occ-tgt",
+		targetWorkId: "work-tgt",
+		proposedLinkType: "RELATED" as const,
+		score: 0.9,
+		explanation: "重複テスト",
+		evidence: [],
+		persistenceStatus: "pending" as const,
+		createdAt: "2026-09-01T00:00:00.000Z",
+		updatedAt: "2026-09-01T00:00:00.000Z",
+	};
+	await store.upsertEmergenceSuggestion(suggestion);
+
+	// First resolve succeeds
+	await operations.resolveEmergenceSuggestion(suggestion.id, "accept", "初回到達");
+	const linksAfterFirst = await store.listLinks();
+	assertEquals(linksAfterFirst.length, 1);
+
+	// Second resolve attempt fails with stale error
+	await assertRejects(
+		() => operations.resolveEmergenceSuggestion(suggestion.id, "accept", "再実行"),
+		Error,
+		"提案が古くなりました。再読み込みしてください。",
+	);
+
+	// No additional links created
+	assertEquals(await store.listLinks(), linksAfterFirst);
+});
