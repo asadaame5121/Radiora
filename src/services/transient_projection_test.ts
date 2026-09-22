@@ -157,6 +157,65 @@ Deno.test("buildQueryProjection deduplicates repeated occurrence IDs", async () 
 	assertEquals(nodes.length, 1);
 });
 
+Deno.test("buildTodayProjection projects date projection with today sourceType", () => {
+	const transient = new TransientProjectionService();
+	const occ = {
+		id: "occ-1",
+		workId: "w-1",
+		text: "Occurrence text",
+		parentId: null,
+		orderKey: 0,
+		collapsed: false,
+		revisionSelector: { mode: "branch" as const, branchId: "b-1" },
+		createdAt: START,
+		updatedAt: START,
+	};
+	const projection = {
+		range: { startInclusive: START, endExclusive: END },
+		created: [
+			{
+				work: { id: "w-1", createdAt: START, updatedAt: START },
+				placements: [{ occurrence: occ, breadcrumb: [] }],
+				representative: occ,
+			},
+		],
+		updated: [
+			{
+				work: { id: "w-2", createdAt: START, updatedAt: START },
+				placements: [],
+				representative: {
+					id: "occ-rep",
+					workId: "w-2",
+					text: "Representative text",
+					parentId: null,
+					orderKey: 1,
+					collapsed: false,
+					revisionSelector: { mode: "branch" as const, branchId: "b-2" },
+					createdAt: START,
+					updatedAt: START,
+				},
+			},
+		],
+	};
+
+	const nodes = transient.buildTodayProjection(projection);
+
+	assertEquals(nodes.length, 2);
+	assertEquals(nodes[0], {
+		workId: "w-1",
+		occurrenceId: "occ-1",
+		text: "Occurrence text",
+		sourceType: "today",
+		breadcrumb: [],
+	});
+	assertEquals(nodes[1], {
+		workId: "w-2",
+		occurrenceId: "occ-rep",
+		text: "Representative text",
+		sourceType: "today",
+	});
+});
+
 async function addWork(
 	store: MemoryGraphStore,
 	id: string,

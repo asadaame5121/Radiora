@@ -43,7 +43,52 @@ Deno.test("tree projection preference tolerates unavailable storage", () => {
 
 	assertEquals(loadTreeProjectionPreference(unavailable), "chronology");
 	saveTreeProjectionPreference("lineage", unavailable);
+
+	// null storage
+	assertEquals(loadTreeProjectionPreference(null), "chronology");
+	saveTreeProjectionPreference("lineage", null);
+
+	// default browserStorage fallback with hermetic stub
+	const stub = createFakeLocalStorage();
+	withStubbedLocalStorage(stub, () => {
+		assertEquals(loadTreeProjectionPreference(), "chronology");
+		saveTreeProjectionPreference("lineage");
+		assertEquals(loadTreeProjectionPreference(), "lineage");
+	});
 });
+
+function withStubbedLocalStorage<T>(stub: Storage, fn: () => T): T {
+	const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+	try {
+		Object.defineProperty(globalThis, "localStorage", {
+			value: stub,
+			configurable: true,
+			writable: true,
+		});
+		return fn();
+	} finally {
+		if (original) {
+			Object.defineProperty(globalThis, "localStorage", original);
+		} else {
+			// @ts-expect-error cleanup undefined
+			delete globalThis.localStorage;
+		}
+	}
+}
+
+function createFakeLocalStorage(initial: Record<string, string> = {}): Storage {
+	const values = new Map(Object.entries(initial));
+	return {
+		getItem: (key: string) => values.get(key) ?? null,
+		setItem: (key: string, value: string) => values.set(key, value),
+		removeItem: (key: string) => values.delete(key),
+		clear: () => values.clear(),
+		key: (index: number) => Array.from(values.keys())[index] ?? null,
+		get length() {
+			return values.size;
+		},
+	};
+}
 
 function memoryStorage(): TreeProjectionStorage & { values: Map<string, string> } {
 	const values = new Map<string, string>();

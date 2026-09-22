@@ -19,3 +19,36 @@ Deno.test("bookmark open maps resolution to temporary expansion, centered select
 		},
 	);
 });
+
+Deno.test("navigationUiState omits caretOffset when not provided", () => {
+	const state = navigationUiState({
+		kind: "occurrence",
+		workId: "work",
+		occurrenceId: "target",
+		ancestorOccurrenceIds: ["root"],
+		fellBack: false,
+	});
+	assertEquals(state, {
+		selectedOccurrenceId: "target",
+		temporaryExpandedOccurrenceIds: ["root"],
+		center: true,
+		highlight: true,
+	});
+	assertEquals("caretOffset" in state, false);
+});
+
+Deno.test("navigationUiState returns default state for work target", () => {
+	assertEquals(
+		navigationUiState({
+			kind: "work",
+			workId: "work",
+			fellBack: true,
+		}),
+		{
+			selectedOccurrenceId: null,
+			temporaryExpandedOccurrenceIds: [],
+			center: false,
+			highlight: false,
+		},
+	);
+});
