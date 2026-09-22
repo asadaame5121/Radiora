@@ -76,3 +76,82 @@ Deno.test("rule-query contract: invalid source and missing saved query fail with
 	);
 	assertEquals(await store.listSavedRuleQueries(), []);
 });
+
+Deno.test("rule-query contract: representative occurrence order selects first occurrence of work", async () => {
+	const store = new MemoryGraphStore();
+	const multiFirst = await addDiscoveryTestWork(store, "work-multi", "Multi First");
+	// Add second occurrence for the same work
+	await store.createOccurrence({
+		id: "work-multi-occ-second",
+		workId: "work-multi",
+		parentOccurrenceId: null,
+		orderKey: 2048,
+		collapsed: false,
+		revisionSelector: { mode: "branch", branchId: "work-multi-main" },
+	});
+	const target = await addDiscoveryTestWork(store, "work-target", "Target");
+	await addDiscoveryTestLink(store, "work-multi", "work-target", "RELATED");
+
+	const operations = new DiscoveryOperations(store);
+	const result = await operations.runRuleQuery("?- link(RELATED, From, To).");
+	// Must select the first occurrence id of work-multi, not the second
+	assertEquals(result.rows, [["RELATED", multiFirst.id, target.id]]);
+});
+
+Deno.test("rule-query contract: links referencing missing works are safely omitted", async () => {
+	const store = new MemoryGraphStore();
+	const validA = await addDiscoveryTestWork(store, "valid-a", "Valid A");
+	const validB = await addDiscoveryTestWork(store, "valid-b", "Valid B");
+	await addDiscoveryTestLink(store, "valid-a", "valid-b", "RELATED");
+	// Link with a non-existent work endpoint
+	await addDiscoveryTestLink(store, "valid-a", "ghost-work", "RELATED");
+	await addDiscoveryTestLink(store, "ghost-work", "valid-b", "RELATED");
+
+	const operations = new DiscoveryOperations(store);
+	const result = await operations.runRuleQuery("?- link(RELATED, From, To).");
+	assertEquals(result.rows, [["RELATED", validA.id, validB.id]]);
+});
+
+Deno.test("rule-query contract: limit parameter clamps result rows and clamps non-positive to 1", async () => {
+	const store = new MemoryGraphStore();
+	await addDiscoveryTestWork(store, "node-a", "A");
+	await addDiscoveryTestWork(store, "node-b", "B");
+	await addDiscoveryTestWork(store, "node-c", "C");
+	await addDiscoveryTestLink(store, "node-a", "node-b", "RELATED");
+	await addDiscoveryTestLink(store, "node-b", "node-c", "RELATED");
+
+	const operations = new DiscoveryOperations(store);
+	const resultAll = await operations.runRuleQuery("?- link(RELATED, X, Y).", 10);
+	assertEquals(resultAll.rows.length, 2);
+
+	const resultLimit1 = await operations.runRuleQuery("?- link(RELATED, X, Y).", 1);
+	assertEquals(resultLimit1.rows.length, 1);
+
+	// Limit <= 0 is clamped to 1
+	const resultLimitZero = await operations.runRuleQuery("?- link(RELATED, X, Y).", 0);
+	assertEquals(resultLimitZero.rows.length, 1);
+});
+
+Deno.test("rule-query contract: deductive rules and built-in predicates evaluate transitive relationships", async () => {
+	const store = new MemoryGraphStore();
+	const node1 = await addDiscoveryTestWork(store, "n1", "Node 1");
+	const node2 = await addDiscoveryTestWork(store, "n2", "Node 2");
+	const node3 = await addDiscoveryTestWork(store, "n3", "Node 3");
+	await addDiscoveryTestLink(store, "n1", "n2", "RELATED");
+	await addDiscoveryTestLink(store, "n2", "n3", "RELATED");
+
+	const operations = new DiscoveryOperations(store);
+	// Multi-hop transitive deduction and title_prefix built-in
+	const querySource = `
+		path(X, Y) :- link(RELATED, X, Y).
+		path(X, Z) :- link(RELATED, X, Y), path(Y, Z).
+		?- path(A, C), title_prefix(A, "Node 1").
+	`;
+	const result = await operations.runRuleQuery(querySource);
+	assertEquals(result.columns, ["A", "C"]);
+	// Should derive path from n1 to n2, and transitive path from n1 to n3
+	assertEquals(result.rows, [
+		[node1.id, node2.id],
+		[node1.id, node3.id],
+	]);
+});
