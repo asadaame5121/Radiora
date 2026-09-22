@@ -155,3 +155,106 @@ Deno.test("rule-query contract: deductive rules and built-in predicates evaluate
 		[node1.id, node3.id],
 	]);
 });
+
+Deno.test("rule-query contract: saveRuleQuery normalizes names and preserves creation timestamp on update", async () => {
+	const store = new MemoryGraphStore();
+	await addDiscoveryTestWork(store, "w1", "Work 1");
+	const operations = new DiscoveryOperations(store);
+
+	// Empty name falls back to "名称未設定"
+	const emptyNamed = await operations.saveRuleQuery({
+		name: "   ",
+		source: "?- item(A).",
+	});
+	assertEquals(emptyNamed.name, "名称未設定");
+	assertEquals(emptyNamed.createdAt, emptyNamed.updatedAt);
+
+	// Whitespace trimming
+	const trimmed = await operations.saveRuleQuery({
+		name: "  Trimmed Query  ",
+		source: "?- item(A).",
+	});
+	assertEquals(trimmed.name, "Trimmed Query");
+
+	// Update preserves original createdAt
+	const originalCreatedAt = trimmed.createdAt;
+	const updated = await operations.saveRuleQuery({
+		id: trimmed.id,
+		name: "Updated Query",
+		source: "?- item(A).",
+	});
+	assertEquals(updated.id, trimmed.id);
+	assertEquals(updated.name, "Updated Query");
+	assertEquals(updated.createdAt, originalCreatedAt);
+	assert(updated.updatedAt >= originalCreatedAt);
+});
+
+Deno.test("rule-query contract: deleteRuleQuery removes query and is idempotent for missing ids", async () => {
+	const store = new MemoryGraphStore();
+	await addDiscoveryTestWork(store, "w1", "Work 1");
+	const operations = new DiscoveryOperations(store);
+
+	const saved = await operations.saveRuleQuery({
+		name: "To Delete",
+		source: "?- item(A).",
+	});
+	assertEquals((await operations.listSavedRuleQueries()).length, 1);
+
+	await operations.deleteRuleQuery(saved.id);
+	assertEquals(await operations.listSavedRuleQueries(), []);
+
+	// Deleting a non-existent id should not throw
+	await operations.deleteRuleQuery("non-existent-id");
+	assertEquals(await operations.listSavedRuleQueries(), []);
+});
+
+Deno.test("rule-query contract: buildQueryProjectionNodes deduplicates cells, ignores unresolvable items, and applies limits", async () => {
+	const store = new MemoryGraphStore();
+	const root = await addDiscoveryTestWork(store, "root", "Root Work");
+	// Create child under root
+	const childWork = { id: "child", createdAt: DISCOVERY_TEST_NOW, updatedAt: DISCOVERY_TEST_NOW };
+	const childBranch = {
+		id: "child-main",
+		workId: "child",
+		name: "main",
+		headRevisionId: null,
+		createdAt: DISCOVERY_TEST_NOW,
+	};
+	const childCopy = {
+		branchId: childBranch.id,
+		workId: "child",
+		text: "Child Work",
+		updatedAt: DISCOVERY_TEST_NOW,
+	};
+	const childOcc = {
+		id: "child-occ",
+		workId: "child",
+		parentOccurrenceId: root.id,
+		orderKey: 2048,
+		collapsed: false,
+		revisionSelector: { mode: "branch" as const, branchId: childBranch.id },
+	};
+	await store.createWorkBundle(childWork, childBranch, childCopy, childOcc);
+
+	const operations = new DiscoveryOperations(store);
+	// Query returning same occurrence in multiple columns or constants that don't match items
+	const saved = await operations.saveRuleQuery({
+		name: "Duplicate and Constant Cells",
+		source: "?- link(FROM, A, B).",
+	});
+
+	const itemsBefore = await store.listItems();
+	const linksBefore = await store.listLinks();
+
+	const projection = await operations.buildQueryProjectionNodes(saved.id, 50);
+	// Result contains parent and child
+	assertEquals(projection.result.rows, [["FROM", root.id, childOcc.id]]);
+	// Nodes should contain projected occurrences without duplicate node entries
+	const occurrenceIds = projection.nodes.map((n) => n.occurrenceId);
+	const uniqueOccurrenceIds = new Set(occurrenceIds);
+	assertEquals(occurrenceIds.length, uniqueOccurrenceIds.size);
+
+	// Verify zero side-effects on store
+	assertEquals(await store.listItems(), itemsBefore);
+	assertEquals(await store.listLinks(), linksBefore);
+});
