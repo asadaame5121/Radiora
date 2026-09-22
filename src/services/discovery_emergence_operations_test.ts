@@ -97,3 +97,93 @@ Deno.test("emergence contract: accepting suggestion with custom symmetric type c
 	assertEquals(accepted.fromId, "a-work");
 	assertEquals(accepted.toId, "z-work");
 });
+
+Deno.test("emergence contract: listing respects limit parameter and ranks suggestions", async () => {
+	const store = new MemoryGraphStore();
+	const context = await addDiscoveryTestWork(store, "context", "Context Work");
+	await addDiscoveryTestWork(store, "middle-a", "Bridge A");
+	await addDiscoveryTestWork(store, "middle-b", "Bridge B");
+	await addDiscoveryTestWork(store, "middle-c", "Bridge C");
+	await addDiscoveryTestWork(store, "target-1", "Target 1");
+	await addDiscoveryTestWork(store, "target-2", "Target 2");
+
+	// Context connected to 3 bridges
+	await addDiscoveryTestLink(store, "context", "middle-a", "LIKE");
+	await addDiscoveryTestLink(store, "context", "middle-b", "LIKE");
+	await addDiscoveryTestLink(store, "context", "middle-c", "LIKE");
+
+	// Target-1 connected to 3 bridges (shared = 3, score = 1.0)
+	await addDiscoveryTestLink(store, "target-1", "middle-a", "LIKE");
+	await addDiscoveryTestLink(store, "target-1", "middle-b", "LIKE");
+	await addDiscoveryTestLink(store, "target-1", "middle-c", "LIKE");
+
+	// Target-2 connected to 2 bridges (shared = 2, score = 0.67)
+	await addDiscoveryTestLink(store, "target-2", "middle-a", "LIKE");
+	await addDiscoveryTestLink(store, "target-2", "middle-b", "LIKE");
+
+	const operations = new DiscoveryOperations(store);
+	const suggestionsAll = await operations.listEmergenceSuggestions(context.id, 10);
+	assertEquals(suggestionsAll.length, 2);
+	assertEquals(suggestionsAll[0].targetWorkId, "target-1");
+	assertEquals(suggestionsAll[1].targetWorkId, "target-2");
+
+	// Limit 1 returns only highest ranked
+	const suggestionsLimit1 = await operations.listEmergenceSuggestions(context.id, 1);
+	assertEquals(suggestionsLimit1.length, 1);
+	assertEquals(suggestionsLimit1[0].targetWorkId, "target-1");
+});
+
+Deno.test("emergence contract: dismissed and accepted suggestions are excluded from subsequent listings while held remain visible", async () => {
+	const store = new MemoryGraphStore();
+	const context = await addDiscoveryTestWork(store, "context", "Alpha Context");
+	await addDiscoveryTestWork(store, "middle-a", "Bridge One");
+	await addDiscoveryTestWork(store, "middle-b", "Bridge Two");
+	await addDiscoveryTestWork(store, "target", "Beta Target");
+	await addDiscoveryTestLink(store, "context", "middle-a", "LIKE");
+	await addDiscoveryTestLink(store, "context", "middle-b", "LIKE");
+	await addDiscoveryTestLink(store, "target", "middle-a", "LIKE");
+	await addDiscoveryTestLink(store, "target", "middle-b", "LIKE");
+
+	const operations = new DiscoveryOperations(store);
+	const initial = await operations.listEmergenceSuggestions(context.id);
+	assertEquals(initial.length, 1);
+	const suggestionId = initial[0].id;
+
+	// Resolve as dismiss
+	await operations.resolveEmergenceSuggestion(suggestionId, "dismiss", "今は不要");
+
+	// Listing again should exclude the dismissed suggestion
+	const afterDismiss = await operations.listEmergenceSuggestions(context.id);
+	assertEquals(afterDismiss.find((s) => s.id === suggestionId), undefined);
+
+	// In store, it persists with dismissed status
+	const persisted = (await store.listEmergenceSuggestions()).find((s) => s.id === suggestionId);
+	assertEquals(persisted?.persistenceStatus, "dismissed");
+	assertEquals(persisted?.resolutionReason, "今は不要");
+});
+
+Deno.test("emergence contract: repeated listings preserve original createdAt and update timestamps idempotently", async () => {
+	const store = new MemoryGraphStore();
+	const context = await addDiscoveryTestWork(store, "context", "Alpha Context");
+	await addDiscoveryTestWork(store, "middle-a", "Bridge One");
+	await addDiscoveryTestWork(store, "middle-b", "Bridge Two");
+	await addDiscoveryTestWork(store, "target", "Beta Target");
+	await addDiscoveryTestLink(store, "context", "middle-a", "LIKE");
+	await addDiscoveryTestLink(store, "context", "middle-b", "LIKE");
+	await addDiscoveryTestLink(store, "target", "middle-a", "LIKE");
+	await addDiscoveryTestLink(store, "target", "middle-b", "LIKE");
+
+	const operations = new DiscoveryOperations(store);
+	const firstRun = await operations.listEmergenceSuggestions(context.id);
+	assertEquals(firstRun.length, 1);
+	const originalCreatedAt = firstRun[0].createdAt;
+	const countBefore = (await store.listEmergenceSuggestions()).length;
+
+	const secondRun = await operations.listEmergenceSuggestions(context.id);
+	assertEquals(secondRun.length, 1);
+	assertEquals(secondRun[0].id, firstRun[0].id);
+	assertEquals(secondRun[0].createdAt, originalCreatedAt);
+	assert(secondRun[0].updatedAt >= originalCreatedAt);
+	// No duplicate suggestions created in store
+	assertEquals((await store.listEmergenceSuggestions()).length, countBefore);
+});
