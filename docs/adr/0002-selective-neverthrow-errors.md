@@ -67,6 +67,12 @@ decode は既存の例外ベース migration / validator を境界で変換す�
 rollback、RPC 互換性をテストする。Effect は、複数 feature にまたがる取消・resource・依存管理
 の統合が必要になった時点で再検討する。
 
+## 段階導入の計画
+
+今後の対象、優先順位、着手条件、完了条件は
+[neverthrow の段階導入計画](../design/error-handling-rollout.md) に記録する。 この ADR
+の初期導入範囲は変更せず、拡大は操作境界ごとの別 PR で行う。
+
 ## 参考
 
 - [neverthrow 公式 README](https://github.com/supermacro/neverthrow)
