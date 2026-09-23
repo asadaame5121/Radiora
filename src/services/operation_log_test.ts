@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noMagicNumbers: Numeric literals here are test inputs and expected values.
 import { assertEquals, assertExists } from "jsr:@std/assert@1";
 import { DiagnosticLogFiles, OperationLog } from "./operation_log.ts";
 

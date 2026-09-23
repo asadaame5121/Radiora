@@ -63,6 +63,12 @@ export function createNavigationController(options: NavigationControllerOptions 
 		return options.searchPort;
 	}
 
+	function recordSearch(outcome: "ok" | "error", started: number): void {
+		if (searchRecorded) return;
+		searchRecorded = true;
+		options.recordSearch?.(outcome, performance.now() - started);
+	}
+
 	return {
 		get browsing() {
 			return browsing;
@@ -189,17 +195,11 @@ export function createNavigationController(options: NavigationControllerOptions 
 					});
 					if (requestId === searchRequestId) {
 						searchResults = next;
-						if (!searchRecorded) {
-							searchRecorded = true;
-							options.recordSearch?.("ok", performance.now() - started);
-						}
+						recordSearch("ok", started);
 					}
 				} catch (cause) {
 					if (requestId === searchRequestId) {
-						if (!searchRecorded) {
-							searchRecorded = true;
-							options.recordSearch?.("error", performance.now() - started);
-						}
+						recordSearch("error", started);
 						port.reportError(cause);
 					}
 				}

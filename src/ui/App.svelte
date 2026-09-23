@@ -22,6 +22,7 @@
 	import TagBrowserView from "./TagBrowserView.svelte";
 	import TrashView from "./TrashView.svelte";
 	import OptionsView from "./OptionsView.svelte";
+	import { downloadTextFile } from "./download_text_file.ts";
 	import WorkingCopySaveStatus from "./WorkingCopySaveStatus.svelte";
 	import StartupCacheStatus from "./StartupCacheStatus.svelte";
 	import StartupView from "./StartupView.svelte";
@@ -1917,16 +1918,7 @@
 				markdownExportPreference.referenceMode,
 				resolutions,
 			);
-			const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-			const url = URL.createObjectURL(blob);
-			const anchor = document.createElement("a");
-			anchor.href = url;
-			anchor.download = `radiora-${localDateValue(new Date())}.md`;
-			anchor.hidden = true;
-			document.body.append(anchor);
-			anchor.click();
-			anchor.remove();
-			globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
+			downloadTextFile(markdown, "text/markdown;charset=utf-8", `radiora-${localDateValue(new Date())}.md`);
 			markdownExportNotice = "Markdownをエクスポートしました。";
 		} catch (cause) {
 			outcome = "error";
@@ -1950,16 +1942,7 @@
 		try {
 			await editorController.flushAutosave();
 			const source = await api.exportOpml();
-			const blob = new Blob([source], { type: "text/x-opml;charset=utf-8" });
-			const url = URL.createObjectURL(blob);
-			const anchor = document.createElement("a");
-			anchor.href = url;
-			anchor.download = `radiora-${localDateValue(new Date())}.opml`;
-			anchor.hidden = true;
-			document.body.append(anchor);
-			anchor.click();
-			anchor.remove();
-			globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
+			downloadTextFile(source, "text/x-opml;charset=utf-8", `radiora-${localDateValue(new Date())}.opml`);
 			opmlNotice = `${vocabulary.opmlExportSuccess}。`;
 		} catch (cause) {
 			error = `${vocabulary.opmlExport}ことができませんでした: ${errorMessage(cause)}`;
@@ -1983,16 +1966,7 @@
 		try {
 			await editorController.flushAutosave();
 			const source = await api.exportJsonBackup();
-			const blob = new Blob([source], { type: "application/json;charset=utf-8" });
-			const url = URL.createObjectURL(blob);
-			const anchor = document.createElement("a");
-			anchor.href = url;
-			anchor.download = `radiora-backup-${localDateValue(new Date())}.json`;
-			anchor.hidden = true;
-			document.body.append(anchor);
-			anchor.click();
-			anchor.remove();
-			globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
+			downloadTextFile(source, "application/json;charset=utf-8", `radiora-backup-${localDateValue(new Date())}.json`);
 			jsonBackupNotice = `${vocabulary.jsonBackupExportSuccess}。`;
 		} catch (cause) {
 			error = `${vocabulary.jsonBackupExport}ことができませんでした: ${errorMessage(cause)}`;
@@ -2385,6 +2359,7 @@
 				{markdownExportSelectionRequired}
 				{markdownExportNotice}
 				startupReady={startup.phase === "ready"}
+				operationLogPort={api}
 				{opmlNotice}
 				{jsonBackupNotice}
 				{treeProjectionPreference}

@@ -2,17 +2,18 @@
 	import { onMount } from "svelte";
 	import type { RadioraBindings } from "../shared/bindings.ts";
 	import type { OperationSummary } from "../shared/operation_log_types.ts";
-	import { createRpcAdapter } from "./rpc_adapter.ts";
+	import { downloadTextFile } from "./download_text_file.ts";
 
-	let { startupReady }: { startupReady: boolean } = $props();
-	const api = createRpcAdapter<RadioraBindings>();
+	type OperationLogPort = Pick<RadioraBindings, "getOperationSummary" | "exportOperationLog" | "clearDiagnosticLogs">;
+	let { startupReady, operationLogPort }: { startupReady: boolean; operationLogPort: OperationLogPort } = $props();
 	let summary = $state<OperationSummary | null>(null);
 	let notice = $state("");
 	let busy = $state(false);
+	const PERCENT = 100;
 
 	async function refresh(): Promise<void> {
 		try {
-			summary = await api.getOperationSummary();
+			summary = await operationLogPort.getOperationSummary();
 		} catch {
 			notice = "記録を読み込めませんでした。";
 		}
@@ -23,13 +24,8 @@
 	async function download(): Promise<void> {
 		busy = true;
 		try {
-			const jsonl = await api.exportOperationLog();
-			const url = URL.createObjectURL(new Blob([jsonl], { type: "application/x-ndjson;charset=utf-8" }));
-			const anchor = document.createElement("a");
-			anchor.href = url;
-			anchor.download = `radiora-operations-${new Date().toISOString().slice(0, 10)}.jsonl`;
-			anchor.click();
-			setTimeout(() => URL.revokeObjectURL(url), 0);
+			const jsonl = await operationLogPort.exportOperationLog();
+			downloadTextFile(jsonl, "application/x-ndjson;charset=utf-8", `radiora-operations-${new Date().toISOString().slice(0, 10)}.jsonl`);
 			notice = "OperationLogを書き出しました。";
 		} catch {
 			notice = "OperationLogを書き出せませんでした。";
@@ -42,7 +38,7 @@
 		if (!window.confirm("OperationLogと診断ログをすべて削除しますか？")) return;
 		busy = true;
 		try {
-			await api.clearDiagnosticLogs();
+			await operationLogPort.clearDiagnosticLogs();
 			await refresh();
 			notice = "診断ログをすべて削除しました。";
 		} catch {
@@ -57,7 +53,7 @@
 	<h2 id="operation-log-title">操作記録</h2>
 	<p>操作と画面遷移を端末内に最大30日間・20 MB保存します。本文・検索語・項目名は記録しません。自動送信は行いません。</p>
 	{#if summary}
-		<p>{summary.count}件 · {summary.bytes.toLocaleString()} bytes · 失敗率 {summary.count ? Math.round(summary.failed / summary.count * 100) : 0}% · 平均 {summary.averageDurationMs} ms</p>
+		<p>{summary.count}件 · {summary.bytes.toLocaleString()} bytes · 失敗率 {summary.count ? Math.round(summary.failed / summary.count * PERCENT) : 0}% · 平均 {summary.averageDurationMs} ms</p>
 		<div class="columns">
 			<div><h3>日別</h3><ul>{#each summary.byDay as row}<li>{row.day}: {row.count}件</li>{/each}</ul></div>
 			<div><h3>操作別</h3><ul>{#each summary.byEvent as row}<li>{row.event}: {row.count}件</li>{/each}</ul></div>

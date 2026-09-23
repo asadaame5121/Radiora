@@ -24,16 +24,15 @@ import {
 	QuickCaptureInputSchema,
 } from "../domain/input_schemas.ts";
 
-export interface BindingContext {
-	getOperationSummary(): Promise<import("../shared/operation_log_types.ts").OperationSummary>;
-	exportOperationLog(): Promise<string>;
-	clearDiagnosticLogs(): Promise<void>;
-	recordViewChange(view: string): Promise<void>;
-	recordClientOperation(
-		event: "search.execute" | "export.markdown",
-		outcome: "ok" | "error",
-		durationMs: number,
-	): Promise<void>;
+export interface BindingContext extends
+	Pick<
+		RadioraBindings,
+		| "getOperationSummary"
+		| "exportOperationLog"
+		| "clearDiagnosticLogs"
+		| "recordViewChange"
+		| "recordClientOperation"
+	> {
 	getService(): OutlineService | null;
 	getStartupStatus(): StartupStatus;
 	retryStartup(): Promise<StartupStatus>;

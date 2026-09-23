@@ -1,11 +1,29 @@
 import type { OperationRecord, OperationSummary } from "../shared/operation_log_types.ts";
 
 const RETENTION_DAYS = 30;
+// biome-ignore lint/style/noMagicNumbers: Log storage limits are expressed in mebibytes.
 const MAX_BYTES = 20 * 1024 * 1024;
+// biome-ignore lint/style/noMagicNumbers: Retention compares millisecond timestamps.
 const DAY_MS = 24 * 60 * 60 * 1000;
+// biome-ignore lint/style/noMagicNumbers: Rotate individual log files at five mebibytes.
 const FILE_BYTES = 5 * 1024 * 1024;
+const DURATION_DECIMAL_PLACES = 100;
+const RECENT_RECORD_LIMIT = 20;
 const operationFile = /^operation-(\d{4}-\d{2}-\d{2})(?:-(\d+))?\.jsonl$/;
 const diagnosticFile = /^startup(?:-(\d{4}-\d{2}-\d{2})(?:-(\d+))?)?\.log$/;
+
+function fileInfoOrNull(path: string): Deno.FileInfo | null {
+	try {
+		return Deno.statSync(path);
+	} catch (cause) {
+		if (cause instanceof Deno.errors.NotFound) return null;
+		throw cause;
+	}
+}
+
+function ensureLogDir(dir: string): void {
+	Deno.mkdirSync(dir, { recursive: true });
+}
 
 function entries(dir: string, pattern: RegExp): { name: string; size: number; modified: number }[] {
 	const result: { name: string; size: number; modified: number }[] = [];
@@ -35,7 +53,7 @@ export class OperationLog {
 	constructor(dir: string, now: () => Date = () => new Date()) {
 		this.#dir = dir;
 		this.#now = now;
-		Deno.mkdirSync(dir, { recursive: true });
+		ensureLogDir(dir);
 		prune(dir, operationFile, now().getTime());
 	}
 
@@ -46,19 +64,16 @@ export class OperationLog {
 			sessionId: this.#sessionId,
 			event,
 			outcome,
-			durationMs: Math.round(Math.max(0, durationMs) * 100) / 100,
+			durationMs: Math.round(Math.max(0, durationMs) * DURATION_DECIMAL_PLACES) /
+				DURATION_DECIMAL_PLACES,
 			...(outcome === "error" && errorType ? { errorType: safeErrorType(errorType) } : {}),
 		};
 		const day = timestamp.slice(0, 10);
 		let index = 0;
 		let path = `${this.#dir}/operation-${day}.jsonl`;
 		while (true) {
-			try {
-				if (Deno.statSync(path).size < FILE_BYTES) break;
-			} catch (cause) {
-				if (cause instanceof Deno.errors.NotFound) break;
-				throw cause;
-			}
+			const stat = fileInfoOrNull(path);
+			if (!stat || stat.size < FILE_BYTES) break;
 			index++;
 			path = `${this.#dir}/operation-${day}-${index}.jsonl`;
 		}
@@ -97,7 +112,7 @@ export class OperationLog {
 			byDay.set(day, (byDay.get(day) ?? 0) + 1);
 			byEvent.set(record.event, (byEvent.get(record.event) ?? 0) + 1);
 			recent.push(record);
-			if (recent.length > 20) recent.shift();
+			if (recent.length > RECENT_RECORD_LIMIT) recent.shift();
 		}
 		return {
 			retentionDays: RETENTION_DAYS,
@@ -142,7 +157,7 @@ export class DiagnosticLogFiles {
 	constructor(dir: string, now: () => Date = () => new Date()) {
 		this.#dir = dir;
 		this.#now = now;
-		Deno.mkdirSync(dir, { recursive: true });
+		ensureLogDir(dir);
 		const marker = `${dir}/diagnostics-sanitized-v1`;
 		try {
 			Deno.statSync(marker);
@@ -163,24 +178,13 @@ export class DiagnosticLogFiles {
 
 	#rotate(): void {
 		const path = `${this.#dir}/startup.log`;
-		let stat: Deno.FileInfo;
-		try {
-			stat = Deno.statSync(path);
-		} catch (cause) {
-			if (cause instanceof Deno.errors.NotFound) return;
-			throw cause;
-		}
+		const stat = fileInfoOrNull(path);
+		if (!stat) return;
 		const day = (stat.mtime ?? this.#now()).toISOString().slice(0, 10);
 		if (day === this.#now().toISOString().slice(0, 10) && stat.size < FILE_BYTES) return;
 		let index = 0;
 		let archive = `${this.#dir}/startup-${day}.log`;
-		while (true) {
-			try {
-				Deno.statSync(archive);
-			} catch (cause) {
-				if (cause instanceof Deno.errors.NotFound) break;
-				throw cause;
-			}
+		while (fileInfoOrNull(archive)) {
 			archive = `${this.#dir}/startup-${day}-${++index}.log`;
 		}
 		Deno.renameSync(path, archive);
