@@ -14,6 +14,7 @@ import {
 } from "../services/browsing_navigation_state.ts";
 
 export interface NavigationControllerOptions {
+	recordSearch?: (outcome: "ok" | "error", durationMs: number) => void;
 	initialPaneId?: string;
 	initialLocation?: BrowsingLocation;
 	nextPaneNumber?: number;
@@ -46,6 +47,7 @@ export function createNavigationController(options: NavigationControllerOptions 
 	let suggestTimer = $state<ReturnType<typeof setTimeout> | undefined>();
 	let searchTimer = $state<ReturnType<typeof setTimeout> | undefined>();
 	let searchRequestId = $state(0);
+	let searchRecorded = false;
 
 	function clearSearchTimers(): void {
 		if (suggestTimer !== undefined) clearTimeout(suggestTimer);
@@ -160,6 +162,7 @@ export function createNavigationController(options: NavigationControllerOptions 
 			const query = quickCaptureText;
 			searchActiveIndex = -1;
 			if (!query.trim()) {
+				searchRecorded = false;
 				suggestions = [];
 				searchResults = [];
 				return;
@@ -177,19 +180,33 @@ export function createNavigationController(options: NavigationControllerOptions 
 			}, 100);
 			searchTimer = setTimeout(async () => {
 				searchTimer = undefined;
+				const started = performance.now();
 				try {
 					const next = await port.searchItems({
 						query,
 						contextItemId: port.getSelectedId(),
 						limit: 20,
 					});
-					if (requestId === searchRequestId) searchResults = next;
+					if (requestId === searchRequestId) {
+						searchResults = next;
+						if (!searchRecorded) {
+							searchRecorded = true;
+							options.recordSearch?.("ok", performance.now() - started);
+						}
+					}
 				} catch (cause) {
-					if (requestId === searchRequestId) port.reportError(cause);
+					if (requestId === searchRequestId) {
+						if (!searchRecorded) {
+							searchRecorded = true;
+							options.recordSearch?.("error", performance.now() - started);
+						}
+						port.reportError(cause);
+					}
 				}
 			}, 250);
 		},
 		clearOmniwindow(): void {
+			searchRecorded = false;
 			quickCaptureText = "";
 			searchRequestId++;
 			clearSearchTimers();

@@ -25,6 +25,15 @@ import {
 } from "../domain/input_schemas.ts";
 
 export interface BindingContext {
+	getOperationSummary(): Promise<import("../shared/operation_log_types.ts").OperationSummary>;
+	exportOperationLog(): Promise<string>;
+	clearDiagnosticLogs(): Promise<void>;
+	recordViewChange(view: string): Promise<void>;
+	recordClientOperation(
+		event: "search.execute" | "export.markdown",
+		outcome: "ok" | "error",
+		durationMs: number,
+	): Promise<void>;
 	getService(): OutlineService | null;
 	getStartupStatus(): StartupStatus;
 	retryStartup(): Promise<StartupStatus>;
@@ -48,6 +57,12 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		throw new Error(status.phase === "failed" ? status.message : "Radiora is still starting.");
 	};
 	return {
+		getOperationSummary: () => context.getOperationSummary(),
+		exportOperationLog: () => context.exportOperationLog(),
+		clearDiagnosticLogs: () => context.clearDiagnosticLogs(),
+		recordViewChange: (view) => context.recordViewChange(view),
+		recordClientOperation: (event, outcome, durationMs) =>
+			context.recordClientOperation(event, outcome, durationMs),
 		getStartupStatus: async () => context.getStartupStatus(),
 		retryStartup: () => context.retryStartup(),
 		loadStartupSnapshotCache: () => context.loadStartupSnapshotCache?.() ?? Promise.resolve(null),

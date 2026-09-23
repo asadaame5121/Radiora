@@ -171,12 +171,18 @@
 		preview: false,
 	});
 	let viewMode = $state<ViewMode>("outline");
+	$effect(() => {
+		void api.recordViewChange(viewMode).catch(() => console.warn("Could not record view change."));
+	});
 	let dateStart = $state(localDateValue(new Date()));
 	let dateEnd = $state(localDateValue(addDays(new Date(), 1)));
 	let dateProjection = $state<DateProjection | null>(null);
 	let dateProjectionLoading = $state(false);
 	let selectedId = $state<string | null>(null);
 	const navigationController = createNavigationController({
+		recordSearch: (outcome, durationMs) => {
+			void api.recordClientOperation("search.execute", outcome, durationMs).catch(() => console.warn("Could not record search."));
+		},
 		searchPort: {
 			suggestItems: (prefix, limit) => api.suggestItems(prefix, limit),
 			searchItems: (request) => api.searchItems(request),
@@ -1893,6 +1899,8 @@
 
 	async function performMarkdownExport(selectedOccurrenceId?: string): Promise<void> {
 		markdownExportNotice = "";
+		const started = performance.now();
+		let outcome: "ok" | "error" = "ok";
 		try {
 			await editorController.flushAutosave();
 			const exportSnapshot = selectMarkdownExportSnapshot(snapshot, {
@@ -1921,7 +1929,11 @@
 			globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
 			markdownExportNotice = "Markdownをエクスポートしました。";
 		} catch (cause) {
+			outcome = "error";
 			error = `Markdownをエクスポートできませんでした: ${errorMessage(cause)}`;
+		} finally {
+			void api.recordClientOperation("export.markdown", outcome, performance.now() - started)
+				.catch(() => console.warn("Could not record Markdown export."));
 		}
 	}
 

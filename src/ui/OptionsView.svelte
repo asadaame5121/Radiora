@@ -6,6 +6,7 @@
 	import type { MarkdownExportPreference } from "./markdown_export_preference.ts";
 	import type { QuickCapturePreference } from "./quick_capture_preference.ts";
 	import RelationTypeSettings from "./RelationTypeSettings.svelte";
+	import OperationLogOptions from "./OperationLogOptions.svelte";
 	import type { TreeProjection } from "./tree_layout.ts";
 	import { useUiVocabulary } from "./ui_vocabulary_context.ts";
 	import { isThemePreference, type ThemePreference } from "./theme_preference.ts";
@@ -150,6 +151,7 @@
 		<p>入力、書き出し、データ交換、バックアップ、表示方法を設定します。</p>
 	</header>
 	<div class="options-grid">
+		<OperationLogOptions {startupReady} />
 		<section class="option-card" aria-labelledby="option-export-title">
 			<h2 id="option-export-title">書き出し</h2>
 			<label>

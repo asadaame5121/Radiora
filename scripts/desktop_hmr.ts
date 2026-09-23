@@ -1,4 +1,6 @@
 const vitePort = await reserveLoopbackPort();
+await Deno.mkdir("dist", { recursive: true });
+await Deno.writeTextFile("dist/build-profile.txt", "development\n");
 const bridgeFile = await Deno.makeTempFile({ prefix: "radiora-desktop-hmr-", suffix: ".json" });
 const uiOrigin = `http://127.0.0.1:${vitePort}`;
 const sharedEnvironment = {

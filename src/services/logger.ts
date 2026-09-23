@@ -11,6 +11,7 @@ export interface LogEntry extends LogFields {
 export interface LoggerOptions {
 	sink?: (line: string) => void;
 	stdout?: (line: string) => void;
+	selectRecord?: (entry: LogEntry) => LogEntry | null;
 	now?: () => string;
 	monotonicNow?: () => number;
 	minLevel?: LogLevel;
@@ -23,9 +24,65 @@ const levelRank: Record<LogLevel, number> = {
 	error: 40,
 };
 
+const releaseOperations = new Set([
+	"createItem",
+	"quickCapture",
+	"moveItem",
+	"createLink",
+	"deleteItem",
+	"searchItems",
+	"runRuleQuery",
+]);
+
+export function selectLogRecord(
+	profile: "development" | "release",
+	entry: LogEntry,
+): LogEntry | null {
+	const { level, event } = entry;
+	const safe = safeLogFields(entry);
+	if (profile === "development") {
+		if (event === "renderer.log") return null;
+		if (level !== "error" && level !== "warn") return safe;
+	}
+	if (level === "warn" || level === "error") {
+		return { ...safe, ...safeErrorName(entry.error) };
+	}
+	if (
+		event !== "rpc.request" || typeof entry.method !== "string" ||
+		!releaseOperations.has(entry.method)
+	) return null;
+	return safe;
+}
+
+function safeLogFields(entry: LogEntry): LogEntry {
+	const { timestamp, level, event } = entry;
+	return {
+		timestamp,
+		level,
+		event,
+		...(typeof entry.method === "string" ? { method: entry.method } : {}),
+		...(typeof entry.durationMs === "number" ? { durationMs: entry.durationMs } : {}),
+		...(entry.outcome === "ok" || entry.outcome === "error" ? { outcome: entry.outcome } : {}),
+	};
+}
+
+function safeErrorName(error: unknown): { error: { name: string } } | Record<string, never> {
+	if (typeof error !== "object" || error === null || !("name" in error)) return {};
+	const name = error.name;
+	if (typeof name !== "string") return {};
+	return {
+		error: {
+			name: ["Error", "TypeError", "SyntaxError", "RangeError"].includes(name)
+				? name
+				: "OtherError",
+		},
+	};
+}
+
 export class Logger {
 	readonly #sink: ((line: string) => void) | undefined;
 	readonly #stdout: ((line: string) => void) | undefined;
+	readonly #selectRecord: ((entry: LogEntry) => LogEntry | null) | undefined;
 	readonly #now: () => string;
 	readonly #monotonicNow: () => number;
 	readonly #minLevel: LogLevel;
@@ -33,6 +90,7 @@ export class Logger {
 	constructor(options: LoggerOptions = {}) {
 		this.#sink = options.sink;
 		this.#stdout = options.stdout;
+		this.#selectRecord = options.selectRecord;
 		this.#now = options.now ?? (() => new Date().toISOString());
 		this.#monotonicNow = options.monotonicNow ?? (() => performance.now());
 		this.#minLevel = options.minLevel ?? "debug";
@@ -65,8 +123,10 @@ export class Logger {
 			event,
 		};
 		if (levelRank[level] < levelRank[this.#minLevel]) return entry;
+		const selected = this.#selectRecord ? this.#selectRecord(entry) : entry;
+		if (!selected) return entry;
 
-		const line = stringifyLogEntry(entry);
+		const line = stringifyLogEntry(selected);
 		try {
 			this.#sink?.(line);
 			// biome-ignore lint/plugin/noSwallowedRejection: A diagnostic sink is isolated so it cannot change application behavior.

@@ -2,6 +2,7 @@ const isWindows = Deno.build.os === "windows";
 const platformLabel = isWindows ? "Windows" : "Linux";
 const outputDirName = isWindows ? "radiora-v2-windows" : "radiora-v2-linux";
 const outputDir = new URL(`../dist-desktop/${outputDirName}/`, import.meta.url);
+const buildProfilePath = new URL("../dist/build-profile.txt", import.meta.url);
 
 const licensesIndex = new URL("../dist/licenses/index.json", import.meta.url);
 export function resolveBackend(args: string[]): "cef" | "webview" {
@@ -20,6 +21,10 @@ export function resolveBackend(args: string[]): "cef" | "webview" {
 		return val;
 	}
 	return "cef";
+}
+
+export function resolveBuildProfile(args: string[]): "development" | "release" {
+	return args.includes("--release") ? "release" : "development";
 }
 
 export async function runDesktopBuild(args: string[] = Deno.args): Promise<void> {
@@ -58,6 +63,8 @@ export async function runDesktopBuild(args: string[] = Deno.args): Promise<void>
 	}
 
 	const backend = resolveBackend(args);
+	const buildProfile = resolveBuildProfile(args);
+	await Deno.writeTextFile(buildProfilePath, `${buildProfile}\n`);
 	const desktopArgs = [
 		"desktop",
 		"-A",
@@ -79,6 +86,7 @@ export async function runDesktopBuild(args: string[] = Deno.args): Promise<void>
 	});
 	const status = await command.spawn().status;
 	if (!status.success) Deno.exit(status.code);
+	await Deno.copyFile(buildProfilePath, new URL("build-profile.txt", outputDir));
 }
 
 if (import.meta.main) {

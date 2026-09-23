@@ -37,7 +37,7 @@ jobs:
         run: deno task build
 
       - name: Build Windows desktop bundle
-        run: deno task desktop:build
+        run: deno task desktop:build --release
 
       - name: Verify Windows bundle artifacts
         shell: pwsh
@@ -46,6 +46,10 @@ jobs:
           $launcher = Join-Path $bundleDir "radiora-v2-windows.exe"
           if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
             throw "The Windows bundle does not contain launcher: $launcher"
+          }
+          $profile = Join-Path $bundleDir "build-profile.txt"
+          if (-not (Test-Path -LiteralPath $profile -PathType Leaf) -or (Get-Content -LiteralPath $profile -Raw).Trim() -ne "release") {
+            throw "The Windows bundle is not a release build"
           }
           $forbidden = @("surreal.exe", "surreal", "radiora-surreal.exe", "radiora-surreal")
           foreach ($item in $forbidden) {
@@ -97,7 +101,7 @@ jobs:
         run: deno task build
 
       - name: Build Linux desktop bundle
-        run: deno task desktop:build
+        run: deno task desktop:build --release
 
       - name: Verify Linux bundle artifacts
         shell: bash
@@ -105,6 +109,10 @@ jobs:
           launcher="dist-desktop/radiora-v2-linux/radiora-v2-linux"
           if [ ! -x "$launcher" ]; then
             echo "The Linux bundle launcher is missing or not executable: $launcher" >&2
+            exit 1
+          fi
+          if [ "$(cat dist-desktop/radiora-v2-linux/build-profile.txt)" != "release" ]; then
+            echo "The Linux bundle is not a release build" >&2
             exit 1
           fi
           for artifact in "surreal" "surreal.exe" "radiora-surreal" "radiora-surreal.exe"; do

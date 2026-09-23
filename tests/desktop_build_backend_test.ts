@@ -1,5 +1,10 @@
 import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert";
-import { resolveBackend } from "../scripts/desktop_build.ts";
+import { resolveBackend, resolveBuildProfile } from "../scripts/desktop_build.ts";
+
+Deno.test("desktop build profile is development by default and release only when requested", () => {
+	assertEquals(resolveBuildProfile([]), "development");
+	assertEquals(resolveBuildProfile(["--release"]), "release");
+});
 
 Deno.test("resolveBackend: returns cef by default when no backend flags", () => {
 	assertEquals(resolveBackend([]), "cef");
@@ -106,6 +111,20 @@ Deno.test("scripts/desktop_msix.ts: assertCleanBundle rejects stale surreal arti
 		);
 		// findLauncher should still defensively ignore radiora-surreal.exe
 		assertEquals(await findLauncher(rootUrl), "Radiora.exe");
+	} finally {
+		await safeRemoveDir(root);
+	}
+});
+
+Deno.test("MSIX rejects a development bundle", async () => {
+	const { assertReleaseBundle } = await import("../scripts/desktop_msix.ts");
+	const root = await Deno.makeTempDir({ prefix: "msix-profile-test-" });
+	try {
+		const rootUrl = new URL(`file:///${root.replaceAll("\\", "/")}/`);
+		await Deno.writeTextFile(new URL("build-profile.txt", rootUrl), "development\n");
+		await assertRejects(() => assertReleaseBundle(rootUrl), Error, "releaseビルドが必要");
+		await Deno.writeTextFile(new URL("build-profile.txt", rootUrl), "release\n");
+		await assertReleaseBundle(rootUrl);
 	} finally {
 		await safeRemoveDir(root);
 	}

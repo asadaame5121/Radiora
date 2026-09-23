@@ -187,8 +187,18 @@ export async function findLauncher(dir: URL): Promise<string> {
 	throw new Error("bundle内にlauncher (.exe) が見つかりません。");
 }
 
+export async function assertReleaseBundle(dir: URL): Promise<void> {
+	const buildProfile = await Deno.readTextFile(new URL("build-profile.txt", dir));
+	if (buildProfile.trim() !== "release") {
+		throw new Error(
+			"MSIXにはreleaseビルドが必要です。deno task desktop:build --release を実行してください。",
+		);
+	}
+}
+
 async function main(): Promise<void> {
 	await assertCleanBundle(bundleDir);
+	await assertReleaseBundle(bundleDir);
 	const launcherName = await findLauncher(bundleDir);
 	const [major, minor, build, revision] = packageVersionParts(version);
 
