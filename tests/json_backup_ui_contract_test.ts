@@ -12,10 +12,9 @@ Deno.test("complete JSON backup flushes edits and downloads a UTF-8 envelope", (
 		app,
 		/async function performJsonBackupExport\(\)[\s\S]*?await editorController\.flushAutosave\(\)[\s\S]*?api\.exportJsonBackup\(\)/,
 	);
-	assertMatch(app, /new Blob\(\[source\], \{ type: "application\/json;charset=utf-8" \}\)/);
 	assertMatch(
 		app,
-		/anchor\.download = `radiora-backup-\$\{localDateValue\(new Date\(\)\)\}\.json`/,
+		/downloadTextFile\(source, "application\/json;charset=utf-8", `radiora-backup-\$\{localDateValue\(new Date\(\)\)\}\.json`\)/,
 	);
 	assertMatch(app, /vocabulary\.jsonBackupExport/);
 	assertMatch(app, /vocabulary\.jsonBackupExportSuccess/);

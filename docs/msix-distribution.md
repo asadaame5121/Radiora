@@ -18,7 +18,7 @@ MSIXパッケージには次のものが含まれる。
 ## ビルド手順（Windows PowerShell）
 
 ```powershell
-deno task desktop:build     # Windows bundle生成
+deno task desktop:build --release  # 配布用Windows bundle生成
 deno task desktop:msix      # ライセンス生成 + MSIX作成 + 署名
 ```
 

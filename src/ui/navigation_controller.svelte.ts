@@ -14,6 +14,7 @@ import {
 } from "../services/browsing_navigation_state.ts";
 
 export interface NavigationControllerOptions {
+	recordSearch?: (outcome: "ok" | "error", durationMs: number) => void;
 	initialPaneId?: string;
 	initialLocation?: BrowsingLocation;
 	nextPaneNumber?: number;
@@ -46,6 +47,7 @@ export function createNavigationController(options: NavigationControllerOptions 
 	let suggestTimer = $state<ReturnType<typeof setTimeout> | undefined>();
 	let searchTimer = $state<ReturnType<typeof setTimeout> | undefined>();
 	let searchRequestId = $state(0);
+	let searchRecorded = false;
 
 	function clearSearchTimers(): void {
 		if (suggestTimer !== undefined) clearTimeout(suggestTimer);
@@ -59,6 +61,12 @@ export function createNavigationController(options: NavigationControllerOptions 
 			throw new Error("Navigation search port is not configured");
 		}
 		return options.searchPort;
+	}
+
+	function recordSearch(outcome: "ok" | "error", started: number): void {
+		if (searchRecorded) return;
+		searchRecorded = true;
+		options.recordSearch?.(outcome, performance.now() - started);
 	}
 
 	return {
@@ -160,6 +168,7 @@ export function createNavigationController(options: NavigationControllerOptions 
 			const query = quickCaptureText;
 			searchActiveIndex = -1;
 			if (!query.trim()) {
+				searchRecorded = false;
 				suggestions = [];
 				searchResults = [];
 				return;
@@ -177,19 +186,27 @@ export function createNavigationController(options: NavigationControllerOptions 
 			}, 100);
 			searchTimer = setTimeout(async () => {
 				searchTimer = undefined;
+				const started = performance.now();
 				try {
 					const next = await port.searchItems({
 						query,
 						contextItemId: port.getSelectedId(),
 						limit: 20,
 					});
-					if (requestId === searchRequestId) searchResults = next;
+					if (requestId === searchRequestId) {
+						searchResults = next;
+						recordSearch("ok", started);
+					}
 				} catch (cause) {
-					if (requestId === searchRequestId) port.reportError(cause);
+					if (requestId === searchRequestId) {
+						recordSearch("error", started);
+						port.reportError(cause);
+					}
 				}
 			}, 250);
 		},
 		clearOmniwindow(): void {
+			searchRecorded = false;
 			quickCaptureText = "";
 			searchRequestId++;
 			clearSearchTimers();

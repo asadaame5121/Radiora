@@ -155,6 +155,33 @@ describe("navigation controller", () => {
 		expect(reportError).not.toHaveBeenCalled();
 	});
 
+	test("records one search result per search session", async () => {
+		vi.useFakeTimers();
+		const recordSearch = vi.fn();
+		const controller = createNavigationController({
+			recordSearch,
+			searchPort: {
+				suggestItems: async () => [],
+				searchItems: async () => [],
+				getSelectedId: () => null,
+				reportError: vi.fn(),
+			},
+		});
+		controller.quickCaptureText = "first";
+		controller.queueSearch();
+		await vi.advanceTimersByTimeAsync(250);
+		controller.quickCaptureText = "second";
+		controller.queueSearch();
+		await vi.advanceTimersByTimeAsync(250);
+		expect(recordSearch).toHaveBeenCalledTimes(1);
+		expect(recordSearch).toHaveBeenCalledWith("ok", expect.any(Number));
+		controller.clearOmniwindow();
+		controller.quickCaptureText = "third";
+		controller.queueSearch();
+		await vi.advanceTimersByTimeAsync(250);
+		expect(recordSearch).toHaveBeenCalledTimes(2);
+	});
+
 	test("clears results immediately for a whitespace-only query", () => {
 		const controller = createNavigationController();
 		controller.quickCaptureText = "   ";

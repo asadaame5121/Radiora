@@ -7,12 +7,19 @@ import {
 } from "./desktop/desktop_helpers.ts";
 import { OutlineService } from "./services/outline_service.ts";
 import { RevisionService } from "./services/revision_service.ts";
-import { Logger } from "./services/logger.ts";
+import { Logger, selectLogRecord } from "./services/logger.ts";
+import { DiagnosticLogFiles, OperationLog } from "./services/operation_log.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
 import type { GraphStore, RelationTypeDefinitionStorePort } from "./storage/graph_store.ts";
 import { bootstrapStorage, type StorageBootstrapSession } from "./storage/storage_bootstrap.ts";
 
 const hmrUiOrigin = developmentUiOrigin(Deno.env.get("RADIORA_HMR_UI_ORIGIN"));
+const buildProfile =
+	(await Deno.readTextFile(new URL("../dist/build-profile.txt", import.meta.url)))
+		.trim();
+if (buildProfile !== "development" && buildProfile !== "release") {
+	throw new Error("Invalid desktop build profile.");
+}
 const hmrBridgeFile = Deno.env.get("RADIORA_HMR_BRIDGE_FILE");
 if (hmrBridgeFile) {
 	const serveAddress = Deno.env.get("DENO_SERVE_ADDRESS");
@@ -30,11 +37,65 @@ const logPath = `${logDir}\\startup.log`;
 const startupSnapshotCachePath = `${dataDir}\\startup-snapshot.json`;
 const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "sqlite";
 await Deno.mkdir(logDir, { recursive: true });
+const diagnosticFiles = new DiagnosticLogFiles(logDir);
+const operationLog = new OperationLog(logDir);
+const operationMethods: Record<string, string> = {
+	createItem: "work.create",
+	quickCapture: "work.quick_capture",
+	createOccurrence: "occurrence.create",
+	moveItem: "occurrence.move",
+	deleteItem: "occurrence.delete",
+	trashWork: "work.trash",
+	restoreWork: "work.restore",
+	purgeWork: "work.purge",
+	createLink: "link.create",
+	deleteLink: "link.delete",
+	runRuleQuery: "query.run",
+	importOpml: "import.opml",
+	exportOpml: "export.opml",
+	exportJsonBackup: "export.backup",
+	restoreJsonBackup: "import.backup",
+	restoreRecoverySnapshot: "revision.restore",
+	promoteRecoverySnapshot: "revision.promote",
+	rewriteAsNewBranch: "revision.branch",
+	mergeWorks: "work.merge",
+};
+const releaseMethods = new Set([
+	"createItem",
+	"quickCapture",
+	"moveItem",
+	"deleteItem",
+	"trashWork",
+	"createLink",
+	"deleteLink",
+	"runRuleQuery",
+	"importOpml",
+	"exportOpml",
+	"exportJsonBackup",
+	"restoreJsonBackup",
+	"restoreRecoverySnapshot",
+]);
+const views = new Set([
+	"outline",
+	"today",
+	"unplaced",
+	"stubs",
+	"duplicates",
+	"tags",
+	"globalLineage",
+	"workLineage",
+	"comparison",
+	"trash",
+	"help",
+	"options",
+]);
+let lastView = "outline";
 
 const logger = new Logger({
+	selectRecord: (entry) => selectLogRecord(buildProfile, entry),
 	sink: (line) => {
 		try {
-			Deno.writeTextFileSync(logPath, `${line}\n`, { append: true, create: true });
+			diagnosticFiles.write(line);
 			// biome-ignore lint/plugin/noSwallowedRejection: Logging falls back to stdout and must not prevent application startup.
 		} catch {
 			// Diagnostics must not change application behavior.
@@ -120,6 +181,23 @@ function extension(path: string): string {
 }
 
 const handlers = createBindingHandlers({
+	getOperationSummary: async () => operationLog.summary(),
+	exportOperationLog: async () => operationLog.exportJsonl(),
+	clearDiagnosticLogs: async () => operationLog.clearAll(),
+	recordViewChange: async (view) => {
+		if (!views.has(view)) throw new Error("Invalid view.");
+		if (view === lastView) return;
+		lastView = view;
+		operationLog.record(`view.${view}`, "ok");
+	},
+	recordClientOperation: async (event, outcome, durationMs) => {
+		if (event !== "search.execute" && event !== "export.markdown") {
+			throw new Error("Invalid operation.");
+		}
+		if (outcome !== "ok" && outcome !== "error") throw new Error("Invalid outcome.");
+		if (!Number.isFinite(durationMs) || durationMs < 0) throw new Error("Invalid duration.");
+		operationLog.record(event, outcome, durationMs);
+	},
 	getService: () => service,
 	getStartupStatus: () => startupStatus,
 	retryStartup: bootstrap,
@@ -166,8 +244,10 @@ appWindow.addEventListener("close", (event) => {
 const server = Deno.serve(async (request) => {
 	const url = new URL(request.url);
 	if (url.pathname === "/api/renderer-log" && request.method === "POST") {
-		const message = await request.text().catch(() => "<unreadable renderer message>");
-		logger.info("renderer.log", { message });
+		const message = await request.text().catch(() => "");
+		if (["Svelte entry module started", "Svelte app mounted"].includes(message)) {
+			logger.info("renderer.log", { message });
+		}
 		return new Response(null, { status: 204 });
 	}
 	if (url.pathname.startsWith("/api/rpc/")) {
@@ -176,16 +256,45 @@ const server = Deno.serve(async (request) => {
 			void bootstrap();
 		}
 		const handler = handlers[name] as ((...args: unknown[]) => unknown) | undefined;
-		if (request.method !== "POST" || !handler) {
+		if (request.method !== "POST" || !Object.hasOwn(handlers, name) || !handler) {
 			return Response.json({ message: "Unknown API method." }, { status: 404 });
 		}
+		const operationEvent = Object.hasOwn(operationMethods, name)
+			? operationMethods[name]
+			: undefined;
+		const started = performance.now();
 		try {
-			const result = await logger.timed("rpc.request", async () => {
+			const invoke = async () => {
 				const body = await request.json() as { args?: unknown[] };
 				return handler(...(body.args ?? []));
-			}, { method: name });
+			};
+			const maintenance = name === "clearDiagnosticLogs" || name === "getOperationSummary" ||
+				name === "exportOperationLog" || name === "recordViewChange" ||
+				name === "recordClientOperation";
+			const result = maintenance
+				? await invoke()
+				: await logger.timed("rpc.request", invoke, { method: name });
+			if (operationEvent && (buildProfile === "development" || releaseMethods.has(name))) {
+				try {
+					operationLog.record(operationEvent, "ok", performance.now() - started);
+				} catch (cause) {
+					logger.error("operation_log.write.failed", cause);
+				}
+			}
 			return Response.json({ result: result ?? null });
 		} catch (cause) {
+			if (operationEvent && (buildProfile === "development" || releaseMethods.has(name))) {
+				try {
+					operationLog.record(
+						operationEvent,
+						"error",
+						performance.now() - started,
+						cause instanceof Error ? cause.name : "UnknownError",
+					);
+				} catch (logCause) {
+					logger.error("operation_log.write.failed", logCause);
+				}
+			}
 			return Response.json({ message: cause instanceof Error ? cause.message : String(cause) }, {
 				status: 500,
 			});

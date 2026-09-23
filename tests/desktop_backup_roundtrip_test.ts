@@ -3,10 +3,12 @@ import { createBindingHandlers } from "../src/desktop/register_bindings.ts";
 import type { JsonBackupV6 } from "../src/services/json_backup.ts";
 import { OutlineService } from "../src/services/outline_service.ts";
 import { MemoryGraphStore } from "../src/storage/memory_store.ts";
+import { operationLogBindingStub } from "./operation_log_binding_stub.ts";
 
 function desktopBindings(store: MemoryGraphStore) {
 	const service = new OutlineService(store);
 	return createBindingHandlers({
+		...operationLogBindingStub,
 		getService: () => service,
 		getStartupStatus: () => ({ phase: "ready", message: "準備完了" }),
 		retryStartup: () => Promise.resolve({ phase: "ready", message: "準備完了" }),

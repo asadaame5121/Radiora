@@ -24,7 +24,15 @@ import {
 	QuickCaptureInputSchema,
 } from "../domain/input_schemas.ts";
 
-export interface BindingContext {
+export interface BindingContext extends
+	Pick<
+		RadioraBindings,
+		| "getOperationSummary"
+		| "exportOperationLog"
+		| "clearDiagnosticLogs"
+		| "recordViewChange"
+		| "recordClientOperation"
+	> {
 	getService(): OutlineService | null;
 	getStartupStatus(): StartupStatus;
 	retryStartup(): Promise<StartupStatus>;
@@ -48,6 +56,12 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		throw new Error(status.phase === "failed" ? status.message : "Radiora is still starting.");
 	};
 	return {
+		getOperationSummary: () => context.getOperationSummary(),
+		exportOperationLog: () => context.exportOperationLog(),
+		clearDiagnosticLogs: () => context.clearDiagnosticLogs(),
+		recordViewChange: (view) => context.recordViewChange(view),
+		recordClientOperation: (event, outcome, durationMs) =>
+			context.recordClientOperation(event, outcome, durationMs),
 		getStartupStatus: async () => context.getStartupStatus(),
 		retryStartup: () => context.retryStartup(),
 		loadStartupSnapshotCache: () => context.loadStartupSnapshotCache?.() ?? Promise.resolve(null),

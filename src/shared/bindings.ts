@@ -63,12 +63,22 @@ import type { WorkMergePreview } from "../services/work_merge_service.ts";
 import type { ManuscriptSection } from "../services/manuscript_projection.ts";
 import type { OpmlImportResult } from "../services/opml_service.ts";
 import type { JsonBackupRestoreResult } from "../services/json_backup.ts";
+import type { OperationSummary } from "./operation_log_types.ts";
 import type {
 	StartupSnapshotCache,
 	StartupSnapshotLocation,
 } from "../services/startup_snapshot_cache.ts";
 
 export interface RadioraBindings {
+	getOperationSummary(): Promise<OperationSummary>;
+	exportOperationLog(): Promise<string>;
+	clearDiagnosticLogs(): Promise<void>;
+	recordViewChange(view: string): Promise<void>;
+	recordClientOperation(
+		event: "search.execute" | "export.markdown",
+		outcome: "ok" | "error",
+		durationMs: number,
+	): Promise<void>;
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	loadStartupSnapshotCache(): Promise<StartupSnapshotCache | null>;
