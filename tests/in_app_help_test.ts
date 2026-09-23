@@ -41,8 +41,8 @@ Deno.test("in-app help is a dedicated, reachable and scannable page", async () =
 	assert(help.includes("[["));
 	assert(help.includes("内部参照"));
 	assert(help.includes("@"));
-	assert(help.includes("意味関係検索"));
-	assert(help.includes("内部参照ではありません"));
+	assert(help.includes("関係型と向きを確定"));
+	assert(help.includes("これは内部参照とは別"));
 	assert(help.includes("DEF</code>"));
 	assert(help.includes("版として残す"));
 	assert(help.includes("別稿"));

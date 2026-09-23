@@ -22,6 +22,25 @@ tags:
 
 ## 2. 基準点と現在地
 
+以下のPhase 0とversion 0〜6の記録は、初期のSurrealDB実装からWork / Occurrence形式へ移行した
+履歴であり、現在のproduction backendを示すものではない。現行実装の境界は次のとおり。
+
+- 通常起動の永続DBは`SqliteGraphStore`（Deno組み込み`node:sqlite`）で、未指定時も`sqlite`を使う。
+- SQLiteの物理schema versionは`src/storage/sqlite_schema.ts`の`2`。既存version `1`からの
+  historical time移行は`migrateSqliteHistoricalTime()`が担当する。
+- SurrealDB schema migration chainはlegacyデータの移行・互換処理として残り、現行chainの値は
+  `src/storage/migrations/mod.ts`の`7`。通常起動時のproduction DB versionではない。
+- JSON backup payloadは`JsonBackupService`がschema version `8`を出力する意図で、V7は
+  `relationTypeDefinitions`、V8はWorkのoptionalな`historicalTime`を加える。これはSQLiteの物理schema
+  versionとは別の番号である。
+
+現在のsource/test contractは一致していない。`json_backup.ts`はbackupと
+`source.storageSchemaVersion`をともに`8`として出力する一方、production SQLiteの物理schemaは`2`。
+2026-09-23の`deno task test`では742件が成功し、`json_backup_test.ts`と`json_store_test.ts`の12件が失敗した。
+current exportを`7`と期待する箇所と、`8`をfuture versionとして扱う箇所が残っている。`deno task verify`は
+先行するBiome lintで停止し、成功していない。これらの不整合が解消・検証されるまでは、backupの実行時互換性と
+`source.storageSchemaVersion`の意味を確定済みとは扱わない。
+
 Phase 0時点のPoCは次の状態にあった。
 
 - SurrealDB schemaは`SurrealGraphStore.initialize()`内の`DEFINE ... IF NOT EXISTS`で生成している
@@ -29,7 +48,7 @@ Phase 0時点のPoCは次の状態にあった。
 - JSON storeは`items`、`links`などを直下に持ち、形式名とschema versionを持たない
 - `OutlineItem.parentId`が配置と系譜を兼ねており、Work / Occurrence導入時に大きな移行が必要になる
 
-この現行形式を次のように扱う。
+この時点のlegacy形式を次のように扱った。
 
 | 対象                                  | 現行形式                             |
 | ------------------------------------- | ------------------------------------ |
@@ -43,12 +62,12 @@ version `0`は互換入力として扱うlegacy形式であり、今後同じ形
 2026-07-27に`0001_work_occurrence`を導入し、Work、main Branch、Working Copy、Occurrence、
 意味リンク、システム関係へ分離した。詳細は [[../log/2026-07-27-phase-1-work-occurrence]]を参照する。
 
-2026-07-28に`0002_revision_snapshot`を導入し、storage schemaとbackup schemaは version
+2026-07-28に`0002_revision_snapshot`を導入し、当時のstorage schemaとbackup schemaは version
 `2`になった。複数Branch、変更不能なRevision、Working Copy単位のRecovery Snapshotを
 永続化する。version `1`のWork、Branch、Working Copy、Occurrence、リンクなどはそのまま保持し、
 RevisionとRecovery Snapshotを空集合として追加する。
 
-2026-07-29に`0003_bookmark_resume`を導入し、現在のstorage schemaとbackup schemaは version
+2026-07-29に`0003_bookmark_resume`を導入し、当時のstorage schemaとbackup schemaは version
 `3`である。手動で複数残す栞と、自動更新する単一の作業再開位置を別レコードとして 永続化する。version
 `2`の内容は保持し、栞を空集合、作業再開位置を未設定として追加する。
 
@@ -70,10 +89,10 @@ type BackupSchemaVersion = number;
 
 ### 3.1 Storage schema version
 
-ローカルDB（現行は SQLite、旧形式は
-SurrealDB）のtable、field、relation、index、保存上の不変条件を表す。
-アプリ起動時のmigration判断に使用する。現行の SQLite では `sqlite_store.ts`
-内の定義およびステートメント追跡で 整合性を担保する。
+各永続backendのtable、field、relation、index、保存上の不変条件を表し、そのbackendのmigration判断に
+使用する。現在のproduction backendはSQLite、SurrealDBはlegacy移行経路である。backendが異なる
+version番号を持ってもよい。
+現行のSQLiteでは`sqlite_store.ts`内の定義およびステートメント追跡で整合性を担保する。
 
 ### 3.2 Backup schema version
 
@@ -109,6 +128,10 @@ versionとして扱わない。
 メモリ内だけの型、UI表示、保存されない計算結果の変更では増やさない。
 
 ## 5. DB内のversion記録
+
+次のTypeScript例は論理的なmetadata契約を示す。現在のSQLite実装は`storage_metadata`に
+`id`、`schema_version`、`updated_at`を持ち、`migration_journal`も別の列構成である。例のすべての
+fieldがSQLiteへ保存されるという意味ではない。
 
 version `1`以降は、DB内に一件だけschema metadataを保持する。
 
@@ -281,7 +304,7 @@ migrationへ含めない。
 
 ## 12. Stub state 移行(version 3 から 4)
 
-2026-07-30に`0004_stub_state`を導入し、現在のstorage schemaとbackup schemaは version
+2026-07-30に`0004_stub_state`を導入し、当時のstorage schemaとbackup schemaは version
 `4`である。Stubは、本文をこれから書くために利用者が明示的に作成した未配置Workを表す
 任意のマーカーであり、Workへ次のoptional値を追加する。
 
@@ -331,7 +354,7 @@ JSON backupは`StoredGraphV4`が`StoredGraphV3`をそのまま継承する。配
 
 ## 13. Duplicate merge provenance 移行(version 4 から 5)
 
-2026-07-30に`0005_merge_provenance`を導入し、storage schemaとbackup schemaはversion `5`
+2026-07-30に`0005_merge_provenance`を導入し、当時のstorage schemaとbackup schemaはversion `5`
 になった。重複統合で吸収されたWorkは削除せず、`mergedIntoWorkId`と`mergedAt`を持つ provenance
 tombstoneとして残す。旧アプリによる統合状態の再表示や黙示損失を防ぐためversionを 上げ、version `4`
 JSONは配列構造を変えず一段変換し、上書き前に`.v4.bak`へ保護する。
@@ -350,7 +373,7 @@ fixtureの日本語、改行、Markdown、`radiora://`参照がversion `5` round
 
 ## 14. Emergence suggestion 移行(version 5 から 6)
 
-2026-07-30に`0006_emergence_suggestion`を導入し、storage schemaとbackup schemaはversion `6`
+2026-07-30に`0006_emergence_suggestion`を導入し、当時のstorage schemaとbackup schemaはversion `6`
 になった。発見候補は確定済みの意味リンクとは分離し、`kind`、Work endpoint、発見時の
 Occurrence、根拠、score、`pending / held / accepted / dismissed`状態と時刻を持つ
 `emergence_suggestion`として永続化する。
@@ -371,3 +394,28 @@ Occurrence、根拠、score、`pending / held / accepted / dismissed`状態と�
 - held/dismissedでリンクを作成せず、acceptedリンクを人間由来リンクと識別できる
 - 旧feedbackは失われず、再発見時以外に不完全な候補へ推測変換されない
 - version `5` JSONを上書きする前に`.v5.bak`へ一度だけ保護する
+
+## 15. Historical time（JSON payload version 7→8）
+
+Workの任意field `historicalTime`は、思索や出来事が扱う一点・期間を表す。`createdAt`と`updatedAt`は
+レコードの実際の作成・編集時刻であり、historical timeとは別である。日付の精度、紀元前、概算、期間端の
+不明を保持し、既存Workへ値を推測補完しない。
+
+このfieldにはbackendごとに別の移行番号がある。
+
+| 対象 | 移行 | 実装上の役割 |
+| --- | --- | --- |
+| Legacy SurrealDB | `0007_historical_time`, v6→v7 | Workにoptionalな`historical_time` objectを追加 |
+| JSON backup payload | v7→v8 | Workにoptionalな`historicalTime`を含む形へ移行。既存値なしは未設定のまま |
+| Production SQLite | physical schema v1→v2 | SQLiteのmetadata/journalをv2へ更新。recordはJSON payload列で保存 |
+
+`0007_historical_time`はSurrealDB migration chainの番号であり、SQLite physical schema version `2`や
+JSON payload version `8`を進めるmigrationではない。SQLite移行は`sqlite_store.ts`の初期化から
+`migrateSqliteHistoricalTime()`を呼ぶ。version `1`からの事前保護ファイルは、既存stateをpayload version
+`7`として`.before-v2.json`へ保存してからSQLite metadataを更新する。
+
+JSON backupの実装はpayload `8`を出力し、decoderはpayload `7`と`8`を受け入れる。ただし出力時の
+`source.storageSchemaVersion`も`8`に固定され、SQLite physical schema `2`とは一致しない。関連テストでは
+`historical_time_storage_test.ts`がpayload `8`を確認する一方、`json_backup_test.ts`と`json_store_test.ts`に
+payload `7`の期待値が残り、future-version fixtureも`8`を指定している。2026-09-23のテストでは前者など
+計12件が失敗し、全体verifyも成功していない。V8 export/restoreの実行互換性とsource metadataの定義は未検証である。

@@ -12,7 +12,7 @@ tags:
 
 ## 1. この文書の目的
 
-この文書は、Radiora v2のPoC完了後に実装する機能と、実装しない機能の境界を定める。
+この文書は、Radioraの製品モデル、実装済みPoCの境界、および将来の方向性を記録する。
 個別画面の詳細設計ではなく、次の事項を共有するための基準である。
 
 - Radioraが何を扱うアプリケーションなのか
@@ -28,6 +28,9 @@ tags:
 > [!important] 開発フェーズの出口
 > 本書の中核機能を実装し、リポジトリ直下で`deno task verify`が成功した時点で、仮説駆動の機能追加から
 > 実使用駆動の改善へ移行する。検証が失敗している状態を完了としない。
+
+以下のPhase一覧は計画と現行PoCの記録を併記する。個別の実装が存在することだけではPhase完了や
+検証成功を意味しない。検証済みと書く場合は、明示的なverify/CI結果を別途記録する。
 
 ## 2. 製品の定義
 
@@ -61,8 +64,10 @@ Radioraは日記専用アプリでも、Word代替でも、形式論理エディ
 
 ### 3.2 日付は親ではなく座標
 
-日付ノードを毎日自動生成して思索の親にしない。作成日時と更新日時は検索、Todayビュー、
-系統樹の時間軸に使う。日記を書きたい利用者は、通常のアウトラインとして日付階層を自由に作れる。
+日付ノードを毎日自動生成して思索の親にしない。`createdAt`と`updatedAt`はレコードの作成・編集時刻で、
+Todayや作業履歴に使う。歴史上の時点・期間はWorkの任意の`historicalTime`として別に記録する。
+historical timeは一点または期間で、世紀・年・月・日の精度、紀元前、概算、期間端の不明を表せる。
+どちらも配置階層の親子関係を変更しない。日記を書きたい利用者は通常のアウトラインに日付階層を作れる。
 
 ### 3.3 改稿は破壊ではなく分岐
 
@@ -106,6 +111,7 @@ Markdown、OPML、JSONを役割別に出力する。Radiora固有のグラフ情
 ```ts
 interface Work {
 	id: string;
+	historicalTime?: HistoricalTime;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -364,8 +370,9 @@ AIや検索が提示しただけの候補は採用済みリンクとは別エン
 
 ### 5.5 ユーザー定義型
 
-将来拡張できるデータ構造にはするが、初期UIでは標準7種に絞る。`CAUSE`、`EXAMPLE`、
-`DEFINES`などを先回りして追加しない。ドッグフーディングで繰り返し不足する関係だけを検討する。
+現行PoCでは組み込み8種に加えてユーザー定義型を作成し、定義を保存・backupできる。
+カスタム型は大文字名と有向／対称の別を持ち、有向型では系統表示上の世代前進も指定できる。
+新しい型は標準型へ追加せず、実使用で繰り返し必要になった場合だけ組み込み候補として検討する。
 
 ### 5.6 WorkリンクとRevision固定リンク
 
@@ -581,14 +588,16 @@ metadataを検討する。
 - タグ付与
 - 栞
 - Hoist
-- 原稿として開く
+- 長文編集へ切り替える（選択項目を中央ペインに展開）
 - Query実行
 
-現行PoCのパレットは、Quick Capture、Hoistと解除、栞、確認付きの別稿作成、高度なリンク編集への
-移動、Query実行・保存を共通の適用条件と無効理由で扱う。Outline内の追加、改行、階層変更、
-並べ替えは本文入力中のキーボード操作として提供する。版として残す操作は復旧履歴の選択文脈から
-実行する。化身としての配置、タグ付与、原稿として開く操作をパレットへ統合することと、
-利用者がショートカットを変更する設定UIは将来拡張である。
+現行PoCではパレットとショートカットが同じcommand definitionを使い、Quick Capture、Hoistと解除、
+長文編集、Markdown export、栞、別稿作成、リンク編集、Query実行・保存を表示する。選択や入力などの
+条件を満たさない操作は無効理由付きで表示する。長文編集は別画面を開かず、選択した本文を中央ペインに
+展開する。UI表示が「原稿として開く」の場合も、この中央ペイン切替を指す。Outline内の追加、改行、
+階層変更、並べ替えは本文入力中のキー操作で行う。通常のパレットではRecovery Snapshotが選ばれて
+いないため「Revisionとして残す」は無効となり、昇格はRecovery画面の選択中Snapshotから実行する。
+パレットからの化身配置、タグ付与、利用者によるショートカット変更設定は将来拡張である。
 
 現行PoCでは頻出操作に固定ショートカットを割り当てる。製品仕様では任意のショートカットを
 割り当てられるようにし、マウス操作だけを前提にしない。
@@ -662,8 +671,11 @@ ID付きトークンへ変換されるため、利用者がescapeを手入力す
 Markdown exportでは型付きリンクや稿情報の出力方法を選択可能にする。完全なRound-tripを
 Markdown単独へ要求しない。
 
-JSONバックアップと実DBのversioning規則は[[schema-evolution]]に従う。現行のversionなしJSONは legacy
-schema version 0として読み取り、今後のexportは形式名とschema versionを持つ envelopeへ移行する。
+JSONバックアップと実DBのversioning規則は[[schema-evolution]]に従う。versionなしJSONはlegacy payload
+version `0`として読み取る。現行sourceはJSON backup payload `8`を出力する意図だが、source storage
+versionとテスト期待値に未解決の不整合がある。2026-09-23の`deno task test`は742件が成功し、backup versionの
+期待値など12件が失敗した。物理SQLite schema `2`やlegacy Surreal schema `7`と同じversionとして扱わず、
+確定した互換性は成功したverify/CI結果を得るまで保留する。
 
 ### 7.15 Markdown本文と内部参照
 
@@ -710,7 +722,8 @@ portable向け、解決可能な参照を`[[表示名]]`へ変換するObsidian�
 
 ### 8.3 ユーザー定義リンク型
 
-データ構造上は拡張可能にするが、標準7種で不足する具体例が蓄積するまでUIを提供しない。
+現行PoCには名前と方向を指定する作成・保存UIがある。属性、既存リンク型の改名・削除、複雑な
+関係制約などは、実使用で必要性が確認されるまで追加しない。
 
 ### 8.4 添付ファイルとWebクリップ
 
@@ -758,7 +771,11 @@ AI生成物と人間作成物を明確に区別し、採用履歴を残す。
 
 ## 10. 実装段階
 
-### Phase 0: 現行PoCの基準化
+### Phase 0: 現行PoCの基準化（歴史的基準）
+
+version 0のSurrealDB/JSONと`OutlineItem.parentId`を棚卸し、fixtureとmigration方針を作った段階を記録する。
+これは現在のproduction storageの説明ではない。backendとschema versionは[[schema-evolution]]を参照。
+以下は当時の基準化チェックリストであり、現在の未実施タスク一覧ではない。
 
 - 現行DBと`OutlineItem.parentId`の利用箇所を列挙する
 - データ移行とロールバック方針を定める
@@ -768,6 +785,8 @@ AI生成物と人間作成物を明確に区別し、採用履歴を残す。
 - 既存データを失わないfixtureを作る
 
 ### Phase 1: 実身・化身と関係分離
+
+WorkとOccurrenceを分離する基本モデルは現行実装にある。以下は当初の移行・受け入れ範囲を示す。
 
 - Work、Occurrenceを導入する
 - アウトライン配置をOccurrenceへ移す
@@ -797,10 +816,12 @@ AI生成物と人間作成物を明確に区別し、採用履歴を残す。
 - Node Diffを実装する
 - 全体系統と版系統の表示を分ける
 
-現行PoCではstorage／service境界、版系統と全体系統の読み取り表示、任意2版の比較、 既存Recovery
-Snapshotの差分確認・復元・Revision昇格まで到達している。明示的な版保存、 Branch
-lifecycle、手動merge、Snapshot自動生成・間引きはservice／policyと自動テストまでで、
-UI導線とruntime接続は後続課題である。以下は製品としてのPhase完了条件を示す。
+現行PoCにはWork / Branch / Working Copy / Revision / Recovery Snapshotのstorage・serviceと、
+Work系統・Revision比較、Branch作成、Snapshotの差分確認・復元・Revision昇格のUIがある。
+手動mergeはWorking Copyを複数親Revisionへ記録するserviceまでで、UI操作はない。Snapshot自動生成・
+保持方針の計算はpure policyとして存在するが、Snapshot自動生成・間引きの実行経路は未接続である。
+Branch昇格とmanual mergeのserviceも通常のUI導線へ接続されていない。したがってこのPhase全体を
+完了とは扱わず、以下は製品としての受け入れ条件を示す。
 
 完了条件:
 
@@ -834,6 +855,10 @@ textareaへ戻す。本文はフォーカス時に編集表示、blur時にMarkd
 インスペクターは選択中の項目の文脈と操作を扱う。画像、表、常時分割プレビューは初期採用範囲に
 含めない。
 
+インスペクターの概要には配置一覧、配置固有見出し、作成日・更新日、Workのhistorical time編集と
+長文編集への切替がある。履歴タブはBranch作成、Work系統・Revision比較への移動とRecovery snapshot
+一覧を提供し、選んだsnapshotの比較・復元・Revision昇格はRecovery画面から行う。
+
 本文内の`[[`は内部参照補完であり、正準保存時には`radiora://`のID付きMarkdownリンクになる。
 一方、`@`は意味関係の相手Workを探す入力であり、本文へ内部参照を暗黙挿入しない。両者は
 互いを代替しない別操作として維持し、`[[`はBacklink、`@`は利用者が確定した意味関係だけを扱う。
@@ -859,17 +884,21 @@ Phase 5では次を現行PoCへ接続した。
 - 内部参照を保持するRadiora向け、IDを除くportable向け、解決済み参照をWikiリンク化する
   Obsidian向けのMarkdown export
 - 階層と本文を交換するOPML import / export
-- 全グラフ状態を扱うJSON完全バックアップと、空DBを含むrestore検証
-- backup schema version `0`から現行version `6`までの段階的migration、将来versionの拒否、
-  restore失敗時の既存状態保持
-- 日本語、Markdown、`radiora://`内部参照を含むJSON、Markdown、OPMLの往復検証
+- 全グラフ状態を扱うJSON backup/restore経路。空DBを含むrestoreと各形式のround-tripはテストソースに
+  ケースがある。2026-09-23の`deno task test`は742件成功・12件失敗で、成功したverify/CI記録はない
+- JSON backup payloadはコード上でversion `0`から`8`への段階的migration、将来versionの拒否、
+  restore失敗時の既存状態保持を意図する。V8はWorkのoptionalなhistorical timeを追加する。
+  ただしcurrent exportとsource storage versionの値、およびchecked-in test期待値に不整合があり、
+  migrationの検証状態は未確定（詳細は[[schema-evolution]]）。
+- JSON、Markdown、OPMLのround-tripテストは日本語、Markdown、`radiora://`内部参照を含む
 
 原稿投影で組み立てた範囲だけを一つのMarkdown原稿として出力する導線は、今後の拡張として残る。
 現行のMarkdown exportはOutline全体を対象とする。
 
 ### Phase 6: ドッグフーディング
 
-Phase 0から5を完了した後、一定期間Radioraを次の用途で実際に使う。
+将来のドッグフーディング段階では、Phase 0から5の受け入れ条件とverify/CI記録を確認したうえで、
+一定期間Radioraを次の用途で実際に使う。
 
 - 日々の着想のQuick Capture
 - 既存思索の改稿とBranch
