@@ -246,7 +246,7 @@ Deno.test("rule-query contract: buildQueryProjectionNodes deduplicates cells, ig
 	const itemsBefore = await store.listItems();
 	const linksBefore = await store.listLinks();
 
-	const projection = await operations.buildQueryProjectionNodes(saved.id, 50);
+	const projection = await operations.buildQueryProjectionNodes(saved.id);
 	// Result contains parent and child
 	assertEquals(projection.result.rows, [["FROM", root.id, childOcc.id]]);
 	// Nodes should contain projected occurrences without duplicate node entries
