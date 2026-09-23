@@ -11,6 +11,12 @@ tags:
 
 # Radiora sync storage schema boundary
 
+> この文書は未実装のDomainOperation同期に関する提案であり、現在の保存方式の説明ではない。
+> 2026-09-23時点で通常起動が使う永続backendはSQLite（物理schema version `2`）。SurrealDB
+> migration chainの`7`はlegacy移行経路、JSON backup payloadのコード上の出力version `8`は別の形式番号である。
+> backup versionとsource storage versionの整合、および関連テストの期待値は未解決のため、保存方式の
+> 実装計画では`schema-evolution`の現況注記を先に解消する。
+
 ## 1. 結論
 
 DomainOperation同期をRadioraへ組み込む段階ではDB schema変更が必要になる。ただし、Labで使った
@@ -27,7 +33,8 @@ projectionとして使う。最初に増えるのはlocal/masterの同期状態�
 
 ## 2. Versionを混同しない
 
-同期導入後は、既存のstorage/backup versionに加えて次を区別する。
+同期を実装する際は、backend固有のstorage schema versionとJSON backup payload versionに加えて、
+次を区別する。
 
 | Version                  | 所有者                   | 意味                                                              |
 | ------------------------ | ------------------------ | ----------------------------------------------------------------- |
@@ -93,21 +100,22 @@ Labの`workingCopy.updateText`と`occurrence.move`は、現行の`working_copy`�
 
 ## 6. Migration方針
 
-同期実装をRadiora本体へ入れる最初の変更は、次の順序で行う。
+同期実装をRadiora本体へ入れる最初の変更は、現行のproduction backendであるSQLiteを前提に、次の順序で行う。
 
 1. operation/protocol contractとlocal/master portsを確定する
-2. local sync stateだけを追加する一段のstorage migrationを作る
+2. SQLite local sync stateだけを追加する一段のstorage migrationを作る
 3. master schemaを別packageまたはserviceの独立migrationとして作る
 4. existing version fixtureから、同期tableが空の状態へ移行できることを検証する
 5. 新規device IDを生成し、既存domain projectionを初回同期するbootstrap方式を検証する
 6. その後に最初のRadiora operation familyを有効化する
 
-現在のstorage schema versionは`6`なので、local sync stateを本体へ導入するmigrationは`6 -> 7`の
-候補になる。ただし本書の追加だけではversionを上げない。物理tableを追加する実装PRでversion、fixture、
-validationを同時に更新する。
+production SQLiteの物理schema versionは現在`2`なので、local sync stateをSQLiteへ導入するmigrationは
+`2 -> 3`が候補になる。legacy SurrealDBの`7`やJSON backup payloadのコード上の`8`を、このmigration番号へ
+流用しない。ただし本書の追加だけではversionを上げない。実装時に、SQLiteの既存version `1`から`2`への
+歴史的migrationとの連続性を確認し、version、fixture、validationを同時に更新する。
 
 sync stateは端末固有・再構築可能な運用metadataなので、通常のJSON backupへ含めない。このためlocal
-sync tableだけの追加ではbackup schema versionを上げない。domain dataの形式や意味も変える場合に限り、
+sync tableだけの追加ではbackup payload schema versionを上げない。domain dataの形式や意味も変える場合に限り、
 対応するbackup migrationを別途追加する。
 
 ## 7. 実装前に決める必要がある点

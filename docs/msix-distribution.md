@@ -17,6 +17,8 @@ MSIXパッケージには次のものが含まれる。
 
 ## ビルド手順（Windows PowerShell）
 
+`.github/workflows/release.yml` はWindows向けZIPとLinux向けtar.gzを公開し、MSIXは生成しない。この手順はWindowsでの手動ビルド用。
+
 ```powershell
 deno task desktop:build     # Windows bundle生成
 deno task desktop:msix      # ライセンス生成 + MSIX作成 + 署名
@@ -41,7 +43,7 @@ deno task desktop:msix      # ライセンス生成 + MSIX作成 + 署名
 
 - `--cert <pfx> --cert-password <password>`: 実証明書で署名
 - `--publisher "CN=..."`: Publisher表示名（署名証明書のSubjectと一致させる）
-- `--version x.y.z.w`: パッケージバージョン（既定は `deno.json` の `version`）
+- `--version x.y.z.w`: パッケージバージョン（既定は `deno.json` の `version` に `.0` を足した4区分。現在の既定値は `0.5.2.0`）
 - 省略時は開発用自己署名証明書を生成し、 `dist-desktop/radiora-dev-signing.pfx` を再利用する
 
 ### テストインストール
@@ -50,7 +52,7 @@ deno task desktop:msix      # ライセンス生成 + MSIX作成 + 署名
 
 ```powershell
 certutil -addstore Root dist-desktop\radiora-dev-signing.cer
-Add-AppxPackage -Path dist-desktop\Radiora_0.5.0.0_x64.msix
+Add-AppxPackage -Path dist-desktop\Radiora_0.5.2.0_x64.msix
 ```
 
 起動確認後、`Remove-AppxPackage` でアンインストールできる。バージョンを上げたパッケージはそのまま
