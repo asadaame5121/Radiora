@@ -364,6 +364,26 @@ F1/H1 は他の候補と独立して開始できる。H2 は一文書群ずつ�
 清掃は「挙動を保つ構造変更」と別の作業種別であり、F3
 で明示した旧運用の廃止は意図的な対象縮小とする。
 
+## E: 型付きエラーハンドリング（2026-09-22）
+
+- [x] **E1: ライブラリ選定と初期導入** — [ADR 0002](adr/0002-selective-neverthrow-errors.md) で
+      neverthrow を採用。 `JsonBackupService.restoreResult` と `BackupRestoreError` に限定し、JSON
+      解析、入力検証、 未対応版、保存失敗を code で区別する。既存 `restore`
+      は結果を消費して例外へ変換し、 RPC、UI 文言、保存形式、storage の transaction / rollback
+      を維持する。
+- [ ] **E2: Working Copy autosave** — 次の優先候補。下書き保持・明示 retry・flush の中止を
+      型付き結果で扱い、Branch ごとの直列化と全件待機を維持する。E1 取り込み後に別 PR で実施。
+- [ ] **E3: startup / storage bootstrap** — A4 の境界に合わせ、設定不正・移行未完了・初期化失敗を
+      区別する。close、元の原因、旧データ保護を維持する。
+- [ ] **E4: OPML import** — O1 の入力契約を確認し、入力・読込・保存の失敗を区別する。 adapter
+      ごとの原子性を確認し、Result 化と保存保証の変更を混同しない。
+- [ ] **E5: rule query（条件付き）** — D5 / A1b 実施時に、構文不正・実行上限超過の区別が
+      利用側の判断を改善する場合だけ導入する。
+
+対象ファイル、導入条件、RPC の前提、回帰テストと完了条件は
+[段階導入計画](design/error-handling-rollout.md) を参照。実施日は未定。 resume
+保存は別途必要性を判断し、全 CRUD の Result 化や共通の巨大エラー階層は計画しない。
+
 ## 検証と共通完了条件
 
 実装時は変更対象の契約テストを先に実行し、不足する観測可能な挙動だけを追加する。
