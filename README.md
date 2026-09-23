@@ -7,6 +7,8 @@
 技術構成は Deno Desktop (CEF / WebView) + Svelte 5 + SQLite です。現在は技術PoCとして開発中で、
 追加の機能とその検証範囲は `CHANGELOG.md` と `docs/` に記録しています。
 
+今後の優先順位は[更新予定](docs/roadmap.md)にまとめています。
+
 ## 特徴
 
 ### アウトラインと編集
