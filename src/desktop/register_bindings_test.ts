@@ -5,12 +5,14 @@ import { RevisionService } from "../services/revision_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import type { StartupStatus } from "../shared/bindings.ts";
 import { createBindingHandlers } from "./register_bindings.ts";
+import { operationLogBindingStub } from "../../tests/operation_log_binding_stub.ts";
 
 Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end to end", async () => {
 	const store = new MemoryGraphStore();
 	const service = new OutlineService(store);
 	const ready: StartupStatus = { phase: "ready", message: "ready" };
 	const handlers = createBindingHandlers({
+		...operationLogBindingStub,
 		getService: () => service,
 		getStartupStatus: () => ready,
 		retryStartup: () => Promise.resolve(ready),
@@ -115,6 +117,7 @@ Deno.test("desktop bindings expose startup failure and retry without dereferenci
 	};
 	let retries = 0;
 	const handlers = createBindingHandlers({
+		...operationLogBindingStub,
 		getService: () => null,
 		getStartupStatus: () => failed,
 		retryStartup: () => {
@@ -137,6 +140,7 @@ Deno.test("desktop bindings validate the global lineage filter at the IPC bounda
 	const service = new OutlineService(store);
 	const ready: StartupStatus = { phase: "ready", message: "ready" };
 	const handlers = createBindingHandlers({
+		...operationLogBindingStub,
 		getService: () => service,
 		getStartupStatus: () => ready,
 		retryStartup: () => Promise.resolve(ready),
@@ -193,6 +197,7 @@ Deno.test("desktop bindings expose relation type catalog and allow custom creati
 	const service = new OutlineService(store);
 	const ready: StartupStatus = { phase: "ready", message: "ready" };
 	const handlers = createBindingHandlers({
+		...operationLogBindingStub,
 		getService: () => service,
 		getStartupStatus: () => ready,
 		retryStartup: () => Promise.resolve(ready),
@@ -222,6 +227,7 @@ Deno.test("desktop bindings validate user input payloads with Valibot schemas", 
 	const service = new OutlineService(store);
 	const ready: StartupStatus = { phase: "ready", message: "ready" };
 	const handlers = createBindingHandlers({
+		...operationLogBindingStub,
 		getService: () => service,
 		getStartupStatus: () => ready,
 		retryStartup: () => Promise.resolve(ready),

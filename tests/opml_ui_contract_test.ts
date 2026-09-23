@@ -12,8 +12,10 @@ Deno.test("OPML UI exports UTF-8 and imports an explicitly selected file", () =>
 		app,
 		/async function performOpmlExport\(\)[\s\S]*?await editorController\.flushAutosave\(\)[\s\S]*?api\.exportOpml\(\)/,
 	);
-	assertMatch(app, /new Blob\(\[source\], \{ type: "text\/x-opml;charset=utf-8" \}\)/);
-	assertMatch(app, /anchor\.download = `radiora-\$\{localDateValue\(new Date\(\)\)\}\.opml`/);
+	assertMatch(
+		app,
+		/downloadTextFile\(source, "text\/x-opml;charset=utf-8", `radiora-\$\{localDateValue\(new Date\(\)\)\}\.opml`\)/,
+	);
 	assertMatch(
 		view,
 		/accept="\.opml,\.xml,text\/x-opml,application\/xml,text\/xml"[\s\S]*?onchange=\{importOpmlFile\}/,
