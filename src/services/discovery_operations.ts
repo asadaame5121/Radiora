@@ -1,7 +1,6 @@
 import type {
 	EmergenceAction,
 	EmergenceSuggestion,
-	OutlineLink,
 	RuleQueryResult,
 	SavedRuleQuery,
 	SearchAlias,
@@ -16,15 +15,9 @@ import type {
 	RelationStorePort,
 	RelationTypeDefinitionStorePort,
 } from "../storage/graph_store.ts";
+import { DiscoveryEmergenceOperations } from "./discovery_emergence_operations.ts";
 import { DiscoveryRuleQueryOperations } from "./discovery_rule_query_operations.ts";
-import { EmergencePersistence } from "./emergence_persistence.ts";
-import {
-	calculateEmergenceCandidates,
-	rankEmergenceSuggestions,
-} from "./emergence_suggestion_calculator.ts";
-import { fetchActiveMergedLinks } from "./implicit_relation.ts";
 import { SearchOperations } from "./search_operations.ts";
-import { titleOf } from "./search_text.ts";
 
 type DiscoveryOperationsStore =
 	& DiscoveryStorePort
@@ -35,12 +28,12 @@ type DiscoveryOperationsStore =
 /** Search, suggestion, and rule-query operations backed by feature-specific store ports. */
 export class DiscoveryOperations {
 	private readonly search: SearchOperations;
-	private readonly emergencePersistence: EmergencePersistence;
+	private readonly emergence: DiscoveryEmergenceOperations;
 	private readonly ruleQuery: DiscoveryRuleQueryOperations;
 
-	constructor(private readonly store: DiscoveryOperationsStore) {
+	constructor(store: DiscoveryOperationsStore) {
 		this.search = new SearchOperations(store);
-		this.emergencePersistence = new EmergencePersistence(store);
+		this.emergence = new DiscoveryEmergenceOperations(store, this.search);
 		this.ruleQuery = new DiscoveryRuleQueryOperations(store);
 	}
 
@@ -70,18 +63,7 @@ export class DiscoveryOperations {
 		contextItemId: string,
 		limit = 10,
 	): Promise<EmergenceSuggestion[]> {
-		const items = await this.store.listItems();
-		const links = await this.listActiveLinks();
-		const context = items.find((item) => item.id === contextItemId);
-		if (!context) return [];
-		const searchResults = await this.search.searchItems({
-			query: titleOf(context),
-			contextItemId,
-			limit: 20,
-		});
-		const candidates = calculateEmergenceCandidates({ context, items, links, searchResults });
-		const visible = await this.emergencePersistence.materialize(candidates);
-		return rankEmergenceSuggestions(visible, limit);
+		return this.emergence.listEmergenceSuggestions(contextItemId, limit);
 	}
 
 	async resolveEmergenceSuggestion(
@@ -89,7 +71,7 @@ export class DiscoveryOperations {
 		action: EmergenceAction,
 		reason?: string,
 	): Promise<void> {
-		return this.emergencePersistence.resolve(id, action, reason);
+		return this.emergence.resolveEmergenceSuggestion(id, action, reason);
 	}
 
 	async runRuleQuery(source: string, limit = 500): Promise<RuleQueryResult> {
@@ -115,9 +97,5 @@ export class DiscoveryOperations {
 		limit = 500,
 	): Promise<{ nodes: TransientProjectionNode[]; result: RuleQueryResult }> {
 		return this.ruleQuery.buildQueryProjectionNodes(queryId, limit);
-	}
-
-	private listActiveLinks(): Promise<OutlineLink[]> {
-		return fetchActiveMergedLinks(this.store);
 	}
 }

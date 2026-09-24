@@ -5,6 +5,11 @@ const expectedPorts: Record<string, string[]> = {
 	"branch_service.ts": ["OutlineStorePort", "RelationStorePort", "WorkStorePort"],
 	"comparison_service.ts": ["RelationStorePort", "WorkStorePort"],
 	"date_projection.ts": ["OutlineStorePort", "WorkStorePort"],
+	"discovery_emergence_operations.ts": [
+		"DiscoveryStorePort",
+		"OutlineStorePort",
+		"RelationStorePort",
+	],
 	"discovery_operations.ts": ["DiscoveryStorePort", "OutlineStorePort", "RelationStorePort"],
 	"discovery_rule_query_operations.ts": [
 		"DiscoveryStorePort",
