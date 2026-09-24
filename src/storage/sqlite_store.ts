@@ -214,7 +214,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 
 	override updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
 		return this.mutate(() => {
-			const main = this.branches.find((branch) =>
+			const main = this.state.branches.find((branch) =>
 				branch.workId === workId && branch.name === "main"
 			);
 			if (!main) return Promise.reject(new Error(`Main Branch not found for Work: ${workId}`));
@@ -232,7 +232,9 @@ export class SqliteGraphStore extends MemoryGraphStore {
 
 	override applyRecoverySnapshot(snapshotId: string, updatedAt: string): Promise<void> {
 		return this.mutate(() => {
-			const snapshot = this.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
+			const snapshot = this.state.recoverySnapshots.find((candidate) =>
+				candidate.id === snapshotId
+			);
 			if (!snapshot) {
 				return Promise.reject(new Error(`Recovery Snapshot not found: ${snapshotId}`));
 			}

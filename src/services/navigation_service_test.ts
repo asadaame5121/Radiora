@@ -88,11 +88,11 @@ Deno.test("resume resolution clamps a stale caret without changing the stored of
 
 class CorruptibleMemoryGraphStore extends MemoryGraphStore {
 	injectBookmark(bookmark: Bookmark): void {
-		this.bookmarks.push(bookmark);
+		this.state.bookmarks.push(bookmark);
 	}
 
 	override listBookmarks(): Promise<Bookmark[]> {
-		return Promise.resolve(structuredClone(this.bookmarks));
+		return Promise.resolve(structuredClone(this.state.bookmarks));
 	}
 }
 
