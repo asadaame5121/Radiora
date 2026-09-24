@@ -187,7 +187,7 @@ magic-number ratchetは281 current/281 baseline、duplicate ratchetは34 current
   - `selectedId`/snapshot を複製せず、現在の選択を getter または入力で受け取る。
   - 完了条件: App に結果配列・loading・request counter が残らず、選択変更/逆順応答/失敗を Vitest
     で固定。 shared counter を別々の owner に分ける際は comparison 同士の排他性を維持する。
-- [ ] **A1b: rule query Controller** — 難易度3、依存 D5
+- [x] **A1b: rule query Controller** — 難易度3、依存 D5
   - source/name/result/error/saved query と sparse projection の状態遷移を所有する。
   - 完了条件: `InspectorQueryPanel` は表示と callback のみ、query の一時ノードを永続化しない。
 - [ ] **A1c: tag・alias・日付投影の残存状態を整理** — 難易度3
