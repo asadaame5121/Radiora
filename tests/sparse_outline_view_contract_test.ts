@@ -130,15 +130,22 @@ Deno.test("outline service delegates query projection to discovery operations", 
 	const discovery = await Deno.readTextFile(
 		new URL("../src/services/discovery_operations.ts", import.meta.url),
 	);
+	const ruleQuery = await Deno.readTextFile(
+		new URL("../src/services/discovery_rule_query_operations.ts", import.meta.url),
+	);
 	assert(facade.includes("buildQueryProjectionNodes"), "façade keeps the public method");
 	assert(
 		facade.includes("this.discovery.buildQueryProjectionNodes"),
 		"façade delegates query projection",
 	);
+	assert(
+		discovery.includes("this.ruleQuery.buildQueryProjectionNodes"),
+		"discovery delegates query projection",
+	);
 	assertMatch(
-		discovery,
+		ruleQuery,
 		/buildSparseOutline\(.*"query"\)/,
-		"discovery operations calls buildSparseOutline with query sourceType",
+		"rule query operations calls buildSparseOutline with query sourceType",
 	);
 });
 

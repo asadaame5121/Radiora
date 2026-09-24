@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { DiscoveryOperations } from "./discovery_operations.ts";
+import { DiscoveryRuleQueryOperations } from "./discovery_rule_query_operations.ts";
 import {
 	addDiscoveryTestLink,
 	addDiscoveryTestWork,
@@ -12,7 +13,7 @@ Deno.test("rule-query contract: a saved query validates, executes, and projects 
 	const alpha = await addDiscoveryTestWork(store, "alpha", "Alpha");
 	const beta = await addDiscoveryTestWork(store, "beta", "Beta");
 	await addDiscoveryTestLink(store, "alpha", "beta", "RELATED");
-	const operations = new DiscoveryOperations(store);
+	const operations = new DiscoveryRuleQueryOperations(store);
 	const saved = await operations.saveRuleQuery({
 		name: " 関係 ",
 		source: "?- link(RELATED, A, B).",
