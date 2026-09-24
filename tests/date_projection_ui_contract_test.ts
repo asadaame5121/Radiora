@@ -16,7 +16,7 @@ Deno.test("Today UI keeps created and updated projections separate without creat
 	assert(view.includes("background: var(--surface-raised) !important"));
 	const openDateEntry = app.slice(
 		app.indexOf("async function openDateEntry"),
-		app.indexOf("async function loadRevisions"),
+		app.indexOf("async function performAddBookmark"),
 	);
 	assert(openDateEntry.includes("openNavigationTarget"));
 	assertFalse(openDateEntry.includes("selectItem("));

@@ -47,6 +47,7 @@
 	import { createEditorController } from "./editor_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { RuleQueryController } from "./rule_query_controller.svelte.ts";
+	import { HistoryController } from "./history_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { RelationTypeController } from "./relation_type_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
@@ -66,14 +67,11 @@
 		SearchResult,
 		ScopedTagSet,
 		TagAlias,
-		Revision,
-		RecoverySnapshot,
 		TransientProjectionNode,
 	} from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
 	import type {
 		GlobalLineageProjection,
-	WorkLineageProjection,
 	} from "../services/branch_service";
 	import type { DateProjection, DateRange } from "../services/date_projection";
 	import {
@@ -205,14 +203,7 @@
 	let tagMergeTarget = $state("");
 	let tagError = $state("");
 	const ruleQuery = new RuleQueryController(api, errorMessage);
-	let revisions = $state<Revision[]>([]);
-	let recoverySnapshots = $state<RecoverySnapshot[]>([]);
-	let revisionsLoading = $state(false);
-	let revisionLoadRequest = 0;
 	let globalLineage = $state<GlobalLineageProjection | null>(null);
-	let workLineage = $state<WorkLineageProjection | null>(null);
-	let workLineageLoading = $state(false);
-	let workLineageLoadRequest = 0;
 	let comparisonPreferredRevisionId = $state<string | undefined>();
 	let linkComparison = $state<LinkComparisonProjection | null>(null);
 	let workComparison = $state<
@@ -284,6 +275,12 @@
 		reloadOutline: load,
 		reportError: (cause) => error = errorMessage(cause),
 	});
+	const history = new HistoryController(
+		api,
+		() => selectedItem?.workId ?? null,
+		() => selectedBranchId ?? null,
+		(cause) => error = errorMessage(cause),
+	);
 	const editorController = createEditorController({
 		api,
 		getSnapshot: () => snapshot,
@@ -291,7 +288,7 @@
 		reload: load,
 		loadUnplacedWorks: () => workController.loadUnplacedWorks(),
 		openNavigationTarget,
-		loadRevisions,
+		loadRevisions: (workId) => history.loadRevisions(workId),
 		openRevisionComparison,
 		requestFocus,
 		findTextarea: (itemId) => document.querySelector<HTMLTextAreaElement>(
@@ -526,15 +523,13 @@
 	$effect(() => {
 		const workId = selectedItem?.workId;
 		if (workId && startup.phase === "ready") {
-			void loadRevisions(workId);
-			void loadWorkLineage(workId);
-			if (selectedBranchId) void loadRecoverySnapshots(workId, selectedBranchId);
-			else recoverySnapshots = [];
+			void history.loadRevisions(workId);
+			void history.loadWorkLineage(workId);
+			if (selectedBranchId) void history.loadRecoverySnapshots(workId, selectedBranchId);
+			else history.clearRecovery();
 			void editorController.loadInternalReferenceBacklinks(workId);
 		} else {
-			revisions = [];
-			recoverySnapshots = [];
-			workLineage = null;
+			history.clear();
 			editorController.clearBacklinks();
 		}
 	});
@@ -1257,27 +1252,6 @@
 		});
 	}
 
-	async function loadRevisions(workId: string): Promise<void> {
-		const request = ++revisionLoadRequest;
-		revisionsLoading = true;
-		try {
-			const next = await api.listRevisions(workId);
-			if (request === revisionLoadRequest && selectedItem?.workId === workId) revisions = next;
-		} catch (cause) {
-			if (request === revisionLoadRequest) error = errorMessage(cause);
-		} finally {
-			if (request === revisionLoadRequest) revisionsLoading = false;
-		}
-	}
-
-	async function loadRecoverySnapshots(workId: string, branchId: string): Promise<void> {
-		try {
-			recoverySnapshots = await api.listRecoverySnapshots(workId, branchId);
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
-	}
-
 	async function restoreRecoverySnapshot(snapshotId: string): Promise<void> {
 		if (!selectedItem || !selectedBranchId) return;
 		await editorController.flushAutosave();
@@ -1288,7 +1262,7 @@
 			"confirmed",
 		);
 		await load();
-		await loadRecoverySnapshots(selectedItem.workId, selectedBranchId);
+		await history.loadRecoverySnapshots(selectedItem.workId, selectedBranchId);
 	}
 
 	async function performPromoteRecoverySnapshot(snapshotId: string): Promise<void> {
@@ -1300,25 +1274,10 @@
 			"confirmed",
 		);
 		await Promise.all([
-			loadRevisions(selectedItem.workId),
-			loadWorkLineage(selectedItem.workId),
-			loadRecoverySnapshots(selectedItem.workId, selectedBranchId),
+			history.loadRevisions(selectedItem.workId),
+			history.loadWorkLineage(selectedItem.workId),
+			history.loadRecoverySnapshots(selectedItem.workId, selectedBranchId),
 		]);
-	}
-
-	async function loadWorkLineage(workId: string): Promise<void> {
-		const request = ++workLineageLoadRequest;
-		workLineageLoading = true;
-		try {
-			const next = await api.listWorkLineage(workId);
-			if (request === workLineageLoadRequest && selectedItem?.workId === workId) {
-				workLineage = next;
-			}
-		} catch (cause) {
-			if (request === workLineageLoadRequest) error = errorMessage(cause);
-		} finally {
-			if (request === workLineageLoadRequest) workLineageLoading = false;
-		}
 	}
 
 	function openRevisionComparison(revisionId: string): void {
@@ -2005,8 +1964,8 @@
 					});
 					await load(placement.id);
 					await Promise.all([
-						loadRevisions(confirmation.workId),
-						loadWorkLineage(confirmation.workId),
+						history.loadRevisions(confirmation.workId),
+						history.loadWorkLineage(confirmation.workId),
 					]);
 					viewMode = "outline";
 				}
@@ -2366,12 +2325,12 @@
 					/>
 				{/key}
 			{:else if selectedItem}
-				{#if revisionsLoading}
+				{#if history.revisionsLoading}
 					<section class="revision-comparison"><p class="comparison-empty">版を読み込んでいます…</p></section>
 				{:else}
 					{#key selectedItem.workId}
 						<RevisionComparison
-							{revisions}
+							revisions={history.revisions}
 							preferredRevisionId={comparisonPreferredRevisionId ??
 								(selectedItem.revisionSelector.mode === "pinned"
 									? selectedItem.revisionSelector.revisionId
@@ -2383,19 +2342,19 @@
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.work}を選択してください。</p></section>
 			{/if}
 		{:else if viewMode === "workLineage"}
-			{#if workLineageLoading}
+			{#if history.workLineageLoading}
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.workLineage}を読み込んでいます…</p></section>
-			{:else if workLineage}
-				{#key workLineage.work.id}
+			{:else if history.workLineage}
+				{#key history.workLineage.work.id}
 					<div class="work-lineage-workspace">
 						<WorkLineage
-							projection={workLineage}
+							projection={history.workLineage}
 							onCompare={openWorkComparison}
 							onBack={() => { viewMode = "outline"; }}
 						/>
 						{#if selectedItem && selectedBranchId}
 							<RecoverySnapshots
-								snapshots={recoverySnapshots}
+								snapshots={history.recoverySnapshots}
 								loadPreview={(snapshotId) =>
 									api.previewRecoverySnapshot(
 										snapshotId,
@@ -2436,8 +2395,8 @@
 				{selectedPlacements}
 				{selectedLinks}
 				{selectedBranchId}
-				{recoverySnapshots}
-				{revisions}
+				recoverySnapshots={history.recoverySnapshots}
+				revisions={history.revisions}
 				{commands}
 				{vocabulary}
 				relationTypeDefinitions={relationTypes.definitions}
