@@ -188,7 +188,7 @@ magic-number ratchetは281 current/281 baseline、duplicate ratchetは34 current
   - owner を一箇所に置く案と、drop callback に移動元 ID を渡す案を比較し、最小の変更を選ぶ。
   - 完了条件: View で開始した drag の移動元が操作側へ届き、終了時にクリアされる回帰テストがある。
     不具合が再現した場合は修正を別差分で先行し、現在の不具合を保存すべき仕様としない。
-- [ ] **A1a: 履歴・比較の feature Controller** — 難易度4
+- [x] **A1a: 履歴・比較の feature Controller** — 難易度4
   - 対象: revisions/recovery/work lineage と comparison のロード処理。履歴と比較は別の state owner
     とする。
   - `selectedId`/snapshot を複製せず、現在の選択を getter または入力で受け取る。

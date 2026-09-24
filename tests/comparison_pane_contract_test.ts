@@ -2,6 +2,9 @@ import { assertMatch } from "jsr:@std/assert@1";
 
 Deno.test("FROM FIX VS Revision and Branch use one read-only comparison pane", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const controller = await Deno.readTextFile(
+		new URL("../src/ui/comparison_controller.svelte.ts", import.meta.url),
+	);
 	const linkEditor = await Deno.readTextFile(
 		new URL("../src/ui/LinkEditor.svelte", import.meta.url),
 	);
@@ -15,9 +18,9 @@ Deno.test("FROM FIX VS Revision and Branch use one read-only comparison pane", a
 		new URL("../src/ui/WorkLineage.svelte", import.meta.url),
 	);
 
-	assertMatch(app, /resolveLinkComparison\(linkId\)/);
+	assertMatch(controller, /resolveLinkComparison\(linkId\)/);
 	assertMatch(linkEditor, /isComparableLinkType\(link\.type\)/);
-	assertMatch(app, /listWorkComparisonDocuments/);
+	assertMatch(controller, /listWorkComparisonDocuments/);
 	assertMatch(app, /<ComparisonPane/);
 	assertMatch(revision, /<ComparisonPane/);
 	assertMatch(lineage, /onCompare\("branch", branch\.id\)/);
@@ -30,17 +33,16 @@ Deno.test("FROM FIX VS Revision and Branch use one read-only comparison pane", a
 
 Deno.test("comparison entry points clear stale context and ignore stale async responses", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+	const controller = await Deno.readTextFile(
+		new URL("../src/ui/comparison_controller.svelte.ts", import.meta.url),
+	);
 
-	assertMatch(
-		app,
-		/function openRevisionComparison[\s\S]*?comparisonRequest\+\+[\s\S]*?linkComparison = null[\s\S]*?workComparison = null/,
-	);
-	assertMatch(app, /const request = \+\+comparisonRequest/);
-	assertMatch(app, /if \(request !== comparisonRequest\) return/);
-	assertMatch(
-		app,
-		/catch \(cause\) \{[\s\S]*?linkComparison = null;[\s\S]*?workComparison = null;/,
-	);
+	assertMatch(app, /comparison\.openRevision\(revisionId\)/);
+	assertMatch(app, /comparison\.openWork\(scope, id\)/);
+	assertMatch(app, /comparison\.openLink\(link\.id\)/);
+	assertMatch(controller, /openRevision\(revisionId: string\)/);
+	assertMatch(controller, /const request = this\.clear\(\)/);
+	assertMatch(controller, /request !== this\.request/);
 });
 
 Deno.test("comparison UI uses UiVocabulary and has no persistence calls", async () => {
