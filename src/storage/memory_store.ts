@@ -38,7 +38,13 @@ import {
 	validateWorkBundleImport,
 	type WorkBundle,
 } from "./graph_store.ts";
-import { applyMergeWorks, projectOutlineItems } from "./memory_store_operations.ts";
+import {
+	applyMergeWorks,
+	applyWorkPurge,
+	applyWorkRestore,
+	applyWorkTrash,
+	projectOutlineItems,
+} from "./memory_store_operations.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
@@ -449,80 +455,22 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	trashWork(workId: string, deletedAt: string): Promise<void> {
-		this.state.works = this.state.works.map((work) =>
-			work.id === workId ? { ...work, deletedAt, updatedAt: deletedAt } : work
-		);
+		applyWorkTrash(this.state, workId, deletedAt);
 		return Promise.resolve();
 	}
 
 	restoreWork(workId: string): Promise<void> {
-		this.state.works = this.state.works.map((work) => {
-			if (work.id !== workId) return work;
-			const restored = { ...work };
-			delete restored.deletedAt;
-			return restored;
-		});
-		const occurrenceIds = new Set(this.state.occurrences.map((occurrence) => occurrence.id));
-		this.state.occurrences = this.state.occurrences.map((occurrence) =>
-			occurrence.workId === workId && occurrence.parentOccurrenceId &&
-				!occurrenceIds.has(occurrence.parentOccurrenceId)
-				? { ...occurrence, parentOccurrenceId: null }
-				: occurrence
-		);
+		applyWorkRestore(this.state, workId);
 		return Promise.resolve();
 	}
 
 	purgeWork(workId: string): Promise<PurgeManifest> {
-		const work = this.state.works.find((candidate) => candidate.id === workId);
-		if (!work?.deletedAt) {
-			return Promise.reject(new Error(`Work must be in trash before it can be purged: ${workId}`));
+		try {
+			const manifest = applyWorkPurge(this.state, workId);
+			return Promise.resolve(structuredClone(manifest));
+		} catch (error) {
+			return Promise.reject(error);
 		}
-		const branchIds = new Set(
-			this.state.branches.filter((branch) => branch.workId === workId).map((branch) => branch.id),
-		);
-		const manifest: PurgeManifest = {
-			id: crypto.randomUUID(),
-			workId,
-			occurrenceIds: this.state.occurrences
-				.filter((occurrence) => occurrence.workId === workId)
-				.map((occurrence) => occurrence.id),
-			branchIds: [...branchIds],
-			revisionIds: [],
-			linkIds: this.state.links
-				.filter((link) => link.from.workId === workId || link.to.workId === workId)
-				.map((link) => link.id),
-			purgedAt: new Date().toISOString(),
-		};
-		this.state.purgeManifests.push(manifest);
-		this.state.works = this.state.works.filter((work) => work.id !== workId);
-		this.state.branches = this.state.branches.filter((branch) => branch.workId !== workId);
-		this.state.workingCopies = this.state.workingCopies.filter((copy) =>
-			copy.workId !== workId && !branchIds.has(copy.branchId)
-		);
-		manifest.revisionIds = this.state.revisions
-			.filter((revision) => revision.workId === workId)
-			.map((revision) => revision.id);
-		this.state.revisions = this.state.revisions.filter((revision) => revision.workId !== workId);
-		this.state.recoverySnapshots = this.state.recoverySnapshots.filter((snapshot) =>
-			snapshot.workId !== workId
-		);
-		this.state.bookmarks = this.state.bookmarks.filter((bookmark) => bookmark.workId !== workId);
-		if (this.state.resumePosition?.workId === workId) this.state.resumePosition = null;
-		this.state.occurrences = this.state.occurrences.filter((occurrence) =>
-			occurrence.workId !== workId
-		);
-		const remainingOccurrenceIds = new Set(
-			this.state.occurrences.map((occurrence) => occurrence.id),
-		);
-		this.state.occurrences = this.state.occurrences.map((occurrence) =>
-			occurrence.parentOccurrenceId && !remainingOccurrenceIds.has(occurrence.parentOccurrenceId)
-				? { ...occurrence, parentOccurrenceId: null }
-				: occurrence
-		);
-		this.state.links = this.state.links.filter((link) =>
-			link.from.workId !== workId && link.to.workId !== workId
-		);
-		return Promise.resolve(structuredClone(manifest));
 	}
 
 	listPurgeManifests(): Promise<PurgeManifest[]> {
