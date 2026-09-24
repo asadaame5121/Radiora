@@ -252,10 +252,16 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
     `MemoryStateContainer` 経由に統一。
   - 完了条件: 状態 owner は一つ。relation type、resume、feedback 等を含む round-trip が全 adapter
     で維持される。
-- [ ] **S2: feature 操作の内部抽出** — 難易度4、依存 S1
-  - 変更理由が独立する操作から一つずつ抽出し、既存 `memory_store_operations.ts` を再利用する。
-  - 完了条件: 一つの mutation を複数 repository が勝手に commit せず、SQLite queue/rollback
-    を維持する。
+- [x] **S2: feature 操作の内部抽出** — 難易度4、依存 S1
+  - `memory_store.ts` の肥大化と責務混在を解消するため、Work Lifecycle
+    (`memory_work_lifecycle.ts`)、Recovery Operations
+    (`memory_recovery_operations.ts`)、Merge/Outline Items Projection (`memory_store_operations.ts`)
+    に責務分割。
+  - 各操作は `MemoryStateContainer` の型安全な `Pick` スライスを受け取り、`MemoryGraphStore`
+    はそれらの純粋操作へ委譲。
+  - 完了条件: 各 mutation
+    の責務境界が分離され、単一責任原則と実装行数制約（400行以内）を満たしつつ、全 751
+    件のテストおよび SQLite/JSON 契約を維持。
 - [ ] **S3: JSON codec/version guard** — 難易度3、S2 から独立
   - unknown 入力の版判定、migration、検証を I/O から分離。既存 `backup_migrations.ts` を再利用する。
   - 完了条件: V0〜V8、未来版、壊れた入力、旧版保護の契約を fixture で検証できる。 validation
