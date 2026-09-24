@@ -246,8 +246,10 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
     `tests/sqlite_store_contract_test.ts` に既存テストあり。
   - JSON restore の write/rename 失敗は `src/storage/json_backup_restore_test.ts` に既存テストあり。
   - 完了条件: 不足した契約だけを追加する。JSON の通常保存を SQLite と同じ保証だと仮定しない。
-- [ ] **S1: Memory state container** — 難易度4、依存 S0
-  - protected 配列群、export/restore、JSON の個別 capture/rollback の依存を同時に棚卸しする。
+- [x] **S1: Memory state container** — 難易度4、依存 S0
+  - `MemoryStateContainer` を新設し、分散していた protected 配列群と状態所有を単一のコンテナへ集約。
+  - `MemoryGraphStore` および `JsonGraphStore` の capture/rollback および load 処理を
+    `MemoryStateContainer` 経由に統一。
   - 完了条件: 状態 owner は一つ。relation type、resume、feedback 等を含む round-trip が全 adapter
     で維持される。
 - [ ] **S2: feature 操作の内部抽出** — 難易度4、依存 S1
