@@ -38,13 +38,7 @@ import {
 	validateWorkBundleImport,
 	type WorkBundle,
 } from "./graph_store.ts";
-import {
-	mergedBranchName,
-	projectOutlineItems,
-	replaceEndpointWork,
-	retractDuplicateActiveLinks,
-	validateMergeInput,
-} from "./memory_store_operations.ts";
+import { applyMergeWorks, projectOutlineItems } from "./memory_store_operations.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
@@ -123,77 +117,7 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	async mergeWorks(input: MergeWorksInput): Promise<void> {
-		const source = this.state.works.find((work) => work.id === input.sourceWorkId);
-		const survivor = this.state.works.find((work) => work.id === input.survivorWorkId);
-		validateMergeInput(input, source, survivor, this.state.aliases);
-
-		const next = structuredClone({
-			works: this.state.works,
-			branches: this.state.branches,
-			workingCopies: this.state.workingCopies,
-			revisions: this.state.revisions,
-			recoverySnapshots: this.state.recoverySnapshots,
-			bookmarks: this.state.bookmarks,
-			resumePosition: this.state.resumePosition,
-			occurrences: this.state.occurrences,
-			links: this.state.links,
-			systemRelations: this.state.systemRelations,
-			aliases: this.state.aliases,
-		});
-		const takenNames = new Set(
-			next.branches.filter((branch) => branch.workId === input.survivorWorkId).map((branch) =>
-				branch.name
-			),
-		);
-		for (const branch of next.branches.filter((entry) => entry.workId === input.sourceWorkId)) {
-			branch.workId = input.survivorWorkId;
-			branch.name = mergedBranchName(input.sourceWorkId, branch.name, takenNames);
-			takenNames.add(branch.name);
-		}
-		for (const copy of next.workingCopies) {
-			if (copy.workId === input.sourceWorkId) copy.workId = input.survivorWorkId;
-		}
-		for (const revision of next.revisions) {
-			if (revision.workId === input.sourceWorkId) revision.workId = input.survivorWorkId;
-		}
-		for (const snapshot of next.recoverySnapshots) {
-			if (snapshot.workId === input.sourceWorkId) snapshot.workId = input.survivorWorkId;
-		}
-		for (const occurrence of next.occurrences) {
-			if (occurrence.workId === input.sourceWorkId) occurrence.workId = input.survivorWorkId;
-		}
-		for (const bookmark of next.bookmarks) {
-			if (bookmark.workId === input.sourceWorkId) bookmark.workId = input.survivorWorkId;
-		}
-		if (next.resumePosition?.workId === input.sourceWorkId) {
-			next.resumePosition.workId = input.survivorWorkId;
-		}
-		for (const link of next.links) {
-			link.from = replaceEndpointWork(link.from, input);
-			link.to = replaceEndpointWork(link.to, input);
-			link.fromId = link.from.workId;
-			link.toId = link.to.workId;
-		}
-		retractDuplicateActiveLinks(next.links, this.state.relationTypeDefinitions);
-		for (const relation of next.systemRelations) {
-			if (relation.fromWorkId === input.sourceWorkId) {
-				relation.fromWorkId = input.survivorWorkId;
-			}
-			if (relation.toWorkId === input.sourceWorkId) relation.toWorkId = input.survivorWorkId;
-		}
-		const sourceTombstone = next.works.find((work) => work.id === input.sourceWorkId)!;
-		sourceTombstone.mergedIntoWorkId = input.survivorWorkId;
-		sourceTombstone.mergedAt = input.mergedAt;
-		const survivorNext = next.works.find((work) => work.id === input.survivorWorkId)!;
-		survivorNext.updatedAt = input.mergedAt;
-		if (input.alias) {
-			next.aliases = [
-				...next.aliases.filter((alias) => alias.id !== input.alias!.id),
-				structuredClone(input.alias),
-			];
-		}
-
-		Object.assign(this.state, next);
+		applyMergeWorks(this.state, input);
 	}
 
 	listBranches(workId?: string): Promise<Branch[]> {
