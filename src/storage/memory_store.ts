@@ -39,12 +39,13 @@ import {
 	type WorkBundle,
 } from "./graph_store.ts";
 import {
-	mergedBranchName,
-	projectOutlineItems,
-	replaceEndpointWork,
-	retractDuplicateActiveLinks,
-	validateMergeInput,
-} from "./memory_store_operations.ts";
+	appendRevisionToBranch,
+	applyRecoverySnapshotPromotion,
+	applyRecoverySnapshotRestore,
+	validateAndCreateRecoverySnapshot,
+} from "./memory_recovery_operations.ts";
+import { applyMergeWorks, projectOutlineItems } from "./memory_store_operations.ts";
+import { applyWorkPurge, applyWorkRestore, applyWorkTrash } from "./memory_work_lifecycle.ts";
 import {
 	countOccurrences,
 	normalizeSearchText,
@@ -123,77 +124,7 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	async mergeWorks(input: MergeWorksInput): Promise<void> {
-		const source = this.state.works.find((work) => work.id === input.sourceWorkId);
-		const survivor = this.state.works.find((work) => work.id === input.survivorWorkId);
-		validateMergeInput(input, source, survivor, this.state.aliases);
-
-		const next = structuredClone({
-			works: this.state.works,
-			branches: this.state.branches,
-			workingCopies: this.state.workingCopies,
-			revisions: this.state.revisions,
-			recoverySnapshots: this.state.recoverySnapshots,
-			bookmarks: this.state.bookmarks,
-			resumePosition: this.state.resumePosition,
-			occurrences: this.state.occurrences,
-			links: this.state.links,
-			systemRelations: this.state.systemRelations,
-			aliases: this.state.aliases,
-		});
-		const takenNames = new Set(
-			next.branches.filter((branch) => branch.workId === input.survivorWorkId).map((branch) =>
-				branch.name
-			),
-		);
-		for (const branch of next.branches.filter((entry) => entry.workId === input.sourceWorkId)) {
-			branch.workId = input.survivorWorkId;
-			branch.name = mergedBranchName(input.sourceWorkId, branch.name, takenNames);
-			takenNames.add(branch.name);
-		}
-		for (const copy of next.workingCopies) {
-			if (copy.workId === input.sourceWorkId) copy.workId = input.survivorWorkId;
-		}
-		for (const revision of next.revisions) {
-			if (revision.workId === input.sourceWorkId) revision.workId = input.survivorWorkId;
-		}
-		for (const snapshot of next.recoverySnapshots) {
-			if (snapshot.workId === input.sourceWorkId) snapshot.workId = input.survivorWorkId;
-		}
-		for (const occurrence of next.occurrences) {
-			if (occurrence.workId === input.sourceWorkId) occurrence.workId = input.survivorWorkId;
-		}
-		for (const bookmark of next.bookmarks) {
-			if (bookmark.workId === input.sourceWorkId) bookmark.workId = input.survivorWorkId;
-		}
-		if (next.resumePosition?.workId === input.sourceWorkId) {
-			next.resumePosition.workId = input.survivorWorkId;
-		}
-		for (const link of next.links) {
-			link.from = replaceEndpointWork(link.from, input);
-			link.to = replaceEndpointWork(link.to, input);
-			link.fromId = link.from.workId;
-			link.toId = link.to.workId;
-		}
-		retractDuplicateActiveLinks(next.links, this.state.relationTypeDefinitions);
-		for (const relation of next.systemRelations) {
-			if (relation.fromWorkId === input.sourceWorkId) {
-				relation.fromWorkId = input.survivorWorkId;
-			}
-			if (relation.toWorkId === input.sourceWorkId) relation.toWorkId = input.survivorWorkId;
-		}
-		const sourceTombstone = next.works.find((work) => work.id === input.sourceWorkId)!;
-		sourceTombstone.mergedIntoWorkId = input.survivorWorkId;
-		sourceTombstone.mergedAt = input.mergedAt;
-		const survivorNext = next.works.find((work) => work.id === input.survivorWorkId)!;
-		survivorNext.updatedAt = input.mergedAt;
-		if (input.alias) {
-			next.aliases = [
-				...next.aliases.filter((alias) => alias.id !== input.alias!.id),
-				structuredClone(input.alias),
-			];
-		}
-
-		Object.assign(this.state, next);
+		applyMergeWorks(this.state, input);
 	}
 
 	listBranches(workId?: string): Promise<Branch[]> {
@@ -403,32 +334,20 @@ export class MemoryGraphStore implements GraphStore {
 		const branch = this.state.branches.find((candidate) => candidate.id === branchId);
 		try {
 			validateRevisionCreation(revision, branch, this.state.revisions);
+			appendRevisionToBranch(this.state, revision, branchId);
+			return Promise.resolve();
 		} catch (error) {
 			return Promise.reject(error);
 		}
-		this.appendRevisionToBranch(revision, branchId);
-		return Promise.resolve();
-	}
-
-	private appendRevisionToBranch(revision: Revision, branchId: string): void {
-		this.state.revisions.push(structuredClone(revision));
-		this.state.branches = this.state.branches.map((candidate) =>
-			candidate.id === branchId ? { ...candidate, headRevisionId: revision.id } : candidate
-		);
 	}
 
 	createRecoverySnapshot(snapshot: RecoverySnapshot): Promise<void> {
-		if (this.state.recoverySnapshots.some((candidate) => candidate.id === snapshot.id)) {
-			return Promise.reject(new Error(`Recovery Snapshot already exists: ${snapshot.id}`));
+		try {
+			validateAndCreateRecoverySnapshot(this.state, snapshot);
+			return Promise.resolve();
+		} catch (error) {
+			return Promise.reject(error);
 		}
-		const copy = this.state.workingCopies.find((candidate) =>
-			candidate.branchId === snapshot.branchId
-		);
-		if (!copy || copy.workId !== snapshot.workId) {
-			return Promise.reject(new Error(`Working Copy not found for Snapshot: ${snapshot.branchId}`));
-		}
-		this.state.recoverySnapshots.push(structuredClone(snapshot));
-		return Promise.resolve();
 	}
 
 	applyRecoverySnapshot(snapshotId: string, updatedAt: string): Promise<void> {
@@ -444,38 +363,12 @@ export class MemoryGraphStore implements GraphStore {
 		beforeRestore: RecoverySnapshot,
 		updatedAt: string,
 	): Promise<void> {
-		const target = this.state.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
-		if (!target) {
-			return Promise.reject(new Error(`Recovery Snapshot not found: ${snapshotId}`));
+		try {
+			applyRecoverySnapshotRestore(this.state, snapshotId, beforeRestore, updatedAt);
+			return Promise.resolve();
+		} catch (error) {
+			return Promise.reject(error);
 		}
-		const copy = this.state.workingCopies.find((candidate) =>
-			candidate.branchId === target.branchId
-		);
-		if (
-			!copy || copy.workId !== target.workId ||
-			beforeRestore.workId !== target.workId ||
-			beforeRestore.branchId !== target.branchId
-		) {
-			return Promise.reject(new Error("Recovery Snapshot scope does not match Working Copy"));
-		}
-		if (this.state.recoverySnapshots.some((candidate) => candidate.id === beforeRestore.id)) {
-			return Promise.reject(
-				new Error(`Recovery Snapshot already exists: ${beforeRestore.id}`),
-			);
-		}
-		if (beforeRestore.text !== copy.text) {
-			return Promise.reject(new Error("Recovery Snapshot does not capture current Working Copy"));
-		}
-		this.state.recoverySnapshots.push(structuredClone(beforeRestore));
-		this.state.workingCopies = this.state.workingCopies.map((candidate) =>
-			candidate.branchId === target.branchId
-				? { ...candidate, text: target.text, updatedAt }
-				: candidate
-		);
-		this.state.works = this.state.works.map((work) =>
-			work.id === target.workId ? { ...work, updatedAt } : work
-		);
-		return Promise.resolve();
 	}
 
 	promoteRecoverySnapshot(
@@ -484,32 +377,12 @@ export class MemoryGraphStore implements GraphStore {
 		branchId: string,
 		protectedAt: string,
 	): Promise<void> {
-		const snapshot = this.state.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
-		const branch = this.state.branches.find((candidate) => candidate.id === branchId);
-		if (!snapshot) {
-			return Promise.reject(new Error(`Recovery Snapshot not found: ${snapshotId}`));
-		}
-		if (
-			snapshot.branchId !== branchId || snapshot.workId !== revision.workId ||
-			branch?.workId !== snapshot.workId || revision.text !== snapshot.text
-		) {
-			return Promise.reject(new Error("Recovery Snapshot scope does not match Revision"));
-		}
 		try {
-			validateRevisionCreation(revision, branch, this.state.revisions);
+			applyRecoverySnapshotPromotion(this.state, snapshotId, revision, branchId, protectedAt);
+			return Promise.resolve();
 		} catch (error) {
 			return Promise.reject(error);
 		}
-		this.appendRevisionToBranch(revision, branchId);
-		this.state.recoverySnapshots = this.state.recoverySnapshots.map((candidate) =>
-			candidate.id === snapshotId
-				? {
-					...candidate,
-					protection: { reason: "revision-source", protectedAt },
-				}
-				: candidate
-		);
-		return Promise.resolve();
 	}
 
 	updateOccurrence(occurrence: Occurrence): Promise<void> {
@@ -525,80 +398,22 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	trashWork(workId: string, deletedAt: string): Promise<void> {
-		this.state.works = this.state.works.map((work) =>
-			work.id === workId ? { ...work, deletedAt, updatedAt: deletedAt } : work
-		);
+		applyWorkTrash(this.state, workId, deletedAt);
 		return Promise.resolve();
 	}
 
 	restoreWork(workId: string): Promise<void> {
-		this.state.works = this.state.works.map((work) => {
-			if (work.id !== workId) return work;
-			const restored = { ...work };
-			delete restored.deletedAt;
-			return restored;
-		});
-		const occurrenceIds = new Set(this.state.occurrences.map((occurrence) => occurrence.id));
-		this.state.occurrences = this.state.occurrences.map((occurrence) =>
-			occurrence.workId === workId && occurrence.parentOccurrenceId &&
-				!occurrenceIds.has(occurrence.parentOccurrenceId)
-				? { ...occurrence, parentOccurrenceId: null }
-				: occurrence
-		);
+		applyWorkRestore(this.state, workId);
 		return Promise.resolve();
 	}
 
 	purgeWork(workId: string): Promise<PurgeManifest> {
-		const work = this.state.works.find((candidate) => candidate.id === workId);
-		if (!work?.deletedAt) {
-			return Promise.reject(new Error(`Work must be in trash before it can be purged: ${workId}`));
+		try {
+			const manifest = applyWorkPurge(this.state, workId);
+			return Promise.resolve(structuredClone(manifest));
+		} catch (error) {
+			return Promise.reject(error);
 		}
-		const branchIds = new Set(
-			this.state.branches.filter((branch) => branch.workId === workId).map((branch) => branch.id),
-		);
-		const manifest: PurgeManifest = {
-			id: crypto.randomUUID(),
-			workId,
-			occurrenceIds: this.state.occurrences
-				.filter((occurrence) => occurrence.workId === workId)
-				.map((occurrence) => occurrence.id),
-			branchIds: [...branchIds],
-			revisionIds: [],
-			linkIds: this.state.links
-				.filter((link) => link.from.workId === workId || link.to.workId === workId)
-				.map((link) => link.id),
-			purgedAt: new Date().toISOString(),
-		};
-		this.state.purgeManifests.push(manifest);
-		this.state.works = this.state.works.filter((work) => work.id !== workId);
-		this.state.branches = this.state.branches.filter((branch) => branch.workId !== workId);
-		this.state.workingCopies = this.state.workingCopies.filter((copy) =>
-			copy.workId !== workId && !branchIds.has(copy.branchId)
-		);
-		manifest.revisionIds = this.state.revisions
-			.filter((revision) => revision.workId === workId)
-			.map((revision) => revision.id);
-		this.state.revisions = this.state.revisions.filter((revision) => revision.workId !== workId);
-		this.state.recoverySnapshots = this.state.recoverySnapshots.filter((snapshot) =>
-			snapshot.workId !== workId
-		);
-		this.state.bookmarks = this.state.bookmarks.filter((bookmark) => bookmark.workId !== workId);
-		if (this.state.resumePosition?.workId === workId) this.state.resumePosition = null;
-		this.state.occurrences = this.state.occurrences.filter((occurrence) =>
-			occurrence.workId !== workId
-		);
-		const remainingOccurrenceIds = new Set(
-			this.state.occurrences.map((occurrence) => occurrence.id),
-		);
-		this.state.occurrences = this.state.occurrences.map((occurrence) =>
-			occurrence.parentOccurrenceId && !remainingOccurrenceIds.has(occurrence.parentOccurrenceId)
-				? { ...occurrence, parentOccurrenceId: null }
-				: occurrence
-		);
-		this.state.links = this.state.links.filter((link) =>
-			link.from.workId !== workId && link.to.workId !== workId
-		);
-		return Promise.resolve(structuredClone(manifest));
 	}
 
 	listPurgeManifests(): Promise<PurgeManifest[]> {

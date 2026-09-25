@@ -11,7 +11,7 @@ import {
 	rankEmergenceSuggestions,
 } from "./emergence_suggestion_calculator.ts";
 import { fetchActiveMergedLinks } from "./implicit_relation.ts";
-import { SearchOperations } from "./search_operations.ts";
+import type { SearchOperations } from "./search_operations.ts";
 import { titleOf } from "./search_text.ts";
 
 type EmergenceStore =

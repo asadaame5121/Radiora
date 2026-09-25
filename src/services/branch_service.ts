@@ -290,6 +290,7 @@ export class BranchService {
 				throw new AggregateError(
 					[error, rollbackError],
 					`Failed to synchronize and restore main Branch: ${main.id}`,
+					{ cause: error },
 				);
 			}
 			throw error;

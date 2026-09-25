@@ -1,5 +1,5 @@
 import type { Branch, Occurrence, OutlineLink, Work, WorkingCopy } from "../domain/models.ts";
-import { MemoryGraphStore } from "../storage/memory_store.ts";
+import type { MemoryGraphStore } from "../storage/memory_store.ts";
 
 export const DISCOVERY_TEST_NOW = "2026-07-30T12:00:00.000Z";
 

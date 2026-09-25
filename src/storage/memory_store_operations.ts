@@ -1,17 +1,149 @@
 import type {
+	Branch,
 	LinkEndpoint,
 	Occurrence,
 	OutlineItem,
 	OutlineLink,
-	RecoverySnapshot,
 	RelationTypeDefinition,
 	Revision,
 	SearchAlias,
+	SystemRelation,
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
 import { BUILT_IN_RELATION_TYPES, isRelationTypeSymmetric } from "../domain/relation_type.ts";
 import type { MergeWorksInput } from "./graph_store.ts";
+import type { MemoryStateContainer } from "./memory_state_container.ts";
+
+export type MutableMergeGraphState = Pick<
+	MemoryStateContainer,
+	| "works"
+	| "branches"
+	| "workingCopies"
+	| "revisions"
+	| "recoverySnapshots"
+	| "bookmarks"
+	| "resumePosition"
+	| "occurrences"
+	| "links"
+	| "systemRelations"
+	| "aliases"
+	| "relationTypeDefinitions"
+>;
+
+export function applyMergeWorks(
+	state: MutableMergeGraphState,
+	input: MergeWorksInput,
+): void {
+	const source = state.works.find((work) => work.id === input.sourceWorkId);
+	const survivor = state.works.find((work) => work.id === input.survivorWorkId);
+	validateMergeInput(input, source, survivor, state.aliases);
+
+	const next = structuredClone({
+		works: state.works,
+		branches: state.branches,
+		workingCopies: state.workingCopies,
+		revisions: state.revisions,
+		recoverySnapshots: state.recoverySnapshots,
+		bookmarks: state.bookmarks,
+		resumePosition: state.resumePosition,
+		occurrences: state.occurrences,
+		links: state.links,
+		systemRelations: state.systemRelations,
+		aliases: state.aliases,
+	});
+	rewireMergedBranches(next.branches, input);
+	rewireScopedEntities(next, input);
+	rewireMergedLinks(next.links, input, state.relationTypeDefinitions);
+	rewireSystemRelations(next.systemRelations, input);
+	updateMergedWorks(next.works, input);
+	if (input.alias) {
+		next.aliases = [
+			...next.aliases.filter((alias) => alias.id !== input.alias!.id),
+			structuredClone(input.alias),
+		];
+	}
+
+	Object.assign(state, next);
+}
+
+function rewireMergedBranches(branches: Branch[], input: MergeWorksInput): void {
+	const takenNames = new Set(
+		branches.filter((branch) => branch.workId === input.survivorWorkId).map((branch) =>
+			branch.name
+		),
+	);
+	for (const branch of branches.filter((entry) => entry.workId === input.sourceWorkId)) {
+		branch.workId = input.survivorWorkId;
+		branch.name = mergedBranchName(input.sourceWorkId, branch.name, takenNames);
+		takenNames.add(branch.name);
+	}
+}
+
+function reassignWorkId<T extends { workId: string }>(
+	items: T[],
+	fromWorkId: string,
+	toWorkId: string,
+): void {
+	for (const item of items) {
+		if (item.workId === fromWorkId) item.workId = toWorkId;
+	}
+}
+
+function rewireScopedEntities(
+	next: Pick<
+		MutableMergeGraphState,
+		| "workingCopies"
+		| "revisions"
+		| "recoverySnapshots"
+		| "occurrences"
+		| "bookmarks"
+		| "resumePosition"
+	>,
+	input: MergeWorksInput,
+): void {
+	reassignWorkId(next.workingCopies, input.sourceWorkId, input.survivorWorkId);
+	reassignWorkId(next.revisions, input.sourceWorkId, input.survivorWorkId);
+	reassignWorkId(next.recoverySnapshots, input.sourceWorkId, input.survivorWorkId);
+	reassignWorkId(next.occurrences, input.sourceWorkId, input.survivorWorkId);
+	reassignWorkId(next.bookmarks, input.sourceWorkId, input.survivorWorkId);
+	if (next.resumePosition?.workId === input.sourceWorkId) {
+		next.resumePosition.workId = input.survivorWorkId;
+	}
+}
+
+function rewireMergedLinks(
+	links: OutlineLink[],
+	input: MergeWorksInput,
+	relationTypeDefinitions: readonly RelationTypeDefinition[],
+): void {
+	for (const link of links) {
+		link.from = replaceEndpointWork(link.from, input);
+		link.to = replaceEndpointWork(link.to, input);
+		link.fromId = link.from.workId;
+		link.toId = link.to.workId;
+	}
+	retractDuplicateActiveLinks(links, relationTypeDefinitions);
+}
+
+function rewireSystemRelations(relations: SystemRelation[], input: MergeWorksInput): void {
+	for (const relation of relations) {
+		if (relation.fromWorkId === input.sourceWorkId) relation.fromWorkId = input.survivorWorkId;
+		if (relation.toWorkId === input.sourceWorkId) relation.toWorkId = input.survivorWorkId;
+	}
+}
+
+function updateMergedWorks(works: Work[], input: MergeWorksInput): void {
+	const sourceTombstone = works.find((work) => work.id === input.sourceWorkId);
+	if (sourceTombstone) {
+		sourceTombstone.mergedIntoWorkId = input.survivorWorkId;
+		sourceTombstone.mergedAt = input.mergedAt;
+	}
+	const survivorNext = works.find((work) => work.id === input.survivorWorkId);
+	if (survivorNext) {
+		survivorNext.updatedAt = input.mergedAt;
+	}
+}
 
 export function validateMergeInput(
 	input: MergeWorksInput,

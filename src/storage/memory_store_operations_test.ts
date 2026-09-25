@@ -1,6 +1,8 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert";
 import type { Occurrence, Revision, Work, WorkingCopy } from "../domain/models.ts";
+import { MemoryStateContainer } from "./memory_state_container.ts";
 import {
+	applyMergeWorks,
 	endpointKey,
 	mergedBranchName,
 	projectOutlineItems,
@@ -76,4 +78,51 @@ Deno.test("projectOutlineItems - projects outline items from works, copies and o
 	assertEquals(items.length, 1);
 	assertEquals(items[0].id, "occ-1");
 	assertEquals(items[0].text, "Hello World");
+});
+
+Deno.test("applyMergeWorks - rewires all scoped state and creates tombstone", () => {
+	const state = new MemoryStateContainer();
+	const now = "2026-08-01T00:00:00.000Z";
+	state.works = [
+		{ id: "source", createdAt: now, updatedAt: now },
+		{ id: "survivor", createdAt: now, updatedAt: now },
+	];
+	state.branches = [
+		{ id: "b1", workId: "source", name: "main", headRevisionId: null, createdAt: now },
+		{ id: "b2", workId: "survivor", name: "main", headRevisionId: null, createdAt: now },
+	];
+	state.workingCopies = [
+		{ workId: "source", branchId: "b1", text: "text1", updatedAt: now },
+		{ workId: "survivor", branchId: "b2", text: "text2", updatedAt: now },
+	];
+	state.occurrences = [
+		{
+			id: "o1",
+			workId: "source",
+			parentOccurrenceId: null,
+			orderKey: 0,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "b1" },
+		},
+	];
+
+	applyMergeWorks(state, {
+		sourceWorkId: "source",
+		survivorWorkId: "survivor",
+		mergedAt: now,
+	});
+
+	const source = state.works.find((w) => w.id === "source");
+	assertEquals(source?.mergedIntoWorkId, "survivor");
+	assertEquals(source?.mergedAt, now);
+
+	const survivor = state.works.find((w) => w.id === "survivor");
+	assertEquals(survivor?.updatedAt, now);
+
+	const b1 = state.branches.find((b) => b.id === "b1");
+	assertEquals(b1?.workId, "survivor");
+	assertEquals(b1?.name, "merged/source/main");
+
+	const o1 = state.occurrences.find((o) => o.id === "o1");
+	assertEquals(o1?.workId, "survivor");
 });
