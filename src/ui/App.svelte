@@ -46,6 +46,7 @@
 	import { createOutlineDragController } from "./outline_drag_controller.svelte.ts";
 	import { createEditorController } from "./editor_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
+	import { RuleQueryController } from "./rule_query_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { RelationTypeController } from "./relation_type_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
@@ -61,8 +62,6 @@
 		OutlineSnapshot,
 		NavigationTarget,
 		RelationTypeDirection,
-		RuleQueryResult,
-		SavedRuleQuery,
 		SearchAlias,
 		SearchResult,
 		ScopedTagSet,
@@ -205,14 +204,7 @@
 	let tagMergeSources = $state("");
 	let tagMergeTarget = $state("");
 	let tagError = $state("");
-	let ruleSource = $state('?- link("LIKE", From, To).');
-	let ruleResult = $state<RuleQueryResult | null>(null);
-	let ruleName = $state("");
-	let savedRuleQueries = $state<SavedRuleQuery[]>([]);
-	let ruleError = $state("");
-	let sparseOutlineNodes = $state<TransientProjectionNode[]>([]);
-	let sparseOutlineQueryName = $state("");
-	let showSparseOutline = $state(false);
+	const ruleQuery = new RuleQueryController(api, errorMessage);
 	let revisions = $state<Revision[]>([]);
 	let recoverySnapshots = $state<RecoverySnapshot[]>([]);
 	let revisionsLoading = $state(false);
@@ -459,8 +451,8 @@
 		canOpenLinkEditor: Boolean(selectedItem),
 		quickCaptureText,
 		quickCaptureSubmitting,
-		ruleSource,
-		ruleName,
+		ruleSource: ruleQuery.source,
+		ruleName: ruleQuery.name,
 		isHoisted: Boolean(browsingLocation.hoistOccurrenceId),
 	});
 	const commands = $derived(commandAvailability(commandContext));
@@ -695,7 +687,7 @@
 		persistStartupSnapshotCache();
 		aliases = await api.listSearchAliases();
 		await loadTagBrowser();
-		savedRuleQueries = await api.listSavedRuleQueries();
+		await ruleQuery.loadSavedQueries();
 	}
 
 	async function load(focusId?: string): Promise<boolean> {
@@ -959,10 +951,6 @@
 			viewMode = "outline";
 			requestFocus(id);
 		});
-	}
-
-	function toggleSparseOutline(): void {
-		showSparseOutline = !showSparseOutline;
 	}
 
 	function requestFocus(id: string, caretOffset?: number): void {
@@ -1588,40 +1576,13 @@
 			aliasVariants = "";
 			aliases = await api.listSearchAliases();
 		} catch (cause) {
-			ruleError = errorMessage(cause);
+			ruleQuery.setError(errorMessage(cause));
 		}
 	}
 
 	async function removeAlias(id: string): Promise<void> {
 		await api.deleteSearchAlias(id);
 		aliases = await api.listSearchAliases();
-	}
-
-	async function performExecuteRule(): Promise<void> {
-		ruleError = "";
-		ruleResult = null;
-		sparseOutlineNodes = [];
-		try {
-			ruleResult = await api.runRuleQuery(ruleSource, 500);
-		} catch (cause) {
-			ruleError = errorMessage(cause);
-		}
-	}
-
-	async function loadSparseOutlineForQuery(query: SavedRuleQuery): Promise<void> {
-		ruleError = "";
-		sparseOutlineNodes = [];
-		sparseOutlineQueryName = query.name;
-		ruleSource = query.source;
-		ruleName = query.name;
-		showSparseOutline = true;
-		try {
-			const projection = await api.buildQueryProjectionNodes(query.id, 500);
-			sparseOutlineNodes = projection.nodes;
-			ruleResult = projection.result;
-		} catch (cause) {
-			ruleError = errorMessage(cause);
-		}
 	}
 
 	async function handleSparseOutlineSelect(node: TransientProjectionNode): Promise<void> {
@@ -1636,22 +1597,6 @@
 		} else {
 			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
 		}
-	}
-
-	async function performSaveRule(): Promise<void> {
-		ruleError = "";
-		try {
-			await api.saveRuleQuery({ name: ruleName, source: ruleSource });
-			savedRuleQueries = await api.listSavedRuleQueries();
-			ruleName = "";
-		} catch (cause) {
-			ruleError = errorMessage(cause);
-		}
-	}
-
-	async function removeRule(id: string): Promise<void> {
-		await api.deleteRuleQuery(id);
-		savedRuleQueries = await api.listSavedRuleQueries();
 	}
 
 	async function performAddLink(input: CreateLinkInput): Promise<void> {
@@ -1804,8 +1749,8 @@
 					if (linkInput) await performAddLink(linkInput);
 					else await openLinkEditor();
 					break;
-				case "runQuery": await performExecuteRule(); break;
-				case "saveQuery": await performSaveRule(); break;
+				case "runQuery": await ruleQuery.execute(); break;
+				case "saveQuery": await ruleQuery.save(); break;
 			case "saveRevision": if (snapshotId) await performPromoteRecoverySnapshot(snapshotId); break;
 				case "createBranch": await requestRewriteAsNewBranch(); break;
 				case "startLongFormEditing": startLongFormEditing(); break;
@@ -2503,29 +2448,29 @@
 				emergenceResolutionReasons={emergenceResolutionReasons}
 				{emergenceLoading}
 				query={{
-					ruleSource,
-					ruleResult,
-					ruleName,
-					ruleError,
-					savedRuleQueries,
-					sparseOutlineNodes,
-					sparseOutlineQueryName,
-					showSparseOutline,
+					ruleSource: ruleQuery.source,
+					ruleResult: ruleQuery.result,
+					ruleName: ruleQuery.name,
+					ruleError: ruleQuery.error,
+					savedRuleQueries: ruleQuery.savedQueries,
+					sparseOutlineNodes: ruleQuery.nodes,
+					sparseOutlineQueryName: ruleQuery.projectionName,
+					showSparseOutline: ruleQuery.showProjection,
 					aliases,
 					aliasCanonical,
 					aliasVariants,
-					onRuleSourceChange: (value) => ruleSource = value,
-					onRuleNameChange: (value) => ruleName = value,
+					onRuleSourceChange: ruleQuery.setSource,
+					onRuleNameChange: ruleQuery.setName,
 					onAliasCanonicalChange: (value) => aliasCanonical = value,
 					onAliasVariantsChange: (value) => aliasVariants = value,
 					onExecuteRule: executeRule,
 					onSaveRule: saveRule,
-					onLoadSavedQuery: loadSparseOutlineForQuery,
-					onRemoveRule: removeRule,
+					onLoadSavedQuery: ruleQuery.loadProjection,
+					onRemoveRule: ruleQuery.remove,
 					onSaveAlias: saveAlias,
 					onRemoveAlias: removeAlias,
 					onSelectSparseNode: handleSparseOutlineSelect,
-					onToggleSparseOutline: toggleSparseOutline,
+					onToggleSparseOutline: ruleQuery.toggleProjection,
 				}}
 				onAsideModeChange={(mode) => asideMode = mode}
 				onElement={(element) => inspectorElement = element}
