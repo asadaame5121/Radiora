@@ -266,9 +266,38 @@ describe("editor controller", () => {
 			expect(api.saveResumePosition).toHaveBeenCalledWith("item-1", 5);
 		});
 
-		test("retryAutosave delegates to autosave coordinator", async () => {
-			const { controller } = createController();
-			expect(() => controller.retryAutosave()).not.toThrow();
+		test("flush keeps the rejection contract and retry saves the retained draft", async () => {
+			const item = {
+				id: "item-1",
+				workId: "work-1",
+				text: "initial",
+				parentId: null,
+				orderKey: 0,
+				collapsed: false,
+				revisionSelector: { mode: "branch" as const, branchId: "branch-1" },
+				createdAt: "2026-08-10T00:00:00.000Z",
+				updatedAt: "2026-08-10T00:00:00.000Z",
+			};
+			const snapshot: OutlineSnapshot = {
+				items: [item],
+				links: [],
+				knots: [],
+				stashItemIds: [],
+			};
+			const cause = new Error("disk full");
+			const updateItemText = vi.fn()
+				.mockRejectedValueOnce(cause)
+				.mockResolvedValueOnce(undefined);
+			const { controller, api } = createController({ snapshot, api: { updateItemText } });
+			controller.updateLocalText("item-1", mockTextarea("unsaved latest text"));
+
+			await expect(controller.flushAutosave("work-1")).rejects.toBe(cause);
+			expect(controller.workingCopySaveStatus?.phase).toBe("failed");
+			expect(controller.drafts()[0]?.text).toBe("unsaved latest text");
+
+			await controller.retryAutosave();
+			expect(api.updateItemText).toHaveBeenNthCalledWith(2, "item-1", "unsaved latest text");
+			expect(controller.drafts()).toEqual([]);
 		});
 	});
 

@@ -1,3 +1,5 @@
+import { ok, type Result, ResultAsync } from "neverthrow";
+
 export type WorkingCopySavePhase = "saved" | "unsaved" | "saving" | "failed";
 
 type TimerHandle = number | ReturnType<typeof globalThis.setTimeout>;
@@ -17,6 +19,14 @@ export interface WorkingCopyDraft {
 	status: WorkingCopySaveStatus;
 }
 
+export interface WorkingCopySaveError {
+	code: "working-copy-save-failed";
+	workId: string;
+	branchId: string;
+	occurrenceId: string;
+	cause: unknown;
+}
+
 interface PendingWorkingCopy {
 	workId: string;
 	branchId: string;
@@ -25,7 +35,7 @@ interface PendingWorkingCopy {
 	version: number;
 	savedVersion: number;
 	timer?: TimerHandle;
-	worker?: Promise<void>;
+	worker?: Promise<Result<void, WorkingCopySaveError>>;
 	status: WorkingCopySaveStatus;
 }
 
@@ -76,9 +86,9 @@ export class WorkingCopyAutosaveCoordinator {
 		entry.status = { workId, branchId, phase: "unsaved" };
 		entry.timer = this.#setTimer(() => {
 			entry.timer = undefined;
-			// biome-ignore lint/plugin/noSwallowedRejection: The coordinator records the failure status and retains the draft for retry.
-			void this.#flushEntry(entry).catch(() => {
-				// Failure is deliberately represented by status and the retained draft.
+			void this.#flushEntry(entry).then((result) => {
+				// The retained draft and failed status are the timer's recovery path.
+				if (result.isErr()) return;
 			});
 		}, this.#delayMs);
 		this.#entries.set(branchId, entry);
@@ -86,16 +96,22 @@ export class WorkingCopyAutosaveCoordinator {
 	}
 
 	async flush(workId?: string): Promise<void> {
+		const result = await this.flushResult(workId);
+		if (result.isErr()) throw result.error.cause;
+	}
+
+	async flushResult(workId?: string): Promise<Result<void, WorkingCopySaveError>> {
 		const entries = workId === undefined
 			? [...this.#entries.values()]
 			: [...this.#entries.values()].filter((entry) => entry.workId === workId);
 		const results = await Promise.allSettled(
 			entries.map((entry) => this.#flushEntry(entry)),
 		);
-		const rejected = results.find(
-			(result): result is PromiseRejectedResult => result.status === "rejected",
-		);
-		if (rejected) throw rejected.reason;
+		for (const result of results) {
+			if (result.status === "rejected") throw result.reason;
+			if (result.value.isErr()) return result.value;
+		}
+		return ok(undefined);
 	}
 
 	retry(workId?: string): Promise<void> {
@@ -122,7 +138,7 @@ export class WorkingCopyAutosaveCoordinator {
 		return [...this.#entries.values()].some((entry) => entry.savedVersion < entry.version);
 	}
 
-	async #flushEntry(entry: PendingWorkingCopy): Promise<void> {
+	async #flushEntry(entry: PendingWorkingCopy): Promise<Result<void, WorkingCopySaveError>> {
 		if (entry.timer !== undefined) {
 			this.#clearTimer(entry.timer);
 			entry.timer = undefined;
@@ -130,22 +146,31 @@ export class WorkingCopyAutosaveCoordinator {
 		if (entry.worker) return entry.worker;
 		entry.worker = this.#runWorker(entry);
 		try {
-			await entry.worker;
+			return await entry.worker;
 		} finally {
 			entry.worker = undefined;
 		}
 	}
 
-	async #runWorker(entry: PendingWorkingCopy): Promise<void> {
+	async #runWorker(entry: PendingWorkingCopy): Promise<Result<void, WorkingCopySaveError>> {
 		while (entry.savedVersion < entry.version) {
 			const savingVersion = entry.version;
 			const occurrenceId = entry.occurrenceId;
 			const text = entry.text;
 			entry.status = { workId: entry.workId, branchId: entry.branchId, phase: "saving" };
 			this.#emit();
-			try {
-				await this.#save(occurrenceId, text);
-			} catch (cause) {
+			const saved = await ResultAsync.fromThrowable(
+				() => this.#save(occurrenceId, text),
+				(cause): WorkingCopySaveError => ({
+					code: "working-copy-save-failed",
+					workId: entry.workId,
+					branchId: entry.branchId,
+					occurrenceId,
+					cause,
+				}),
+			)();
+			if (saved.isErr()) {
+				const { cause } = saved.error;
 				entry.status = {
 					workId: entry.workId,
 					branchId: entry.branchId,
@@ -153,12 +178,13 @@ export class WorkingCopyAutosaveCoordinator {
 					error: cause instanceof Error ? cause.message : String(cause),
 				};
 				this.#emit();
-				throw cause;
+				return saved;
 			}
 			entry.savedVersion = savingVersion;
 		}
 		entry.status = { workId: entry.workId, branchId: entry.branchId, phase: "saved" };
 		this.#emit();
+		return ok(undefined);
 	}
 
 	#emit(): void {
