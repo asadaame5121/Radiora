@@ -1,15 +1,22 @@
 # リファクタリング・バックログ
 
-更新日: 2026-09-23。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree に変更なし）。
+更新日: 2026-09-23。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
+に変更なし）。
 
 責務、state ownership、I/O、transaction の変更理由に沿って、挙動を維持したまま整理する計画。
 ファイルを短くすること自体は目的にしない。既存のタスク ID は追跡のため維持する。
 
 ## 今回の調査と判断
 
-2026-09-23に、README、アプリ内ヘルプ、設計・移行文書、開発計画、配布手順、公式ドキュメントサイトの記述を現行実装と照合した。通常起動のSQLite、legacy SurrealDB移行、JSON backup、歴史上の時点・期間、カスタム関係型を区別して記録した。これは文書更新であり、下記のリファクタリング候補の完了を意味しない。
+2026-09-23に、README、アプリ内ヘルプ、設計・移行文書、開発計画、配布手順、公式ドキュメントサイトの記述を現行実装と照合した。通常起動のSQLite、legacy
+SurrealDB移行、JSON
+backup、歴史上の時点・期間、カスタム関係型を区別して記録した。これは文書更新であり、下記のリファクタリング候補の完了を意味しない。
 
-検証: 公式サイトの`npm run build`は15ページを生成して成功。`deno task verify`はBiome lintの4エラーで停止した。個別実行した`deno task test`は742件成功・12件失敗し、失敗はJSON backup versionの期待値に集中。`deno task check`は`historical_time_controller.svelte.ts`に未定義`item` / `reset`を5箇所報告し、`deno fmt --check`も同ファイルの整形差分で失敗。Vitestとアプリbuildはesbuildがworkspace外の親directoryを読めず実行できなかった。文書関連の`in_app_help_test.ts`と対象2ファイルのformat checkは通過。
+検証: 公式サイトの`npm run build`は15ページを生成して成功。`deno task verify`はBiome
+lintの4エラーで停止した。個別実行した`deno task test`は742件成功・12件失敗し、失敗はJSON backup
+versionの期待値に集中。`deno task check`は`historical_time_controller.svelte.ts`に未定義`item` /
+`reset`を5箇所報告し、`deno fmt --check`も同ファイルの整形差分で失敗。Vitestとアプリbuildはesbuildがworkspace外の親directoryを読めず実行できなかった。文書関連の`in_app_help_test.ts`と対象2ファイルのformat
+checkは通過。
 
 `src` の production TypeScript/Svelte/CSS を行数で棚卸しし、既存候補の実装、呼び出し側、
 関連テスト、storage bootstrap、quality task、Editor の mutation 調査文書を確認した。
@@ -230,9 +237,11 @@ magic-number ratchetは281 current/281 baseline、duplicate ratchetは34 current
 
 Surreal の repository 数を模倣せず、現在の GraphStore port と transaction を基準にする。
 
-- [ ] **S0: 永続化契約の対応表を作る** — 難易度2、S1 の前提
+- [x] **S0: 永続化契約の対応表を作る** — 難易度2、S1 の前提
   - 全 mutation と状態フィールドについて Memory/SQLite/JSON
-    の保存・復元経路と既存テストを対応付ける。
+    の保存・復元経路と既存テストを対応付けた（`docs/design/storage-persistence-contracts.md`）。
+  - `tests/graph_store_contract_test.ts` に `SqliteGraphStore` を追加し、全 3
+    バックエンドで共通ドメイン契約の成立を担保。
   - SQLite の差分保存、失敗時 rollback、並行 mutation、close 待機は
     `tests/sqlite_store_contract_test.ts` に既存テストあり。
   - JSON restore の write/rename 失敗は `src/storage/json_backup_restore_test.ts` に既存テストあり。
