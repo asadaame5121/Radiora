@@ -48,6 +48,7 @@
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { RuleQueryController } from "./rule_query_controller.svelte.ts";
 	import { HistoryController } from "./history_controller.svelte.ts";
+	import { ComparisonController } from "./comparison_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { RelationTypeController } from "./relation_type_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
@@ -126,8 +127,6 @@
 	} from "./command_palette.ts";
 	import {
 		comparisonDocumentKey,
-		type LinkComparisonProjection,
-		type WorkComparisonDocuments,
 	} from "../services/comparison_service";
 	import { previewDirection } from "../services/advanced_link_resolver";
 	import {
@@ -204,12 +203,6 @@
 	let tagError = $state("");
 	const ruleQuery = new RuleQueryController(api, errorMessage);
 	let globalLineage = $state<GlobalLineageProjection | null>(null);
-	let comparisonPreferredRevisionId = $state<string | undefined>();
-	let linkComparison = $state<LinkComparisonProjection | null>(null);
-	let workComparison = $state<
-		(WorkComparisonDocuments & { preferredLeftKey?: string; preferredRightKey?: string }) | null
-	>(null);
-	let comparisonRequest = 0;
 	const confirmationController = createConfirmationController();
 	let confirmationDialog: ConfirmationDialog;
 	let licensesDialogOpen = $state(false);
@@ -281,6 +274,14 @@
 		() => selectedBranchId ?? null,
 		(cause) => error = errorMessage(cause),
 	);
+	const comparison = new ComparisonController({
+		api,
+		getSelectedWorkId: () => selectedItem?.workId ?? null,
+		getSelectedId: () => selectedId,
+		openView: () => viewMode = "comparison",
+		reportError: (cause) => error = errorMessage(cause),
+		comparisonPaneLabel: () => vocabulary.comparisonPane,
+	});
 	const editorController = createEditorController({
 		api,
 		getSnapshot: () => snapshot,
@@ -289,7 +290,7 @@
 		loadUnplacedWorks: () => workController.loadUnplacedWorks(),
 		openNavigationTarget,
 		loadRevisions: (workId) => history.loadRevisions(workId),
-		openRevisionComparison,
+		openRevisionComparison: (revisionId) => comparison.openRevision(revisionId),
 		requestFocus,
 		findTextarea: (itemId) => document.querySelector<HTMLTextAreaElement>(
 			`textarea[data-item-id="${CSS.escape(itemId)}"]`,
@@ -1280,14 +1281,6 @@
 		]);
 	}
 
-	function openRevisionComparison(revisionId: string): void {
-		comparisonRequest++;
-		linkComparison = null;
-		workComparison = null;
-		comparisonPreferredRevisionId = revisionId;
-		viewMode = "comparison";
-	}
-
 	async function setSelectedOccurrenceRevision(revisionId: string | null): Promise<void> {
 		if (!selectedId) return;
 		try {
@@ -1300,60 +1293,11 @@
 	}
 
 	function openSelectedRevisionComparison(): void {
-		openRevisionComparison(
+		comparison.openRevision(
 			selectedItem?.revisionSelector.mode === "pinned"
 				? selectedItem.revisionSelector.revisionId
 				: "",
 		);
-	}
-
-	async function openWorkComparison(
-		scope: "branch" | "revision",
-		id: string,
-	): Promise<void> {
-		if (!selectedItem) return;
-		const requestedWorkId = selectedItem.workId;
-		const request = ++comparisonRequest;
-		linkComparison = null;
-		workComparison = null;
-		try {
-			const result = await api.listWorkComparisonDocuments(requestedWorkId);
-			if (request !== comparisonRequest || selectedItem?.workId !== requestedWorkId) return;
-			const selected = result.documents.find((document) =>
-				document.scope === scope &&
-				(scope === "branch" ? document.branchId === id : document.revisionId === id)
-			);
-			if (!selected) throw new Error(`${vocabulary.comparisonPane}対象が見つかりません。`);
-			const key = comparisonDocumentKey(selected);
-			linkComparison = null;
-			workComparison = {
-				...result,
-				...(scope === "revision" ? { preferredRightKey: key } : { preferredLeftKey: key }),
-			};
-			viewMode = "comparison";
-		} catch (cause) {
-			if (request !== comparisonRequest) return;
-			linkComparison = null;
-			workComparison = null;
-			error = errorMessage(cause);
-		}
-	}
-
-	async function openLinkComparison(linkId: string): Promise<void> {
-		const request = ++comparisonRequest;
-		linkComparison = null;
-		workComparison = null;
-		try {
-			const result = await api.resolveLinkComparison(linkId);
-			if (request !== comparisonRequest) return;
-			linkComparison = result;
-			viewMode = "comparison";
-		} catch (cause) {
-			if (request !== comparisonRequest) return;
-			linkComparison = null;
-			workComparison = null;
-			error = errorMessage(cause);
-		}
 	}
 
 	async function retryWorkingCopySave(): Promise<void> {
@@ -2299,29 +2243,29 @@
 				onOpenCommandPalette={() => void openCommandPalette()}
 			/>
 		{:else if viewMode === "comparison"}
-			{#if linkComparison}
-				{#key linkComparison.linkId}
+			{#if comparison.link}
+				{#key comparison.link.linkId}
 					<ComparisonPane
-						documents={[linkComparison.left, linkComparison.right]}
+						documents={[comparison.link.left, comparison.link.right]}
 						context={{
 							kind: "semantic-link",
-							type: linkComparison.type,
-							direction: linkComparison.direction,
-							createdAt: linkComparison.createdAt,
-							reason: linkComparison.reason,
+							type: comparison.link.type,
+							direction: comparison.link.direction,
+							createdAt: comparison.link.createdAt,
+							reason: comparison.link.reason,
 						}}
-						preferredLeftKey={comparisonDocumentKey(linkComparison.left)}
-						preferredRightKey={comparisonDocumentKey(linkComparison.right)}
+						preferredLeftKey={comparisonDocumentKey(comparison.link.left)}
+						preferredRightKey={comparisonDocumentKey(comparison.link.right)}
 						locked
 					/>
 				{/key}
-			{:else if workComparison}
-				{#key workComparison.workId}
+			{:else if comparison.work}
+				{#key comparison.work.workId}
 					<ComparisonPane
-						documents={workComparison.documents}
+						documents={comparison.work.documents}
 						context={{ kind: "branch" }}
-						preferredLeftKey={workComparison.preferredLeftKey}
-						preferredRightKey={workComparison.preferredRightKey}
+						preferredLeftKey={comparison.work.preferredLeftKey}
+						preferredRightKey={comparison.work.preferredRightKey}
 					/>
 				{/key}
 			{:else if selectedItem}
@@ -2331,7 +2275,7 @@
 					{#key selectedItem.workId}
 						<RevisionComparison
 							revisions={history.revisions}
-							preferredRevisionId={comparisonPreferredRevisionId ??
+							preferredRevisionId={comparison.preferredRevisionId ??
 								(selectedItem.revisionSelector.mode === "pinned"
 									? selectedItem.revisionSelector.revisionId
 									: undefined)}
@@ -2349,7 +2293,7 @@
 					<div class="work-lineage-workspace">
 						<WorkLineage
 							projection={history.workLineage}
-							onCompare={openWorkComparison}
+							onCompare={(scope, id) => comparison.openWork(scope, id)}
 							onBack={() => { viewMode = "outline"; }}
 						/>
 						{#if selectedItem && selectedBranchId}
@@ -2443,7 +2387,7 @@
 				onConfirmLink={(input) => executeCommand("createLink", undefined, input)}
 				onDeleteLink={removeLink}
 				onReverseLink={reverseLink}
-				onCompareLink={(link) => openLinkComparison(link.id)}
+				onCompareLink={(link) => comparison.openLink(link.id)}
 				onSearch={api.searchItems}
 				{titleFor}
 				titleForId={titleForId}
