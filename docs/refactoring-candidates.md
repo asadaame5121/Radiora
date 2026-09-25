@@ -215,12 +215,12 @@ magic-number ratchetは281 current/281 baseline、duplicate ratchetは34 current
 - [x] **D2**: `search_operations.ts` と純粋 `search_ranking.ts`。
 - [x] **D3**: `emergence_suggestion_calculator.ts` の候補計算・ranking。
 - [x] **D4**: `emergence_persistence.ts` の materialize/resolve lifecycle。
-- [ ] **D5: rule query operations を抽出** — 難易度3
+- [x] **D5: rule query operations を抽出** — 難易度3
   - `runRuleQuery`、saved query CRUD、query projection を一つの module にする。
   - query に必要な port のみを渡し、代表 occurrence の選択順と implicit FROM link の扱いを維持する。
   - 完了条件: `discovery_rule_query_operations_test.ts` の正常/無効入力/非永続化契約が同じ interface
     で通る。
-- [ ] **D6: 残る emergence orchestration と facade を整理** — 難易度3、依存 D5
+- [x] **D6: 残る emergence orchestration と facade を整理** — 難易度3、依存 D5
   - `listEmergenceSuggestions` の取得→search→候補→materialize→rank を emergence 側へ移す。
   - 完了条件: `DiscoveryOperations` は配線と委譲のみで、graph
     traversal、ranking、永続化判断を持たない。
