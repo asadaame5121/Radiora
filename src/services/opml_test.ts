@@ -1,6 +1,7 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
+import fc from "fast-check";
 import type { OutlineItem, OutlineSnapshot } from "../domain/models.ts";
-import { parseOpml, renderOutlineSnapshotOpml } from "./opml.ts";
+import { type OpmlNode, parseOpml, renderOutlineSnapshotOpml } from "./opml.ts";
 
 function item(
 	id: string,
@@ -23,6 +24,53 @@ function item(
 
 function snapshot(items: OutlineItem[]): OutlineSnapshot {
 	return { items, links: [], knots: [], stashItemIds: [] };
+}
+
+interface GeneratedItem {
+	readonly text: string;
+	readonly parentHint: number;
+	readonly orderKey: number;
+}
+
+const outlineTextArbitrary = fc.string({ maxLength: 40 });
+const generatedItemsArbitrary = fc.array(
+	fc.record({
+		text: outlineTextArbitrary,
+		parentHint: fc.nat(),
+		orderKey: fc.integer({ min: -3, max: 3 }),
+	}),
+	{ maxLength: 12 },
+);
+
+function generatedSnapshot(generated: readonly GeneratedItem[]): OutlineSnapshot {
+	return snapshot(generated.map((entry, index) =>
+		item(
+			`item-${index}`,
+			entry.text,
+			index === 0 || entry.parentHint % (index + 1) === index
+				? null
+				: `item-${entry.parentHint % index}`,
+			entry.orderKey,
+		)
+	));
+}
+
+function expectedTree(source: OutlineSnapshot): OpmlNode[] {
+	const childrenByParent = new Map<string | null, OutlineItem[]>();
+	for (const entry of source.items) {
+		const children = childrenByParent.get(entry.parentId) ?? [];
+		children.push(entry);
+		childrenByParent.set(entry.parentId, children);
+	}
+	const orderedChildren = (parentId: string | null): OutlineItem[] =>
+		(childrenByParent.get(parentId) ?? []).toSorted((left, right) =>
+			left.orderKey - right.orderKey || left.id.localeCompare(right.id)
+		);
+	const toNode = (entry: OutlineItem): OpmlNode => ({
+		text: entry.text,
+		children: orderedChildren(entry.id).map(toNode),
+	});
+	return orderedChildren(null).map(toNode);
 }
 
 Deno.test("OPML round-trip retains hierarchy, sibling order, Japanese, and complete multiline text", () => {
@@ -80,5 +128,15 @@ Deno.test("OPML rejects malformed Radiora lossless attributes", () => {
 		parseOpml(
 			'<opml><body><outline text="x" data-radiora-text="not base64!"/></body></opml>',
 		)
+	);
+});
+
+Deno.test("Property: OPML round-trip preserves text, hierarchy, and sibling order", () => {
+	void fc.assert(
+		fc.property(generatedItemsArbitrary, (generated) => {
+			const source = generatedSnapshot(generated);
+			assertEquals(parseOpml(renderOutlineSnapshotOpml(source)), expectedTree(source));
+		}),
+		{ numRuns: 100 },
 	);
 });
