@@ -52,27 +52,14 @@ import {
 	titleOf,
 } from "../services/search_text.ts";
 
-export class MemoryGraphStore implements GraphStore {
-	protected works: Work[] = [];
-	protected branches: Branch[] = [];
-	protected workingCopies: WorkingCopy[] = [];
-	protected revisions: Revision[] = [];
-	protected recoverySnapshots: RecoverySnapshot[] = [];
-	protected bookmarks: Bookmark[] = [];
-	protected resumePosition: ResumePosition | null = null;
-	protected occurrences: Occurrence[] = [];
-	protected links: OutlineLink[] = [];
-	protected systemRelations: SystemRelation[] = [];
-	protected knots: Knot[] = [];
-	protected aliases: SearchAlias[] = [];
-	protected emergenceFeedback: Record<string, "accept" | "dismiss" | "pin"> = {};
-	protected emergenceSuggestions: EmergenceSuggestion[] = [];
-	protected savedRuleQueries: SavedRuleQuery[] = [];
-	protected purgeManifests: PurgeManifest[] = [];
-	protected relationTypeDefinitions: RelationTypeDefinition[] = BUILT_IN_RELATION_TYPES.map((
-		def,
-	) => ({ ...def }));
+import { MemoryStateContainer } from "./memory_state_container.ts";
 
+export class MemoryGraphStore implements GraphStore {
+	readonly state: MemoryStateContainer;
+
+	constructor(state?: MemoryStateContainer) {
+		this.state = state ?? new MemoryStateContainer();
+	}
 	initialize(): Promise<void> {
 		return Promise.resolve();
 	}
@@ -82,71 +69,33 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	exportGraphState(): Promise<GraphStateSnapshot> {
-		return Promise.resolve(structuredClone({
-			works: this.works,
-			branches: this.branches,
-			workingCopies: this.workingCopies,
-			occurrences: this.occurrences,
-			links: this.links,
-			systemRelations: this.systemRelations,
-			knots: this.knots,
-			aliases: this.aliases,
-			emergenceFeedback: this.emergenceFeedback,
-			emergenceSuggestions: this.emergenceSuggestions,
-			savedRuleQueries: this.savedRuleQueries,
-			purgeManifests: this.purgeManifests,
-			revisions: this.revisions,
-			recoverySnapshots: this.recoverySnapshots,
-			bookmarks: this.bookmarks,
-			resumePosition: this.resumePosition,
-			relationTypeDefinitions: this.relationTypeDefinitions,
-		}));
+		return Promise.resolve(this.state.exportGraphState());
 	}
 
 	restoreGraphState(source: GraphStateSnapshot): Promise<void> {
-		let state: GraphStateSnapshot;
 		try {
-			state = validatedGraphStateSnapshot(source);
+			this.state.restoreGraphState(source);
+			return Promise.resolve();
 		} catch (error) {
 			return Promise.reject(error);
 		}
-		this.works = state.works;
-		this.branches = state.branches;
-		this.workingCopies = state.workingCopies;
-		this.occurrences = state.occurrences;
-		this.links = state.links;
-		this.systemRelations = state.systemRelations;
-		this.knots = state.knots;
-		this.aliases = state.aliases;
-		this.emergenceFeedback = state.emergenceFeedback;
-		this.emergenceSuggestions = state.emergenceSuggestions;
-		this.savedRuleQueries = state.savedRuleQueries;
-		this.purgeManifests = state.purgeManifests;
-		this.revisions = state.revisions;
-		this.recoverySnapshots = state.recoverySnapshots;
-		this.bookmarks = state.bookmarks;
-		this.resumePosition = state.resumePosition;
-		this.relationTypeDefinitions = state.relationTypeDefinitions
-			? structuredClone(state.relationTypeDefinitions)
-			: BUILT_IN_RELATION_TYPES.map((def) => ({ ...def }));
-		return Promise.resolve();
 	}
 
 	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]> {
-		return Promise.resolve(structuredClone(this.relationTypeDefinitions));
+		return Promise.resolve(structuredClone(this.state.relationTypeDefinitions));
 	}
 
 	createRelationTypeDefinition(definition: RelationTypeDefinition): Promise<void> {
 		let validated: RelationTypeDefinition[];
 		try {
 			validated = validateRelationTypeDefinitions([
-				...this.relationTypeDefinitions,
+				...this.state.relationTypeDefinitions,
 				definition,
 			]);
 		} catch (error) {
 			return Promise.reject(error);
 		}
-		this.relationTypeDefinitions = validated;
+		this.state.relationTypeDefinitions = validated;
 		return Promise.resolve();
 	}
 
@@ -156,38 +105,40 @@ export class MemoryGraphStore implements GraphStore {
 
 	listWorks(includeDeleted = false): Promise<Work[]> {
 		return Promise.resolve(structuredClone(
-			this.works.filter((work) => includeDeleted || (!work.deletedAt && !work.mergedIntoWorkId)),
+			this.state.works.filter((work) =>
+				includeDeleted || (!work.deletedAt && !work.mergedIntoWorkId)
+			),
 		));
 	}
 
 	listOccurrences(includeDeletedWorks = false): Promise<Occurrence[]> {
 		const visibleWorkIds = new Set(
-			this.works.filter((work) =>
+			this.state.works.filter((work) =>
 				includeDeletedWorks || (!work.deletedAt && !work.mergedIntoWorkId)
 			).map((work) => work.id),
 		);
 		return Promise.resolve(structuredClone(
-			this.occurrences.filter((occurrence) => visibleWorkIds.has(occurrence.workId)),
+			this.state.occurrences.filter((occurrence) => visibleWorkIds.has(occurrence.workId)),
 		));
 	}
 
 	async mergeWorks(input: MergeWorksInput): Promise<void> {
-		const source = this.works.find((work) => work.id === input.sourceWorkId);
-		const survivor = this.works.find((work) => work.id === input.survivorWorkId);
-		validateMergeInput(input, source, survivor, this.aliases);
+		const source = this.state.works.find((work) => work.id === input.sourceWorkId);
+		const survivor = this.state.works.find((work) => work.id === input.survivorWorkId);
+		validateMergeInput(input, source, survivor, this.state.aliases);
 
 		const next = structuredClone({
-			works: this.works,
-			branches: this.branches,
-			workingCopies: this.workingCopies,
-			revisions: this.revisions,
-			recoverySnapshots: this.recoverySnapshots,
-			bookmarks: this.bookmarks,
-			resumePosition: this.resumePosition,
-			occurrences: this.occurrences,
-			links: this.links,
-			systemRelations: this.systemRelations,
-			aliases: this.aliases,
+			works: this.state.works,
+			branches: this.state.branches,
+			workingCopies: this.state.workingCopies,
+			revisions: this.state.revisions,
+			recoverySnapshots: this.state.recoverySnapshots,
+			bookmarks: this.state.bookmarks,
+			resumePosition: this.state.resumePosition,
+			occurrences: this.state.occurrences,
+			links: this.state.links,
+			systemRelations: this.state.systemRelations,
+			aliases: this.state.aliases,
 		});
 		const takenNames = new Set(
 			next.branches.filter((branch) => branch.workId === input.survivorWorkId).map((branch) =>
@@ -223,7 +174,7 @@ export class MemoryGraphStore implements GraphStore {
 			link.fromId = link.from.workId;
 			link.toId = link.to.workId;
 		}
-		retractDuplicateActiveLinks(next.links, this.relationTypeDefinitions);
+		retractDuplicateActiveLinks(next.links, this.state.relationTypeDefinitions);
 		for (const relation of next.systemRelations) {
 			if (relation.fromWorkId === input.sourceWorkId) {
 				relation.fromWorkId = input.survivorWorkId;
@@ -242,30 +193,30 @@ export class MemoryGraphStore implements GraphStore {
 			];
 		}
 
-		Object.assign(this, next);
+		Object.assign(this.state, next);
 	}
 
 	listBranches(workId?: string): Promise<Branch[]> {
 		return Promise.resolve(structuredClone(
-			this.branches.filter((branch) => workId == null || branch.workId === workId),
+			this.state.branches.filter((branch) => workId == null || branch.workId === workId),
 		));
 	}
 
 	listWorkingCopies(workId?: string): Promise<WorkingCopy[]> {
 		return Promise.resolve(structuredClone(
-			this.workingCopies.filter((copy) => workId == null || copy.workId === workId),
+			this.state.workingCopies.filter((copy) => workId == null || copy.workId === workId),
 		));
 	}
 
 	listRevisions(workId?: string): Promise<Revision[]> {
 		return Promise.resolve(structuredClone(
-			this.revisions.filter((revision) => workId == null || revision.workId === workId),
+			this.state.revisions.filter((revision) => workId == null || revision.workId === workId),
 		));
 	}
 
 	listRecoverySnapshots(workId?: string, branchId?: string): Promise<RecoverySnapshot[]> {
 		return Promise.resolve(structuredClone(
-			this.recoverySnapshots.filter((snapshot) =>
+			this.state.recoverySnapshots.filter((snapshot) =>
 				(workId == null || snapshot.workId === workId) &&
 				(branchId == null || snapshot.branchId === branchId)
 			),
@@ -274,17 +225,19 @@ export class MemoryGraphStore implements GraphStore {
 
 	listBookmarks(): Promise<Bookmark[]> {
 		const activeWorkIds = new Set(
-			this.works.filter((work) => !work.deletedAt).map((work) => work.id),
+			this.state.works.filter((work) => !work.deletedAt).map((work) => work.id),
 		);
 		return Promise.resolve(structuredClone(
-			this.bookmarks.filter((bookmark) => activeWorkIds.has(bookmark.workId)),
+			this.state.bookmarks.filter((bookmark) => activeWorkIds.has(bookmark.workId)),
 		));
 	}
 
 	getResumePosition(): Promise<ResumePosition | null> {
-		const active = this.resumePosition &&
-			this.works.some((work) => work.id === this.resumePosition?.workId && !work.deletedAt);
-		return Promise.resolve(active ? structuredClone(this.resumePosition) : null);
+		const active = this.state.resumePosition &&
+			this.state.works.some((work) =>
+				work.id === this.state.resumePosition?.workId && !work.deletedAt
+			);
+		return Promise.resolve(active ? structuredClone(this.state.resumePosition) : null);
 	}
 
 	createWorkBundle(
@@ -293,32 +246,38 @@ export class MemoryGraphStore implements GraphStore {
 		workingCopy: WorkingCopy,
 		occurrence: Occurrence,
 	): Promise<void> {
-		this.works.push(structuredClone(work));
-		this.branches.push(structuredClone(branch));
-		this.workingCopies.push(structuredClone(workingCopy));
-		this.occurrences.push(structuredClone(occurrence));
+		this.state.works.push(structuredClone(work));
+		this.state.branches.push(structuredClone(branch));
+		this.state.workingCopies.push(structuredClone(workingCopy));
+		this.state.occurrences.push(structuredClone(occurrence));
 		return Promise.resolve();
 	}
 
 	importWorkBundles(bundles: readonly WorkBundle[]): Promise<void> {
 		try {
 			validateWorkBundleImport(bundles, {
-				works: this.works,
-				branches: this.branches,
-				workingCopies: this.workingCopies,
-				occurrences: this.occurrences,
+				works: this.state.works,
+				branches: this.state.branches,
+				workingCopies: this.state.workingCopies,
+				occurrences: this.state.occurrences,
 			});
 		} catch (error) {
 			return Promise.reject(error);
 		}
-		this.works = [...this.works, ...bundles.map((bundle) => structuredClone(bundle.work))];
-		this.branches = [...this.branches, ...bundles.map((bundle) => structuredClone(bundle.branch))];
-		this.workingCopies = [
-			...this.workingCopies,
+		this.state.works = [
+			...this.state.works,
+			...bundles.map((bundle) => structuredClone(bundle.work)),
+		];
+		this.state.branches = [
+			...this.state.branches,
+			...bundles.map((bundle) => structuredClone(bundle.branch)),
+		];
+		this.state.workingCopies = [
+			...this.state.workingCopies,
 			...bundles.map((bundle) => structuredClone(bundle.workingCopy)),
 		];
-		this.occurrences = [
-			...this.occurrences,
+		this.state.occurrences = [
+			...this.state.occurrences,
 			...bundles.map((bundle) => structuredClone(bundle.occurrence)),
 		];
 		return Promise.resolve();
@@ -330,21 +289,21 @@ export class MemoryGraphStore implements GraphStore {
 				work,
 				branch,
 				workingCopy,
-				this.works,
-				this.branches,
-				this.workingCopies,
+				this.state.works,
+				this.state.branches,
+				this.state.workingCopies,
 			);
 		} catch (error) {
 			return Promise.reject(error);
 		}
-		this.works.push(structuredClone(work));
-		this.branches.push(structuredClone(branch));
-		this.workingCopies.push(structuredClone(workingCopy));
+		this.state.works.push(structuredClone(work));
+		this.state.branches.push(structuredClone(branch));
+		this.state.workingCopies.push(structuredClone(workingCopy));
 		return Promise.resolve();
 	}
 
 	async resolveWorkStub(workId: string, updatedAt: string): Promise<void> {
-		this.works = resolveWorkStub(this.works, workId, updatedAt);
+		this.state.works = resolveWorkStub(this.state.works, workId, updatedAt);
 	}
 
 	async setWorkHistoricalTime(
@@ -352,31 +311,33 @@ export class MemoryGraphStore implements GraphStore {
 		value: HistoricalTime | null,
 		updatedAt: string,
 	): Promise<void> {
-		updateHistoricalTime(this.works, workId, value, updatedAt);
+		updateHistoricalTime(this.state.works, workId, value, updatedAt);
 	}
 
 	createOccurrence(occurrence: Occurrence): Promise<void> {
-		this.occurrences.push(structuredClone(occurrence));
+		this.state.occurrences.push(structuredClone(occurrence));
 		return Promise.resolve();
 	}
 
 	createBookmark(bookmark: Bookmark): Promise<void> {
-		if (this.bookmarks.some((candidate) => candidate.id === bookmark.id)) {
+		if (this.state.bookmarks.some((candidate) => candidate.id === bookmark.id)) {
 			return Promise.reject(new Error(`Bookmark already exists: ${bookmark.id}`));
 		}
-		const occurrence = this.occurrences.find((candidate) => candidate.id === bookmark.occurrenceId);
-		const work = this.works.find((candidate) =>
+		const occurrence = this.state.occurrences.find((candidate) =>
+			candidate.id === bookmark.occurrenceId
+		);
+		const work = this.state.works.find((candidate) =>
 			candidate.id === bookmark.workId && !candidate.deletedAt
 		);
 		if (!work || occurrence?.workId !== bookmark.workId) {
 			return Promise.reject(new Error("Bookmark Work and Occurrence must exist and match"));
 		}
-		this.bookmarks.push(structuredClone(bookmark));
+		this.state.bookmarks.push(structuredClone(bookmark));
 		return Promise.resolve();
 	}
 
 	deleteBookmark(id: string): Promise<void> {
-		this.bookmarks = this.bookmarks.filter((bookmark) => bookmark.id !== id);
+		this.state.bookmarks = this.state.bookmarks.filter((bookmark) => bookmark.id !== id);
 		return Promise.resolve();
 	}
 
@@ -384,19 +345,21 @@ export class MemoryGraphStore implements GraphStore {
 		if (!Number.isSafeInteger(position.caretOffset) || position.caretOffset < 0) {
 			return Promise.reject(new Error(`Invalid caret offset: ${position.caretOffset}`));
 		}
-		const occurrence = this.occurrences.find((candidate) => candidate.id === position.occurrenceId);
-		const work = this.works.find((candidate) =>
+		const occurrence = this.state.occurrences.find((candidate) =>
+			candidate.id === position.occurrenceId
+		);
+		const work = this.state.works.find((candidate) =>
 			candidate.id === position.workId && !candidate.deletedAt
 		);
 		if (!work || occurrence?.workId !== position.workId) {
 			return Promise.reject(new Error("Resume Work and Occurrence must exist and match"));
 		}
-		this.resumePosition = structuredClone(position);
+		this.state.resumePosition = structuredClone(position);
 		return Promise.resolve();
 	}
 
 	clearResumePosition(): Promise<void> {
-		this.resumePosition = null;
+		this.state.resumePosition = null;
 		return Promise.resolve();
 	}
 
@@ -404,62 +367,72 @@ export class MemoryGraphStore implements GraphStore {
 		if (branch.id !== workingCopy.branchId || branch.workId !== workingCopy.workId) {
 			return Promise.reject(new Error("Branch and Working Copy identity must match"));
 		}
-		this.branches.push(structuredClone(branch));
-		this.workingCopies.push(structuredClone(workingCopy));
+		this.state.branches.push(structuredClone(branch));
+		this.state.workingCopies.push(structuredClone(workingCopy));
 		return Promise.resolve();
 	}
 
 	updateBranch(branch: Branch): Promise<void> {
-		this.branches = this.branches.map((candidate) =>
+		this.state.branches = this.state.branches.map((candidate) =>
 			candidate.id === branch.id ? structuredClone(branch) : candidate
 		);
 		return Promise.resolve();
 	}
 
 	updateBranchWorkingCopy(branchId: string, text: string, updatedAt: string): Promise<void> {
-		const copy = this.workingCopies.find((candidate) => candidate.branchId === branchId);
+		const copy = this.state.workingCopies.find((candidate) => candidate.branchId === branchId);
 		if (!copy) return Promise.reject(new Error(`Working Copy not found for Branch: ${branchId}`));
-		this.workingCopies = this.workingCopies.map((candidate) =>
+		this.state.workingCopies = this.state.workingCopies.map((candidate) =>
 			candidate.branchId === branchId ? { ...candidate, text, updatedAt } : candidate
 		);
-		this.works = this.works.map((work) => work.id === copy.workId ? { ...work, updatedAt } : work);
+		this.state.works = this.state.works.map((work) =>
+			work.id === copy.workId ? { ...work, updatedAt } : work
+		);
 		return Promise.resolve();
 	}
 
 	updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
-		const main = this.branches.find((branch) => branch.workId === workId && branch.name === "main");
+		const main = this.state.branches.find((branch) =>
+			branch.workId === workId && branch.name === "main"
+		);
 		if (!main) return Promise.reject(new Error(`Main Branch not found for Work: ${workId}`));
 		return this.updateBranchWorkingCopy(main.id, text, updatedAt);
 	}
 
 	createRevision(revision: Revision, branchId: string): Promise<void> {
-		const branch = this.branches.find((candidate) => candidate.id === branchId);
+		const branch = this.state.branches.find((candidate) => candidate.id === branchId);
 		try {
-			validateRevisionCreation(revision, branch, this.revisions);
+			validateRevisionCreation(revision, branch, this.state.revisions);
 		} catch (error) {
 			return Promise.reject(error);
 		}
-		this.revisions.push(structuredClone(revision));
-		this.branches = this.branches.map((candidate) =>
-			candidate.id === branchId ? { ...candidate, headRevisionId: revision.id } : candidate
-		);
+		this.appendRevisionToBranch(revision, branchId);
 		return Promise.resolve();
 	}
 
+	private appendRevisionToBranch(revision: Revision, branchId: string): void {
+		this.state.revisions.push(structuredClone(revision));
+		this.state.branches = this.state.branches.map((candidate) =>
+			candidate.id === branchId ? { ...candidate, headRevisionId: revision.id } : candidate
+		);
+	}
+
 	createRecoverySnapshot(snapshot: RecoverySnapshot): Promise<void> {
-		if (this.recoverySnapshots.some((candidate) => candidate.id === snapshot.id)) {
+		if (this.state.recoverySnapshots.some((candidate) => candidate.id === snapshot.id)) {
 			return Promise.reject(new Error(`Recovery Snapshot already exists: ${snapshot.id}`));
 		}
-		const copy = this.workingCopies.find((candidate) => candidate.branchId === snapshot.branchId);
+		const copy = this.state.workingCopies.find((candidate) =>
+			candidate.branchId === snapshot.branchId
+		);
 		if (!copy || copy.workId !== snapshot.workId) {
 			return Promise.reject(new Error(`Working Copy not found for Snapshot: ${snapshot.branchId}`));
 		}
-		this.recoverySnapshots.push(structuredClone(snapshot));
+		this.state.recoverySnapshots.push(structuredClone(snapshot));
 		return Promise.resolve();
 	}
 
 	applyRecoverySnapshot(snapshotId: string, updatedAt: string): Promise<void> {
-		const snapshot = this.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
+		const snapshot = this.state.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
 		if (!snapshot) {
 			return Promise.reject(new Error(`Recovery Snapshot not found: ${snapshotId}`));
 		}
@@ -471,11 +444,13 @@ export class MemoryGraphStore implements GraphStore {
 		beforeRestore: RecoverySnapshot,
 		updatedAt: string,
 	): Promise<void> {
-		const target = this.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
+		const target = this.state.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
 		if (!target) {
 			return Promise.reject(new Error(`Recovery Snapshot not found: ${snapshotId}`));
 		}
-		const copy = this.workingCopies.find((candidate) => candidate.branchId === target.branchId);
+		const copy = this.state.workingCopies.find((candidate) =>
+			candidate.branchId === target.branchId
+		);
 		if (
 			!copy || copy.workId !== target.workId ||
 			beforeRestore.workId !== target.workId ||
@@ -483,7 +458,7 @@ export class MemoryGraphStore implements GraphStore {
 		) {
 			return Promise.reject(new Error("Recovery Snapshot scope does not match Working Copy"));
 		}
-		if (this.recoverySnapshots.some((candidate) => candidate.id === beforeRestore.id)) {
+		if (this.state.recoverySnapshots.some((candidate) => candidate.id === beforeRestore.id)) {
 			return Promise.reject(
 				new Error(`Recovery Snapshot already exists: ${beforeRestore.id}`),
 			);
@@ -491,13 +466,13 @@ export class MemoryGraphStore implements GraphStore {
 		if (beforeRestore.text !== copy.text) {
 			return Promise.reject(new Error("Recovery Snapshot does not capture current Working Copy"));
 		}
-		this.recoverySnapshots.push(structuredClone(beforeRestore));
-		this.workingCopies = this.workingCopies.map((candidate) =>
+		this.state.recoverySnapshots.push(structuredClone(beforeRestore));
+		this.state.workingCopies = this.state.workingCopies.map((candidate) =>
 			candidate.branchId === target.branchId
 				? { ...candidate, text: target.text, updatedAt }
 				: candidate
 		);
-		this.works = this.works.map((work) =>
+		this.state.works = this.state.works.map((work) =>
 			work.id === target.workId ? { ...work, updatedAt } : work
 		);
 		return Promise.resolve();
@@ -509,8 +484,8 @@ export class MemoryGraphStore implements GraphStore {
 		branchId: string,
 		protectedAt: string,
 	): Promise<void> {
-		const snapshot = this.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
-		const branch = this.branches.find((candidate) => candidate.id === branchId);
+		const snapshot = this.state.recoverySnapshots.find((candidate) => candidate.id === snapshotId);
+		const branch = this.state.branches.find((candidate) => candidate.id === branchId);
 		if (!snapshot) {
 			return Promise.reject(new Error(`Recovery Snapshot not found: ${snapshotId}`));
 		}
@@ -521,15 +496,12 @@ export class MemoryGraphStore implements GraphStore {
 			return Promise.reject(new Error("Recovery Snapshot scope does not match Revision"));
 		}
 		try {
-			validateRevisionCreation(revision, branch, this.revisions);
+			validateRevisionCreation(revision, branch, this.state.revisions);
 		} catch (error) {
 			return Promise.reject(error);
 		}
-		this.revisions.push(structuredClone(revision));
-		this.branches = this.branches.map((candidate) =>
-			candidate.id === branchId ? { ...candidate, headRevisionId: revision.id } : candidate
-		);
-		this.recoverySnapshots = this.recoverySnapshots.map((candidate) =>
+		this.appendRevisionToBranch(revision, branchId);
+		this.state.recoverySnapshots = this.state.recoverySnapshots.map((candidate) =>
 			candidate.id === snapshotId
 				? {
 					...candidate,
@@ -541,33 +513,33 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	updateOccurrence(occurrence: Occurrence): Promise<void> {
-		this.occurrences = this.occurrences.map((candidate) =>
+		this.state.occurrences = this.state.occurrences.map((candidate) =>
 			candidate.id === occurrence.id ? structuredClone(occurrence) : candidate
 		);
 		return Promise.resolve();
 	}
 
 	deleteOccurrence(id: string): Promise<void> {
-		this.occurrences = this.occurrences.filter((occurrence) => occurrence.id !== id);
+		this.state.occurrences = this.state.occurrences.filter((occurrence) => occurrence.id !== id);
 		return Promise.resolve();
 	}
 
 	trashWork(workId: string, deletedAt: string): Promise<void> {
-		this.works = this.works.map((work) =>
+		this.state.works = this.state.works.map((work) =>
 			work.id === workId ? { ...work, deletedAt, updatedAt: deletedAt } : work
 		);
 		return Promise.resolve();
 	}
 
 	restoreWork(workId: string): Promise<void> {
-		this.works = this.works.map((work) => {
+		this.state.works = this.state.works.map((work) => {
 			if (work.id !== workId) return work;
 			const restored = { ...work };
 			delete restored.deletedAt;
 			return restored;
 		});
-		const occurrenceIds = new Set(this.occurrences.map((occurrence) => occurrence.id));
-		this.occurrences = this.occurrences.map((occurrence) =>
+		const occurrenceIds = new Set(this.state.occurrences.map((occurrence) => occurrence.id));
+		this.state.occurrences = this.state.occurrences.map((occurrence) =>
 			occurrence.workId === workId && occurrence.parentOccurrenceId &&
 				!occurrenceIds.has(occurrence.parentOccurrenceId)
 				? { ...occurrence, parentOccurrenceId: null }
@@ -577,67 +549,71 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	purgeWork(workId: string): Promise<PurgeManifest> {
-		const work = this.works.find((candidate) => candidate.id === workId);
+		const work = this.state.works.find((candidate) => candidate.id === workId);
 		if (!work?.deletedAt) {
 			return Promise.reject(new Error(`Work must be in trash before it can be purged: ${workId}`));
 		}
 		const branchIds = new Set(
-			this.branches.filter((branch) => branch.workId === workId).map((branch) => branch.id),
+			this.state.branches.filter((branch) => branch.workId === workId).map((branch) => branch.id),
 		);
 		const manifest: PurgeManifest = {
 			id: crypto.randomUUID(),
 			workId,
-			occurrenceIds: this.occurrences
+			occurrenceIds: this.state.occurrences
 				.filter((occurrence) => occurrence.workId === workId)
 				.map((occurrence) => occurrence.id),
 			branchIds: [...branchIds],
 			revisionIds: [],
-			linkIds: this.links
+			linkIds: this.state.links
 				.filter((link) => link.from.workId === workId || link.to.workId === workId)
 				.map((link) => link.id),
 			purgedAt: new Date().toISOString(),
 		};
-		this.purgeManifests.push(manifest);
-		this.works = this.works.filter((work) => work.id !== workId);
-		this.branches = this.branches.filter((branch) => branch.workId !== workId);
-		this.workingCopies = this.workingCopies.filter((copy) =>
+		this.state.purgeManifests.push(manifest);
+		this.state.works = this.state.works.filter((work) => work.id !== workId);
+		this.state.branches = this.state.branches.filter((branch) => branch.workId !== workId);
+		this.state.workingCopies = this.state.workingCopies.filter((copy) =>
 			copy.workId !== workId && !branchIds.has(copy.branchId)
 		);
-		manifest.revisionIds = this.revisions
+		manifest.revisionIds = this.state.revisions
 			.filter((revision) => revision.workId === workId)
 			.map((revision) => revision.id);
-		this.revisions = this.revisions.filter((revision) => revision.workId !== workId);
-		this.recoverySnapshots = this.recoverySnapshots.filter((snapshot) =>
+		this.state.revisions = this.state.revisions.filter((revision) => revision.workId !== workId);
+		this.state.recoverySnapshots = this.state.recoverySnapshots.filter((snapshot) =>
 			snapshot.workId !== workId
 		);
-		this.bookmarks = this.bookmarks.filter((bookmark) => bookmark.workId !== workId);
-		if (this.resumePosition?.workId === workId) this.resumePosition = null;
-		this.occurrences = this.occurrences.filter((occurrence) => occurrence.workId !== workId);
-		const remainingOccurrenceIds = new Set(this.occurrences.map((occurrence) => occurrence.id));
-		this.occurrences = this.occurrences.map((occurrence) =>
+		this.state.bookmarks = this.state.bookmarks.filter((bookmark) => bookmark.workId !== workId);
+		if (this.state.resumePosition?.workId === workId) this.state.resumePosition = null;
+		this.state.occurrences = this.state.occurrences.filter((occurrence) =>
+			occurrence.workId !== workId
+		);
+		const remainingOccurrenceIds = new Set(
+			this.state.occurrences.map((occurrence) => occurrence.id),
+		);
+		this.state.occurrences = this.state.occurrences.map((occurrence) =>
 			occurrence.parentOccurrenceId && !remainingOccurrenceIds.has(occurrence.parentOccurrenceId)
 				? { ...occurrence, parentOccurrenceId: null }
 				: occurrence
 		);
-		this.links = this.links.filter((link) =>
+		this.state.links = this.state.links.filter((link) =>
 			link.from.workId !== workId && link.to.workId !== workId
 		);
 		return Promise.resolve(structuredClone(manifest));
 	}
 
 	listPurgeManifests(): Promise<PurgeManifest[]> {
-		return Promise.resolve(structuredClone(this.purgeManifests));
+		return Promise.resolve(structuredClone(this.state.purgeManifests));
 	}
 
 	listLinks(): Promise<OutlineLink[]> {
-		return Promise.resolve(structuredClone(this.links));
+		return Promise.resolve(structuredClone(this.state.links));
 	}
 	createLink(link: OutlineLink): Promise<void> {
-		this.links.push(structuredClone(link));
+		this.state.links.push(structuredClone(link));
 		return Promise.resolve();
 	}
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
-		this.links = this.links.map((link) =>
+		this.state.links = this.state.links.map((link) =>
 			link.fromId === fromId && link.toId === toId && link.type === type &&
 				link.status !== "retracted"
 				? { ...link, status: "retracted" }
@@ -647,13 +623,13 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	listSystemRelations(): Promise<SystemRelation[]> {
-		return Promise.resolve(structuredClone(this.systemRelations));
+		return Promise.resolve(structuredClone(this.state.systemRelations));
 	}
 	listKnots(): Promise<Knot[]> {
-		return Promise.resolve(structuredClone(this.knots));
+		return Promise.resolve(structuredClone(this.state.knots));
 	}
 	replaceKnots(knots: Knot[]): Promise<void> {
-		this.knots = structuredClone(knots);
+		this.state.knots = structuredClone(knots);
 		return Promise.resolve();
 	}
 	suggestItems(prefix: string, limit: number): Promise<OutlineItem[]> {
@@ -691,33 +667,35 @@ export class MemoryGraphStore implements GraphStore {
 		return Promise.resolve(structuredClone(hits));
 	}
 	listAliases(): Promise<SearchAlias[]> {
-		return Promise.resolve(structuredClone(this.aliases));
+		return Promise.resolve(structuredClone(this.state.aliases));
 	}
 	upsertAlias(alias: SearchAlias): Promise<void> {
-		this.aliases = [
-			...this.aliases.filter((candidate) => candidate.id !== alias.id),
+		this.state.aliases = [
+			...this.state.aliases.filter((candidate) => candidate.id !== alias.id),
 			structuredClone(alias),
 		];
 		return Promise.resolve();
 	}
 	deleteAlias(id: string): Promise<void> {
-		this.aliases = this.aliases.filter((alias) => alias.id !== id);
+		this.state.aliases = this.state.aliases.filter((alias) => alias.id !== id);
 		return Promise.resolve();
 	}
 	getEmergenceFeedback(id: string): Promise<"accept" | "dismiss" | "pin" | null> {
-		return Promise.resolve(this.emergenceFeedback[id] ?? null);
+		return Promise.resolve(this.state.emergenceFeedback[id] ?? null);
 	}
 	setEmergenceFeedback(id: string, action: "accept" | "dismiss" | "pin"): Promise<void> {
-		this.emergenceFeedback[id] = action;
+		this.state.emergenceFeedback[id] = action;
 		return Promise.resolve();
 	}
 	listEmergenceSuggestions(): Promise<EmergenceSuggestion[]> {
-		return Promise.resolve(structuredClone(this.emergenceSuggestions));
+		return Promise.resolve(structuredClone(this.state.emergenceSuggestions));
 	}
 	upsertEmergenceSuggestion(suggestion: EmergenceSuggestion): Promise<void> {
-		const existing = this.emergenceSuggestions.find((candidate) => candidate.id === suggestion.id);
-		this.emergenceSuggestions = [
-			...this.emergenceSuggestions.filter((candidate) => candidate.id !== suggestion.id),
+		const existing = this.state.emergenceSuggestions.find((candidate) =>
+			candidate.id === suggestion.id
+		);
+		this.state.emergenceSuggestions = [
+			...this.state.emergenceSuggestions.filter((candidate) => candidate.id !== suggestion.id),
 			structuredClone(
 				existing
 					? {
@@ -738,9 +716,9 @@ export class MemoryGraphStore implements GraphStore {
 		link?: OutlineLink,
 		reason?: string,
 	): Promise<void> {
-		const index = this.emergenceSuggestions.findIndex((candidate) => candidate.id === id);
+		const index = this.state.emergenceSuggestions.findIndex((candidate) => candidate.id === id);
 		if (index < 0) return Promise.reject(new Error(`Emergence suggestion not found: ${id}`));
-		const current = this.emergenceSuggestions[index];
+		const current = this.state.emergenceSuggestions[index];
 		const status = action === "accept" ? "accepted" : action === "dismiss" ? "dismissed" : "held";
 		if (current.persistenceStatus === status) return Promise.resolve();
 		if (current.persistenceStatus === "accepted" || current.persistenceStatus === "dismissed") {
@@ -756,7 +734,7 @@ export class MemoryGraphStore implements GraphStore {
 					new Error("Accepted emergence suggestion requires an asserted suggestion link"),
 				);
 			}
-			const isSymmetric = isRelationTypeSymmetric(link.type, this.relationTypeDefinitions);
+			const isSymmetric = isRelationTypeSymmetric(link.type, this.state.relationTypeDefinitions);
 			const endpointsMatch = (link.from.workId === current.contextWorkId &&
 				link.to.workId === current.targetWorkId) ||
 				(isSymmetric &&
@@ -765,7 +743,7 @@ export class MemoryGraphStore implements GraphStore {
 			if (!endpointsMatch || link.type !== current.proposedLinkType) {
 				return Promise.reject(new Error("Emergence suggestion link does not match its proposal"));
 			}
-			const duplicate = this.links.some((candidate) =>
+			const duplicate = this.state.links.some((candidate) =>
 				candidate.status !== "retracted" &&
 				candidate.origin === "suggestion" &&
 				candidate.from.scope === "work" &&
@@ -777,10 +755,10 @@ export class MemoryGraphStore implements GraphStore {
 						candidate.from.workId === link.to.workId &&
 						candidate.to.workId === link.from.workId))
 			);
-			if (!duplicate) this.links.push(structuredClone(link));
+			if (!duplicate) this.state.links.push(structuredClone(link));
 		}
 		const now = new Date().toISOString();
-		this.emergenceSuggestions[index] = {
+		this.state.emergenceSuggestions[index] = {
 			...current,
 			persistenceStatus: status,
 			status: status === "held" ? "pinned" : undefined,
@@ -791,26 +769,26 @@ export class MemoryGraphStore implements GraphStore {
 		return Promise.resolve();
 	}
 	listSavedRuleQueries(): Promise<SavedRuleQuery[]> {
-		return Promise.resolve(structuredClone(this.savedRuleQueries));
+		return Promise.resolve(structuredClone(this.state.savedRuleQueries));
 	}
 	upsertSavedRuleQuery(query: SavedRuleQuery): Promise<void> {
-		this.savedRuleQueries = [
-			...this.savedRuleQueries.filter((candidate) => candidate.id !== query.id),
+		this.state.savedRuleQueries = [
+			...this.state.savedRuleQueries.filter((candidate) => candidate.id !== query.id),
 			structuredClone(query),
 		];
 		return Promise.resolve();
 	}
 	deleteSavedRuleQuery(id: string): Promise<void> {
-		this.savedRuleQueries = this.savedRuleQueries.filter((query) => query.id !== id);
+		this.state.savedRuleQueries = this.state.savedRuleQueries.filter((query) => query.id !== id);
 		return Promise.resolve();
 	}
 
 	private projectItems(includeDeleted: boolean): OutlineItem[] {
 		return projectOutlineItems(
-			this.works,
-			this.workingCopies,
-			this.revisions,
-			this.occurrences,
+			this.state.works,
+			this.state.workingCopies,
+			this.state.revisions,
+			this.state.occurrences,
 			includeDeleted,
 		);
 	}

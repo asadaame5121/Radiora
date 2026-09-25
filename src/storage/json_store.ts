@@ -170,18 +170,12 @@ export class JsonGraphStore extends MemoryGraphStore {
 		branch: Branch,
 		workingCopy: WorkingCopy,
 	): Promise<void> {
-		const before = {
-			works: structuredClone(this.works),
-			branches: structuredClone(this.branches),
-			workingCopies: structuredClone(this.workingCopies),
-		};
+		const before = this.state.capture();
 		try {
 			await super.createUnplacedWork(work, branch, workingCopy);
 			await this.persist();
 		} catch (cause) {
-			this.works = before.works;
-			this.branches = before.branches;
-			this.workingCopies = before.workingCopies;
+			this.state.rollback(before);
 			throw cause;
 		}
 	}
@@ -386,16 +380,12 @@ export class JsonGraphStore extends MemoryGraphStore {
 		link?: OutlineLink,
 		reason?: string,
 	): Promise<void> {
-		const before = structuredClone({
-			emergenceSuggestions: this.emergenceSuggestions,
-			links: this.links,
-		});
+		const before = this.state.capture();
 		try {
 			await super.resolveEmergenceSuggestion(id, action, link, reason);
 			await this.persist();
 		} catch (cause) {
-			this.emergenceSuggestions = before.emergenceSuggestions;
-			this.links = before.links;
+			this.state.rollback(before);
 			throw cause;
 		}
 	}
@@ -411,12 +401,12 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	override async createRelationTypeDefinition(definition: RelationTypeDefinition): Promise<void> {
-		const before = this.relationTypeDefinitions;
+		const before = this.state.capture();
 		try {
 			await super.createRelationTypeDefinition(definition);
 			await this.persist();
 		} catch (cause) {
-			this.relationTypeDefinitions = before;
+			this.state.rollback(before);
 			throw cause;
 		}
 	}
@@ -471,26 +461,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	private load(data: StoredGraphV7): void {
-		const validated = validatedGraphStateSnapshot(data);
-		this.works = validated.works;
-		this.branches = validated.branches;
-		this.workingCopies = validated.workingCopies;
-		this.occurrences = validated.occurrences;
-		this.links = validated.links;
-		this.systemRelations = validated.systemRelations;
-		this.knots = validated.knots;
-		this.aliases = validated.aliases;
-		this.emergenceFeedback = validated.emergenceFeedback;
-		this.emergenceSuggestions = validated.emergenceSuggestions;
-		this.savedRuleQueries = validated.savedRuleQueries;
-		this.purgeManifests = validated.purgeManifests;
-		this.revisions = validated.revisions;
-		this.recoverySnapshots = validated.recoverySnapshots;
-		this.bookmarks = validated.bookmarks;
-		this.resumePosition = validated.resumePosition;
-		this.relationTypeDefinitions = validated.relationTypeDefinitions
-			? structuredClone(validated.relationTypeDefinitions)
-			: BUILT_IN_RELATION_TYPES.map((def) => ({ ...def }));
+		this.state.restoreGraphState(data);
 	}
 
 	private async persist(): Promise<void> {
@@ -509,46 +480,20 @@ export class JsonGraphStore extends MemoryGraphStore {
 		};
 	}
 
-	private captureAllState() {
-		return structuredClone({
-			works: this.works,
-			branches: this.branches,
-			workingCopies: this.workingCopies,
-			revisions: this.revisions,
-			recoverySnapshots: this.recoverySnapshots,
-			bookmarks: this.bookmarks,
-			resumePosition: this.resumePosition,
-			occurrences: this.occurrences,
-			links: this.links,
-			systemRelations: this.systemRelations,
-			aliases: this.aliases,
-			emergenceSuggestions: this.emergenceSuggestions,
-			relationTypeDefinitions: this.relationTypeDefinitions,
-		});
+	private captureAllState(): GraphStateSnapshot {
+		return this.state.capture();
 	}
 
-	private restoreAllState(state: ReturnType<JsonGraphStore["captureAllState"]>): void {
-		Object.assign(this, state);
+	private restoreAllState(state: GraphStateSnapshot): void {
+		this.state.rollback(state);
 	}
 
-	private captureRecoveryMutationState() {
-		return structuredClone({
-			works: this.works,
-			branches: this.branches,
-			workingCopies: this.workingCopies,
-			revisions: this.revisions,
-			recoverySnapshots: this.recoverySnapshots,
-		});
+	private captureRecoveryMutationState(): GraphStateSnapshot {
+		return this.state.capture();
 	}
 
-	private restoreRecoveryMutationState(
-		state: ReturnType<JsonGraphStore["captureRecoveryMutationState"]>,
-	): void {
-		this.works = state.works;
-		this.branches = state.branches;
-		this.workingCopies = state.workingCopies;
-		this.revisions = state.revisions;
-		this.recoverySnapshots = state.recoverySnapshots;
+	private restoreRecoveryMutationState(state: GraphStateSnapshot): void {
+		this.state.rollback(state);
 	}
 
 	private async protectVersionInput(version: number): Promise<void> {

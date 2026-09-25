@@ -15,7 +15,7 @@ const NOW = "2026-07-30T12:00:00.000Z";
 
 class MergeTestStore extends MemoryGraphStore {
 	seedSystemRelations(): void {
-		this.systemRelations = [
+		this.state.systemRelations = [
 			{
 				id: "relation-self",
 				fromWorkId: "source",

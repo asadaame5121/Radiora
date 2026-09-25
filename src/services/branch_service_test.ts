@@ -572,8 +572,8 @@ class FailingMainWorkingCopyStore extends MemoryGraphStore {
 	}
 
 	seed(branches: Branch[], workingCopies: WorkingCopy[]): void {
-		this.branches = structuredClone(branches);
-		this.workingCopies = structuredClone(workingCopies);
+		this.state.branches = structuredClone(branches);
+		this.state.workingCopies = structuredClone(workingCopies);
 	}
 }
 
