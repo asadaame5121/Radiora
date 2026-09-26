@@ -1,7 +1,11 @@
 import { assertEquals } from "jsr:@std/assert@1";
 import fc from "fast-check";
 import type { Revision } from "../domain/models.ts";
-import { chooseInitialRevisionComparison, diffRevisionText } from "./revision_diff.ts";
+import {
+	chooseInitialRevisionComparison,
+	diffRevisionText,
+	type RevisionDiffNode,
+} from "./revision_diff.ts";
 
 const lineArbitrary = fc.string({ maxLength: 24 }).filter((line) => !/[\r\n]/.test(line));
 const textArbitrary = fc.array(lineArbitrary, { maxLength: 12 }).chain((lines) => {
@@ -19,6 +23,23 @@ const textArbitrary = fc.array(lineArbitrary, { maxLength: 12 }).chain((lines) =
 
 function normalizeLineEndings(text: string): string {
 	return text.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+}
+
+function assertStrictlyIncreasingLineNumbers(
+	nodes: readonly RevisionDiffNode[],
+	side: "left" | "right",
+): void {
+	let previous = 0;
+	for (const node of nodes) {
+		if (side === "left" && node.kind === "add") continue;
+		if (side === "right" && node.kind === "remove") continue;
+		const lineNumber = side === "left" ? node.leftLineNumber : node.rightLineNumber;
+		assertEquals(typeof lineNumber, "number");
+		if (lineNumber === undefined) continue;
+		assertEquals(Number.isInteger(lineNumber), true);
+		assertEquals(lineNumber > previous, true);
+		previous = lineNumber;
+	}
 }
 
 Deno.test("Revision text diff is stable for identical Japanese text and line ending styles", () => {
@@ -93,6 +114,8 @@ Deno.test("Property: revision diff reconstructs both normalized source texts", (
 
 			assertEquals(reconstructedLeft, normalizeLineEndings(left));
 			assertEquals(reconstructedRight, normalizeLineEndings(right));
+			assertStrictlyIncreasingLineNumbers(nodes, "left");
+			assertStrictlyIncreasingLineNumbers(nodes, "right");
 		}),
 		{ numRuns: 100 },
 	);
