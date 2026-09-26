@@ -89,6 +89,16 @@ export class WorkingCopyAutosaveCoordinator {
 			void this.#flushEntry(entry).then((result) => {
 				// The retained draft and failed status are the timer's recovery path.
 				if (result.isErr()) return;
+			}).catch((cause: unknown) => {
+				if (entry.savedVersion < entry.version) {
+					entry.status = {
+						workId: entry.workId,
+						branchId: entry.branchId,
+						phase: "failed",
+						error: cause instanceof Error ? cause.message : String(cause),
+					};
+				}
+				console.error("Working Copy autosave failed", cause);
 			});
 		}, this.#delayMs);
 		this.#entries.set(branchId, entry);

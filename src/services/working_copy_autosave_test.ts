@@ -30,6 +30,33 @@ Deno.test("Working Copy autosave debounces edits and saves the latest text", asy
 	assertEquals(coordinator.statuses(), [{ workId: "work", branchId: "branch", phase: "saved" }]);
 });
 
+Deno.test("Working Copy timer handles status callback failures", async () => {
+	let fireTimer!: () => void;
+	const error = new Error("status callback failed");
+	const reports: unknown[] = [];
+	const originalConsoleError = console.error;
+	console.error = (...args: unknown[]) => reports.push(args);
+	try {
+		const coordinator = new WorkingCopyAutosaveCoordinator({
+			save: () => Promise.resolve(),
+			onStatusChange: (statuses) => {
+				if (statuses[0]?.phase === "saving") throw error;
+			},
+			setTimer: (callback) => {
+				fireTimer = callback;
+				return 1;
+			},
+		});
+		coordinator.queue("work", "branch", "occurrence", "draft");
+		fireTimer();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assertEquals(coordinator.drafts()[0]?.status.phase, "failed");
+		assertEquals(reports, [["Working Copy autosave failed", error]]);
+	} finally {
+		console.error = originalConsoleError;
+	}
+});
+
 Deno.test("Working Copy autosave serializes edits queued during a save", async () => {
 	const saves: string[] = [];
 	let releaseFirst!: () => void;
