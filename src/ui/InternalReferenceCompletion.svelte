@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ReferenceCandidateList from "./ReferenceCandidateList.svelte";
-	import type { InternalReferenceCompletionState } from "./editor_controller.svelte.ts";
+	import type { InternalReferenceCompletionState } from "./editor_completion_controller.svelte.ts";
 	import type { InternalReferenceCompletion } from "../services/internal_reference_service.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 

@@ -71,6 +71,9 @@ Deno.test("Markdown editor keeps native replacement, autosave, completion, and r
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
 	);
+	const completion = await Deno.readTextFile(
+		new URL("../src/ui/editor_completion_controller.svelte.ts", import.meta.url),
+	);
 	const adapter = await Deno.readTextFile(
 		new URL("../src/ui/overtype_markdown_editor_adapter.ts", import.meta.url),
 	);
@@ -78,8 +81,8 @@ Deno.test("Markdown editor keeps native replacement, autosave, completion, and r
 	assertMatch(outlineRowItem, /<MarkdownEditor/);
 	assertMatch(outlineRowItem, /onChange=.*handlers\.updateLocalText/);
 	assertMatch(outlineRowItem, /onSelectionChange=.*handlers\.updateEditorSelection/);
-	assertMatch(controller, /textarea\.setRangeText\(/);
-	assertMatch(controller, /inputType: "insertReplacementText"/);
+	assertMatch(completion, /textarea\.setRangeText\(/);
+	assertMatch(completion, /inputType: "insertReplacementText"/);
 	assertMatch(
 		controller,
 		/autosave\.queue\(item\.workId, item\.revisionSelector\.branchId, id, text\)/,

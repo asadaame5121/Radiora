@@ -5,7 +5,7 @@
 	import type {
 		InlineLinkCompletionState,
 		InternalReferenceCompletionState,
-	} from "./editor_controller.svelte.ts";
+} from "./editor_completion_controller.svelte.ts";
 	import type {
 		OutlineHelpers,
 		OutlineRowHandlers,
