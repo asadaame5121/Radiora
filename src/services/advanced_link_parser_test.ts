@@ -1,4 +1,5 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
+import fc from "fast-check";
 import {
 	AdvancedLinkParseError,
 	type AdvancedLinkParseErrorCode,
@@ -118,3 +119,39 @@ Deno.test("Advanced Link parser accepts allowed custom link types and rejects un
 	);
 	assertEquals(error.code, "UNKNOWN_LINK_TYPE");
 });
+
+const validFieldArbitrary = fc.tuple(
+	fc.array(fc.constantFrom("a", "b", "日本語"), { minLength: 1, maxLength: 12 }),
+	fc.array(fc.constantFrom("c", "d", " ", "資料"), { maxLength: 12 }),
+).map(([required, suffix]) => [...required, ...suffix].join(""));
+const validInputArbitrary = fc.tuple(
+	validFieldArbitrary,
+	fc.constantFrom("FROM", "SUPPORT", "DEF", "RELATED"),
+	validFieldArbitrary,
+).map(([source, type, target]) => source + " :: " + type + " :: " + target);
+const parserInputArbitrary = fc.oneof(
+	fc.string({ maxLength: 160 }).map((input) => ({ input, guaranteedValid: false })),
+	validInputArbitrary.map((input) => ({ input, guaranteedValid: true })),
+);
+
+Deno.test(
+	"Property: Advanced Link parser returns a value or a bounded structured parse error",
+	() => {
+		void fc.assert(
+			fc.property(parserInputArbitrary, ({ input, guaranteedValid }) => {
+				try {
+					const parsed = parseAdvancedLinkInput(input);
+					assertEquals(typeof parsed.source, "string");
+					assertEquals(typeof parsed.type, "string");
+					assertEquals(typeof parsed.target, "string");
+				} catch (error) {
+					if (!(error instanceof AdvancedLinkParseError)) throw error;
+					assertEquals(guaranteedValid, false);
+					assertEquals(Number.isInteger(error.position), true);
+					assertEquals(error.position >= 0 && error.position <= input.length, true);
+				}
+			}),
+			{ numRuns: 100 },
+		);
+	},
+);
