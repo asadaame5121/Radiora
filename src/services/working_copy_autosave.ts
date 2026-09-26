@@ -94,11 +94,10 @@ export class WorkingCopyAutosaveCoordinator {
 					entry.status = {
 						workId: entry.workId,
 						branchId: entry.branchId,
-						phase: "failed",
-						error: cause instanceof Error ? cause.message : String(cause),
+						phase: "unsaved",
 					};
 				}
-				console.error("Working Copy autosave failed", cause);
+				console.error("Working Copy autosave internal error", cause);
 			});
 		}, this.#delayMs);
 		this.#entries.set(branchId, entry);

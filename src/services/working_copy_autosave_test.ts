@@ -50,8 +50,9 @@ Deno.test("Working Copy timer handles status callback failures", async () => {
 		coordinator.queue("work", "branch", "occurrence", "draft");
 		fireTimer();
 		await new Promise((resolve) => setTimeout(resolve, 0));
-		assertEquals(coordinator.drafts()[0]?.status.phase, "failed");
-		assertEquals(reports, [["Working Copy autosave failed", error]]);
+		assertEquals(coordinator.drafts()[0]?.status.phase, "unsaved");
+		assertEquals(coordinator.drafts()[0]?.status.error, undefined);
+		assertEquals(reports, [["Working Copy autosave internal error", error]]);
 	} finally {
 		console.error = originalConsoleError;
 	}
