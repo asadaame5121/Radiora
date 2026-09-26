@@ -40,7 +40,7 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 		controller.indexOf("async function commitInlineLink"),
 		controller.indexOf("function applyInternalReferenceCompletion"),
 	);
-	assertMatch(commit, /replaceInlineLinkTrigger\(textarea\.value, state\.range, ""\)/);
+	assertMatch(commit, /ports\.requestFocus\(item\.id, state\.range\.start\)/);
 	assertMatch(
 		commit,
 		/textarea\.setRangeText\("", state\.range\.start, state\.range\.end, "end"\)/,

@@ -952,6 +952,7 @@
 
 	function requestFocus(id: string, caretOffset?: number): void {
 		setTimeout(() => {
+			if (selectedId !== id) return;
 			const host = document.querySelector<HTMLElement>(
 				`.markdown-editor-host[data-editor-item-id="${CSS.escape(id)}"]`,
 			);

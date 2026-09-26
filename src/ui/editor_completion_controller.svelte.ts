@@ -1,6 +1,6 @@
 import type { LinkType } from "../domain/models.ts";
 import { findInternalReferenceTrigger } from "../services/internal_reference.ts";
-import { findInlineLinkTrigger, replaceInlineLinkTrigger } from "../services/inline_link.ts";
+import { findInlineLinkTrigger } from "../services/inline_link.ts";
 import type { InternalReferenceCompletion } from "../services/internal_reference_service.ts";
 import {
 	defaultRelationType,
@@ -345,7 +345,6 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 		try {
 			await ports.api.createLink({ fromId, toId, type, origin: "human", status: "asserted" });
 			if (request !== inlineLinkCompletionRequest || ports.getSelectedId() !== selectedId) return;
-			const replacement = replaceInlineLinkTrigger(textarea.value, state.range, "");
 			cancelInlineLinkCompletion();
 			textarea.focus();
 			textarea.setRangeText("", state.range.start, state.range.end, "end");
@@ -356,8 +355,10 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 					data: "",
 				}),
 			);
-			await ports.reload(item.id);
-			ports.requestFocus(item.id, replacement.caretOffset);
+			await ports.reload();
+			if (ports.getSelectedId() === selectedId) {
+				ports.requestFocus(item.id, state.range.start);
+			}
 		} catch (cause) {
 			if (request === inlineLinkCompletionRequest && ports.getSelectedId() === selectedId) {
 				ports.reportError(cause);
