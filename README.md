@@ -49,7 +49,8 @@
 - `発見`タブでは橋渡し、欠けたリンク、近傍クラスタの提案を表示します。提案は採用・理由付き却下・
   保留を明示的に選べ、採用時だけ提案由来のリンクを作ります。
 - 左ナビゲーションの`Query・検索別名`では項目とリンクに対する制限付き・読み取り専用のDatalog風クエリを実行し、
-  保存して再実行できます。結果は表またはSparse Outlineで確認します。選択中は右ペインがQuery・検索別名の表示に切り替わります。
+  保存して再実行できます。結果は表またはSparse
+  Outlineで確認します。選択中は右ペインがQuery・検索別名の表示に切り替わります。
 - `Stub一覧`では作成経路と文脈を記録した未配置のStubを明示的に作れます。
 - `重複候補`ではタイトル・alias・共有タグ・共有リンクに基づくscoreと根拠を確認し、統合・
   `LIKE`・`RELATED`・却下を別々に実行できます。候補は自動統合されません。
@@ -76,12 +77,12 @@ Treeビューでは`Outline / Tree`で切り替えます。`Chronology`では`�
 Windows（x86_64）とLinux（x86_64）で動作します。前提はDeno 2.9以上とNode.js/npmです。
 
 ```powershell
-npm install
+npm ci
 deno task desktop
 ```
 
 ```sh
-npm install
+npm ci
 deno task desktop
 ```
 
