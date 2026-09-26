@@ -11,6 +11,9 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
 	);
+	const completion = await Deno.readTextFile(
+		new URL("../src/ui/editor_completion_controller.svelte.ts", import.meta.url),
+	);
 	const vocabulary = await Deno.readTextFile(
 		new URL("../src/shared/ui_vocabulary.ts", import.meta.url),
 	);
@@ -19,10 +22,10 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 		new URL("../src/ui/OutlineRowItem.svelte", import.meta.url),
 	);
 
-	assertMatch(controller, /findInternalReferenceTrigger/);
-	assertMatch(controller, /textarea\.setRangeText\(/);
-	assertMatch(controller, /inputType: "insertReplacementText"/);
-	assertMatch(controller, /listInternalReferenceCompletions/);
+	assertMatch(completion, /findInternalReferenceTrigger/);
+	assertMatch(completion, /textarea\.setRangeText\(/);
+	assertMatch(completion, /inputType: "insertReplacementText"/);
+	assertMatch(completion, /listInternalReferenceCompletions/);
 	assertMatch(controller, /resolveInternalReferences/);
 	assertMatch(controller, /resolution\.status !== "resolved"/);
 	assertMatch(controller, /openRevisionComparison\(resolution\.revision\.id\)/);
@@ -38,7 +41,7 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 
 Deno.test("internal reference UI does not create semantic or system graph relations", async () => {
 	const controller = await Deno.readTextFile(
-		new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
+		new URL("../src/ui/editor_completion_controller.svelte.ts", import.meta.url),
 	);
 	const referenceFunctions = controller.slice(
 		controller.indexOf("async function updateInternalReferenceCompletion"),

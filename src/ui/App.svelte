@@ -740,6 +740,7 @@
 
 	function selectOccurrence(id: string | null, afterSelection?: () => void): boolean {
 		const commit = () => {
+			if (selectedId !== id) editorController.clearCompletions();
 			selectedId = id;
 			navigationController.browseToOccurrence(snapshot, id);
 			afterSelection?.();
