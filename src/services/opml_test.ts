@@ -29,48 +29,50 @@ function snapshot(items: OutlineItem[]): OutlineSnapshot {
 interface GeneratedItem {
 	readonly text: string;
 	readonly parentHint: number;
-	readonly orderKey: number;
 }
 
-const outlineTextArbitrary = fc.string({ maxLength: 40 });
 const generatedItemsArbitrary = fc.array(
 	fc.record({
-		text: outlineTextArbitrary,
+		text: fc.string({ maxLength: 40 }),
 		parentHint: fc.nat(),
-		orderKey: fc.integer({ min: -3, max: 3 }),
 	}),
-	{ maxLength: 12 },
+	{ minLength: 2, maxLength: 12 },
 );
 
-function generatedSnapshot(generated: readonly GeneratedItem[]): OutlineSnapshot {
-	return snapshot(generated.map((entry, index) =>
-		item(
-			`item-${index}`,
-			entry.text,
-			index === 0 || entry.parentHint % (index + 1) === index
-				? null
-				: `item-${entry.parentHint % index}`,
-			entry.orderKey,
-		)
-	));
+function generatedParentIndex(entry: GeneratedItem, index: number): number | null {
+	if (index < 2 || entry.parentHint % (index + 1) === index) return null;
+	return entry.parentHint % index;
 }
 
-function expectedTree(source: OutlineSnapshot): OpmlNode[] {
-	const childrenByParent = new Map<string | null, OutlineItem[]>();
-	for (const entry of source.items) {
-		const children = childrenByParent.get(entry.parentId) ?? [];
-		children.push(entry);
-		childrenByParent.set(entry.parentId, children);
-	}
-	const orderedChildren = (parentId: string | null): OutlineItem[] =>
-		(childrenByParent.get(parentId) ?? []).toSorted((left, right) =>
-			left.orderKey - right.orderKey || left.id.localeCompare(right.id)
+function generatedSnapshot(generated: readonly GeneratedItem[]): OutlineSnapshot {
+	const nextSiblingOrder = new Map<number | null, number>();
+	const items = generated.map((entry, index) => {
+		const parentIndex = generatedParentIndex(entry, index);
+		const orderKey = nextSiblingOrder.get(parentIndex) ?? 0;
+		nextSiblingOrder.set(parentIndex, orderKey + 1);
+		return item(
+			"item-" + index,
+			entry.text,
+			parentIndex === null ? null : "item-" + parentIndex,
+			orderKey,
 		);
-	const toNode = (entry: OutlineItem): OpmlNode => ({
-		text: entry.text,
-		children: orderedChildren(entry.id).map(toNode),
 	});
-	return orderedChildren(null).map(toNode);
+	return snapshot(items.toReversed());
+}
+
+function expectedTree(generated: readonly GeneratedItem[]): OpmlNode[] {
+	const childrenByParent = new Map<number | null, number[]>();
+	for (const [index, entry] of generated.entries()) {
+		const parentIndex = generatedParentIndex(entry, index);
+		const children = childrenByParent.get(parentIndex) ?? [];
+		children.push(index);
+		childrenByParent.set(parentIndex, children);
+	}
+	const toNode = (index: number): OpmlNode => ({
+		text: generated[index].text,
+		children: (childrenByParent.get(index) ?? []).map(toNode),
+	});
+	return (childrenByParent.get(null) ?? []).map(toNode);
 }
 
 Deno.test("OPML round-trip retains hierarchy, sibling order, Japanese, and complete multiline text", () => {
@@ -131,12 +133,17 @@ Deno.test("OPML rejects malformed Radiora lossless attributes", () => {
 	);
 });
 
-Deno.test("Property: OPML round-trip preserves text, hierarchy, and sibling order", () => {
-	void fc.assert(
-		fc.property(generatedItemsArbitrary, (generated) => {
-			const source = generatedSnapshot(generated);
-			assertEquals(parseOpml(renderOutlineSnapshotOpml(source)), expectedTree(source));
-		}),
-		{ numRuns: 100 },
-	);
-});
+Deno.test(
+	"Property: OPML round-trip preserves generated text, hierarchy, and sibling order",
+	() => {
+		void fc.assert(
+			fc.property(generatedItemsArbitrary, (generated) => {
+				assertEquals(
+					parseOpml(renderOutlineSnapshotOpml(generatedSnapshot(generated))),
+					expectedTree(generated),
+				);
+			}),
+			{ numRuns: 100 },
+		);
+	},
+);
