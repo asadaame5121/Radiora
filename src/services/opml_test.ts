@@ -1,6 +1,7 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1";
+import fc from "fast-check";
 import type { OutlineItem, OutlineSnapshot } from "../domain/models.ts";
-import { parseOpml, renderOutlineSnapshotOpml } from "./opml.ts";
+import { type OpmlNode, parseOpml, renderOutlineSnapshotOpml } from "./opml.ts";
 
 function item(
 	id: string,
@@ -23,6 +24,55 @@ function item(
 
 function snapshot(items: OutlineItem[]): OutlineSnapshot {
 	return { items, links: [], knots: [], stashItemIds: [] };
+}
+
+interface GeneratedItem {
+	readonly text: string;
+	readonly parentHint: number;
+}
+
+const generatedItemsArbitrary = fc.array(
+	fc.record({
+		text: fc.string({ maxLength: 40 }),
+		parentHint: fc.nat(),
+	}),
+	{ minLength: 2, maxLength: 12 },
+);
+
+function generatedParentIndex(entry: GeneratedItem, index: number): number | null {
+	if (index < 2 || entry.parentHint % (index + 1) === index) return null;
+	return entry.parentHint % index;
+}
+
+function generatedSnapshot(generated: readonly GeneratedItem[]): OutlineSnapshot {
+	const nextSiblingOrder = new Map<number | null, number>();
+	const items = generated.map((entry, index) => {
+		const parentIndex = generatedParentIndex(entry, index);
+		const orderKey = nextSiblingOrder.get(parentIndex) ?? 0;
+		nextSiblingOrder.set(parentIndex, orderKey + 1);
+		return item(
+			"item-" + index,
+			entry.text,
+			parentIndex === null ? null : "item-" + parentIndex,
+			orderKey,
+		);
+	});
+	return snapshot(items.toReversed());
+}
+
+function expectedTree(generated: readonly GeneratedItem[]): OpmlNode[] {
+	const childrenByParent = new Map<number | null, number[]>();
+	for (const [index, entry] of generated.entries()) {
+		const parentIndex = generatedParentIndex(entry, index);
+		const children = childrenByParent.get(parentIndex) ?? [];
+		children.push(index);
+		childrenByParent.set(parentIndex, children);
+	}
+	const toNode = (index: number): OpmlNode => ({
+		text: generated[index].text,
+		children: (childrenByParent.get(index) ?? []).map(toNode),
+	});
+	return (childrenByParent.get(null) ?? []).map(toNode);
 }
 
 Deno.test("OPML round-trip retains hierarchy, sibling order, Japanese, and complete multiline text", () => {
@@ -82,3 +132,18 @@ Deno.test("OPML rejects malformed Radiora lossless attributes", () => {
 		)
 	);
 });
+
+Deno.test(
+	"Property: OPML round-trip preserves generated text, hierarchy, and sibling order",
+	() => {
+		void fc.assert(
+			fc.property(generatedItemsArbitrary, (generated) => {
+				assertEquals(
+					parseOpml(renderOutlineSnapshotOpml(generatedSnapshot(generated))),
+					expectedTree(generated),
+				);
+			}),
+			{ numRuns: 100 },
+		);
+	},
+);
