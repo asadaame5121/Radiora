@@ -166,6 +166,9 @@
 		background: transparent !important;
 		color: var(--radiora-editor-text);
 	}
+	.markdown-editor-host :global(.overtype-input::placeholder) {
+		color: transparent !important;
+	}
 	.markdown-editor-host :global(:is(.overtype-input, .overtype-preview)) {
 		max-height: 100% !important;
 		overflow: auto !important;
