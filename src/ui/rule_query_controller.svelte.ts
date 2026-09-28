@@ -1,4 +1,9 @@
-import type { RuleQueryResult, SavedRuleQuery, TransientProjectionNode } from "../domain/models.ts";
+import type {
+	RuleQueryResult,
+	SavedRuleQuery,
+	SearchAlias,
+	TransientProjectionNode,
+} from "../domain/models.ts";
 import type { RadioraBindings } from "../shared/bindings.ts";
 
 type RuleQueryApi = Pick<
@@ -8,6 +13,9 @@ type RuleQueryApi = Pick<
 	| "saveRuleQuery"
 	| "deleteRuleQuery"
 	| "buildQueryProjectionNodes"
+	| "listSearchAliases"
+	| "saveSearchAlias"
+	| "deleteSearchAlias"
 >;
 
 const QUERY_LIMIT = 500;
@@ -21,6 +29,9 @@ export class RuleQueryController {
 	nodes = $state<TransientProjectionNode[]>([]);
 	projectionName = $state("");
 	showProjection = $state(false);
+	aliases = $state<SearchAlias[]>([]);
+	aliasCanonical = $state("");
+	aliasVariants = $state("");
 
 	constructor(
 		private readonly api: RuleQueryApi,
@@ -85,5 +96,40 @@ export class RuleQueryController {
 	};
 	toggleProjection = (): void => {
 		this.showProjection = !this.showProjection;
+	};
+
+	async loadAliases(): Promise<void> {
+		this.aliases = await this.api.listSearchAliases();
+	}
+
+	async saveAlias(): Promise<void> {
+		this.error = "";
+		try {
+			await this.api.saveSearchAlias({
+				canonical: this.aliasCanonical,
+				variants: this.aliasVariants
+					.split(/[,、\n]/)
+					.map((value) => value.trim())
+					.filter(Boolean),
+			});
+			this.aliasCanonical = "";
+			this.aliasVariants = "";
+			await this.loadAliases();
+		} catch (cause) {
+			this.error = this.errorMessage(cause);
+		}
+	}
+
+	async removeAlias(id: string): Promise<void> {
+		await this.api.deleteSearchAlias(id);
+		await this.loadAliases();
+	}
+
+	setAliasCanonical = (value: string): void => {
+		this.aliasCanonical = value;
+	};
+
+	setAliasVariants = (value: string): void => {
+		this.aliasVariants = value;
 	};
 }

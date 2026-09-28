@@ -78,4 +78,32 @@ describe("rule query controller", () => {
 		expect(controller.error).toBe("invalid query");
 		expect(controller.result).toBeNull();
 	});
+
+	test("saves, lists, and removes search aliases", async () => {
+		const mockAliases = [{ id: "alias-1", canonical: "foo", variants: ["bar", "baz"] }];
+		const api = createApi({
+			listSearchAliases: vi.fn(async () => mockAliases),
+			saveSearchAlias: vi.fn(async () => mockAliases[0]),
+			deleteSearchAlias: vi.fn(async () => undefined),
+		});
+		const controller = new RuleQueryController(api, String);
+
+		await controller.loadAliases();
+		expect(api.listSearchAliases).toHaveBeenCalledTimes(1);
+		expect(controller.aliases).toEqual(mockAliases);
+
+		controller.setAliasCanonical("new-canonical");
+		controller.setAliasVariants("v1, v2\nv3");
+		await controller.saveAlias();
+
+		expect(api.saveSearchAlias).toHaveBeenCalledWith({
+			canonical: "new-canonical",
+			variants: ["v1", "v2", "v3"],
+		});
+		expect(controller.aliasCanonical).toBe("");
+		expect(controller.aliasVariants).toBe("");
+
+		await controller.removeAlias("alias-1");
+		expect(api.deleteSearchAlias).toHaveBeenCalledWith("alias-1");
+	});
 });
