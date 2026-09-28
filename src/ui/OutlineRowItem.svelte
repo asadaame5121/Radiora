@@ -53,6 +53,10 @@
 	class:dragging={draggedId === row.item.id}
 	class="row"
 	style={`--depth:${row.depth}`}
+	onfocusout={(event) => {
+		if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+		handlers.discardUntouchedEmptyItem(row.item.id);
+	}}
 	role="treeitem"
 	aria-selected={selectedId === row.item.id}
 	tabindex="-1"

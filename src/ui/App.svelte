@@ -45,6 +45,7 @@
 	} from "./confirmation_controller.svelte.ts";
 	import { createOutlineDragController } from "./outline_drag_controller.svelte.ts";
 	import { createEditorController } from "./editor_controller.svelte.ts";
+	import { createPendingEmptyItemController } from "./pending_empty_item_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { RuleQueryController } from "./rule_query_controller.svelte.ts";
 	import { HistoryController } from "./history_controller.svelte.ts";
@@ -301,6 +302,13 @@
 		vocabulary,
 		relationTypeNames: () => relationTypes.names,
 		isSymmetricRelationType: (type) => relationTypes.isSymmetric(type),
+	});
+	const pendingEmptyItemController = createPendingEmptyItemController({
+		getSnapshot: () => snapshot,
+		flushAutosave: (workId) => editorController.flushAutosave(workId),
+		deleteItem: (id) => api.deleteItem(id),
+		reload: () => load(),
+		reportError: (cause) => error = errorMessage(cause),
 	});
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
@@ -678,6 +686,7 @@
 		treeFilter = reconciled;
 		const loaded = await load();
 		if (!loaded) return;
+		await pendingEmptyItemController.discardRestored();
 		startupDataLoaded = true;
 		startupCacheActive = false;
 		persistStartupSnapshotCache();
@@ -1101,6 +1110,7 @@
 				parentId: row.item.parentId,
 				afterId: row.item.id,
 			});
+			if (!right.trim()) pendingEmptyItemController.track(created.id);
 			await load(created.id);
 			return;
 		}
@@ -1122,6 +1132,7 @@
 					return;
 				}
 				await api.deleteItem(row.item.id);
+				pendingEmptyItemController.forget(row.item.id);
 				await load(previous.id);
 			}
 			return;
@@ -1132,7 +1143,10 @@
 		}
 	}
 
-	const updateLocalText = editorController.updateLocalText;
+	function updateLocalText(id: string, textarea: HTMLTextAreaElement): void {
+		pendingEmptyItemController.noteTextChange(id, textarea.value);
+		editorController.updateLocalText(id, textarea);
+	}
 	const updateEditorSelection = editorController.updateEditorSelection;
 	const updateInlineLinkSearch = editorController.updateInlineLinkSearch;
 	const handleInlineLinkOmniKeydown = editorController.handleInlineLinkOmniKeydown;
@@ -1980,6 +1994,7 @@
 		hoistOccurrence,
 		updateLocalText,
 		updateEditorSelection,
+		discardUntouchedEmptyItem: pendingEmptyItemController.discard,
 		handleKeydown,
 		openEditorInternalReference,
 		applyInternalReferenceCompletion,
