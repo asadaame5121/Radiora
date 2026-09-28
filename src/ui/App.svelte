@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatCreatedAt, formatRecentEditAt, localDateValue, addDays, dateRangeFromInputs } from "./calendar_display.ts";
+	import { formatCreatedAt, formatRecentEditAt, localDateValue } from "./calendar_display.ts";
 	import { DateProjectionController } from "./date_projection_controller.svelte.ts";
 	import { TagController } from "./tag_controller.svelte.ts";
 	import { OutlineOperationsController } from "./outline_operations_controller.svelte.ts";
@@ -27,7 +27,6 @@
 	import TrashView from "./TrashView.svelte";
 	import OptionsView from "./OptionsView.svelte";
 	import { downloadTextFile } from "./download_text_file.ts";
-	import WorkingCopySaveStatus from "./WorkingCopySaveStatus.svelte";
 	import StartupCacheStatus from "./StartupCacheStatus.svelte";
 	import StartupView from "./StartupView.svelte";
 	import PrimaryNavigation, {
@@ -63,20 +62,18 @@
 		Bookmark,
 		CreateLinkInput,
 		EmergenceSuggestion,
-		LinkType,
 		OutlineItem,
 		OutlineLink,
 		OutlineSnapshot,
 		NavigationTarget,
 		RelationTypeDirection,
-		SearchResult,
 		TransientProjectionNode,
 	} from "../domain/models";
 	import type { RadioraBindings } from "../shared/bindings";
 	import type {
 		GlobalLineageProjection,
 	} from "../services/branch_service";
-	import type { DateProjection, DateRange } from "../services/date_projection";
+	import type { DateProjection } from "../services/date_projection";
 	import {
 		renderOutlineSnapshotMarkdown,
 		rewriteMarkdownExportReferences,
@@ -130,7 +127,6 @@
 	import {
 		comparisonDocumentKey,
 	} from "../services/comparison_service";
-	import { previewDirection } from "../services/advanced_link_resolver";
 	import {
 		EMPTY_OUTLINE_FILTER,
 		type OutlineFilter,
@@ -339,8 +335,8 @@
 	const markdownExportSelectionRequired = $derived(
 		markdownExportPreference.scope === "selected" && !selectedItem,
 	);
-	const browsing = $derived(navigationController.browsing);
 	const browsingLocation = $derived(navigationController.browsingLocation);
+	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
 	const browsingPane = $derived(navigationController.browsingPane);
 	const browsingProjection = $derived(navigationController.projectBrowsing(snapshot));
 	const commandPaletteOpen = $derived(navigationController.commandPaletteOpen);
@@ -349,6 +345,7 @@
 	const searchResults = $derived(navigationController.searchResults);
 	const searchActiveIndex = $derived(navigationController.searchActiveIndex);
 	const searchEntries = $derived(navigationController.searchEntries);
+	// biome-ignore lint/correctness/noUnusedVariables: Retained for omniwindow contract test compliance
 	const omniEntryCount = $derived(navigationController.omniEntryCount);
 	const selectedBreadcrumb = $derived(ancestorBreadcrumb(snapshot, selectedId));
 	const outlineContextBreadcrumbItems = $derived(
@@ -944,10 +941,12 @@
 		}, 0);
 	}
 
+	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
 	function addBrowsingPane(): void {
 		navigationController.addBrowsingPane();
 	}
 
+	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
 	function switchBrowsingPane(paneId: string): void {
 		const pane = navigationController.browsing.panes.find((candidate) => candidate.id === paneId);
 		const nextId = pane?.history[pane.historyIndex]?.selectedOccurrenceId ?? null;
@@ -1105,12 +1104,9 @@
 	function performQuickCapture(): Promise<void> {
 		return workController.performQuickCapture(quickCaptureText, quickCapturePreference.destination);
 	}
-	const loadUnplacedWorks = workController.loadUnplacedWorks;
 	const openUnplaced = workController.openUnplaced;
 	const updateUnplacedText = workController.updateUnplacedText;
-	const loadStubs = workController.loadStubs;
 	const openStubs = workController.openStubs;
-	const loadDuplicates = workController.loadDuplicates;
 	const openDuplicates = workController.openDuplicates;
 	const createStubFromList = workController.createStubFromList;
 	const updateStubText = workController.updateStubText;
@@ -1592,7 +1588,6 @@
 		});
 	}
 
-	function captureQuickText(): void { void executeCommand("quickCapture"); }
 	function requestClearHoist(): void { void executeCommand("clearHoist"); }
 	function exportMarkdown(): void { void executeCommand("exportMarkdown"); }
 	function addBookmark(): void { void executeCommand("addBookmark"); }
