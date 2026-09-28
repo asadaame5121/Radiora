@@ -66,12 +66,27 @@ export class StartupController {
 			if (this.#cancelled) return;
 			this.status = nextStatus;
 			if (this.status.phase === "ready") {
-				if (this.options.onReady) {
-					await this.options.onReady();
-				}
+				await this.#handleReady();
 				return;
 			}
 			await new Promise((resolve) => setTimeout(resolve, pollInterval));
+		}
+	};
+
+	#handleReady = async (): Promise<void> => {
+		if (!this.options.onReady) return;
+		try {
+			await this.options.onReady();
+		} catch (cause) {
+			if (this.#cancelled) return;
+			if (!this.dataLoaded) {
+				this.status = {
+					phase: "failed",
+					message: "初期データの読み込みに失敗しました。",
+					detail: this.options.errorMessage(cause),
+					logPath: this.status.logPath,
+				};
+			}
 		}
 	};
 
@@ -93,8 +108,8 @@ export class StartupController {
 			return;
 		}
 		if (this.#cancelled) return;
-		if (this.status.phase === "ready" && this.options.onReady) {
-			await this.options.onReady();
+		if (this.status.phase === "ready") {
+			await this.#handleReady();
 		}
 	};
 

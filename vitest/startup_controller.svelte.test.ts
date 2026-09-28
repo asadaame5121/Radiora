@@ -152,22 +152,65 @@ describe("StartupController", () => {
 		expect(getStartupStatus).not.toHaveBeenCalled();
 	});
 
-	it("does not overwrite status to failed if onReady throws after retryStartup succeeds", async () => {
+	it("restores failed retryable status when onReady rejects before markDataLoaded during monitor", async () => {
+		const readyStatus: StartupStatus = { phase: "ready" };
+		const getStartupStatus = vi.fn().mockResolvedValue(readyStatus);
+		const onReady = vi.fn().mockRejectedValue(new Error("relationTypes load failed"));
+		const controller = new StartupController({
+			api: {
+				getStartupStatus,
+				retryStartup: vi.fn(),
+				loadStartupSnapshotCache: vi.fn(),
+			},
+			errorMessage: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+			onReady,
+			pollIntervalMs: 5,
+		});
+
+		await controller.monitor();
+		expect(controller.status.phase).toBe("failed");
+		expect(controller.status.detail).toBe("relationTypes load failed");
+	});
+
+	it("restores failed retryable status when onReady rejects before markDataLoaded during retry", async () => {
 		const readyStatus: StartupStatus = { phase: "ready" };
 		const retryStartup = vi.fn().mockResolvedValue(readyStatus);
-		const onReady = vi.fn().mockRejectedValue(new Error("onReady failed"));
+		const onReady = vi.fn().mockRejectedValue(new Error("load failed"));
 		const controller = new StartupController({
 			api: {
 				getStartupStatus: vi.fn(),
 				retryStartup,
 				loadStartupSnapshotCache: vi.fn(),
 			},
-			errorMessage: String,
+			errorMessage: (cause) => (cause instanceof Error ? cause.message : String(cause)),
 			onReady,
 		});
 
-		await expect(controller.retry()).rejects.toThrow("onReady failed");
-		expect(controller.status.phase).toBe("ready");
+		await controller.retry();
+		expect(controller.status.phase).toBe("failed");
+		expect(controller.status.detail).toBe("load failed");
+	});
+
+	it("preserves ready status when onReady rejects after markDataLoaded", async () => {
+		const readyStatus: StartupStatus = { phase: "ready" };
+		let controllerInstance!: StartupController;
+		const onReady = vi.fn().mockImplementation(async () => {
+			controllerInstance.markDataLoaded();
+			throw new Error("post-load alias failed");
+		});
+		controllerInstance = new StartupController({
+			api: {
+				getStartupStatus: vi.fn().mockResolvedValue(readyStatus),
+				retryStartup: vi.fn(),
+				loadStartupSnapshotCache: vi.fn(),
+			},
+			errorMessage: String,
+			onReady,
+			pollIntervalMs: 5,
+		});
+
+		await controllerInstance.monitor();
+		expect(controllerInstance.status.phase).toBe("ready");
 	});
 
 	it("aborts monitor if disposed during in-flight getStartupStatus", async () => {
