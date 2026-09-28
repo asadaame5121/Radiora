@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { formatCreatedAt, formatRecentEditAt, localDateValue, addDays, dateRangeFromInputs } from "./calendar_display.ts";
 	import { onMount, tick, untrack } from "svelte";
-	import { SvelteSet } from "svelte/reactivity";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
 	import GlobalLineage from "./GlobalLineage.svelte";
@@ -46,6 +45,7 @@
 	} from "./confirmation_controller.svelte.ts";
 	import { createOutlineDragController } from "./outline_drag_controller.svelte.ts";
 	import { createEditorController } from "./editor_controller.svelte.ts";
+	import { createPendingEmptyItemController } from "./pending_empty_item_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { RuleQueryController } from "./rule_query_controller.svelte.ts";
 	import { HistoryController } from "./history_controller.svelte.ts";
@@ -177,7 +177,6 @@
 	let dateProjection = $state<DateProjection | null>(null);
 	let dateProjectionLoading = $state(false);
 	let selectedId = $state<string | null>(null);
-	let pendingEmptyItemIds = new SvelteSet<string>();
 	const navigationController = createNavigationController({
 		recordSearch: (outcome, durationMs) => {
 			void api.recordClientOperation("search.execute", outcome, durationMs).catch(() => console.warn("Could not record search."));
@@ -303,6 +302,13 @@
 		vocabulary,
 		relationTypeNames: () => relationTypes.names,
 		isSymmetricRelationType: (type) => relationTypes.isSymmetric(type),
+	});
+	const pendingEmptyItemController = createPendingEmptyItemController({
+		getSnapshot: () => snapshot,
+		flushAutosave: (workId) => editorController.flushAutosave(workId),
+		deleteItem: (id) => api.deleteItem(id),
+		reload: () => load(),
+		reportError: (cause) => error = errorMessage(cause),
 	});
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
@@ -680,6 +686,7 @@
 		treeFilter = reconciled;
 		const loaded = await load();
 		if (!loaded) return;
+		await pendingEmptyItemController.discardRestored();
 		startupDataLoaded = true;
 		startupCacheActive = false;
 		persistStartupSnapshotCache();
@@ -1101,7 +1108,7 @@
 				parentId: row.item.parentId,
 				afterId: row.item.id,
 			});
-			if (!right.trim()) pendingEmptyItemIds.add(created.id);
+			if (!right.trim()) pendingEmptyItemController.track(created.id);
 			await load(created.id);
 			return;
 		}
@@ -1123,7 +1130,7 @@
 					return;
 				}
 				await api.deleteItem(row.item.id);
-				pendingEmptyItemIds.delete(row.item.id);
+				pendingEmptyItemController.forget(row.item.id);
 				await load(previous.id);
 			}
 			return;
@@ -1135,32 +1142,8 @@
 	}
 
 	function updateLocalText(id: string, textarea: HTMLTextAreaElement): void {
-		if (textarea.value.trim()) pendingEmptyItemIds.delete(id);
+		pendingEmptyItemController.noteTextChange(id, textarea.value);
 		editorController.updateLocalText(id, textarea);
-	}
-
-	async function discardUntouchedEmptyItem(id: string): Promise<void> {
-		if (!pendingEmptyItemIds.has(id)) return;
-		const item = snapshot.items.find((candidate) => candidate.id === id);
-		if (!item || item.text.trim()) {
-			pendingEmptyItemIds.delete(id);
-			return;
-		}
-		try {
-			await editorController.flushAutosave(item.workId);
-			if (!pendingEmptyItemIds.has(id)) return;
-			const current = snapshot.items.find((candidate) => candidate.id === id);
-			if (!current || current.text.trim() || snapshot.items.some((candidate) => candidate.parentId === id)) {
-				pendingEmptyItemIds.delete(id);
-				return;
-			}
-			await api.deleteItem(id);
-			pendingEmptyItemIds.delete(id);
-			await load();
-		} catch (cause) {
-			pendingEmptyItemIds.delete(id);
-			error = errorMessage(cause);
-		}
 	}
 	const updateEditorSelection = editorController.updateEditorSelection;
 	const updateInlineLinkSearch = editorController.updateInlineLinkSearch;
@@ -2009,7 +1992,7 @@
 		hoistOccurrence,
 		updateLocalText,
 		updateEditorSelection,
-		discardUntouchedEmptyItem,
+		discardUntouchedEmptyItem: pendingEmptyItemController.discard,
 		handleKeydown,
 		openEditorInternalReference,
 		applyInternalReferenceCompletion,
