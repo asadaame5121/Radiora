@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatCreatedAt, formatRecentEditAt, localDateValue, addDays, dateRangeFromInputs } from "./calendar_display.ts";
 	import { DateProjectionController } from "./date_projection_controller.svelte.ts";
+	import { TagController } from "./tag_controller.svelte.ts";
 	import { onMount, tick, untrack } from "svelte";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
@@ -195,14 +196,16 @@
 	let aliases = $state<SearchAlias[]>([]);
 	let aliasCanonical = $state("");
 	let aliasVariants = $state("");
-	let tagScopes = $state<ScopedTagSet[]>([]);
-	let tagAliases = $state<TagAlias[]>([]);
-	let selectedTag = $state<string | null>(null);
-	let tagRenameFrom = $state("");
-	let tagRenameTo = $state("");
-	let tagMergeSources = $state("");
-	let tagMergeTarget = $state("");
-	let tagError = $state("");
+	const tagController = new TagController({
+		api: {
+			listScopedTags: () => api.listScopedTags(),
+			listTagAliases: () => api.listTagAliases(),
+			renameTag: (from, to) => api.renameTag(from, to),
+			mergeTags: (sources, target) => api.mergeTags(sources, target),
+		},
+		loadUnplacedWorks: () => workController.loadUnplacedWorks(),
+		errorMessage,
+	});
 	const ruleQuery = new RuleQueryController(api, errorMessage);
 	let globalLineage = $state<GlobalLineageProjection | null>(null);
 	const confirmationController = createConfirmationController();
@@ -684,7 +687,7 @@
 		startupCacheActive = false;
 		persistStartupSnapshotCache();
 		aliases = await api.listSearchAliases();
-		await loadTagBrowser();
+		await tagController.load();
 		await ruleQuery.loadSavedQueries();
 	}
 
@@ -1510,30 +1513,8 @@
 		});
 		await load();
 	}
-	function splitTagInput(value: string): string[] {
-		return value.split(/[,、\s]+/).map((tag) => tag.trim()).filter(Boolean);
-	}
-
-	async function loadTagBrowser(): Promise<void> {
-		tagError = "";
-		try {
-			const [scopes, aliases] = await Promise.all([
-				api.listScopedTags(),
-				api.listTagAliases(),
-				workController.loadUnplacedWorks(),
-			]);
-			tagScopes = scopes;
-			tagAliases = aliases;
-			if (selectedTag && !scopes.some((scope) => scope.tags.includes(selectedTag!))) {
-				selectedTag = null;
-			}
-		} catch (cause) {
-			tagError = errorMessage(cause);
-		}
-	}
-
 	async function openTags(): Promise<void> {
-		await loadTagBrowser();
+		await tagController.load();
 		viewMode = "tags";
 	}
 
@@ -1548,30 +1529,6 @@
 			return;
 		}
 		error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
-	}
-
-	async function renameTag(): Promise<void> {
-		tagError = "";
-		try {
-			await api.renameTag(tagRenameFrom, tagRenameTo);
-			tagRenameFrom = "";
-			tagRenameTo = "";
-			await loadTagBrowser();
-		} catch (cause) {
-			tagError = errorMessage(cause);
-		}
-	}
-
-	async function mergeTags(): Promise<void> {
-		tagError = "";
-		try {
-			await api.mergeTags(splitTagInput(tagMergeSources), tagMergeTarget);
-			tagMergeSources = "";
-			tagMergeTarget = "";
-			await loadTagBrowser();
-		} catch (cause) {
-			tagError = errorMessage(cause);
-		}
 	}
 
 	async function duplicateSelectedOccurrence(): Promise<void> {
@@ -2153,19 +2110,19 @@
 			/>
 		{:else if viewMode === "tags"}
 			<TagBrowserView
-				{tagScopes}
-				{tagAliases}
-				{tagError}
-				bind:selectedTag
-				bind:tagRenameFrom
-				bind:tagRenameTo
-				bind:tagMergeSources
-				bind:tagMergeTarget
+				tagScopes={tagController.scopes}
+				tagAliases={tagController.aliases}
+				tagError={tagController.error}
+				bind:selectedTag={tagController.selectedTag}
+				bind:tagRenameFrom={tagController.renameFrom}
+				bind:tagRenameTo={tagController.renameTo}
+				bind:tagMergeSources={tagController.mergeSources}
+				bind:tagMergeTarget={tagController.mergeTarget}
 				workIds={new Set(itemByWorkId.keys())}
 				{titleForWorkId}
 				onOpenTagNode={openTagNode}
-				onRenameTag={renameTag}
-				onMergeTags={mergeTags}
+				onRenameTag={tagController.rename}
+				onMergeTags={tagController.merge}
 			/>
 		{:else if viewMode === "trash"}
 			<TrashView entries={trashEntries} onRestore={restoreTrash} onPurge={purgeTrash} />
