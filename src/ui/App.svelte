@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { formatCreatedAt, formatRecentEditAt, localDateValue, addDays, dateRangeFromInputs } from "./calendar_display.ts";
+	import { DateProjectionController } from "./date_projection_controller.svelte.ts";
 	import { onMount, tick, untrack } from "svelte";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
@@ -171,10 +172,11 @@
 	$effect(() => {
 		void api.recordViewChange(viewMode).catch(() => console.warn("Could not record view change."));
 	});
-	let dateStart = $state(localDateValue(new Date()));
-	let dateEnd = $state(localDateValue(addDays(new Date(), 1)));
-	let dateProjection = $state<DateProjection | null>(null);
-	let dateProjectionLoading = $state(false);
+	const dateProjectionController = new DateProjectionController({
+		projectDates: (range) => api.projectDates(range),
+		onError: (cause) => error = errorMessage(cause),
+		onOpenView: (view) => viewMode = view,
+	});
 	let selectedId = $state<string | null>(null);
 	const navigationController = createNavigationController({
 		recordSearch: (outcome, durationMs) => {
@@ -1162,41 +1164,10 @@
 	const createDuplicateCandidateLink = workController.createDuplicateCandidateLink;
 	const requestDuplicateMerge = workController.requestDuplicateMerge;
 	const linkUnplaced = workController.linkUnplaced;
-	async function openToday(): Promise<void> {
-		const now = new Date();
-		dateStart = localDateValue(now);
-		dateEnd = localDateValue(addDays(now, 1));
-		await loadDateProjection();
-	}
-
-	async function loadDateProjection(): Promise<void> {
-		try {
-			dateProjectionLoading = true;
-			dateProjection = await api.projectDates(dateRangeFromInputs(dateStart, dateEnd));
-			viewMode = "today";
-		} catch (cause) {
-			error = errorMessage(cause);
-		} finally {
-			dateProjectionLoading = false;
-		}
-	}
-
-	async function moveDateRange(days: number): Promise<void> {
-		const start = new Date(`${dateStart}T00:00:00`);
-		const end = new Date(`${dateEnd}T00:00:00`);
-		dateStart = localDateValue(addDays(start, days));
-		dateEnd = localDateValue(addDays(end, days));
-		await loadDateProjection();
-	}
-
-	async function showWeek(): Promise<void> {
-		const today = new Date();
-		const offset = (today.getDay() + 6) % 7;
-		const monday = addDays(today, -offset);
-		dateStart = localDateValue(monday);
-		dateEnd = localDateValue(addDays(monday, 7));
-		await loadDateProjection();
-	}
+	const openToday = dateProjectionController.openToday;
+	const loadDateProjection = dateProjectionController.load;
+	const moveDateRange = dateProjectionController.moveRange;
+	const showWeek = dateProjectionController.showWeek;
 
 	async function openDateEntry(entry: DateProjection["created"][number]): Promise<void> {
 		const occurrence = entry.representative;
@@ -2136,11 +2107,11 @@
 			</section>
 		{:else if viewMode === "today"}
 			<TodayView
-				bind:dateStart
-				bind:dateEnd
+				bind:dateStart={dateProjectionController.start}
+				bind:dateEnd={dateProjectionController.end}
 				bind:outlineFilter
-				projection={dateProjection}
-				loading={dateProjectionLoading}
+				projection={dateProjectionController.projection}
+				loading={dateProjectionController.loading}
 				onMoveDateRange={moveDateRange}
 				onShowWeek={showWeek}
 				onLoad={loadDateProjection}
