@@ -342,21 +342,28 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 		const toId = state.direction === "forward" ? candidate.workId : item.workId;
 		const request = ++inlineLinkCompletionRequest;
 		const selectedId = ports.getSelectedId();
+		const triggerText = textarea.value.slice(state.range.start, state.range.end);
 		try {
 			await ports.api.createLink({ fromId, toId, type, origin: "human", status: "asserted" });
-			if (request !== inlineLinkCompletionRequest || ports.getSelectedId() !== selectedId) return;
-			cancelInlineLinkCompletion();
-			textarea.focus();
-			textarea.setRangeText("", state.range.start, state.range.end, "end");
-			textarea.dispatchEvent(
-				new InputEvent("input", {
-					bubbles: true,
-					inputType: "insertReplacementText",
-					data: "",
-				}),
-			);
+			const current = request === inlineLinkCompletionRequest && ports.getSelectedId() === selectedId;
+			if (current) cancelInlineLinkCompletion();
+			const trigger = findInlineLinkTrigger(textarea.value, state.range.end, state.range.end);
+			if (
+				trigger?.range.start === state.range.start && trigger.range.end === state.range.end &&
+				textarea.value.slice(state.range.start, state.range.end) === triggerText
+			) {
+				if (current) textarea.focus();
+				textarea.setRangeText("", state.range.start, state.range.end, current ? "end" : "preserve");
+				textarea.dispatchEvent(
+					new InputEvent("input", {
+						bubbles: true,
+						inputType: "insertReplacementText",
+						data: "",
+					}),
+				);
+			}
 			await ports.reload();
-			if (ports.getSelectedId() === selectedId) {
+			if (current && ports.getSelectedId() === selectedId) {
 				ports.requestFocus(item.id, state.range.start);
 			}
 		} catch (cause) {
