@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import type { StartupSnapshotCachePayload } from "../src/services/startup_snapshot_cache.ts";
+import type { StartupSnapshotCache } from "../src/services/startup_snapshot_cache.ts";
 import type { StartupStatus } from "../src/shared/bindings.ts";
 import { StartupController } from "../src/ui/startup_controller.svelte.ts";
 
 describe("StartupController", () => {
-	function createMockCache(): StartupSnapshotCachePayload {
+	function createMockCache(): StartupSnapshotCache {
 		return {
 			version: 1,
 			savedAt: "now",
-			location: { paneId: "pane-1", selectedOccurrenceId: "item-1" },
+			location: { selectedOccurrenceId: "item-1", hoistOccurrenceId: null },
 			snapshot: {
 				items: [],
 				works: [],

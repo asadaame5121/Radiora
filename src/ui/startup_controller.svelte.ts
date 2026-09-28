@@ -1,19 +1,21 @@
-import type { StartupSnapshotCachePayload } from "../services/startup_snapshot_cache.ts";
+import type { StartupSnapshotCache } from "../services/startup_snapshot_cache.ts";
 import type { StartupStatus } from "../shared/bindings.ts";
 
 export interface StartupApi {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
-	loadStartupSnapshotCache(): Promise<StartupSnapshotCachePayload | null>;
+	loadStartupSnapshotCache(): Promise<StartupSnapshotCache | null>;
 }
 
 export interface StartupControllerOptions {
 	api: StartupApi;
 	errorMessage: (cause: unknown) => string;
-	onCacheRestored?: (cache: StartupSnapshotCachePayload) => void;
+	onCacheRestored?: (cache: StartupSnapshotCache) => void;
 	onReady?: () => Promise<void>;
 	pollIntervalMs?: number;
 }
+
+const DEFAULT_STARTUP_POLL_INTERVAL_MS = 250;
 
 export class StartupController {
 	status = $state<StartupStatus>({
@@ -47,7 +49,7 @@ export class StartupController {
 	};
 
 	monitor = async (): Promise<void> => {
-		const pollInterval = this.options.pollIntervalMs ?? 250;
+		const pollInterval = this.options.pollIntervalMs ?? DEFAULT_STARTUP_POLL_INTERVAL_MS;
 		while (!this.#cancelled) {
 			try {
 				this.status = await this.options.api.getStartupStatus();
