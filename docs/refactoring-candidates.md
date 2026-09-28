@@ -92,12 +92,15 @@ A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ
 - [x] Memory の純粋操作を `memory_store_operations.ts` へ分離し、service の依存を feature port
       へ縮小。
 - [x] D1〜D4: search 契約と ranking、emergence 計算と persistence を分離。
-- [x] A2: `OutlineOperationsController.svelte.ts` へツリー構造変異および keydown 処理を集約。
+- [x] A2: `OutlineOperationsController.svelte.ts`
+      へツリー構造変異（インデント・行分割・空行削除等）を集約（キーボードイベント処理自体は App
+      側に残置）。
 - [x] A3: `InspectorView.svelte` と Overview/Relation/History/Query の View を分離。
-- [x] A1c: `DateProjectionController`、`TagController` の抽出と alias 状態の `RuleQueryController`
-      統合。
-- [x] A4: `StartupController.svelte.ts` へ起動監視、キャッシュ復元、再試行処理を集約。
-- [x] A5: `App.svelte` の未使用インポート・変数削除と副作用境界（$effect）の明文化を完了。
+- [x] A1c: `DateProjectionController`、`TagController`、`SearchAliasController` の抽出と状態分離。
+- [x] A4: `StartupController.svelte.ts`
+      へ起動監視、キャッシュ復元、再試行処理を集約（進行中中断・onReady失敗分離を含む）。
+- [x] A5: `App.svelte` の未使用インポート・変数削除、副作用境界（$effect）の明文化、および
+      `recentEditedItems` ランキング計算の `recent_edited_items.ts` 抽出を完了。
 - [x] T4 の Sidebar/Inspector/Filter/Displayed 描画部分を分離。Tree 全体の状態整理は T3 に残す。
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
