@@ -197,6 +197,7 @@
 			loading = false;
 		},
 		onReady: () => loadStartupData(),
+		onReadyError: (cause) => error = errorMessage(cause),
 	});
 	const startup = $derived(startupController.status);
 	const startupCacheActive = $derived(startupController.cacheActive);
