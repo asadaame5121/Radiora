@@ -1093,22 +1093,7 @@
 				return;
 			}
 			event.preventDefault();
-			try {
-				await editorController.flushAutosave(row.item.workId);
-			} catch (cause) {
-				error = errorMessage(cause);
-				return;
-			}
-			const cursor = textarea.selectionStart;
-			const left = row.item.text.slice(0, cursor);
-			const right = row.item.text.slice(textarea.selectionEnd);
-			await api.updateItemText(row.item.id, left);
-			const created = await api.createItem({
-				text: right,
-				parentId: row.item.parentId,
-				afterId: row.item.id,
-			});
-			await load(created.id);
+			await outlineOperations.splitRow(row.item, textarea.selectionStart, textarea.selectionEnd);
 			return;
 		}
 		if (event.key === "Tab") {
@@ -1118,19 +1103,8 @@
 			return;
 		}
 		if (event.key === "Backspace" && !row.item.text.trim()) {
-			const siblings = siblingsOf(row.item).filter((item) => item.orderKey < row.item.orderKey);
-			const previous = siblings.at(-1);
-			if (previous) {
-				event.preventDefault();
-				try {
-					await editorController.flushAutosave(row.item.workId);
-				} catch (cause) {
-					error = errorMessage(cause);
-					return;
-				}
-				await api.deleteItem(row.item.id);
-				await load(previous.id);
-			}
+			const deleted = await outlineOperations.deleteEmptyRow(row.item);
+			if (deleted) event.preventDefault();
 			return;
 		}
 		if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
@@ -1328,7 +1302,6 @@
 	const indent = outlineOperations.indent;
 	const outdent = outlineOperations.outdent;
 	const moveSibling = outlineOperations.moveSibling;
-	const siblingsOf = outlineOperations.siblingsOf;
 	const toggle = (row: VisibleRow): Promise<void> => outlineOperations.toggle(row.item);
 
 	async function remove(id: string): Promise<void> {
