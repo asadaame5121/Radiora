@@ -51,20 +51,24 @@ export class StartupController {
 	monitor = async (): Promise<void> => {
 		const pollInterval = this.options.pollIntervalMs ?? DEFAULT_STARTUP_POLL_INTERVAL_MS;
 		while (!this.#cancelled) {
+			let nextStatus: StartupStatus;
 			try {
-				this.status = await this.options.api.getStartupStatus();
-				if (this.status.phase === "ready") {
-					if (this.options.onReady) {
-						await this.options.onReady();
-					}
-					return;
-				}
+				nextStatus = await this.options.api.getStartupStatus();
 			} catch (cause) {
+				if (this.#cancelled) return;
 				this.status = {
 					phase: "failed",
 					message: "起動状態を取得できませんでした。",
 					detail: this.options.errorMessage(cause),
 				};
+				return;
+			}
+			if (this.#cancelled) return;
+			this.status = nextStatus;
+			if (this.status.phase === "ready") {
+				if (this.options.onReady) {
+					await this.options.onReady();
+				}
 				return;
 			}
 			await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -79,15 +83,18 @@ export class StartupController {
 		};
 		try {
 			this.status = await this.options.api.retryStartup();
-			if (this.status.phase === "ready" && this.options.onReady) {
-				await this.options.onReady();
-			}
 		} catch (cause) {
+			if (this.#cancelled) return;
 			this.status = {
 				phase: "failed",
 				message: "再試行に失敗しました。",
 				detail: this.options.errorMessage(cause),
 			};
+			return;
+		}
+		if (this.#cancelled) return;
+		if (this.status.phase === "ready" && this.options.onReady) {
+			await this.options.onReady();
 		}
 	};
 

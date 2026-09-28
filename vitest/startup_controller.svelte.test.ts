@@ -151,4 +151,50 @@ describe("StartupController", () => {
 		await controller.monitor();
 		expect(getStartupStatus).not.toHaveBeenCalled();
 	});
+
+	it("does not overwrite status to failed if onReady throws after retryStartup succeeds", async () => {
+		const readyStatus: StartupStatus = { phase: "ready" };
+		const retryStartup = vi.fn().mockResolvedValue(readyStatus);
+		const onReady = vi.fn().mockRejectedValue(new Error("onReady failed"));
+		const controller = new StartupController({
+			api: {
+				getStartupStatus: vi.fn(),
+				retryStartup,
+				loadStartupSnapshotCache: vi.fn(),
+			},
+			errorMessage: String,
+			onReady,
+		});
+
+		await expect(controller.retry()).rejects.toThrow("onReady failed");
+		expect(controller.status.phase).toBe("ready");
+	});
+
+	it("aborts monitor if disposed during in-flight getStartupStatus", async () => {
+		let resolveStatus!: (value: StartupStatus) => void;
+		const statusPromise = new Promise<StartupStatus>((resolve) => {
+			resolveStatus = resolve;
+		});
+		const getStartupStatus = vi.fn().mockReturnValue(statusPromise);
+		const onReady = vi.fn();
+		const controller = new StartupController({
+			api: {
+				getStartupStatus,
+				retryStartup: vi.fn(),
+				loadStartupSnapshotCache: vi.fn(),
+			},
+			errorMessage: String,
+			onReady,
+			pollIntervalMs: 5,
+		});
+
+		const monitorPromise = controller.monitor();
+		// dispose while getStartupStatus is in-flight
+		controller.dispose();
+		resolveStatus({ phase: "ready" });
+		await monitorPromise;
+
+		expect(controller.status.phase).toBe("starting");
+		expect(onReady).not.toHaveBeenCalled();
+	});
 });
