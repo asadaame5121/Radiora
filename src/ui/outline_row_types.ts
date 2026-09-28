@@ -1,6 +1,6 @@
 import type { LinkType, OutlineItem } from "../domain/models.ts";
 import type { VisibleRow } from "./outline_view_model.ts";
-import type { InlineLinkDirection } from "./editor_controller.svelte.ts";
+import type { InlineLinkDirection } from "./editor_completion_controller.svelte.ts";
 import type { InternalReferenceCompletion as InternalReferenceCompletionType } from "../services/internal_reference_service.ts";
 import type { RadioraInternalReferenceCandidate } from "../services/markdown_parser.ts";
 import type {

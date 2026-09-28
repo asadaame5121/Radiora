@@ -155,6 +155,7 @@
 				"src/storage/surreal_discovery_repository.ts",
 				"src/ui/App.svelte",
 				"src/ui/editor_controller.svelte.ts",
+				"src/ui/editor_completion_controller.svelte.ts",
 				"src/ui/tree_layout.ts"
 			],
 			"linter": {
@@ -192,6 +193,7 @@
 				"src/storage/surreal_store.ts",
 				"src/ui/App.svelte",
 				"src/ui/editor_controller.svelte.ts",
+				"src/ui/editor_completion_controller.svelte.ts",
 				"src/ui/navigation_controller.svelte.ts",
 				"src/ui/tree_layout.ts",
 				"src/ui/work_controller.svelte.ts"

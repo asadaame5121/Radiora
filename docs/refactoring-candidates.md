@@ -273,7 +273,7 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
 
 ## R1: Editor completion（再レビューから実施候補へ）
 
-- [ ] **R1: completion の state ownership を分離** — 難易度3
+- [x] **R1: completion の state ownership を分離** — 難易度3
   - 根拠: `editor_controller.svelte.ts:81–145` は保存状態、二種類の補完、backlink を同時に所有する。
     autosave/resume は既に coordinator に委譲済みなので、保存処理の再抽出は不要。
   - `docs/mutation-testing/editor-controller.md` の未到達箇所の指摘を起点に、completion の
