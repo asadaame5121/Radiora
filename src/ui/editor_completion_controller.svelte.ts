@@ -350,7 +350,8 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 		const triggerText = textarea.value.slice(state.range.start, state.range.end);
 		try {
 			await ports.api.createLink({ fromId, toId, type, origin: "human", status: "asserted" });
-			const current = request === inlineLinkCompletionRequest && ports.getSelectedId() === selectedId;
+			const current = request === inlineLinkCompletionRequest &&
+				ports.getSelectedId() === selectedId;
 			if (current) cancelInlineLinkCompletion();
 			const trigger = findInlineLinkTrigger(textarea.value, state.range.end, state.range.end);
 			if (
