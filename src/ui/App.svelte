@@ -3,6 +3,7 @@
 	import { DateProjectionController } from "./date_projection_controller.svelte.ts";
 	import { TagController } from "./tag_controller.svelte.ts";
 	import { OutlineOperationsController } from "./outline_operations_controller.svelte.ts";
+	import { StartupController } from "./startup_controller.svelte.ts";
 	import { onMount, tick, untrack } from "svelte";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
@@ -71,7 +72,7 @@
 		SearchResult,
 		TransientProjectionNode,
 	} from "../domain/models";
-	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
+	import type { RadioraBindings } from "../shared/bindings";
 	import type {
 		GlobalLineageProjection,
 	} from "../services/branch_service";
@@ -157,9 +158,6 @@
 	const vocabulary = useUiVocabulary();
 	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
 	let loading = $state(true);
-	let startupCacheActive = $state(false);
-	let startupDataLoaded = false;
-	let startup = $state<StartupStatus>({ phase: "starting", message: "Radioraを起動しています…" });
 	let error = $state("");
 	let outlineFilter = $state<OutlineFilter>({ ...EMPTY_OUTLINE_FILTER });
 	let longForm = $state({
@@ -189,6 +187,21 @@
 			reportError: (cause) => error = errorMessage(cause),
 		},
 	});
+	const startupController = new StartupController({
+		api,
+		errorMessage,
+		onCacheRestored: (cache) => {
+			snapshot = cache.snapshot;
+			selectedId = navigationController.resetBrowsing("pane-1", cache.location)
+				.selectedOccurrenceId;
+			loading = false;
+		},
+		onReady: () => loadStartupData(),
+		onReadyError: (cause) => error = errorMessage(cause),
+	});
+	const startup = $derived(startupController.status);
+	const startupCacheActive = $derived(startupController.cacheActive);
+	const retryStartup = startupController.retry;
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
 	let asideMode = $state<InspectorAsideMode>("overview");
@@ -546,21 +559,6 @@
 
 	onMount(() => {
 		const cleanupTheme = themeController.init();
-		let cancelled = false;
-		async function restoreStartupSnapshotCache(): Promise<void> {
-			try {
-				const cache = await api.loadStartupSnapshotCache();
-				if (cancelled || startupDataLoaded || !cache) return;
-				snapshot = cache.snapshot;
-				selectedId = navigationController.resetBrowsing("pane-1", cache.location)
-					.selectedOccurrenceId;
-				loading = false;
-				startupCacheActive = true;
-			// biome-ignore lint/plugin/noSwallowedRejection: The startup cache is optional and normal startup remains available.
-			} catch {
-				// The startup cache is optional; continue with the normal startup screen.
-			}
-		}
 		const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
 			persistStartupSnapshotCache();
 			if (!editorController.hasUnsavedChanges()) return;
@@ -632,25 +630,10 @@
 		// Capture before editor libraries so Ctrl+K cannot be consumed as a
 		// Markdown link-formatting shortcut while the textarea has focus.
 		window.addEventListener("keydown", handleGlobalShortcut, true);
-		async function monitorStartup(): Promise<void> {
-			while (!cancelled) {
-				try {
-					startup = await api.getStartupStatus();
-					if (startup.phase === "ready") {
-						await loadStartupData();
-						return;
-					}
-				} catch (cause) {
-					startup = { phase: "failed", message: "起動状態を取得できませんでした。", detail: errorMessage(cause) };
-					return;
-				}
-				await new Promise((resolve) => setTimeout(resolve, 250));
-			}
-		}
-		void restoreStartupSnapshotCache();
-		void monitorStartup();
+		void startupController.restoreCache();
+		void startupController.monitor();
 		return () => {
-			cancelled = true;
+			startupController.dispose();
 			cleanupTheme();
 			persistStartupSnapshotCache();
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
@@ -667,12 +650,6 @@
 		};
 	});
 
-	async function retryStartup(): Promise<void> {
-		startup = { phase: "starting", message: "再試行しています…", logPath: startup.logPath };
-		startup = await api.retryStartup();
-		if (startup.phase === "ready") await loadStartupData();
-	}
-
 	async function reloadCachedStartupData(): Promise<void> {
 		await loadStartupData();
 	}
@@ -687,8 +664,7 @@
 		treeFilter = reconciled;
 		const loaded = await load();
 		if (!loaded) return;
-		startupDataLoaded = true;
-		startupCacheActive = false;
+		startupController.markDataLoaded();
 		persistStartupSnapshotCache();
 		await searchAliases.load();
 		await loadTags();
