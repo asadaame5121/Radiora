@@ -10,7 +10,6 @@ export interface TagApi {
 export interface TagControllerOptions {
 	api: TagApi;
 	errorMessage: (cause: unknown) => string;
-	loadUnplacedWorks?: () => Promise<unknown>;
 }
 
 export function splitTagInput(value: string): string[] {
@@ -35,7 +34,6 @@ export class TagController {
 			const [scopes, aliases] = await Promise.all([
 				this.options.api.listScopedTags(),
 				this.options.api.listTagAliases(),
-				this.options.loadUnplacedWorks ? this.options.loadUnplacedWorks() : Promise.resolve([]),
 			]);
 			this.scopes = scopes;
 			this.aliases = aliases;

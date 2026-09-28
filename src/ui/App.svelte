@@ -49,6 +49,7 @@
 	import { createEditorController } from "./editor_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { RuleQueryController } from "./rule_query_controller.svelte.ts";
+	import { SearchAliasController } from "./search_alias_controller.svelte.ts";
 	import { HistoryController } from "./history_controller.svelte.ts";
 	import { ComparisonController } from "./comparison_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
@@ -66,10 +67,7 @@
 		OutlineSnapshot,
 		NavigationTarget,
 		RelationTypeDirection,
-		SearchAlias,
 		SearchResult,
-		ScopedTagSet,
-		TagAlias,
 		TransientProjectionNode,
 	} from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
@@ -200,10 +198,10 @@
 			renameTag: (from, to) => api.renameTag(from, to),
 			mergeTags: (sources, target) => api.mergeTags(sources, target),
 		},
-		loadUnplacedWorks: () => workController.loadUnplacedWorks(),
 		errorMessage,
 	});
 	const ruleQuery = new RuleQueryController(api, errorMessage);
+	const searchAliases = new SearchAliasController(api, errorMessage);
 	let globalLineage = $state<GlobalLineageProjection | null>(null);
 	const confirmationController = createConfirmationController();
 	let confirmationDialog: ConfirmationDialog;
@@ -683,8 +681,8 @@
 		startupDataLoaded = true;
 		startupCacheActive = false;
 		persistStartupSnapshotCache();
-		await ruleQuery.loadAliases();
-		await tagController.load();
+		await searchAliases.load();
+		await loadTags();
 		await ruleQuery.loadSavedQueries();
 	}
 
@@ -1492,8 +1490,22 @@
 		await load();
 	}
 	async function openTags(): Promise<void> {
-		await tagController.load();
+		await loadTags();
 		viewMode = "tags";
+	}
+
+	async function loadTags(): Promise<void> {
+		await Promise.all([tagController.load(), workController.loadUnplacedWorks()]);
+	}
+
+	async function renameTag(): Promise<void> {
+		await tagController.rename();
+		if (!tagController.error) await workController.loadUnplacedWorks();
+	}
+
+	async function mergeTags(): Promise<void> {
+		await tagController.merge();
+		if (!tagController.error) await workController.loadUnplacedWorks();
 	}
 
 	function openTagNode(workId: string): void {
@@ -2099,8 +2111,8 @@
 				workIds={new Set(itemByWorkId.keys())}
 				{titleForWorkId}
 				onOpenTagNode={openTagNode}
-				onRenameTag={tagController.rename}
-				onMergeTags={tagController.merge}
+				onRenameTag={renameTag}
+				onMergeTags={mergeTags}
 			/>
 		{:else if viewMode === "trash"}
 			<TrashView entries={trashEntries} onRestore={restoreTrash} onPurge={purgeTrash} />
@@ -2265,19 +2277,20 @@
 					sparseOutlineNodes: ruleQuery.nodes,
 					sparseOutlineQueryName: ruleQuery.projectionName,
 					showSparseOutline: ruleQuery.showProjection,
-					aliases: ruleQuery.aliases,
-					aliasCanonical: ruleQuery.aliasCanonical,
-					aliasVariants: ruleQuery.aliasVariants,
+					aliases: searchAliases.aliases,
+					aliasCanonical: searchAliases.canonical,
+					aliasVariants: searchAliases.variants,
+					aliasError: searchAliases.error,
 					onRuleSourceChange: ruleQuery.setSource,
 					onRuleNameChange: ruleQuery.setName,
-					onAliasCanonicalChange: ruleQuery.setAliasCanonical,
-					onAliasVariantsChange: ruleQuery.setAliasVariants,
+					onAliasCanonicalChange: searchAliases.setCanonical,
+					onAliasVariantsChange: searchAliases.setVariants,
 					onExecuteRule: executeRule,
 					onSaveRule: saveRule,
 					onLoadSavedQuery: ruleQuery.loadProjection,
 					onRemoveRule: ruleQuery.remove,
-					onSaveAlias: ruleQuery.saveAlias,
-					onRemoveAlias: ruleQuery.removeAlias,
+					onSaveAlias: searchAliases.save,
+					onRemoveAlias: searchAliases.remove,
 					onSelectSparseNode: handleSparseOutlineSelect,
 					onToggleSparseOutline: ruleQuery.toggleProjection,
 				}}

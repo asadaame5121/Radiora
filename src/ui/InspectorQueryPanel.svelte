@@ -15,6 +15,7 @@
 		ruleResult: RuleQueryResult | null;
 		ruleName: string;
 		ruleError: string;
+		aliasError: string;
 		savedRuleQueries: readonly SavedRuleQuery[];
 		sparseOutlineNodes: TransientProjectionNode[];
 		sparseOutlineQueryName: string;
@@ -110,6 +111,7 @@
 		{/each}
 	</div>
 	<h3>検索別名</h3>
+	{#if query.aliasError}<p class="query-error">{query.aliasError}</p>{/if}
 	<input
 		placeholder="基準語"
 		value={query.aliasCanonical}

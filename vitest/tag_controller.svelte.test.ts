@@ -30,7 +30,6 @@ describe("TagController", () => {
 		listTagAliases?: () => Promise<TagAlias[]>;
 		renameTag?: (from: string, to: string) => Promise<void>;
 		mergeTags?: (sources: string[], target: string) => Promise<void>;
-		loadUnplacedWorks?: () => Promise<unknown>;
 	}) {
 		const api = {
 			listScopedTags: overrides?.listScopedTags ?? vi.fn().mockResolvedValue(mockScopes),
@@ -38,13 +37,11 @@ describe("TagController", () => {
 			renameTag: overrides?.renameTag ?? vi.fn().mockResolvedValue(undefined),
 			mergeTags: overrides?.mergeTags ?? vi.fn().mockResolvedValue(undefined),
 		};
-		const loadUnplacedWorks = overrides?.loadUnplacedWorks ?? vi.fn().mockResolvedValue([]);
 		const controller = new TagController({
 			api,
-			loadUnplacedWorks,
 			errorMessage: (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)),
 		});
-		return { controller, api, loadUnplacedWorks };
+		return { controller, api };
 	}
 
 	it("initializes with empty states", () => {
@@ -59,13 +56,12 @@ describe("TagController", () => {
 		expect(controller.error).toBe("");
 	});
 
-	it("loads scopes, aliases, and unplaced works", async () => {
-		const { controller, api, loadUnplacedWorks } = createController();
+	it("loads scopes and aliases", async () => {
+		const { controller, api } = createController();
 		await controller.load();
 
 		expect(api.listScopedTags).toHaveBeenCalledTimes(1);
 		expect(api.listTagAliases).toHaveBeenCalledTimes(1);
-		expect(loadUnplacedWorks).toHaveBeenCalledTimes(1);
 		expect(controller.scopes).toEqual(mockScopes);
 		expect(controller.aliases).toEqual(mockAliases);
 		expect(controller.error).toBe("");
