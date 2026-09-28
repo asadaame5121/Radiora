@@ -1495,17 +1495,33 @@
 	}
 
 	async function loadTags(): Promise<void> {
-		await Promise.all([tagController.load(), workController.loadUnplacedWorks()]);
+		try {
+			await Promise.all([tagController.load(), workController.loadUnplacedWorks()]);
+		} catch (cause) {
+			tagController.error = errorMessage(cause);
+		}
 	}
 
 	async function renameTag(): Promise<void> {
 		await tagController.rename();
-		if (!tagController.error) await workController.loadUnplacedWorks();
+		if (!tagController.error) {
+			try {
+				await workController.loadUnplacedWorks();
+			} catch (cause) {
+				tagController.error = errorMessage(cause);
+			}
+		}
 	}
 
 	async function mergeTags(): Promise<void> {
 		await tagController.merge();
-		if (!tagController.error) await workController.loadUnplacedWorks();
+		if (!tagController.error) {
+			try {
+				await workController.loadUnplacedWorks();
+			} catch (cause) {
+				tagController.error = errorMessage(cause);
+			}
+		}
 	}
 
 	function openTagNode(workId: string): void {
