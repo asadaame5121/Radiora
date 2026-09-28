@@ -193,9 +193,6 @@
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
 	let asideMode = $state<InspectorAsideMode>("overview");
-	let aliases = $state<SearchAlias[]>([]);
-	let aliasCanonical = $state("");
-	let aliasVariants = $state("");
 	const tagController = new TagController({
 		api: {
 			listScopedTags: () => api.listScopedTags(),
@@ -686,7 +683,7 @@
 		startupDataLoaded = true;
 		startupCacheActive = false;
 		persistStartupSnapshotCache();
-		aliases = await api.listSearchAliases();
+		await ruleQuery.loadAliases();
 		await tagController.load();
 		await ruleQuery.loadSavedQueries();
 	}
@@ -1441,25 +1438,6 @@
 		action: "accept" | "dismiss" | "pin",
 	): Promise<void> {
 		await emergenceController.resolve(suggestion, action);
-	}
-
-	async function saveAlias(): Promise<void> {
-		try {
-			await api.saveSearchAlias({
-				canonical: aliasCanonical,
-				variants: aliasVariants.split(/[,、\n]/).map((value) => value.trim()).filter(Boolean),
-			});
-			aliasCanonical = "";
-			aliasVariants = "";
-			aliases = await api.listSearchAliases();
-		} catch (cause) {
-			ruleQuery.setError(errorMessage(cause));
-		}
-	}
-
-	async function removeAlias(id: string): Promise<void> {
-		await api.deleteSearchAlias(id);
-		aliases = await api.listSearchAliases();
 	}
 
 	async function handleSparseOutlineSelect(node: TransientProjectionNode): Promise<void> {
@@ -2287,19 +2265,19 @@
 					sparseOutlineNodes: ruleQuery.nodes,
 					sparseOutlineQueryName: ruleQuery.projectionName,
 					showSparseOutline: ruleQuery.showProjection,
-					aliases,
-					aliasCanonical,
-					aliasVariants,
+					aliases: ruleQuery.aliases,
+					aliasCanonical: ruleQuery.aliasCanonical,
+					aliasVariants: ruleQuery.aliasVariants,
 					onRuleSourceChange: ruleQuery.setSource,
 					onRuleNameChange: ruleQuery.setName,
-					onAliasCanonicalChange: (value) => aliasCanonical = value,
-					onAliasVariantsChange: (value) => aliasVariants = value,
+					onAliasCanonicalChange: ruleQuery.setAliasCanonical,
+					onAliasVariantsChange: ruleQuery.setAliasVariants,
 					onExecuteRule: executeRule,
 					onSaveRule: saveRule,
 					onLoadSavedQuery: ruleQuery.loadProjection,
 					onRemoveRule: ruleQuery.remove,
-					onSaveAlias: saveAlias,
-					onRemoveAlias: removeAlias,
+					onSaveAlias: ruleQuery.saveAlias,
+					onRemoveAlias: ruleQuery.removeAlias,
 					onSelectSparseNode: handleSparseOutlineSelect,
 					onToggleSparseOutline: ruleQuery.toggleProjection,
 				}}
