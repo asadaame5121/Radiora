@@ -108,8 +108,16 @@ export class OutlineOperationsController {
 		return created;
 	};
 
-	deleteEmptyRow = async (item: OutlineItem): Promise<boolean> => {
+	canDeleteEmptyRow = (item: OutlineItem): boolean => {
 		if (item.text.trim()) return false;
+		const siblings = this.siblingsOf(item).filter((candidate) =>
+			candidate.orderKey < item.orderKey
+		);
+		return siblings.length > 0;
+	};
+
+	deleteEmptyRow = async (item: OutlineItem): Promise<boolean> => {
+		if (!this.canDeleteEmptyRow(item)) return false;
 		const siblings = this.siblingsOf(item).filter((candidate) =>
 			candidate.orderKey < item.orderKey
 		);

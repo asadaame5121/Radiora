@@ -1102,9 +1102,9 @@
 			else await indent(row.item);
 			return;
 		}
-		if (event.key === "Backspace" && !row.item.text.trim()) {
-			const deleted = await outlineOperations.deleteEmptyRow(row.item);
-			if (deleted) event.preventDefault();
+		if (event.key === "Backspace" && outlineOperations.canDeleteEmptyRow(row.item)) {
+			event.preventDefault();
+			await outlineOperations.deleteEmptyRow(row.item);
 			return;
 		}
 		if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {

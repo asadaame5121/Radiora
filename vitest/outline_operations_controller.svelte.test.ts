@@ -237,4 +237,30 @@ describe("OutlineOperationsController - structure operations", () => {
 		expect(deleteItem).toHaveBeenCalledWith("curr");
 		expect(reload).toHaveBeenCalledWith("prev");
 	});
+
+	it("checks whether an empty row can be deleted based on content and previous sibling", () => {
+		const first = createItem("first", null, 1, "");
+		const prev = createItem("prev", null, 5, "Previous");
+		const current = createItem("curr", null, 10, "");
+		const nonEmpty = createItem("nonEmpty", null, 15, "Non Empty");
+
+		const controller = new OutlineOperationsController({
+			api: {
+				moveItem: vi.fn(),
+				setCollapsed: vi.fn(),
+				updateItemText: vi.fn(),
+				createItem: vi.fn(),
+				deleteItem: vi.fn(),
+			},
+			getItems: () => [first, prev, current, nonEmpty],
+			getItemById: vi.fn(),
+			reload: vi.fn(),
+			flushAutosave: vi.fn(),
+			reportError: vi.fn(),
+		});
+
+		expect(controller.canDeleteEmptyRow(current)).toBe(true);
+		expect(controller.canDeleteEmptyRow(nonEmpty)).toBe(false);
+		expect(controller.canDeleteEmptyRow(first)).toBe(false);
+	});
 });
