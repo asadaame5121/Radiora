@@ -163,6 +163,8 @@
 		preview: false,
 	});
 	let viewMode = $state<ViewMode>("outline");
+	// Side-effect boundary: record viewMode changes asynchronously for telemetry/analysis.
+	// Dependency: viewMode. Cleanup: not needed (best-effort async logging).
 	$effect(() => {
 		void api.recordViewChange(viewMode).catch(() => console.warn("Could not record view change."));
 	});
@@ -268,8 +270,10 @@
 		reload: load,
 		select: selectOccurrence,
 	});
+	// Side-effect boundary: reconcile snapshot refreshes and selection paths that bypass selectOccurrence.
+	// Dependency: selectedItem (derived from snapshot and selectedId).
+	// untrack: prevents cascading updates during selection reassignment. Cleanup: not needed.
 	$effect(() => {
-		// Reconcile snapshot refreshes and selection paths that bypass selectOccurrence.
 		const next = selectedItem;
 		untrack(() => {
 			if (!historicalTimeController.select(next)) {
@@ -527,18 +531,25 @@
 	}));
 	const helpEditorShortcuts = EDITOR_BINDINGS.map(({ label, keys }) => ({ label, shortcut: keys }));
 
+	// Side-effect boundary: load emergence suggestions on selection changes once startup is ready.
+	// Dependency: selectedId, startup.phase. Cleanup: managed inside loadEmergence request lifecycle.
 	$effect(() => {
 		const id = selectedId;
 		if (id && startup.phase === "ready") void loadEmergence(id);
 		else emergenceController.clear();
 	});
 
+	// Side-effect boundary: reset view-specific outline filter when switching away from today/unplaced views.
+	// Dependency: viewMode. Cleanup: not needed (synchronous state reset).
 	$effect(() => {
 		if (viewMode !== "today" && viewMode !== "unplaced") {
 			outlineFilter = { ...EMPTY_OUTLINE_FILTER };
 		}
 	});
 
+	// Side-effect boundary: sync work-level history, recovery snapshots, and reference backlinks with selection.
+	// Dependency: selectedItem?.workId, selectedBranchId, startup.phase.
+	// Cleanup: handled by controllers (history.clear, editorController.clearBacklinks).
 	$effect(() => {
 		const workId = selectedItem?.workId;
 		if (workId && startup.phase === "ready") {
@@ -997,6 +1008,9 @@
 		].join(":");
 	}
 
+	// Side-effect boundary: refresh global lineage tree when transient selection or filter changes the projection key.
+	// Dependency: viewMode, globalLineageFilterKey() (tracks activeGlobalLineageFilter and selectedItem?.workId).
+	// Cleanup: globalLineageRequest token safely drops in-flight stale responses.
 	$effect(() => {
 		// The selected Work is a transient exception to the isolation filter, so
 		// any selection change must refresh the projection while the tree view
