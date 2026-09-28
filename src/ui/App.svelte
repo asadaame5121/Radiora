@@ -40,6 +40,7 @@
 		type LicenseEntry,
 		type LicenseIndex,
 	} from "../services/license_index.ts";
+	import { rankRecentEditedItems } from "../services/recent_edited_items.ts";
 	import {
 		createConfirmationController,
 		type PendingConfirmation,
@@ -350,25 +351,12 @@
 			? titleForId(browsingLocation.hoistOccurrenceId)
 			: "ルート",
 	);
-	const recentEditedItems = $derived.by(() => {
-		const stashedIds = new Set(snapshot.stashItemIds);
-		const seenWorkIds = new Set<string>();
-		return [...snapshot.items]
-			.filter((item) => !stashedIds.has(item.id))
-			.sort((left, right) => {
-				const leftTime = Date.parse(left.updatedAt);
-				const rightTime = Date.parse(right.updatedAt);
-				return (Number.isNaN(rightTime) ? 0 : rightTime) -
-					(Number.isNaN(leftTime) ? 0 : leftTime) ||
-					left.id.localeCompare(right.id);
-			})
-			.filter((item) => {
-				if (seenWorkIds.has(item.workId)) return false;
-				seenWorkIds.add(item.workId);
-				return true;
-			})
-			.slice(0, 6);
-	});
+	const recentEditedItems = $derived.by(() =>
+		rankRecentEditedItems({
+			items: snapshot.items,
+			stashItemIds: snapshot.stashItemIds,
+		})
+	);
 	const primaryNavigationRecentItems = $derived<RecentNavigationItem[]>(
 		recentEditedItems.map((item) => ({
 			workId: item.workId,
@@ -1042,10 +1030,16 @@
 		// The selected Work is a transient exception to the isolation filter, so
 		// any selection change must refresh the projection while the tree view
 		// is open; otherwise a previously selected Work would stay visible.
-		if (viewMode !== "globalLineage") return;
+		if (viewMode !== "globalLineage") {
+			globalLineageRequest++;
+			return;
+		}
 		const key = globalLineageFilterKey();
 		if (key === lastLoadedGlobalLineageFilterKey) return;
 		void loadGlobalLineage();
+		return () => {
+			globalLineageRequest++;
+		};
 	});
 
 	function handleGlobalLineageFilterChange(next: GlobalLineageFilter): void {
