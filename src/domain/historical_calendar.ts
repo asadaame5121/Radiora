@@ -6,8 +6,23 @@ const DAYS_PER_YEAR = 365;
 const GREGORIAN_CYCLE = 400;
 const LEAP_CYCLE = 4;
 const LEAP_FEBRUARY_DAYS = 29;
-// biome-ignore lint/style/noMagicNumbers: Gregorian month lengths are calendar table data in January-to-December order.
-const MONTH_LENGTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const SHORT_MONTH_DAYS = 28;
+const NORMAL_MONTH_DAYS = 30;
+const LONG_MONTH_DAYS = 31;
+const MONTH_LENGTHS = [
+	LONG_MONTH_DAYS,
+	SHORT_MONTH_DAYS,
+	LONG_MONTH_DAYS,
+	NORMAL_MONTH_DAYS,
+	LONG_MONTH_DAYS,
+	NORMAL_MONTH_DAYS,
+	LONG_MONTH_DAYS,
+	LONG_MONTH_DAYS,
+	NORMAL_MONTH_DAYS,
+	LONG_MONTH_DAYS,
+	NORMAL_MONTH_DAYS,
+	LONG_MONTH_DAYS,
+];
 
 export function daysInHistoricalMonth(year: number, month: number): number {
 	const leap = year % LEAP_CYCLE === 0 &&

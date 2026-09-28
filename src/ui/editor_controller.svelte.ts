@@ -50,7 +50,6 @@ export function createEditorController(ports: EditorControllerPorts) {
 	let workingCopySaveStatuses = $state<WorkingCopySaveStatus[]>([]);
 	let internalReferenceBacklinks = $state<InternalReferenceBacklink[]>([]);
 	let internalReferenceNotice = $state("");
-
 	const autosave = new WorkingCopyAutosaveCoordinator({
 		save: (occurrenceId, text) => ports.api.updateItemText(occurrenceId, text),
 		onStatusChange: (statuses) => {
@@ -62,9 +61,8 @@ export function createEditorController(ports: EditorControllerPorts) {
 	});
 	const completion = createEditorCompletionController(ports);
 	const resumeAutosave = new ResumePositionAutosaveCoordinator({
-		save: async (occurrenceId, caretOffset) => {
-			await ports.api.saveResumePosition(occurrenceId, caretOffset);
-		},
+		save: (occurrenceId, caretOffset) =>
+			ports.api.saveResumePosition(occurrenceId, caretOffset).then(() => undefined),
 		onError: ports.reportError,
 	});
 
@@ -130,25 +128,24 @@ export function createEditorController(ports: EditorControllerPorts) {
 		await openInternalReference(`[ref](${destination})`, match[1] as "work" | "revision", match[2]);
 	}
 
+	let internalReferenceBacklinksRequest = 0;
+
 	async function loadInternalReferenceBacklinks(workId: string): Promise<void> {
+		const request = ++internalReferenceBacklinksRequest;
 		try {
-			internalReferenceBacklinks =
-				(await ports.api.listInternalReferenceBacklinks("work", workId)) ?? [];
+			const backlinks = (await ports.api.listInternalReferenceBacklinks("work", workId)) ?? [];
+			if (request === internalReferenceBacklinksRequest) internalReferenceBacklinks = backlinks;
 		} catch (cause) {
-			internalReferenceNotice = ports.errorMessage(cause);
+			if (request === internalReferenceBacklinksRequest) {
+				internalReferenceNotice = ports.errorMessage(cause);
+			}
 		}
 	}
 
 	async function openInternalReferenceBacklink(backlink: InternalReferenceBacklink): Promise<void> {
 		const source = backlink.source;
-		const markdown = source.scope === "work"
-			? `[source](radiora://work/${source.workId})`
-			: `[source](radiora://revision/${source.revisionId})`;
-		await openInternalReference(
-			markdown,
-			source.scope,
-			source.scope === "work" ? source.workId : source.revisionId,
-		);
+		const id = source.scope === "work" ? source.workId : source.revisionId;
+		await openInternalReference(`[source](radiora://${source.scope}/${id})`, source.scope, id);
 	}
 
 	return {
@@ -173,7 +170,10 @@ export function createEditorController(ports: EditorControllerPorts) {
 		get internalReferenceNotice() {
 			return internalReferenceNotice;
 		},
-		clearBacklinks: () => internalReferenceBacklinks = [],
+		clearBacklinks: () => {
+			internalReferenceBacklinksRequest++;
+			internalReferenceBacklinks = [];
+		},
 		hasUnsavedChanges: () => autosave.hasUnsavedChanges(),
 		drafts: () => autosave.drafts(),
 		flushAutosave: (workId?: string) => autosave.flush(workId),
