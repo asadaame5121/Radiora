@@ -541,43 +541,54 @@ describe("editor controller", () => {
 			expect(ports.requestFocus).not.toHaveBeenCalled();
 		});
 
-		test("cancel during link creation does not replace text after the response", async () => {
-			let resolve!: () => void;
-			const pending = new Promise<void>((done) => resolve = done);
-			const textarea = mockTextarea("@Target");
-			const item = {
-				id: "item-1",
-				workId: "work-self",
-				text: "@Target",
-				parentId: null,
-				orderKey: 0,
-				collapsed: false,
-				revisionSelector: { mode: "branch" as const, branchId: "b-1" },
-			};
-			const { controller, ports } = createController({
-				snapshot: { items: [item], links: [], knots: [], stashItemIds: [] },
-				findTextarea: () => textarea,
-				api: { createLink: vi.fn().mockReturnValue(pending) },
-			});
-			await controller.updateInlineLinkCompletion("item-1", textarea);
-			controller.selectInlineLinkCandidate("item-1", {
-				scope: "work",
-				id: "work-target",
-				workId: "work-target",
-				displayName: "Target",
-				scopeLabel: "Work",
-				shortId: "target",
-				canonicalMarkdown: "[Target](radiora://work/work-target)",
-			});
-			const commit = controller.commitInlineLink("item-1");
-			controller.cancelInlineLinkCompletion();
-			resolve();
-			await commit;
+		test.each(["cancel", "selection change"])(
+			"%s during link creation finishes the confirmed link without stealing focus",
+			async (change) => {
+				let selectedId = "item-1";
+				let resolve!: () => void;
+				const pending = new Promise<void>((done) => resolve = done);
+				const textarea = mockTextarea("@Target");
+				const item = {
+					id: "item-1",
+					workId: "work-self",
+					text: "@Target",
+					parentId: null,
+					orderKey: 0,
+					collapsed: false,
+					revisionSelector: { mode: "branch" as const, branchId: "b-1" },
+				};
+				const { controller, ports, api } = createController({
+					snapshot: { items: [item], links: [], knots: [], stashItemIds: [] },
+					findTextarea: () => textarea,
+					api: { createLink: vi.fn().mockReturnValue(pending) },
+					ports: { getSelectedId: () => selectedId },
+				});
+				await controller.updateInlineLinkCompletion("item-1", textarea);
+				controller.selectInlineLinkCandidate("item-1", {
+					scope: "work",
+					id: "work-target",
+					workId: "work-target",
+					displayName: "Target",
+					scopeLabel: "Work",
+					shortId: "target",
+					canonicalMarkdown: "[Target](radiora://work/work-target)",
+				});
+				const commit = controller.commitInlineLink("item-1");
+				if (change === "cancel") controller.cancelInlineLinkCompletion();
+				else {
+					selectedId = "item-2";
+					controller.clearCompletions();
+				}
+				resolve();
+				await commit;
 
-			expect(textarea.value).toBe("@Target");
-			expect(ports.reload).not.toHaveBeenCalled();
-			expect(ports.requestFocus).not.toHaveBeenCalled();
-		});
+				expect(api.createLink).toHaveBeenCalledTimes(1);
+				expect(textarea.value).toBe("");
+				expect(textarea.setRangeText).toHaveBeenCalledWith("", 0, 7, "preserve");
+				expect(ports.reload).toHaveBeenCalledWith();
+				expect(ports.requestFocus).not.toHaveBeenCalled();
+			},
+		);
 
 		test("commitInlineLink rejects linking node to itself", async () => {
 			const item = {
