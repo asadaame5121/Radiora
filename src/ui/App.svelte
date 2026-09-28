@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { formatCreatedAt, formatRecentEditAt, localDateValue, addDays, dateRangeFromInputs } from "./calendar_display.ts";
+	import { DateProjectionController } from "./date_projection_controller.svelte.ts";
+	import { TagController } from "./tag_controller.svelte.ts";
 	import { onMount, tick, untrack } from "svelte";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
@@ -48,6 +50,7 @@
 	import { createPendingEmptyItemController } from "./pending_empty_item_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
 	import { RuleQueryController } from "./rule_query_controller.svelte.ts";
+	import { SearchAliasController } from "./search_alias_controller.svelte.ts";
 	import { HistoryController } from "./history_controller.svelte.ts";
 	import { ComparisonController } from "./comparison_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
@@ -65,10 +68,7 @@
 		OutlineSnapshot,
 		NavigationTarget,
 		RelationTypeDirection,
-		SearchAlias,
 		SearchResult,
-		ScopedTagSet,
-		TagAlias,
 		TransientProjectionNode,
 	} from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
@@ -172,10 +172,11 @@
 	$effect(() => {
 		void api.recordViewChange(viewMode).catch(() => console.warn("Could not record view change."));
 	});
-	let dateStart = $state(localDateValue(new Date()));
-	let dateEnd = $state(localDateValue(addDays(new Date(), 1)));
-	let dateProjection = $state<DateProjection | null>(null);
-	let dateProjectionLoading = $state(false);
+	const dateProjectionController = new DateProjectionController({
+		projectDates: (range) => api.projectDates(range),
+		onError: (cause) => error = errorMessage(cause),
+		onOpenView: (view) => viewMode = view,
+	});
 	let selectedId = $state<string | null>(null);
 	const navigationController = createNavigationController({
 		recordSearch: (outcome, durationMs) => {
@@ -191,18 +192,17 @@
 	let bookmarks = $state<Bookmark[]>([]);
 	let transientExpandedIds = $state<string[]>([]);
 	let asideMode = $state<InspectorAsideMode>("overview");
-	let aliases = $state<SearchAlias[]>([]);
-	let aliasCanonical = $state("");
-	let aliasVariants = $state("");
-	let tagScopes = $state<ScopedTagSet[]>([]);
-	let tagAliases = $state<TagAlias[]>([]);
-	let selectedTag = $state<string | null>(null);
-	let tagRenameFrom = $state("");
-	let tagRenameTo = $state("");
-	let tagMergeSources = $state("");
-	let tagMergeTarget = $state("");
-	let tagError = $state("");
+	const tagController = new TagController({
+		api: {
+			listScopedTags: () => api.listScopedTags(),
+			listTagAliases: () => api.listTagAliases(),
+			renameTag: (from, to) => api.renameTag(from, to),
+			mergeTags: (sources, target) => api.mergeTags(sources, target),
+		},
+		errorMessage,
+	});
 	const ruleQuery = new RuleQueryController(api, errorMessage);
+	const searchAliases = new SearchAliasController(api, errorMessage);
 	let globalLineage = $state<GlobalLineageProjection | null>(null);
 	const confirmationController = createConfirmationController();
 	let confirmationDialog: ConfirmationDialog;
@@ -690,8 +690,8 @@
 		startupDataLoaded = true;
 		startupCacheActive = false;
 		persistStartupSnapshotCache();
-		aliases = await api.listSearchAliases();
-		await loadTagBrowser();
+		await searchAliases.load();
+		await loadTags();
 		await ruleQuery.loadSavedQueries();
 	}
 
@@ -1178,41 +1178,10 @@
 	const createDuplicateCandidateLink = workController.createDuplicateCandidateLink;
 	const requestDuplicateMerge = workController.requestDuplicateMerge;
 	const linkUnplaced = workController.linkUnplaced;
-	async function openToday(): Promise<void> {
-		const now = new Date();
-		dateStart = localDateValue(now);
-		dateEnd = localDateValue(addDays(now, 1));
-		await loadDateProjection();
-	}
-
-	async function loadDateProjection(): Promise<void> {
-		try {
-			dateProjectionLoading = true;
-			dateProjection = await api.projectDates(dateRangeFromInputs(dateStart, dateEnd));
-			viewMode = "today";
-		} catch (cause) {
-			error = errorMessage(cause);
-		} finally {
-			dateProjectionLoading = false;
-		}
-	}
-
-	async function moveDateRange(days: number): Promise<void> {
-		const start = new Date(`${dateStart}T00:00:00`);
-		const end = new Date(`${dateEnd}T00:00:00`);
-		dateStart = localDateValue(addDays(start, days));
-		dateEnd = localDateValue(addDays(end, days));
-		await loadDateProjection();
-	}
-
-	async function showWeek(): Promise<void> {
-		const today = new Date();
-		const offset = (today.getDay() + 6) % 7;
-		const monday = addDays(today, -offset);
-		dateStart = localDateValue(monday);
-		dateEnd = localDateValue(addDays(monday, 7));
-		await loadDateProjection();
-	}
+	const openToday = dateProjectionController.openToday;
+	const loadDateProjection = dateProjectionController.load;
+	const moveDateRange = dateProjectionController.moveRange;
+	const showWeek = dateProjectionController.showWeek;
 
 	async function openDateEntry(entry: DateProjection["created"][number]): Promise<void> {
 		const occurrence = entry.representative;
@@ -1485,25 +1454,6 @@
 		await emergenceController.resolve(suggestion, action);
 	}
 
-	async function saveAlias(): Promise<void> {
-		try {
-			await api.saveSearchAlias({
-				canonical: aliasCanonical,
-				variants: aliasVariants.split(/[,、\n]/).map((value) => value.trim()).filter(Boolean),
-			});
-			aliasCanonical = "";
-			aliasVariants = "";
-			aliases = await api.listSearchAliases();
-		} catch (cause) {
-			ruleQuery.setError(errorMessage(cause));
-		}
-	}
-
-	async function removeAlias(id: string): Promise<void> {
-		await api.deleteSearchAlias(id);
-		aliases = await api.listSearchAliases();
-	}
-
 	async function handleSparseOutlineSelect(node: TransientProjectionNode): Promise<void> {
 		const ancestorIds = node.breadcrumb ?? [];
 		const occurrenceId = node.occurrenceId;
@@ -1555,31 +1505,39 @@
 		});
 		await load();
 	}
-	function splitTagInput(value: string): string[] {
-		return value.split(/[,、\s]+/).map((tag) => tag.trim()).filter(Boolean);
+	async function openTags(): Promise<void> {
+		await loadTags();
+		viewMode = "tags";
 	}
 
-	async function loadTagBrowser(): Promise<void> {
-		tagError = "";
+	async function loadTags(): Promise<void> {
 		try {
-			const [scopes, aliases] = await Promise.all([
-				api.listScopedTags(),
-				api.listTagAliases(),
-				workController.loadUnplacedWorks(),
-			]);
-			tagScopes = scopes;
-			tagAliases = aliases;
-			if (selectedTag && !scopes.some((scope) => scope.tags.includes(selectedTag!))) {
-				selectedTag = null;
-			}
+			await Promise.all([tagController.load(), workController.loadUnplacedWorks()]);
 		} catch (cause) {
-			tagError = errorMessage(cause);
+			tagController.error = errorMessage(cause);
 		}
 	}
 
-	async function openTags(): Promise<void> {
-		await loadTagBrowser();
-		viewMode = "tags";
+	async function renameTag(): Promise<void> {
+		await tagController.rename();
+		if (!tagController.error) {
+			try {
+				await workController.loadUnplacedWorks();
+			} catch (cause) {
+				tagController.error = errorMessage(cause);
+			}
+		}
+	}
+
+	async function mergeTags(): Promise<void> {
+		await tagController.merge();
+		if (!tagController.error) {
+			try {
+				await workController.loadUnplacedWorks();
+			} catch (cause) {
+				tagController.error = errorMessage(cause);
+			}
+		}
 	}
 
 	function openTagNode(workId: string): void {
@@ -1593,30 +1551,6 @@
 			return;
 		}
 		error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
-	}
-
-	async function renameTag(): Promise<void> {
-		tagError = "";
-		try {
-			await api.renameTag(tagRenameFrom, tagRenameTo);
-			tagRenameFrom = "";
-			tagRenameTo = "";
-			await loadTagBrowser();
-		} catch (cause) {
-			tagError = errorMessage(cause);
-		}
-	}
-
-	async function mergeTags(): Promise<void> {
-		tagError = "";
-		try {
-			await api.mergeTags(splitTagInput(tagMergeSources), tagMergeTarget);
-			tagMergeSources = "";
-			tagMergeTarget = "";
-			await loadTagBrowser();
-		} catch (cause) {
-			tagError = errorMessage(cause);
-		}
 	}
 
 	async function duplicateSelectedOccurrence(): Promise<void> {
@@ -2153,11 +2087,11 @@
 			</section>
 		{:else if viewMode === "today"}
 			<TodayView
-				bind:dateStart
-				bind:dateEnd
+				bind:dateStart={dateProjectionController.start}
+				bind:dateEnd={dateProjectionController.end}
 				bind:outlineFilter
-				projection={dateProjection}
-				loading={dateProjectionLoading}
+				projection={dateProjectionController.projection}
+				loading={dateProjectionController.loading}
 				onMoveDateRange={moveDateRange}
 				onShowWeek={showWeek}
 				onLoad={loadDateProjection}
@@ -2199,14 +2133,14 @@
 			/>
 		{:else if viewMode === "tags"}
 			<TagBrowserView
-				{tagScopes}
-				{tagAliases}
-				{tagError}
-				bind:selectedTag
-				bind:tagRenameFrom
-				bind:tagRenameTo
-				bind:tagMergeSources
-				bind:tagMergeTarget
+				tagScopes={tagController.scopes}
+				tagAliases={tagController.aliases}
+				tagError={tagController.error}
+				bind:selectedTag={tagController.selectedTag}
+				bind:tagRenameFrom={tagController.renameFrom}
+				bind:tagRenameTo={tagController.renameTo}
+				bind:tagMergeSources={tagController.mergeSources}
+				bind:tagMergeTarget={tagController.mergeTarget}
 				workIds={new Set(itemByWorkId.keys())}
 				{titleForWorkId}
 				onOpenTagNode={openTagNode}
@@ -2376,19 +2310,20 @@
 					sparseOutlineNodes: ruleQuery.nodes,
 					sparseOutlineQueryName: ruleQuery.projectionName,
 					showSparseOutline: ruleQuery.showProjection,
-					aliases,
-					aliasCanonical,
-					aliasVariants,
+					aliases: searchAliases.aliases,
+					aliasCanonical: searchAliases.canonical,
+					aliasVariants: searchAliases.variants,
+					aliasError: searchAliases.error,
 					onRuleSourceChange: ruleQuery.setSource,
 					onRuleNameChange: ruleQuery.setName,
-					onAliasCanonicalChange: (value) => aliasCanonical = value,
-					onAliasVariantsChange: (value) => aliasVariants = value,
+					onAliasCanonicalChange: searchAliases.setCanonical,
+					onAliasVariantsChange: searchAliases.setVariants,
 					onExecuteRule: executeRule,
 					onSaveRule: saveRule,
 					onLoadSavedQuery: ruleQuery.loadProjection,
 					onRemoveRule: ruleQuery.remove,
-					onSaveAlias: saveAlias,
-					onRemoveAlias: removeAlias,
+					onSaveAlias: searchAliases.save,
+					onRemoveAlias: searchAliases.remove,
 					onSelectSparseNode: handleSparseOutlineSelect,
 					onToggleSparseOutline: ruleQuery.toggleProjection,
 				}}
