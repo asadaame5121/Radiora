@@ -3,13 +3,14 @@ import type { ScopedTagSet, TagAlias } from "../domain/models.ts";
 export interface TagApi {
 	listScopedTags(): Promise<ScopedTagSet[]>;
 	listTagAliases(): Promise<TagAlias[]>;
-	renameTag(from: string, to: string): Promise<void>;
-	mergeTags(sources: string[], target: string): Promise<void>;
+	renameTag(from: string, to: string): Promise<unknown>;
+	mergeTags(sources: string[], target: string): Promise<unknown>;
 }
 
 export interface TagControllerOptions {
 	api: TagApi;
 	errorMessage: (cause: unknown) => string;
+	loadUnplacedWorks?: () => Promise<unknown>;
 }
 
 export function splitTagInput(value: string): string[] {
@@ -34,6 +35,7 @@ export class TagController {
 			const [scopes, aliases] = await Promise.all([
 				this.options.api.listScopedTags(),
 				this.options.api.listTagAliases(),
+				this.options.loadUnplacedWorks ? this.options.loadUnplacedWorks() : Promise.resolve([]),
 			]);
 			this.scopes = scopes;
 			this.aliases = aliases;

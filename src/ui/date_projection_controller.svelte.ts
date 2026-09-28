@@ -1,4 +1,4 @@
-import type { DateProjection, DateRange } from "../domain/models.ts";
+import type { DateProjection, DateRange } from "../services/date_projection.ts";
 import { addDays, dateRangeFromInputs, localDateValue } from "./calendar_display.ts";
 
 export interface DateProjectionControllerOptions {
@@ -6,6 +6,9 @@ export interface DateProjectionControllerOptions {
 	onError: (cause: unknown) => void;
 	onOpenView?: (view: "today") => void;
 }
+
+const DAYS_IN_WEEK = 7;
+const MONDAY_INDEX_OFFSET = 6;
 
 export class DateProjectionController {
 	start = $state(localDateValue(new Date()));
@@ -54,10 +57,10 @@ export class DateProjectionController {
 
 	showWeek = async (): Promise<void> => {
 		const today = new Date();
-		const offset = (today.getDay() + 6) % 7;
+		const offset = (today.getDay() + MONDAY_INDEX_OFFSET) % DAYS_IN_WEEK;
 		const monday = addDays(today, -offset);
 		this.start = localDateValue(monday);
-		this.end = localDateValue(addDays(monday, 7));
+		this.end = localDateValue(addDays(monday, DAYS_IN_WEEK));
 		await this.load();
 	};
 }
