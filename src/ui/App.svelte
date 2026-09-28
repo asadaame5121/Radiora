@@ -2,6 +2,7 @@
 	import { formatCreatedAt, formatRecentEditAt, localDateValue, addDays, dateRangeFromInputs } from "./calendar_display.ts";
 	import { DateProjectionController } from "./date_projection_controller.svelte.ts";
 	import { TagController } from "./tag_controller.svelte.ts";
+	import { OutlineOperationsController } from "./outline_operations_controller.svelte.ts";
 	import { onMount, tick, untrack } from "svelte";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
@@ -230,6 +231,14 @@
 	const outlineDrag = createOutlineDragController({
 		moveItem: (input) => api.moveItem(input),
 		reload: load,
+		reportError: (cause) => error = errorMessage(cause),
+	});
+	const outlineOperations = new OutlineOperationsController({
+		api,
+		getItems: () => snapshot.items,
+		getItemById: (id) => itemById.get(id),
+		reload: load,
+		flushAutosave: (workId) => editorController.flushAutosave(workId),
 		reportError: (cause) => error = errorMessage(cause),
 	});
 	const relationTypes = new RelationTypeController(api);
@@ -1084,22 +1093,7 @@
 				return;
 			}
 			event.preventDefault();
-			try {
-				await editorController.flushAutosave(row.item.workId);
-			} catch (cause) {
-				error = errorMessage(cause);
-				return;
-			}
-			const cursor = textarea.selectionStart;
-			const left = row.item.text.slice(0, cursor);
-			const right = row.item.text.slice(textarea.selectionEnd);
-			await api.updateItemText(row.item.id, left);
-			const created = await api.createItem({
-				text: right,
-				parentId: row.item.parentId,
-				afterId: row.item.id,
-			});
-			await load(created.id);
+			await outlineOperations.splitRow(row.item, textarea.selectionStart, textarea.selectionEnd);
 			return;
 		}
 		if (event.key === "Tab") {
@@ -1108,20 +1102,9 @@
 			else await indent(row.item);
 			return;
 		}
-		if (event.key === "Backspace" && !row.item.text.trim()) {
-			const siblings = siblingsOf(row.item).filter((item) => item.orderKey < row.item.orderKey);
-			const previous = siblings.at(-1);
-			if (previous) {
-				event.preventDefault();
-				try {
-					await editorController.flushAutosave(row.item.workId);
-				} catch (cause) {
-					error = errorMessage(cause);
-					return;
-				}
-				await api.deleteItem(row.item.id);
-				await load(previous.id);
-			}
+		if (event.key === "Backspace" && outlineOperations.canDeleteEmptyRow(row.item)) {
+			event.preventDefault();
+			await outlineOperations.deleteEmptyRow(row.item);
 			return;
 		}
 		if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
@@ -1316,44 +1299,10 @@
 		outlineFilter = { ...EMPTY_OUTLINE_FILTER };
 	}
 
-	async function indent(item: OutlineItem): Promise<void> {
-		const siblings = siblingsOf(item);
-		const index = siblings.findIndex((candidate) => candidate.id === item.id);
-		if (index <= 0) return;
-		const parent = siblings[index - 1];
-		const children = snapshot.items.filter((candidate) => candidate.parentId === parent.id)
-			.sort((a, b) => a.orderKey - b.orderKey);
-		await api.moveItem({ id: item.id, parentId: parent.id, afterId: children.at(-1)?.id ?? null });
-		await load(item.id);
-	}
-
-	async function outdent(item: OutlineItem): Promise<void> {
-		if (!item.parentId) return;
-		const parent = itemById.get(item.parentId);
-		if (!parent) return;
-		await api.moveItem({ id: item.id, parentId: parent.parentId, afterId: parent.id });
-		await load(item.id);
-	}
-
-	async function moveSibling(item: OutlineItem, direction: -1 | 1): Promise<void> {
-		const siblings = siblingsOf(item);
-		const index = siblings.findIndex((candidate) => candidate.id === item.id);
-		const targetIndex = index + direction;
-		if (targetIndex < 0 || targetIndex >= siblings.length) return;
-		const afterId = direction < 0 ? (siblings[targetIndex - 1]?.id ?? null) : siblings[targetIndex].id;
-		await api.moveItem({ id: item.id, parentId: item.parentId, afterId });
-		await load(item.id);
-	}
-
-	function siblingsOf(item: OutlineItem): OutlineItem[] {
-		return snapshot.items.filter((candidate) => candidate.parentId === item.parentId)
-			.sort((a, b) => a.orderKey - b.orderKey);
-	}
-
-	async function toggle(row: VisibleRow): Promise<void> {
-		await api.setCollapsed(row.item.id, !row.item.collapsed);
-		await load();
-	}
+	const indent = outlineOperations.indent;
+	const outdent = outlineOperations.outdent;
+	const moveSibling = outlineOperations.moveSibling;
+	const toggle = (row: VisibleRow): Promise<void> => outlineOperations.toggle(row.item);
 
 	async function remove(id: string): Promise<void> {
 		const item = itemById.get(id);
