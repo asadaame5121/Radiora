@@ -12,6 +12,7 @@ export interface StartupControllerOptions {
 	errorMessage: (cause: unknown) => string;
 	onCacheRestored?: (cache: StartupSnapshotCache) => void;
 	onReady?: () => Promise<void>;
+	onReadyError?: (cause: unknown) => void;
 	pollIntervalMs?: number;
 }
 
@@ -86,6 +87,8 @@ export class StartupController {
 					detail: this.options.errorMessage(cause),
 					logPath: this.status.logPath,
 				};
+			} else {
+				this.options.onReadyError?.(cause);
 			}
 		}
 	};
