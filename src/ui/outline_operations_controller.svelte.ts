@@ -84,4 +84,45 @@ export class OutlineOperationsController {
 		await this.options.api.setCollapsed(item.id, !item.collapsed);
 		await this.options.reload();
 	};
+
+	splitRow = async (
+		item: OutlineItem,
+		cursor: number,
+		selectionEnd: number,
+	): Promise<OutlineItem | null> => {
+		try {
+			await this.options.flushAutosave(item.workId);
+		} catch (cause) {
+			this.options.reportError(cause);
+			return null;
+		}
+		const left = item.text.slice(0, cursor);
+		const right = item.text.slice(selectionEnd);
+		await this.options.api.updateItemText(item.id, left);
+		const created = await this.options.api.createItem({
+			text: right,
+			parentId: item.parentId,
+			afterId: item.id,
+		});
+		await this.options.reload(created.id);
+		return created;
+	};
+
+	deleteEmptyRow = async (item: OutlineItem): Promise<boolean> => {
+		if (item.text.trim()) return false;
+		const siblings = this.siblingsOf(item).filter((candidate) =>
+			candidate.orderKey < item.orderKey
+		);
+		const previous = siblings.at(-1);
+		if (!previous) return false;
+		try {
+			await this.options.flushAutosave(item.workId);
+		} catch (cause) {
+			this.options.reportError(cause);
+			return false;
+		}
+		await this.options.api.deleteItem(item.id);
+		await this.options.reload(previous.id);
+		return true;
+	};
 }

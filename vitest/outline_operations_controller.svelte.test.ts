@@ -172,4 +172,69 @@ describe("OutlineOperationsController - structure operations", () => {
 		expect(setCollapsed).toHaveBeenCalledWith("1", true);
 		expect(reload).toHaveBeenCalledWith();
 	});
+
+	it("splits row at cursor position and loads created item", async () => {
+		const item = createItem("1", null, 10, "Hello World");
+		const updateItemText = vi.fn().mockResolvedValue({ ...item, text: "Hello " });
+		const createdItem = createItem("new", null, 15, "World");
+		const createItemApi = vi.fn().mockResolvedValue(createdItem);
+		const reload = vi.fn().mockResolvedValue(undefined);
+		const flushAutosave = vi.fn().mockResolvedValue(undefined);
+
+		const controller = new OutlineOperationsController({
+			api: {
+				moveItem: vi.fn(),
+				setCollapsed: vi.fn(),
+				updateItemText,
+				createItem: createItemApi,
+				deleteItem: vi.fn(),
+			},
+			getItems: () => [item],
+			getItemById: () => item,
+			reload,
+			flushAutosave,
+			reportError: vi.fn(),
+		});
+
+		await controller.splitRow(item, 6, 6);
+
+		expect(flushAutosave).toHaveBeenCalledWith(item.workId);
+		expect(updateItemText).toHaveBeenCalledWith("1", "Hello ");
+		expect(createItemApi).toHaveBeenCalledWith({
+			text: "World",
+			parentId: null,
+			afterId: "1",
+		});
+		expect(reload).toHaveBeenCalledWith("new");
+	});
+
+	it("deletes empty row and focuses previous sibling", async () => {
+		const prev = createItem("prev", null, 5, "Previous");
+		const current = createItem("curr", null, 10, "");
+		const deleteItem = vi.fn().mockResolvedValue(undefined);
+		const reload = vi.fn().mockResolvedValue(undefined);
+		const flushAutosave = vi.fn().mockResolvedValue(undefined);
+
+		const controller = new OutlineOperationsController({
+			api: {
+				moveItem: vi.fn(),
+				setCollapsed: vi.fn(),
+				updateItemText: vi.fn(),
+				createItem: vi.fn(),
+				deleteItem,
+			},
+			getItems: () => [prev, current],
+			getItemById: (id) => (id === "prev" ? prev : current),
+			reload,
+			flushAutosave,
+			reportError: vi.fn(),
+		});
+
+		const result = await controller.deleteEmptyRow(current);
+
+		expect(result).toBe(true);
+		expect(flushAutosave).toHaveBeenCalledWith(current.workId);
+		expect(deleteItem).toHaveBeenCalledWith("curr");
+		expect(reload).toHaveBeenCalledWith("prev");
+	});
 });
