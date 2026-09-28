@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatCreatedAt, formatRecentEditAt, localDateValue, addDays, dateRangeFromInputs } from "./calendar_display.ts";
 	import { onMount, tick, untrack } from "svelte";
+	import { SvelteSet } from "svelte/reactivity";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
 	import GlobalLineage from "./GlobalLineage.svelte";
@@ -176,6 +177,7 @@
 	let dateProjection = $state<DateProjection | null>(null);
 	let dateProjectionLoading = $state(false);
 	let selectedId = $state<string | null>(null);
+	let pendingEmptyItemIds = new SvelteSet<string>();
 	const navigationController = createNavigationController({
 		recordSearch: (outcome, durationMs) => {
 			void api.recordClientOperation("search.execute", outcome, durationMs).catch(() => console.warn("Could not record search."));
@@ -1099,6 +1101,7 @@
 				parentId: row.item.parentId,
 				afterId: row.item.id,
 			});
+			if (!right.trim()) pendingEmptyItemIds.add(created.id);
 			await load(created.id);
 			return;
 		}
@@ -1120,6 +1123,7 @@
 					return;
 				}
 				await api.deleteItem(row.item.id);
+				pendingEmptyItemIds.delete(row.item.id);
 				await load(previous.id);
 			}
 			return;
@@ -1130,7 +1134,34 @@
 		}
 	}
 
-	const updateLocalText = editorController.updateLocalText;
+	function updateLocalText(id: string, textarea: HTMLTextAreaElement): void {
+		if (textarea.value.trim()) pendingEmptyItemIds.delete(id);
+		editorController.updateLocalText(id, textarea);
+	}
+
+	async function discardUntouchedEmptyItem(id: string): Promise<void> {
+		if (!pendingEmptyItemIds.has(id)) return;
+		const item = snapshot.items.find((candidate) => candidate.id === id);
+		if (!item || item.text.trim()) {
+			pendingEmptyItemIds.delete(id);
+			return;
+		}
+		try {
+			await editorController.flushAutosave(item.workId);
+			if (!pendingEmptyItemIds.has(id)) return;
+			const current = snapshot.items.find((candidate) => candidate.id === id);
+			if (!current || current.text.trim() || snapshot.items.some((candidate) => candidate.parentId === id)) {
+				pendingEmptyItemIds.delete(id);
+				return;
+			}
+			await api.deleteItem(id);
+			pendingEmptyItemIds.delete(id);
+			await load();
+		} catch (cause) {
+			pendingEmptyItemIds.delete(id);
+			error = errorMessage(cause);
+		}
+	}
 	const updateEditorSelection = editorController.updateEditorSelection;
 	const updateInlineLinkSearch = editorController.updateInlineLinkSearch;
 	const handleInlineLinkOmniKeydown = editorController.handleInlineLinkOmniKeydown;
@@ -1978,6 +2009,7 @@
 		hoistOccurrence,
 		updateLocalText,
 		updateEditorSelection,
+		discardUntouchedEmptyItem,
 		handleKeydown,
 		openEditorInternalReference,
 		applyInternalReferenceCompletion,

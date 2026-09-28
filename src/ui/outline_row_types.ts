@@ -24,6 +24,7 @@ export type OutlineRowHandlers = {
 	hoistOccurrence: (id: string) => void;
 	updateLocalText: (id: string, textarea: HTMLTextAreaElement) => void;
 	updateEditorSelection: (id: string, textarea: HTMLTextAreaElement) => void;
+	discardUntouchedEmptyItem: (id: string) => void;
 	handleKeydown: (
 		event: KeyboardEvent,
 		row: VisibleRow,
