@@ -38,6 +38,11 @@ export type InlineLinkCompletionState = {
 	creating: boolean;
 };
 
+function dispatchReplacementInput(textarea: HTMLTextAreaElement, data: string): void {
+	const options = { bubbles: true, inputType: "insertReplacementText", data };
+	textarea.dispatchEvent(new InputEvent("input", options));
+}
+
 export function createEditorCompletionController(ports: EditorCompletionPorts) {
 	let internalReferenceCompletion = $state<InternalReferenceCompletionState | null>(null);
 	let inlineLinkCompletion = $state<InlineLinkCompletionState | null>(null);
@@ -354,13 +359,7 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 			) {
 				if (current) textarea.focus();
 				textarea.setRangeText("", state.range.start, state.range.end, current ? "end" : "preserve");
-				textarea.dispatchEvent(
-					new InputEvent("input", {
-						bubbles: true,
-						inputType: "insertReplacementText",
-						data: "",
-					}),
-				);
+				dispatchReplacementInput(textarea, "");
 			}
 			await ports.reload();
 			if (current && ports.getSelectedId() === selectedId) {
@@ -392,13 +391,7 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 		cancelInternalReferenceCompletion();
 		textarea.focus();
 		textarea.setRangeText(candidate.canonicalMarkdown, state.range.start, state.range.end, "end");
-		textarea.dispatchEvent(
-			new InputEvent("input", {
-				bubbles: true,
-				inputType: "insertReplacementText",
-				data: candidate.canonicalMarkdown,
-			}),
-		);
+		dispatchReplacementInput(textarea, candidate.canonicalMarkdown);
 	}
 
 	return {
