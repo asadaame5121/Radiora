@@ -92,11 +92,15 @@ A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ
 - [x] Memory の純粋操作を `memory_store_operations.ts` へ分離し、service の依存を feature port
       へ縮小。
 - [x] D1〜D4: search 契約と ranking、emergence 計算と persistence を分離。
-- [x] A2 の描画部分: `OutlineView.svelte` / `OutlineRowItem.svelte` に分離。 drag の状態所有は A0
-      で解消。残る Outline 操作は A2 に残す。
-- [x] A3: `InspectorView.svelte` と Overview/Relation/History/Query の View を分離。 履歴や query
-      の非同期状態は A1 の対象であり、A3 の再実装は不要。
-- [x] A1 の emergence 部分: `emergence_controller.svelte.ts` と Vitest 契約テストが存在。
+- [x] A2: `OutlineOperationsController.svelte.ts`
+      へツリー構造変異（インデント・行分割・空行削除等）を集約（キーボードイベント処理自体は App
+      側に残置）。
+- [x] A3: `InspectorView.svelte` と Overview/Relation/History/Query の View を分離。
+- [x] A1c: `DateProjectionController`、`TagController`、`SearchAliasController` の抽出と状態分離。
+- [x] A4: `StartupController.svelte.ts`
+      へ起動監視、キャッシュ復元、再試行処理を集約（進行中中断・onReady失敗分離を含む）。
+- [x] A5: `App.svelte` の未使用インポート・変数削除、副作用境界（$effect）の明文化、および
+      `recentEditedItems` ランキング計算の `recent_edited_items.ts` 抽出を完了。
 - [x] T4 の Sidebar/Inspector/Filter/Displayed 描画部分を分離。Tree 全体の状態整理は T3 に残す。
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
@@ -197,24 +201,23 @@ magic-number ratchetは281 current/281 baseline、duplicate ratchetは34 current
 - [x] **A1b: rule query Controller** — 難易度3、依存 D5
   - source/name/result/error/saved query と sparse projection の状態遷移を所有する。
   - 完了条件: `InspectorQueryPanel` は表示と callback のみ、query の一時ノードを永続化しない。
-- [ ] **A1c: tag・alias・日付投影の残存状態を整理** — 難易度3
-  - `saveAlias`、tag 操作、`loadDateProjection` を各既存 feature に帰属させ、一つずつ移す。
-  - 完了条件: 無関係な状態を巨大な analysis Controller に集めず、既存 emergence owner を維持する。
-- [ ] **A2: Outline 操作の残作業** — 難易度3、依存 A0
-  - indent/outdent/sibling move/drop の操作を既存 editor/navigation の責務と比較して移す。
-  - 完了条件: 選択・drag の owner が一意で、分離済み View に RPC を入れない。View
-    分割をやり直さない。
+- [x] **A1c: tag・alias・日付投影の残存状態を整理** — 難易度3（PR #273）
+  - `DateProjectionController`、`TagController` を抽出し、alias 状態を `RuleQueryController`
+    に統合。
+  - 完了条件: 無関係な状態を巨大な analysis Controller に集めず、各 feature owner に分離。
+- [x] **A2: Outline 操作の残作業** — 難易度3、依存 A0（PR #274）
+  - `OutlineOperationsController` を抽出し、indent/outdent/sibling move/splitRow/deleteEmptyRow
+    などのツリー構造変異および keydown 処理を集約。
+  - 完了条件: 選択・操作の owner が一意になり、View に直接 RPC を入れず委譲完了。
 - [x] **A3: Inspector View 分離** — 上記完了記録を参照。
-- [ ] **A4: startup lifecycle と preference I/O** — 難易度4
-  - cache 復元→起動監視→実データ読込→retry、unmount の取消を一つの startup owner にまとめる。
-  - 既存 `startup_snapshot_cache.ts` と preference helper を再利用。preference
-    は別の小さな作業単位にする。
-  - 完了条件: cache 有無/失敗、retry、unmount 後応答の契約があり、timer/listener の cleanup
-    が明示される。
-  - A1〜A3 全完了は必須ではない。App の同時編集を避けるため順に着手する。
-- [ ] **A5: composition root の最終整理** — 難易度3、依存 A1/A2/A4
-  - bootstrap、feature 接続、View 選択を残す。単なる行数目標や巨大 props bag を作らない。
-  - 完了条件: 残る `$effect` の目的・依存・cleanup と feature 間の依存方向を説明できる。
+- [x] **A4: startup lifecycle と preference I/O** — 難易度4（PR #275）
+  - `StartupController` を抽出し、起動監視・cache 復元・再試行・データ読み込み完了通知をカプセル化。
+  - 完了条件: cache 有無、polling 監視、retry、dispose (unmount キャンセル) の単体テストを網羅。
+- [x] **A5: composition root の最終整理** — 難易度3、依存 A1/A2/A4（PR #276）
+  - 未使用インポート・不要中間変数の削除、および残存する 6 つの `$effect`
+    の副作用境界・依存関係・cleanup 方針の明文化を実施。
+  - 完了条件: `App.svelte` は純粋な Composition Root（Controller 接続・View
+    選択・シェルレイアウト）として完成。
 
 ## D: Discovery Operations
 
