@@ -7,7 +7,7 @@ export interface OutlineOperationsApi {
 		afterId: string | null;
 	}): Promise<void>;
 	setCollapsed(id: string, collapsed: boolean): Promise<void>;
-	updateItemText(id: string, text: string): Promise<OutlineItem>;
+	updateItemText(id: string, text: string): Promise<void>;
 	createItem(input: {
 		text: string;
 		parentId: string | null;
