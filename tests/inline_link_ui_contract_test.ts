@@ -43,7 +43,7 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 	assertMatch(commit, /ports\.requestFocus\(item\.id, state\.range\.start\)/);
 	assertMatch(
 		commit,
-		/textarea\.setRangeText\("", state\.range\.start, state\.range\.end, "end"\)/,
+		/textarea\.setRangeText\("", state\.range\.start, state\.range\.end, current \? "end" : "preserve"\)/,
 	);
 	if (commit.includes("canonicalInternalReferenceMarkdown")) {
 		throw new Error("Semantic Relation completion must not create a Markdown Internal Reference");
