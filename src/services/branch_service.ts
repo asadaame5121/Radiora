@@ -287,10 +287,11 @@ export class BranchService {
 			try {
 				await this.store.updateBranch(main);
 			} catch (rollbackError) {
+				// biome-ignore lint/style/useErrorCause: AggregateError preserves original error and rollbackError in its errors array.
 				throw new AggregateError(
 					[error, rollbackError],
 					`Failed to synchronize and restore main Branch: ${main.id}`,
-					{ cause: error },
+					{ cause: rollbackError },
 				);
 			}
 			throw error;

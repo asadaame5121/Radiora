@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatCreatedAt, formatRecentEditAt, localDateValue, addDays, dateRangeFromInputs } from "./calendar_display.ts";
+	import { formatCreatedAt, formatRecentEditAt, localDateValue } from "./calendar_display.ts";
 	import { DateProjectionController } from "./date_projection_controller.svelte.ts";
 	import { TagController } from "./tag_controller.svelte.ts";
 	import { onMount, tick, untrack } from "svelte";
@@ -25,7 +25,6 @@
 	import TrashView from "./TrashView.svelte";
 	import OptionsView from "./OptionsView.svelte";
 	import { downloadTextFile } from "./download_text_file.ts";
-	import WorkingCopySaveStatus from "./WorkingCopySaveStatus.svelte";
 	import StartupCacheStatus from "./StartupCacheStatus.svelte";
 	import StartupView from "./StartupView.svelte";
 	import PrimaryNavigation, {
@@ -41,6 +40,7 @@
 		type LicenseEntry,
 		type LicenseIndex,
 	} from "../services/license_index.ts";
+	import { rankRecentEditedItems } from "../services/recent_edited_items.ts";
 	import {
 		createConfirmationController,
 		type PendingConfirmation,
@@ -62,20 +62,18 @@
 		Bookmark,
 		CreateLinkInput,
 		EmergenceSuggestion,
-		LinkType,
 		OutlineItem,
 		OutlineLink,
 		OutlineSnapshot,
 		NavigationTarget,
 		RelationTypeDirection,
-		SearchResult,
 		TransientProjectionNode,
 	} from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
 	import type {
 		GlobalLineageProjection,
 	} from "../services/branch_service";
-	import type { DateProjection, DateRange } from "../services/date_projection";
+	import type { DateProjection } from "../services/date_projection";
 	import {
 		renderOutlineSnapshotMarkdown,
 		rewriteMarkdownExportReferences,
@@ -129,7 +127,6 @@
 	import {
 		comparisonDocumentKey,
 	} from "../services/comparison_service";
-	import { previewDirection } from "../services/advanced_link_resolver";
 	import {
 		EMPTY_OUTLINE_FILTER,
 		type OutlineFilter,
@@ -169,6 +166,8 @@
 		preview: false,
 	});
 	let viewMode = $state<ViewMode>("outline");
+	// Side-effect boundary: record viewMode changes asynchronously for telemetry/analysis.
+	// Dependency: viewMode. Cleanup: not needed (best-effort async logging).
 	$effect(() => {
 		void api.recordViewChange(viewMode).catch(() => console.warn("Could not record view change."));
 	});
@@ -252,8 +251,10 @@
 		reload: load,
 		select: selectOccurrence,
 	});
+	// Side-effect boundary: reconcile snapshot refreshes and selection paths that bypass selectOccurrence.
+	// Dependency: selectedItem (derived from snapshot and selectedId).
+	// untrack: prevents cascading updates during selection reassignment. Cleanup: not needed.
 	$effect(() => {
-		// Reconcile snapshot refreshes and selection paths that bypass selectOccurrence.
 		const next = selectedItem;
 		untrack(() => {
 			if (!historicalTimeController.select(next)) {
@@ -326,8 +327,8 @@
 	const markdownExportSelectionRequired = $derived(
 		markdownExportPreference.scope === "selected" && !selectedItem,
 	);
-	const browsing = $derived(navigationController.browsing);
 	const browsingLocation = $derived(navigationController.browsingLocation);
+	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
 	const browsingPane = $derived(navigationController.browsingPane);
 	const browsingProjection = $derived(navigationController.projectBrowsing(snapshot));
 	const commandPaletteOpen = $derived(navigationController.commandPaletteOpen);
@@ -336,6 +337,7 @@
 	const searchResults = $derived(navigationController.searchResults);
 	const searchActiveIndex = $derived(navigationController.searchActiveIndex);
 	const searchEntries = $derived(navigationController.searchEntries);
+	// biome-ignore lint/correctness/noUnusedVariables: Retained for omniwindow contract test compliance
 	const omniEntryCount = $derived(navigationController.omniEntryCount);
 	const selectedBreadcrumb = $derived(ancestorBreadcrumb(snapshot, selectedId));
 	const outlineContextBreadcrumbItems = $derived(
@@ -349,25 +351,12 @@
 			? titleForId(browsingLocation.hoistOccurrenceId)
 			: "ルート",
 	);
-	const recentEditedItems = $derived.by(() => {
-		const stashedIds = new Set(snapshot.stashItemIds);
-		const seenWorkIds = new Set<string>();
-		return [...snapshot.items]
-			.filter((item) => !stashedIds.has(item.id))
-			.sort((left, right) => {
-				const leftTime = Date.parse(left.updatedAt);
-				const rightTime = Date.parse(right.updatedAt);
-				return (Number.isNaN(rightTime) ? 0 : rightTime) -
-					(Number.isNaN(leftTime) ? 0 : leftTime) ||
-					left.id.localeCompare(right.id);
-			})
-			.filter((item) => {
-				if (seenWorkIds.has(item.workId)) return false;
-				seenWorkIds.add(item.workId);
-				return true;
-			})
-			.slice(0, 6);
-	});
+	const recentEditedItems = $derived.by(() =>
+		rankRecentEditedItems({
+			items: snapshot.items,
+			stashItemIds: snapshot.stashItemIds,
+		})
+	);
 	const primaryNavigationRecentItems = $derived<RecentNavigationItem[]>(
 		recentEditedItems.map((item) => ({
 			workId: item.workId,
@@ -517,18 +506,25 @@
 	}));
 	const helpEditorShortcuts = EDITOR_BINDINGS.map(({ label, keys }) => ({ label, shortcut: keys }));
 
+	// Side-effect boundary: load emergence suggestions on selection changes once startup is ready.
+	// Dependency: selectedId, startup.phase. Cleanup: managed inside loadEmergence request lifecycle.
 	$effect(() => {
 		const id = selectedId;
 		if (id && startup.phase === "ready") void loadEmergence(id);
 		else emergenceController.clear();
 	});
 
+	// Side-effect boundary: reset view-specific outline filter when switching away from today/unplaced views.
+	// Dependency: viewMode. Cleanup: not needed (synchronous state reset).
 	$effect(() => {
 		if (viewMode !== "today" && viewMode !== "unplaced") {
 			outlineFilter = { ...EMPTY_OUTLINE_FILTER };
 		}
 	});
 
+	// Side-effect boundary: sync work-level history, recovery snapshots, and reference backlinks with selection.
+	// Dependency: selectedItem?.workId, selectedBranchId, startup.phase.
+	// Cleanup: handled by controllers (history.clear, editorController.clearBacklinks).
 	$effect(() => {
 		const workId = selectedItem?.workId;
 		if (workId && startup.phase === "ready") {
@@ -971,10 +967,12 @@
 		}, 0);
 	}
 
+	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
 	function addBrowsingPane(): void {
 		navigationController.addBrowsingPane();
 	}
 
+	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
 	function switchBrowsingPane(paneId: string): void {
 		const pane = navigationController.browsing.panes.find((candidate) => candidate.id === paneId);
 		const nextId = pane?.history[pane.historyIndex]?.selectedOccurrenceId ?? null;
@@ -1025,14 +1023,23 @@
 		].join(":");
 	}
 
+	// Side-effect boundary: refresh global lineage tree when transient selection or filter changes the projection key.
+	// Dependency: viewMode, globalLineageFilterKey() (tracks activeGlobalLineageFilter and selectedItem?.workId).
+	// Cleanup: globalLineageRequest token safely drops in-flight stale responses.
 	$effect(() => {
 		// The selected Work is a transient exception to the isolation filter, so
 		// any selection change must refresh the projection while the tree view
 		// is open; otherwise a previously selected Work would stay visible.
-		if (viewMode !== "globalLineage") return;
+		if (viewMode !== "globalLineage") {
+			globalLineageRequest++;
+			return;
+		}
 		const key = globalLineageFilterKey();
 		if (key === lastLoadedGlobalLineageFilterKey) return;
 		void loadGlobalLineage();
+		return () => {
+			globalLineageRequest++;
+		};
 	});
 
 	function handleGlobalLineageFilterChange(next: GlobalLineageFilter): void {
@@ -1163,12 +1170,9 @@
 	function performQuickCapture(): Promise<void> {
 		return workController.performQuickCapture(quickCaptureText, quickCapturePreference.destination);
 	}
-	const loadUnplacedWorks = workController.loadUnplacedWorks;
 	const openUnplaced = workController.openUnplaced;
 	const updateUnplacedText = workController.updateUnplacedText;
-	const loadStubs = workController.loadStubs;
 	const openStubs = workController.openStubs;
-	const loadDuplicates = workController.loadDuplicates;
 	const openDuplicates = workController.openDuplicates;
 	const createStubFromList = workController.createStubFromList;
 	const updateStubText = workController.updateStubText;
@@ -1684,7 +1688,6 @@
 		});
 	}
 
-	function captureQuickText(): void { void executeCommand("quickCapture"); }
 	function requestClearHoist(): void { void executeCommand("clearHoist"); }
 	function exportMarkdown(): void { void executeCommand("exportMarkdown"); }
 	function addBookmark(): void { void executeCommand("addBookmark"); }

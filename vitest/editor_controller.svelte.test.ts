@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import type { LinkType, OutlineSnapshot } from "../src/domain/models.ts";
+import type { InternalReferenceBacklink, LinkType, OutlineSnapshot } from "../src/domain/models.ts";
 import { createEditorController } from "../src/ui/editor_controller.svelte.ts";
 
 function createController(overrides?: {
@@ -812,6 +812,40 @@ describe("editor controller", () => {
 
 			controller.clearBacklinks();
 			expect(controller.internalReferenceBacklinks).toEqual([]);
+		});
+
+		test("loadInternalReferenceBacklinks ignores stale out-of-order responses", async () => {
+			let resolveFirst!: (value: InternalReferenceBacklink[]) => void;
+			const firstPromise = new Promise<InternalReferenceBacklink[]>((resolve) => {
+				resolveFirst = resolve;
+			});
+			const backlink1 = {
+				source: { scope: "work" as const, workId: "w-old" },
+				target: { scope: "work" as const, workId: "w-target-1" },
+			};
+			const backlink2 = {
+				source: { scope: "work" as const, workId: "w-new" },
+				target: { scope: "work" as const, workId: "w-target-2" },
+			};
+			const listFn = vi.fn()
+				.mockReturnValueOnce(firstPromise)
+				.mockResolvedValueOnce([backlink2]);
+
+			const { controller } = createController({
+				api: {
+					listInternalReferenceBacklinks: listFn,
+				},
+			});
+
+			const p1 = controller.loadInternalReferenceBacklinks("w-target-1");
+			const p2 = controller.loadInternalReferenceBacklinks("w-target-2");
+
+			await p2;
+			expect(controller.internalReferenceBacklinks).toEqual([backlink2]);
+
+			resolveFirst([backlink1]);
+			await p1;
+			expect(controller.internalReferenceBacklinks).toEqual([backlink2]);
 		});
 
 		test("openInternalReferenceBacklink opens revision backlink", async () => {
