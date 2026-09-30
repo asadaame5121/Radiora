@@ -5,12 +5,8 @@ Deno.test("App routes command buttons and global shortcuts through the command s
 	assert(app.includes("commandAvailability(commandContext)"));
 	assert(app.includes("dispatchCommand(id, executionContext"));
 	assert(app.includes("isEditableTarget(event.target)"));
-	assert(
-		app.includes(
-			'event.shiftKey && event.key.toLocaleLowerCase() === "l"',
-		),
-	);
-	assert(app.includes('void executeCommand("createLink")'));
+	assert(!app.includes('event.shiftKey && event.key.toLocaleLowerCase() === "l"'));
+	assert(app.includes("keyboard.handle(event)"));
 	assert(app.includes("validateShortcuts(COMMAND_DEFINITIONS"));
 	assert(app.includes('window.addEventListener("keydown", handleGlobalShortcut, true)'));
 	assert(app.includes('window.removeEventListener("keydown", handleGlobalShortcut, true)'));

@@ -28,7 +28,7 @@ export function commandPaletteItems(
 		.map((command) => ({
 			id: command.id,
 			label: command.label(vocabulary),
-			shortcut: command.shortcut,
+			shortcut: command.chordKey ? `Ctrl+/ → ${command.chordKey}` : command.shortcut,
 			availability: availability[command.id],
 		}))
 		.filter((command) => command.label.toLocaleLowerCase().includes(normalizedQuery));
