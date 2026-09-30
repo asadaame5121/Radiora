@@ -1351,7 +1351,7 @@
 	}
 
 	async function saveLongFormEditing(): Promise<void> {
-		await keyboardWorkspace.returnToEditor();
+		await keyboardWorkspace.saveLongForm();
 	}
 	function startLongFormEditing(): void { void executeCommand("startLongFormEditing"); }
 

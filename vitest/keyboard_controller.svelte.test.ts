@@ -5,8 +5,57 @@ import { KeyboardController } from "../src/ui/keyboard_controller.svelte.ts";
 import { LongFormController } from "../src/ui/long_form_controller.svelte.ts";
 import { KeyboardWorkspaceController } from "../src/ui/keyboard_workspace_controller.svelte.ts";
 import { projectBrowsingOutline } from "../src/services/browsing_navigation_state.ts";
+import type { ViewMode } from "../src/ui/app_view_mode.ts";
 
 afterEach(() => vi.unstubAllGlobals());
+
+test.each(["globalLineage", "options"] as const)(
+	"Save persists manuscripts opened from %s without a return position",
+	async (initialView) => {
+		vi.stubGlobal("document", { querySelector: vi.fn().mockReturnValue(null) });
+		const persistence = {
+			flush: vi.fn().mockResolvedValue(undefined),
+			save: vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(undefined),
+			reload: vi.fn().mockResolvedValue(undefined),
+			reportError: vi.fn(),
+		};
+		const longForm = new LongFormController(persistence);
+		let view: ViewMode = initialView;
+		const item = { id: "tree-item", text: "original" } as OutlineItem;
+		const ports = {
+			selectedId: () => item.id,
+			hoistId: () => null,
+			view: () => view,
+			setView: (next: ViewMode) => {
+				view = next;
+			},
+			longFormActive: () => longForm.state.active,
+			leaveLongForm: () => longForm.save(),
+			startLongForm: () => longForm.start(item),
+			select: vi.fn().mockReturnValue(true),
+			setHoist: vi.fn(),
+			reveal: vi.fn(),
+			items: () => [item],
+			projection: vi.fn(),
+			clearTemporaryExpansion: vi.fn(),
+			setCollapsed: vi.fn(),
+			reload: vi.fn(),
+		};
+		const workspace = new KeyboardWorkspaceController(ports);
+		await workspace.openLongForm();
+		expect(workspace.position).toBeNull();
+		longForm.input("edited manuscript");
+		await workspace.saveLongForm();
+		expect(persistence.save).toHaveBeenCalledWith(item.id, "edited manuscript");
+		expect(longForm.state).toMatchObject({ active: true, dirty: true, text: "edited manuscript" });
+		expect(persistence.reload).not.toHaveBeenCalled();
+		await workspace.saveLongForm();
+		expect(persistence.reload).toHaveBeenCalledWith(item.id);
+		expect(longForm.state.active).toBe(false);
+		expect(ports.select).not.toHaveBeenCalled();
+		expect(view).toBe("outline");
+	},
+);
 
 test("collapse all includes hidden descendants in the current hoist and reloads after partial failure", async () => {
 	vi.stubGlobal("document", { querySelector: vi.fn().mockReturnValue(null) });

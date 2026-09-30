@@ -66,6 +66,10 @@ export class KeyboardWorkspaceController {
 		document.querySelector<HTMLTextAreaElement>(".long-form-textarea")?.focus();
 	};
 	returnToEditor = (): Promise<void> => this.editorReturn.restore();
+	saveLongForm = async (): Promise<void> => {
+		if (!await this.ports.leaveLongForm()) return;
+		if (this.position) await this.returnToEditor();
+	};
 	focusSearch = (): void => {
 		this.remember();
 		document.querySelector<HTMLInputElement>(".omniwindow input")?.focus();
