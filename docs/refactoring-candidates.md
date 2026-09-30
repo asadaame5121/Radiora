@@ -265,8 +265,18 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
   - 完了条件: 各 mutation
     の責務境界が分離され、単一責任原則と実装行数制約（400行以内）を満たしつつ、全 751
     件のテストおよび SQLite/JSON 契約を維持。
-- [ ] **S3: JSON codec/version guard** — 難易度3、S2 から独立
-  - unknown 入力の版判定、migration、検証を I/O から分離。既存 `backup_migrations.ts` を再利用する。
+- [x] **S3: JSON codec/version guard** — 難易度3、S2 から独立
+  - 2026-09-30完了。`json_graph_codec.ts` の `decodeJsonGraph(unknown)` に版判定、既存
+    `backup_migrations.ts` による移行、snapshot検証を集約。`JsonGraphStore` は検証済みdataを
+    読み込み、返された元の版に従って旧版保護と保存を行う。
+  - V0/V4の既存fixtureから各版の入力を構築し、codec直接テストとinitialize契約テスト26件を
+    追加。V0〜V8、未来版、不正入力、エラー順序、旧版の原文保護、既存保護の維持、V8の
+    非書き換え、失敗時のmemory/disk不変を検証。metadataや旧版の既定値の受理条件も維持。
+  - `json_store.ts` は348実装行となり行数例外を削除。移動・解消したmagic-number登録を削除し、
+    既存importの重複登録はMemoryとの69 tokensからSQLiteとの50 tokensへ置換（件数増加なし）。
+  - 検証: 関連85件、Vitest149件、型チェック、build、品質ラチェットは成功。`deno task verify`
+    はDeno789件成功・3件失敗で停止。legacy移行のパスとWindows専用MSIXに関する同じ3件の失敗を
+    変更前HEADでも確認済み。後続のVitestとbuildは個別に実行した。
   - 完了条件: V0〜V8、未来版、壊れた入力、旧版保護の契約を fixture で検証できる。 validation
     強化で受理入力やエラーを変える場合は別の挙動変更として扱う。
 - [ ] **S4: JSON persistence policy** — 難易度4、依存 S0/S3、S1/S2 と同時編集しない

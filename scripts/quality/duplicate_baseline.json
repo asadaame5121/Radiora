@@ -24,7 +24,7 @@
 	"services/revision_service.ts|services/revision_service.ts|9|80",
 	"services/rule_query.ts|services/rule_query.ts|6|56",
 	"storage/backup_migrations.ts|storage/graph_store.ts|10|62",
-	"storage/json_store.ts|storage/memory_store.ts|12|69",
+	"storage/json_store.ts|storage/sqlite_store.ts|21|50",
 	"storage/memory_store.ts|storage/memory_store.ts|9|74",
 	"ui/ComparisonPane.svelte:html|ui/ComparisonPane.svelte:html|9|62",
 	"ui/InAppHelp.svelte:html|ui/InAppHelp.svelte:html|8|58",
