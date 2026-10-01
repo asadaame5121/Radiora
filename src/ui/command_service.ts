@@ -1,4 +1,5 @@
 import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
+import { KEYBOARD_COMMANDS } from "./keyboard_commands.ts";
 
 /** A command's state is deliberately UI-neutral so buttons and shortcuts agree. */
 export interface CommandContext {
@@ -12,6 +13,8 @@ export interface CommandContext {
 	ruleSource: string;
 	ruleName: string;
 	isHoisted: boolean;
+	isOutline?: boolean;
+	hasReturnPosition?: boolean;
 }
 
 export type CommandId =
@@ -25,7 +28,18 @@ export type CommandId =
 	| "createLink"
 	| "runQuery"
 	| "saveQuery"
-	| "startLongFormEditing";
+	| "startLongFormEditing"
+	| "showOutline"
+	| "showTree"
+	| "returnToEditor"
+	| "focusSearch"
+	| "focusQuickCapture"
+	| "toggleSidebar"
+	| "collapseAll"
+	| "expandAll"
+	| "toggleCollapsed"
+	| "zoomOut"
+	| "removeOccurrence";
 
 export interface CommandAvailability {
 	enabled: boolean;
@@ -36,6 +50,7 @@ export interface CommandDefinition {
 	id: CommandId;
 	label: (vocabulary: UiVocabulary) => string;
 	shortcut?: string;
+	chordKey?: string;
 	availability: (context: CommandContext) => CommandAvailability;
 }
 
@@ -73,6 +88,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 		id: "startLongFormEditing",
 		label: (vocabulary) => vocabulary.manuscriptOpen,
 		shortcut: "Ctrl+Shift+E",
+		chordKey: "d",
 		availability: selection,
 	},
 	{
@@ -108,7 +124,8 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 	},
 	{
 		id: "createBranch",
-		label: (vocabulary) => `新しい${vocabulary.branch}`,
+		label: (vocabulary) => `${vocabulary.branch}として保存`,
+		shortcut: "Ctrl+Shift+S",
 		availability: (context) =>
 			!selection(context).enabled
 				? selection(context)
@@ -119,7 +136,6 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 	{
 		id: "createLink",
 		label: (vocabulary) => `${vocabulary.semanticLink}を追加`,
-		shortcut: "Ctrl+Shift+L",
 		availability: (context) =>
 			!selection(context).enabled
 				? selection(context)
@@ -150,6 +166,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 				? { enabled: false, reason: "保存名を入力してください。" }
 				: { enabled: true },
 	},
+	...KEYBOARD_COMMANDS,
 ] as const;
 
 export function commandAvailability(

@@ -34,6 +34,10 @@
 	import Toast from "./Toast.svelte";
 	import IconButton from "./primitives/IconButton.svelte";
 	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
+	import ShortcutNavigation from "./ShortcutNavigation.svelte";
+	import { KeyboardController, focusWorkspacePane, IME_PROCESS_KEY_CODE } from "./keyboard_controller.svelte.ts";
+	import { KeyboardWorkspaceController } from "./keyboard_workspace_controller.svelte.ts";
+	import { LongFormController } from "./long_form_controller.svelte.ts";
 	import LicensesDialog from "./LicensesDialog.svelte";
 	import {
 		fetchLicenseIndex,
@@ -159,12 +163,13 @@
 	let startup = $state<StartupStatus>({ phase: "starting", message: "Radioraを起動しています…" });
 	let error = $state("");
 	let outlineFilter = $state<OutlineFilter>({ ...EMPTY_OUTLINE_FILTER });
-	let longForm = $state({
-		active: false,
-		text: "",
-		dirty: false,
-		preview: false,
+	const longFormController = new LongFormController({
+		flush: () => editorController.flushAutosave(),
+		save: (id, text) => api.updateItemText(id, text),
+		reload: (id) => load(id),
+		reportError: (cause) => error = errorMessage(cause),
 	});
+	const longForm = $derived(longFormController.state);
 	let viewMode = $state<ViewMode>("outline");
 	// Side-effect boundary: record viewMode changes asynchronously for telemetry/analysis.
 	// Dependency: viewMode. Cleanup: not needed (best-effort async logging).
@@ -311,6 +316,29 @@
 		reload: () => load(),
 		reportError: (cause) => error = errorMessage(cause),
 	});
+	const keyboardWorkspace = new KeyboardWorkspaceController({
+		selectedId: () => selectedId,
+		hoistId: () => browsingLocation.hoistOccurrenceId,
+		view: () => viewMode,
+		setView: (view) => viewMode = view,
+		longFormActive: () => longForm.active,
+		leaveLongForm: () => longFormController.save(),
+		startLongForm: async () => { if (selectedItem) await longFormController.start(selectedItem); },
+		select: selectOccurrence,
+		setHoist: (id) => { if (id) navigationController.setHoist(id); else navigationController.clearHoist(); },
+		reveal: (id) => transientExpandedIds = ancestorBreadcrumb(snapshot, id).map((item) => item.id),
+		projection: () => browsingProjection,
+		items: () => snapshot.items,
+		clearTemporaryExpansion: () => transientExpandedIds = [],
+		setCollapsed: (id, collapsed) => api.setCollapsed(id, collapsed),
+		reload: () => load(),
+	});
+	const keyboard = new KeyboardController({
+		context: () => commandContext,
+		blocked: () => startup.phase !== "ready" || commandPaletteOpen || Boolean(confirmationController.pending) || licensesDialogOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
+		execute: executeCommand,
+		reportError: (cause) => error = errorMessage(cause),
+	});
 
 	const itemById = $derived(new Map(snapshot.items.map((item) => [item.id, item])));
 	const itemByWorkId = $derived(new Map(snapshot.items.map((item) => [item.workId, item])));
@@ -449,6 +477,8 @@
 		ruleSource: ruleQuery.source,
 		ruleName: ruleQuery.name,
 		isHoisted: Boolean(browsingLocation.hoistOccurrenceId),
+		isOutline: viewMode === "outline" && !longForm.active,
+		hasReturnPosition: Boolean(keyboardWorkspace.position),
 	});
 	const commands = $derived(commandAvailability(commandContext));
 	const occurrenceContextMenuItems = $derived.by((): readonly ContextMenuItem[] => {
@@ -505,6 +535,10 @@
 		shortcut,
 	}));
 	const helpEditorShortcuts = EDITOR_BINDINGS.map(({ label, keys }) => ({ label, shortcut: keys }));
+	const chordCommands = $derived(COMMAND_DEFINITIONS.flatMap((command) => command.chordKey ? [{
+		id: command.id, label: command.label(vocabulary), chordKey: command.chordKey,
+		availability: commands[command.id],
+	}] : []));
 
 	// Side-effect boundary: load emergence suggestions on selection changes once startup is ready.
 	// Dependency: selectedId, startup.phase. Cleanup: managed inside loadEmergence request lifecycle.
@@ -575,6 +609,8 @@
 			}
 		};
 		const handleGlobalShortcut = (event: KeyboardEvent) => {
+			if (event.isComposing || event.keyCode === IME_PROCESS_KEY_CODE) return;
+			if (keyboard.handle(event)) return;
 			const openHelpPanel = () => {
 				event.preventDefault();
 				if (commandPaletteOpen) void closeCommandPalette();
@@ -596,32 +632,45 @@
 			}
 			if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLocaleLowerCase() === "k") {
 				event.preventDefault();
+				event.stopImmediatePropagation();
+				keyboardWorkspace.remember();
 				if (commandPaletteOpen) void closeCommandPalette();
 				else void openCommandPalette();
 				return;
 			}
-			if (event.ctrlKey && !event.altKey && event.shiftKey && event.key.toLocaleLowerCase() === "l") {
+			if (event.defaultPrevented) return;
+			if (commandPaletteOpen || confirmationController.pending || licensesDialogOpen || occurrenceContextMenu || document.querySelector('[role="dialog"], dialog[open]')) return;
+			if (event.key === "F6" && !event.ctrlKey && !event.altKey && !event.metaKey) {
 				event.preventDefault();
-				void executeCommand("createLink");
+				focusWorkspacePane(event.shiftKey);
 				return;
 			}
-			if (event.defaultPrevented) return;
-			if (isEditableTarget(event.target)) return;
 			if (
 				event.key === " " &&
 				!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey &&
+				!isEditableTarget(event.target) &&
 				!(event.target instanceof HTMLElement && event.target.closest("button, a, [role='button']"))
 			) {
 				event.preventDefault();
-				viewMode = viewMode === "globalLineage" ? "outline" : "globalLineage";
+				void executeCommand(viewMode === "globalLineage" ? "showOutline" : "showTree");
 				return;
 			}
 			const shortcut = shortcutForKeyboardEvent(event);
-			const binding = shortcuts.bindings.find((candidate) => candidate.shortcut === shortcut);
+			const binding = shortcut === "Alt+." ? { commandId: "hoist" as const }
+				: shortcuts.bindings.find((candidate) => candidate.shortcut === shortcut);
 			if (!binding) return;
 			event.preventDefault();
+			event.stopImmediatePropagation();
+			if (event.repeat) return;
 			void executeCommand(binding.commandId);
 		};
+		const cancelChordOutside = (event: PointerEvent) => {
+			if (keyboard.open && !(event.target instanceof Element && event.target.closest("[data-shortcut-navigation]"))) keyboard.cancel(false);
+		};
+		const cancelChordOnBlur = () => keyboard.cancel(false);
+		window.addEventListener("pointerdown", cancelChordOutside, true);
+		window.addEventListener("blur", cancelChordOnBlur);
+		window.addEventListener("compositionstart", cancelChordOnBlur, true);
 		window.addEventListener("beforeunload", warnAboutUnsavedChanges);
 		document.addEventListener("visibilitychange", flushWhenHidden);
 		// Capture before editor libraries so Ctrl+K cannot be consumed as a
@@ -651,6 +700,9 @@
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
 			document.removeEventListener("visibilitychange", flushWhenHidden);
 			window.removeEventListener("keydown", handleGlobalShortcut, true);
+			window.removeEventListener("pointerdown", cancelChordOutside, true);
+			window.removeEventListener("blur", cancelChordOnBlur);
+			window.removeEventListener("compositionstart", cancelChordOnBlur, true);
 			// biome-ignore lint/plugin/noSwallowedRejection: Teardown cannot await; the retained draft and unload warning preserve recovery.
 			void editorController.flushAutosave().catch(() => {
 				// beforeunload already warns while an unsaved draft exists.
@@ -1096,7 +1148,7 @@
 				return;
 			}
 		}
-		if (event.key === "Enter" && !event.shiftKey) {
+		if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			if (!row.item.text.trim()) {
 				event.preventDefault();
 				return;
@@ -1121,13 +1173,13 @@
 			await load(created.id);
 			return;
 		}
-		if (event.key === "Tab") {
+		if (event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			event.preventDefault();
 			if (event.shiftKey) await outdent(row.item);
 			else await indent(row.item);
 			return;
 		}
-		if (event.key === "Backspace" && !row.item.text.trim()) {
+		if (event.key === "Backspace" && !event.ctrlKey && !event.altKey && !event.metaKey && !row.item.text.trim()) {
 			const siblings = siblingsOf(row.item).filter((item) => item.orderKey < row.item.orderKey);
 			const previous = siblings.at(-1);
 			if (previous) {
@@ -1144,7 +1196,7 @@
 			}
 			return;
 		}
-		if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+		if (event.altKey && !event.ctrlKey && !event.metaKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
 			event.preventDefault();
 			await moveSibling(row.item, event.key === "ArrowUp" ? -1 : 1);
 		}
@@ -1298,38 +1350,26 @@
 		}
 	}
 
-	function startLongFormEditing(): void {
-		if (!selectedItem) return;
-		longForm = { active: true, text: selectedItem.text, dirty: false, preview: false };
-	}
-
 	async function saveLongFormEditing(): Promise<void> {
-		if (!selectedItem) return;
-		try {
-			await api.updateItemText(selectedItem.id, longForm.text);
-			longForm = { active: false, text: "", dirty: false, preview: false };
-			await load(selectedItem.id);
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
+		await keyboardWorkspace.saveLongForm();
 	}
+	function startLongFormEditing(): void { void executeCommand("startLongFormEditing"); }
 
 	async function cancelLongFormEditing(): Promise<void> {
 		if (!longForm.dirty) {
-			longForm = { active: false, text: "", dirty: false, preview: false };
+			longFormController.reset();
 			return;
 		}
 		await requestConfirmation({
 			action: "cancel-longform",
 			pendingAction: async () => {
-				longForm = { active: false, text: "", dirty: false, preview: false };
+				longFormController.reset();
 			},
 		});
 	}
 
 	function handleLongFormInput(value: string): void {
-		longForm.text = value;
-		longForm.dirty = true;
+		longFormController.input(value);
 	}
 
 	function clearOutlineFilter(): void {
@@ -1371,6 +1411,7 @@
 	}
 
 	async function toggle(row: VisibleRow): Promise<void> {
+		transientExpandedIds = transientExpandedIds.filter((id) => id !== row.item.id);
 		await api.setCollapsed(row.item.id, !row.item.collapsed);
 		await load();
 	}
@@ -1587,11 +1628,16 @@
 	const openTrash = workController.openTrash;
 	const restoreTrash = workController.restoreTrash;
 
+	// ponytail: serialize commands globally; split per feature only if concurrent commands become necessary.
+	let commandExecuting = false;
 	async function executeCommand(
 		id: CommandId,
 		snapshotId?: string,
 		linkInput?: CreateLinkInput,
 	): Promise<void> {
+		if (commandExecuting) return;
+		commandExecuting = true;
+		try {
 		const executionContext: CommandContext = snapshotId
 			? { ...commandContext, hasSelectedRecoverySnapshot: true }
 			: commandContext;
@@ -1610,13 +1656,32 @@
 				case "saveQuery": await ruleQuery.save(); break;
 			case "saveRevision": if (snapshotId) await performPromoteRecoverySnapshot(snapshotId); break;
 				case "createBranch": await requestRewriteAsNewBranch(); break;
-				case "startLongFormEditing": startLongFormEditing(); break;
+				case "startLongFormEditing": await keyboardWorkspace.openLongForm(); break;
+				case "showOutline": await keyboardWorkspace.openOutline(); break;
+				case "showTree": await keyboardWorkspace.openTree(); break;
+				case "returnToEditor": await keyboardWorkspace.returnToEditor(); break;
+				case "focusSearch":
+				case "focusQuickCapture": keyboardWorkspace.focusSearch(); break;
+				case "toggleSidebar": toggleNavigation(); break;
+				case "collapseAll": await keyboardWorkspace.setAllCollapsed(true); break;
+				case "expandAll": await keyboardWorkspace.setAllCollapsed(false); break;
+				case "toggleCollapsed": {
+					const row = visibleRows.find((entry) => entry.item.id === selectedId);
+					if (row) await toggle(row);
+					break;
+				}
+				case "zoomOut": await keyboardWorkspace.zoomOut(); break;
+				case "removeOccurrence": if (selectedId) await remove(selectedId); break;
 			}
 		});
 		if (!result.executed && result.reason) error = result.reason;
+		} catch (cause) { error = errorMessage(cause); }
+		finally { commandExecuting = false; }
 	}
 
 	async function openCommandPalette(): Promise<void> {
+		keyboard.cancel();
+		keyboardWorkspace.remember();
 		commandPaletteRestoreFocus = document.activeElement instanceof HTMLElement
 			? document.activeElement
 			: null;
@@ -1679,6 +1744,7 @@
 
 	async function requestRewriteAsNewBranch(): Promise<void> {
 		if (!selectedItem || !selectedBranchId) return;
+		if (!await longFormController.save()) return;
 		confirmationController.rewriteBranchName = "";
 		await requestConfirmation({
 			action: "rewrite",
@@ -1949,6 +2015,12 @@
 
 <svelte:head><title>Radiora v2 PoC</title></svelte:head>
 
+{#if keyboard.open}
+	<ShortcutNavigation commands={chordCommands} notice={keyboard.notice}
+		onChoose={(id) => void keyboard.choose(id).catch((cause) => error = errorMessage(cause))}
+		onCancel={() => keyboard.cancel()} />
+{/if}
+
 <CommandPaletteDialog
 	open={commandPaletteOpen}
 	commands={commandPaletteCommands}
@@ -2013,7 +2085,7 @@
 		{inspectorCollapsed}
 		{workingCopySaveStatus}
 		themePreference={themeController.preference}
-		onSetViewMode={(mode) => (viewMode = mode)}
+		onSetViewMode={(mode) => void executeCommand(mode === "outline" ? "showOutline" : "showTree")}
 		onQuickCaptureInput={(val) => {
 			navigationController.quickCaptureText = val;
 			navigationController.queueSearch();

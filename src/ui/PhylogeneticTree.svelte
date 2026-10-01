@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { nodeTitle } from "./tree_node_title.ts";
+	import { moveTreeFocus } from "./keyboard_controller.svelte.ts";
 	import { onMount } from "svelte";
 	import HistoricalTimeline from "./HistoricalTimeline.svelte";
 	import * as d3 from "d3";
@@ -286,6 +287,7 @@
 	}
 
 	function handleNodeKeydown(event: KeyboardEvent, node: TreeLayoutNode): void {
+		if (moveTreeFocus(event, svgElement)) return;
 		if (!node.aggregate && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) {
 			event.preventDefault();
 			onContextMenu(node.id, event);
@@ -402,6 +404,7 @@
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<g
 						class="tree-node"
+						data-tree-node-id={node.id}
 						class:dimmed={Boolean(focusId) && !nodeIsEmphasized(node)}
 						class:emphasized={Boolean(focusId) && nodeIsEmphasized(node)}
 						class:selected={node.itemIds.includes(selectionId ?? "")}
@@ -439,7 +442,7 @@
 
 						{#if showLabel(node) && !node.aggregate}
 							<text class="node-label" x={node.radius + 12} dy=".32em">
-								{#each node.labelLines as line, index}
+								{#each node.labelLines as line, index (index)}
 									<tspan x={node.radius + 12} dy={index === 0 ? 0 : "1.15em"}>{line}</tspan>
 								{/each}
 							</text>

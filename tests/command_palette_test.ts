@@ -28,7 +28,7 @@ Deno.test("command palette searches command labels while retaining every command
 	);
 	assertEquals(
 		commandPaletteItems("クイック", context(), DEFAULT_UI_VOCABULARY).map((command) => command.id),
-		["quickCapture"],
+		["quickCapture", "focusQuickCapture"],
 	);
 });
 
