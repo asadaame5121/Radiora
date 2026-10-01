@@ -33,10 +33,10 @@ Deno.test("in-app help is a dedicated, reachable and scannable page", async () =
 
 	// Key vocabulary and distinctions
 	assert(help.includes("クイック入力"));
-	assert(help.includes("未配置箱"));
+	assert(help.includes("未配置項目"));
 	assert(help.includes("今日"));
 	assert(help.includes("栞"));
-	assert(help.includes("再開位置"));
+	assert(help.includes("前回の位置"));
 	assert(help.includes("長文編集モード"));
 	assert(help.includes("[["));
 	assert(help.includes("内部参照"));
@@ -46,14 +46,14 @@ Deno.test("in-app help is a dedicated, reachable and scannable page", async () =
 	assert(help.includes("DEF</code>"));
 	assert(help.includes("版として残す"));
 	assert(help.includes("別稿"));
-	assert(help.includes("復旧履歴（Recovery Snapshot）"));
+	assert(help.includes("復元ポイント（Recovery Snapshot）"));
 	assert(help.includes("比較"));
-	assert(help.includes("全体系統"));
-	assert(help.includes("版系統"));
+	assert(help.includes("ツリーの全体像"));
+	assert(help.includes("版の履歴"));
 	assert(help.includes("Chronology"));
 	assert(help.includes("Lineage"));
 	assert(help.includes("Query"));
-	assert(help.includes("Stub一覧"));
+	assert(help.includes("未完成項目一覧"));
 	assert(help.includes("重複候補"));
 	assert(help.includes("SQLite"));
 	assert(help.includes("READMEの移行手順"));
