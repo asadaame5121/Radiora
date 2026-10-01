@@ -15,37 +15,13 @@ import type {
 	Revision,
 	SavedRuleQuery,
 	SearchAlias,
-	SystemRelation,
 	Work,
 	WorkingCopy,
 } from "../domain/models.ts";
-import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
-import {
-	type GraphStateSnapshot,
-	type MergeWorksInput,
-	validatedGraphStateSnapshot,
-	type WorkBundle,
-} from "./graph_store.ts";
-import {
-	type BackupV0,
-	type BackupV1,
-	type BackupV2,
-	type BackupV3,
-	type BackupV4,
-	type BackupV5,
-	type BackupV6,
-	type BackupV7,
-	type BackupV8,
-	migrateBackupV0,
-	migrateBackupV1,
-	migrateBackupV2,
-	migrateBackupV3,
-	migrateBackupV4,
-	migrateBackupV5,
-	migrateBackupV6,
-	type StoredGraphV7,
-} from "./backup_migrations.ts";
+import { type GraphStateSnapshot, type MergeWorksInput, type WorkBundle } from "./graph_store.ts";
+import type { BackupV8, StoredGraphV7 } from "./backup_migrations.ts";
+import { decodeJsonGraph } from "./json_graph_codec.ts";
 
 export { migrateBackupV0 } from "./backup_migrations.ts";
 
@@ -71,46 +47,11 @@ export class JsonGraphStore extends MemoryGraphStore {
 
 	override async initialize(): Promise<void> {
 		try {
-			const parsed = JSON.parse(await Deno.readTextFile(this.path)) as
-				| BackupV0
-				| BackupV1
-				| BackupV2
-				| BackupV3
-				| BackupV4
-				| BackupV5
-				| BackupV6
-				| BackupV7
-				| BackupV8;
-			const data = "schemaVersion" in parsed ? this.readVersioned(parsed) : migrateBackupV6(
-				migrateBackupV5(
-					migrateBackupV4(
-						migrateBackupV3(
-							migrateBackupV2(migrateBackupV1(migrateBackupV0(parsed))),
-						),
-					),
-				),
-			);
-			this.load(data);
-			if (!("schemaVersion" in parsed)) {
-				await this.protectVersionInput(0);
-				await this.persist();
-			} else if (parsed.schemaVersion === 1) {
-				await this.protectVersionInput(parsed.schemaVersion);
-				await this.persist();
-			} else if (parsed.schemaVersion === 2) {
-				await this.protectVersionInput(parsed.schemaVersion);
-				await this.persist();
-			} else if (parsed.schemaVersion === 3) {
-				await this.protectVersionInput(parsed.schemaVersion);
-				await this.persist();
-			} else if (parsed.schemaVersion === 4) {
-				await this.protectVersionInput(parsed.schemaVersion);
-				await this.persist();
-			} else if (parsed.schemaVersion === 5) {
-				await this.protectVersionInput(parsed.schemaVersion);
-				await this.persist();
-			} else if (parsed.schemaVersion === 6 || parsed.schemaVersion === 7) {
-				await this.protectVersionInput(parsed.schemaVersion);
+			const parsed: unknown = JSON.parse(await Deno.readTextFile(this.path));
+			const decoded = decodeJsonGraph(parsed);
+			this.state.restoreGraphState(decoded.data);
+			if (decoded.protectionVersion !== null) {
+				await this.protectVersionInput(decoded.protectionVersion);
 				await this.persist();
 			}
 		} catch (cause) {
@@ -409,59 +350,6 @@ export class JsonGraphStore extends MemoryGraphStore {
 			this.state.rollback(before);
 			throw cause;
 		}
-	}
-
-	private readVersioned(
-		parsed: BackupV1 | BackupV2 | BackupV3 | BackupV4 | BackupV5 | BackupV6 | BackupV7 | BackupV8,
-	): StoredGraphV7 {
-		if (parsed.format !== "radiora-backup") {
-			throw new Error(`Unsupported backup format: ${String(parsed.format)}`);
-		}
-		if (parsed.schemaVersion === 1) {
-			return migrateBackupV6(
-				migrateBackupV5(
-					migrateBackupV4(migrateBackupV3(migrateBackupV2(migrateBackupV1(parsed.data)))),
-				),
-			);
-		}
-		if (parsed.schemaVersion === 2) {
-			return migrateBackupV6(
-				migrateBackupV5(migrateBackupV4(migrateBackupV3(migrateBackupV2(parsed.data)))),
-			);
-		}
-		if (parsed.schemaVersion === 3) {
-			return migrateBackupV6(
-				migrateBackupV5(migrateBackupV4(migrateBackupV3(parsed.data))),
-			);
-		}
-		if (parsed.schemaVersion === 4) {
-			return migrateBackupV6(migrateBackupV5(migrateBackupV4(parsed.data)));
-		}
-		if (parsed.schemaVersion === 5) {
-			return migrateBackupV6(migrateBackupV5(parsed.data));
-		}
-		if (parsed.schemaVersion === 6) {
-			return migrateBackupV6(parsed.data);
-		}
-		if (parsed.schemaVersion === 7 || parsed.schemaVersion === 8) {
-			const data = parsed.data;
-			if (
-				typeof data !== "object" || data === null || Array.isArray(data) ||
-				!("relationTypeDefinitions" in data)
-			) {
-				throw new Error("Invalid V7 backup data: missing relationTypeDefinitions");
-			}
-			return data;
-		}
-		throw new Error(
-			`Unsupported backup schema version: ${
-				String((parsed as { schemaVersion: unknown }).schemaVersion)
-			}`,
-		);
-	}
-
-	private load(data: StoredGraphV7): void {
-		this.state.restoreGraphState(data);
 	}
 
 	private async persist(): Promise<void> {
