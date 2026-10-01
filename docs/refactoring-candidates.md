@@ -279,8 +279,20 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
     変更前HEADでも確認済み。後続のVitestとbuildは個別に実行した。
   - 完了条件: V0〜V8、未来版、壊れた入力、旧版保護の契約を fixture で検証できる。 validation
     強化で受理入力やエラーを変える場合は別の挙動変更として扱う。
-- [ ] **S4: JSON persistence policy** — 難易度4、依存 S0/S3、S1/S2 と同時編集しない
-  - 通常保存、batch/import、atomic restore の保証を区別したまま重複手順を整理する。
+- [x] **S4: JSON persistence policy** — 難易度4、依存 S0/S3、S1/S2 と同時編集しない
+  - 作業Issue: #280。2026-10-01: `json_persistence.ts` に通常保存、memory rollback 付き保存、atomic
+    restore を分離。 `JsonGraphStore` は操作別 policy の選択と委譲を担当し、Memory が domain
+    mutation を所有する。
+  - 通常保存は失敗後の memory を保持し、import/unplaced/historical time/merge/recovery
+    restore・promotion/emergence/relation type の8操作だけ従来どおり memory を rollback する。
+    両者の disk 保存は直接書き込みのまま。途中失敗時の disk 保護は保証しない。
+  - atomic restore は一時ファイルへの書き込みと rename を維持。失敗時は memory を戻してから cleanup
+    し、cleanup 失敗では元のエラーを保持して残存 temp を許容する。
+  - 契約テストは全8操作の保存失敗、通常保存の memory 保持、部分書き込み・rename・cleanup
+    失敗、存在しない temp、string/URL path、復元成功・不正入力、mutation の同期/非同期失敗を確認。
+  - 検証: 追加24件を含むDeno813件（4 steps）成功、Vitest156件、型チェック、build、品質
+    ラチェット成功。`deno task verify` はlegacy移行のパスとWindows専用MSIXに関する3件の
+    既存失敗で停止。同じ3件を変更前HEADでも確認し、Vitest/buildは個別に実行した。
   - 完了条件: 失敗時の memory/disk/一時ファイルの契約が維持される。全面 atomic 化は別仕様とする。
   - SQLite の既存 `mutate` を再実装せず、JSON と共通の抽象基底 class を新設しない。
 
