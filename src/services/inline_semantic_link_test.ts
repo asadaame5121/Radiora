@@ -177,3 +177,47 @@ Deno.test("inline semantic links parse custom relation types when explicitly all
 	assertEquals(defaultResult.candidates, []);
 	assertEquals(defaultResult.diagnostics.map((d) => d.code), ["UNKNOWN_TYPE", "UNKNOWN_TYPE"]);
 });
+
+Deno.test("inline semantic links count UTF-16 positions after astral characters", () => {
+	const text = "😀 [[A::RELATED::B]] and [[C::NOPE::D]]";
+	const result = parseInlineSemanticLinks(text);
+	const validStart = text.indexOf("[[");
+	const invalidTypeStart = text.indexOf("NOPE");
+
+	assertEquals(result.candidates[0].range, {
+		start: validStart,
+		end: validStart + "[[A::RELATED::B]]".length,
+	});
+	assertEquals(result.diagnostics[0].code, "UNKNOWN_TYPE");
+	assertEquals(result.diagnostics[0].range, {
+		start: invalidTypeStart,
+		end: invalidTypeStart + "NOPE".length,
+	});
+});
+
+Deno.test("inline semantic links distinguish odd and even escaping before opening markers", () => {
+	const text = String.raw`\[[Ignored::RELATED::B]] \\[[A::RELATED::B]]`;
+	const result = parseInlineSemanticLinks(text);
+
+	assertEquals(result.diagnostics, []);
+	assertEquals(result.candidates.map(({ source, range }) => ({ source, range })), [{
+		source: "A",
+		range: { start: text.lastIndexOf("[["), end: text.length },
+	}]);
+});
+
+Deno.test("inline semantic links skip tilde fences and resume after closing them", () => {
+	const text = [
+		"~~~md",
+		"[[Hidden::RELATED::B]]",
+		"~~~",
+		"[[Visible::RELATED::B]]",
+	].join("\r\n");
+	const result = parseInlineSemanticLinks(text);
+
+	assertEquals(result.diagnostics, []);
+	assertEquals(result.candidates.map(({ source, range }) => ({ source, range })), [{
+		source: "Visible",
+		range: { start: text.lastIndexOf("[["), end: text.length },
+	}]);
+});
