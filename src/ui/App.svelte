@@ -144,6 +144,8 @@
 		type SemanticLinkAnnotation,
 	} from "../services/semantic_link_annotations";
 	import type { ViewMode } from "./app_view_mode.ts";
+	import { ScreenNavigationController } from "./screen_navigation_controller.svelte.ts";
+	import { captureEditorPosition, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
 
 	const api = createRpcAdapter<RadioraBindings>();
 
@@ -170,7 +172,12 @@
 		reportError: (cause) => error = errorMessage(cause),
 	});
 	const longForm = $derived(longFormController.state);
-	let viewMode = $state<ViewMode>("outline");
+	const screenNavigation = new ScreenNavigationController({
+		capture: captureScreenContext,
+		restore: restoreScreenContext,
+		afterRestore: restoreScreenFocus,
+	});
+	let viewMode: ViewMode = $derived(screenNavigation.view);
 	// Side-effect boundary: record viewMode changes asynchronously for telemetry/analysis.
 	// Dependency: viewMode. Cleanup: not needed (best-effort async logging).
 	$effect(() => {
@@ -179,7 +186,7 @@
 	const dateProjectionController = new DateProjectionController({
 		projectDates: (range) => api.projectDates(range),
 		onError: (cause) => error = errorMessage(cause),
-		onOpenView: (view) => viewMode = view,
+		onOpenView: (view) => screenNavigation.open(view),
 	});
 	let selectedId = $state<string | null>(null);
 	const navigationController = createNavigationController({
@@ -242,7 +249,7 @@
 		api,
 		getSnapshot: () => snapshot,
 		reload: load,
-		openView: (view) => viewMode = view,
+		openView: (view) => screenNavigation.open(view),
 		selectOccurrence,
 		requestConfirmation,
 		reportError: (cause) => error = errorMessage(cause),
@@ -285,7 +292,7 @@
 		api,
 		getSelectedWorkId: () => selectedItem?.workId ?? null,
 		getSelectedId: () => selectedId,
-		openView: () => viewMode = "comparison",
+		openView: () => screenNavigation.open("comparison"),
 		reportError: (cause) => error = errorMessage(cause),
 		comparisonPaneLabel: () => vocabulary.comparisonPane,
 	});
@@ -320,7 +327,7 @@
 		selectedId: () => selectedId,
 		hoistId: () => browsingLocation.hoistOccurrenceId,
 		view: () => viewMode,
-		setView: (view) => viewMode = view,
+		setView: (view) => screenNavigation.open(view),
 		longFormActive: () => longForm.active,
 		leaveLongForm: () => longFormController.save(),
 		startLongForm: async () => { if (selectedItem) await longFormController.start(selectedItem); },
@@ -333,6 +340,44 @@
 		setCollapsed: (id, collapsed) => api.setCollapsed(id, collapsed),
 		reload: () => load(),
 	});
+	function captureScreenContext() {
+		return {
+			selectedId,
+			browsing: $state.snapshot(navigationController.browsing),
+			expandedIds: [...transientExpandedIds],
+			outlineFilter: $state.snapshot(outlineFilter),
+			asideMode,
+			inspectorCollapsed,
+			comparison: {
+				link: $state.snapshot(comparison.link),
+				work: $state.snapshot(comparison.work),
+				preferredRevisionId: comparison.preferredRevisionId,
+			},
+			editorPosition: selectedId && viewMode === "outline" && !longForm.active
+				? captureEditorPosition(selectedId, browsingLocation.hoistOccurrenceId) : undefined,
+		};
+	}
+	async function restoreScreenContext(context: ReturnType<typeof captureScreenContext>): Promise<boolean> {
+		if (!await longFormController.save()) return false;
+		await editorController.flushAutosave();
+		if (!historicalTimeController.select(snapshot.items.find((item) => item.id === context.selectedId) ?? null)) return false;
+		navigationController.restoreBrowsing(context.browsing, snapshot);
+		selectedId = navigationController.browsingLocation.selectedOccurrenceId;
+		transientExpandedIds = context.expandedIds.filter((id) => itemById.has(id));
+		outlineFilter = context.outlineFilter;
+		asideMode = context.asideMode;
+		inspectorCollapsed = context.inspectorCollapsed;
+		comparison.link = context.comparison.link;
+		comparison.work = context.comparison.work;
+		comparison.preferredRevisionId = context.comparison.preferredRevisionId;
+		return true;
+	}
+	async function restoreScreenFocus(context: ReturnType<typeof captureScreenContext>, view: ViewMode): Promise<void> {
+		await tick();
+		if (view === "outline") await focusOutlineEditor(selectedId, context.editorPosition);
+		else if (view === "globalLineage") document.querySelector<SVGElement>(".tree-node.selected, .tree-node")?.focus();
+	}
+
 	const keyboard = new KeyboardController({
 		context: () => commandContext,
 		blocked: () => startup.phase !== "ready" || commandPaletteOpen || Boolean(confirmationController.pending) || licensesDialogOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
@@ -479,6 +524,7 @@
 		isHoisted: Boolean(browsingLocation.hoistOccurrenceId),
 		isOutline: viewMode === "outline" && !longForm.active,
 		hasReturnPosition: Boolean(keyboardWorkspace.position),
+		canGoBack: screenNavigation.canGoBack,
 	});
 	const commands = $derived(commandAvailability(commandContext));
 	const occurrenceContextMenuItems = $derived.by((): readonly ContextMenuItem[] => {
@@ -868,7 +914,7 @@
 				await openTreeOccurrence(targetId);
 				break;
 			case "zoom":
-				viewMode = "outline";
+				screenNavigation.open("outline");
 				transientExpandedIds = ancestorBreadcrumb(snapshot, targetId).map((item) => item.id);
 				navigationController.setHoist(targetId);
 				break;
@@ -891,7 +937,7 @@
 				await executeCommand("createBranch");
 				break;
 			case "work-lineage":
-				viewMode = "workLineage";
+				screenNavigation.open("workLineage");
 				break;
 			case "revision-comparison":
 				openSelectedRevisionComparison();
@@ -989,8 +1035,11 @@
 	}
 
 	async function openInspectorTool(mode: Extract<InspectorAsideMode, "query">): Promise<void> {
+		if (asideMode === mode && !dedicatedView && !inspectorCollapsed) return;
+		if (dedicatedView) screenNavigation.open("outline");
+		else screenNavigation.remember();
 		asideMode = mode;
-		if (dedicatedView) viewMode = "outline";
+		inspectorCollapsed = false;
 		await tick();
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
@@ -1002,7 +1051,7 @@
 	function openOutlineOccurrence(id: string, expandedIds = transientExpandedIds): void {
 		selectOccurrence(id, () => {
 			transientExpandedIds = expandedIds;
-			viewMode = "outline";
+			screenNavigation.open("outline");
 			requestFocus(id);
 		});
 	}
@@ -1281,14 +1330,14 @@
 		const state = navigationUiState(target, caretOffset);
 		if (!state.selectedOccurrenceId) {
 			selectOccurrence(null, () => {
-				viewMode = "outline";
+				screenNavigation.open("outline");
 				error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
 			});
 			return;
 		}
 		const occurrenceId = state.selectedOccurrenceId;
 		selectOccurrence(occurrenceId, () => {
-			viewMode = "outline";
+			screenNavigation.open("outline");
 			transientExpandedIds = state.temporaryExpandedOccurrenceIds;
 			void load().then((loaded) => loaded && requestFocus(occurrenceId, state.caretOffset));
 		});
@@ -1476,7 +1525,7 @@
 
 	function openRecentItem(item: OutlineItem): void {
 		const ancestors = ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id);
-		selectItem(item, ancestors, () => viewMode = "outline");
+		selectItem(item, ancestors, () => screenNavigation.open("outline"));
 	}
 
 	function openRecentNavigationItem(item: RecentNavigationItem): void {
@@ -1485,7 +1534,7 @@
 	}
 
 	function openHelp(): void {
-		viewMode = "help";
+		screenNavigation.open("help");
 	}
 
 	async function loadEmergence(id: string): Promise<void> {
@@ -1506,7 +1555,7 @@
 			selectOccurrence(occurrenceId, () => {
 				transientExpandedIds = ancestorIds;
 				void load(occurrenceId);
-				viewMode = "outline";
+				screenNavigation.open("outline");
 			});
 		} else {
 			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
@@ -1552,7 +1601,7 @@
 	}
 	async function openTags(): Promise<void> {
 		await loadTags();
-		viewMode = "tags";
+		screenNavigation.open("tags");
 	}
 
 	async function loadTags(): Promise<void> {
@@ -1659,6 +1708,7 @@
 				case "startLongFormEditing": await keyboardWorkspace.openLongForm(); break;
 				case "showOutline": await keyboardWorkspace.openOutline(); break;
 				case "showTree": await keyboardWorkspace.openTree(); break;
+				case "goBack": await screenNavigation.goBack(); break;
 				case "returnToEditor": await keyboardWorkspace.returnToEditor(); break;
 				case "focusSearch":
 				case "focusQuickCapture": keyboardWorkspace.focusSearch(); break;
@@ -1930,7 +1980,7 @@
 						history.loadRevisions(confirmation.workId),
 						history.loadWorkLineage(confirmation.workId),
 					]);
-					viewMode = "outline";
+					screenNavigation.open("outline");
 				}
 			} else if (confirmation.action === "merge-duplicate") {
 				await workController.confirmDuplicateMerge(confirmation.preview);
@@ -2062,7 +2112,7 @@
 		onOpenUnplaced={() => void openUnplaced()}
 		onOpenStubs={() => void openStubs()}
 		onOpenDuplicates={() => void openDuplicates()}
-		onOpenOptions={() => (viewMode = "options")}
+		onOpenOptions={() => screenNavigation.open("options")}
 		onOpenTags={() => void openTags()}
 		onOpenQuery={() => void openInspectorTool("query")}
 		onOpenHelp={openHelp}
@@ -2071,6 +2121,8 @@
 	<AppTopBar
 		{viewMode}
 		{viewModeLabel}
+		canGoBack={commands.goBack.enabled}
+		onGoBack={() => void executeCommand("goBack")}
 		quickCaptureText={navigationController.quickCaptureText}
 		{quickCaptureDestinationLabel}
 		{quickCaptureSubmitting}
@@ -2262,10 +2314,10 @@
 			<InAppHelp
 				shortcuts={helpShortcuts}
 				editorShortcuts={helpEditorShortcuts}
-				onOpenOutline={() => { viewMode = "outline"; }}
+				onOpenOutline={() => { screenNavigation.open("outline"); }}
 				onOpenToday={() => void openToday()}
 				onOpenUnplaced={() => void openUnplaced()}
-				onOpenOptions={() => { viewMode = "options"; }}
+				onOpenOptions={() => { screenNavigation.open("options"); }}
 				onOpenCommandPalette={() => void openCommandPalette()}
 			/>
 		{:else if viewMode === "comparison"}
@@ -2320,7 +2372,7 @@
 						<WorkLineage
 							projection={history.workLineage}
 							onCompare={(scope, id) => comparison.openWork(scope, id)}
-							onBack={() => { viewMode = "outline"; }}
+							onBack={() => { screenNavigation.open("outline"); }}
 						/>
 						{#if selectedItem && selectedBranchId}
 							<RecoverySnapshots
@@ -2423,7 +2475,7 @@
 				onOpenBacklink={openInternalReferenceBacklink}
 				onSetEmergenceReason={(id, value) => emergenceController.setResolutionReason(id, value)}
 				onResolveEmergence={resolveEmergence}
-				onOpenWorkLineage={() => viewMode = "workLineage"}
+				onOpenWorkLineage={() => screenNavigation.open("workLineage")}
 				onOpenRevisionComparison={openSelectedRevisionComparison}
 				onSelectRevision={setSelectedOccurrenceRevision}
 				onCreateBranch={() => executeCommand("createBranch")}

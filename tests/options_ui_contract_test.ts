@@ -19,7 +19,7 @@ Deno.test("Option is a dedicated management view and the toolbar keeps only dire
 	assertMatch(view, /<section class="options-panel"/);
 	assertNotMatch(app, /<details class="toolbar-menu">/);
 	assertMatch(view, /onclick=\{onExportMarkdown\}/);
-	assertMatch(app, /onOpenOptions=\{\(\) => \(viewMode = "options"\)\}/);
+	assertMatch(app, /onOpenOptions=\{\(\) => screenNavigation\.open\("options"\)\}/);
 	assertMatch(view, /onclick=\{onOpenTrash\}>項目を復元する<\/button>/);
 	assertMatch(app, /onOpenTrash=\{\(\) => void openTrash\(\)\}/);
 });

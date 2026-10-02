@@ -30,9 +30,9 @@ export class ComparisonController {
 	) {}
 
 	openRevision(revisionId: string): void {
+		this.ports.openView();
 		this.clear();
 		this.preferredRevisionId = revisionId;
-		this.ports.openView();
 	}
 
 	async openWork(scope: "branch" | "revision", id: string): Promise<void> {
@@ -48,11 +48,11 @@ export class ComparisonController {
 			);
 			if (!selected) throw new Error(`${this.ports.comparisonPaneLabel()}対象が見つかりません。`);
 			const key = comparisonDocumentKey(selected);
+			this.ports.openView();
 			this.work = {
 				...result,
 				...(scope === "revision" ? { preferredRightKey: key } : { preferredLeftKey: key }),
 			};
-			this.ports.openView();
 		} catch (cause) {
 			if (request !== this.request || this.ports.getSelectedWorkId() !== workId) return;
 			this.clearResults();
@@ -66,8 +66,8 @@ export class ComparisonController {
 		try {
 			const result = await this.ports.api.resolveLinkComparison(linkId);
 			if (request !== this.request || this.ports.getSelectedId() !== selectedId) return;
-			this.link = result;
 			this.ports.openView();
+			this.link = result;
 		} catch (cause) {
 			if (request !== this.request || this.ports.getSelectedId() !== selectedId) return;
 			this.clearResults();
