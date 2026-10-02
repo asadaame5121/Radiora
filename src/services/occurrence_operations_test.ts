@@ -3,6 +3,38 @@ import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
 import { StubService } from "./stub_service.ts";
 
+for (const level of ["root", "child"]) {
+	Deno.test(`occurrence operations inserts between existing ${level} siblings`, async () => {
+		const store = new MemoryGraphStore();
+		const operations = new OccurrenceOperations(store);
+		const parentId = level === "root"
+			? null
+			: (await operations.createItem({ text: "parent", parentId: null })).id;
+		const siblings: string[] = [];
+		for (const text of ["A", "B", "C", "D"]) {
+			const created = await operations.createItem({
+				text,
+				parentId,
+				afterId: siblings.at(-1),
+			});
+			siblings.push(created.id);
+		}
+
+		const created = await operations.createItem({ text: "new", parentId, afterId: siblings[1] });
+		const persisted = (await store.listItems()).filter((item) => item.parentId === parentId)
+			.sort((left, right) => left.orderKey - right.orderKey);
+
+		assertEquals(created.parentId, parentId);
+		assertEquals(persisted.map((item) => item.id), [
+			siblings[0],
+			siblings[1],
+			created.id,
+			siblings[2],
+			siblings[3],
+		]);
+	});
+}
+
 Deno.test("occurrence operations creates ordered siblings and preserves child order when deleting a parent", async () => {
 	const operations = new OccurrenceOperations(new MemoryGraphStore());
 	const first = await operations.createItem({ text: "first", parentId: null });

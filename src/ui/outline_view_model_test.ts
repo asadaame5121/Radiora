@@ -14,11 +14,33 @@ Deno.test("outline view model orders roots and children by orderKey", () => {
 	]);
 
 	assertEquals(rows(snapshot).map(rowSummary), [
-		["root-later", 0, false, false],
 		["root-first", 0, true, false],
 		["child-first", 1, false, false],
 		["child-later", 1, false, false],
+		["root-later", 0, false, false],
 	]);
+});
+
+Deno.test("outline view model inserts an appended root after its preceding sibling without mutating inputs", () => {
+	const orderStep = 1024;
+	const snapshot = outline(
+		["A", "B", "C", "D"].map((id, index) => item(id, null, (index + 1) * orderStep)),
+	);
+	const insertedOrder = (snapshot.items[1].orderKey + snapshot.items[2].orderKey) / 2;
+	snapshot.items.push(item("new", null, insertedOrder));
+	const projection = project(snapshot);
+	const beforeSnapshot = structuredClone(snapshot);
+	const beforeProjection = structuredClone(projection);
+
+	assertEquals(rows(snapshot, { projection }).map((row) => row.item.id), [
+		"A",
+		"B",
+		"new",
+		"C",
+		"D",
+	]);
+	assertEquals(snapshot, beforeSnapshot);
+	assertEquals(projection, beforeProjection);
 });
 
 Deno.test("outline view model hides descendants of collapsed items", () => {
