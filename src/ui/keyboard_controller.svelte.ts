@@ -58,6 +58,16 @@ export class KeyboardController {
 			this.cancel(false);
 			return false;
 		}
+		// Reserve browser Back even while a dialog or startup blocks application commands.
+		if (
+			event.key === "ArrowLeft" && event.altKey && !event.ctrlKey && !event.shiftKey &&
+			!event.metaKey
+		) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			if (!event.repeat) void this.choose("goBack").catch(this.ports.reportError);
+			return true;
+		}
 		if (this.ports.blocked()) {
 			this.cancel(false);
 			return false;

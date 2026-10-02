@@ -107,6 +107,36 @@ function event(key: string, modifiers: Partial<KeyboardEvent> = {}): KeyboardEve
 	} as KeyboardEvent;
 }
 
+test("reserved Alt+Left suppresses native Back while dialogs or startup block commands", () => {
+	const execute = vi.fn().mockResolvedValue(undefined);
+	const keyboard = new KeyboardController({
+		context: () => ({ startupReady: true, canGoBack: true }) as CommandContext,
+		blocked: () => true,
+		execute,
+		reportError: vi.fn(),
+	});
+	const back = event("ArrowLeft", { altKey: true });
+	expect(keyboard.handle(back)).toBe(true);
+	expect(back.preventDefault).toHaveBeenCalledOnce();
+	expect(back.stopImmediatePropagation).toHaveBeenCalledOnce();
+	expect(execute).not.toHaveBeenCalled();
+});
+
+test("reserved Alt+Left executes screen back once and ignores repeats", async () => {
+	const execute = vi.fn().mockResolvedValue(undefined);
+	const keyboard = new KeyboardController({
+		context: () => ({ startupReady: true, canGoBack: true }) as CommandContext,
+		blocked: () => false,
+		execute,
+		reportError: vi.fn(),
+	});
+	expect(keyboard.handle(event("ArrowLeft", { altKey: true }))).toBe(true);
+	await Promise.resolve();
+	expect(execute).toHaveBeenCalledWith("goBack");
+	expect(keyboard.handle(event("ArrowLeft", { altKey: true, repeat: true }))).toBe(true);
+	expect(execute).toHaveBeenCalledOnce();
+});
+
 test("chords consume input, reject unavailable commands, and leave reserved keys alone", async () => {
 	vi.stubGlobal("document", { activeElement: null });
 	vi.stubGlobal("HTMLTextAreaElement", class {});

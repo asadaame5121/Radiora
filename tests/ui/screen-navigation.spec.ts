@@ -16,6 +16,17 @@ test.beforeEach(async ({ page }) => {
 		route.fulfill({
 			json: { result: { items, links: [], knots: [], stashItemIds: [] } },
 		}));
+	await page.route("**/api/rpc/listGlobalLineage", (route) =>
+		route.fulfill({
+			json: {
+				result: {
+					snapshot: { items, links: [], knots: [], stashItemIds: [] },
+					promotedBranches: [],
+					totalWorkCount: items.length,
+					filteredWorkCount: items.length,
+				},
+			},
+		}));
 	for (const method of ["listUnplacedWorks", "listStubs", "listDuplicateCandidates"]) {
 		await page.route(`**/api/rpc/${method}`, (route) => route.fulfill({ json: { result: [] } }));
 	}
@@ -91,4 +102,38 @@ test("revision comparison returns to the original occurrence and history tab", a
 			element: HTMLTextAreaElement,
 		) => [element.selectionStart, element.selectionEnd]),
 	).toEqual([3, 7]);
+});
+
+test("screen back focuses the selected tree node instead of the first node", async ({ page }) => {
+	await page.goto("/");
+	await page.getByRole("button", { name: "ツリー", exact: true }).click();
+	const node = page.locator(".tree-node").nth(1);
+	await node.focus();
+	await node.press("Enter");
+	await expect(node).toHaveClass(/selected/);
+	const nodeId = await node.getAttribute("data-tree-node-id");
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
+	await expect(page.locator(`.tree-node[data-tree-node-id="${nodeId}"]`)).toBeFocused();
+});
+
+test("Alt+Left is suppressed while a dialog is open", async ({ page }) => {
+	await page.goto("/");
+	await page.getByRole("button", { name: "Option", exact: true }).click();
+	await page.keyboard.press("Control+K");
+	await expect(page.getByRole("dialog", { name: "コマンドパレット" })).toBeVisible();
+	const prevented = await page.evaluate(() => {
+		const event = new KeyboardEvent("keydown", {
+			key: "ArrowLeft",
+			altKey: true,
+			bubbles: true,
+			cancelable: true,
+		});
+		window.dispatchEvent(event);
+		return event.defaultPrevented;
+	});
+	expect(prevented).toBe(true);
+	await expect(page.getByRole("dialog", { name: "コマンドパレット" })).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("heading", { name: "Option", exact: true })).toBeVisible();
 });

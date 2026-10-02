@@ -10,6 +10,14 @@ type ComparisonApi = Pick<
 	"listWorkComparisonDocuments" | "resolveLinkComparison"
 >;
 
+export interface ComparisonNavigationContext {
+	preferredRevisionId: string | undefined;
+	link: LinkComparisonProjection | null;
+	work:
+		| (WorkComparisonDocuments & { preferredLeftKey?: string; preferredRightKey?: string })
+		| null;
+}
+
 export class ComparisonController {
 	preferredRevisionId = $state<string | undefined>();
 	link = $state<LinkComparisonProjection | null>(null);
@@ -28,6 +36,21 @@ export class ComparisonController {
 			comparisonPaneLabel(): string;
 		},
 	) {}
+
+	captureNavigationContext(): ComparisonNavigationContext {
+		return {
+			preferredRevisionId: this.preferredRevisionId,
+			link: $state.snapshot(this.link),
+			work: $state.snapshot(this.work),
+		};
+	}
+
+	restoreNavigationContext(context: ComparisonNavigationContext): void {
+		++this.request;
+		this.preferredRevisionId = context.preferredRevisionId;
+		this.link = context.link;
+		this.work = context.work;
+	}
 
 	openRevision(revisionId: string): void {
 		this.ports.openView();

@@ -73,6 +73,34 @@ describe("navigation controller", () => {
 		expect(controller.addBrowsingPane()).toBe("pane-5");
 	});
 
+	test("screen restoration reconciles saved panes and preserves browsing when selection is blocked", () => {
+		const snapshot = outline();
+		const controller = createNavigationController();
+		controller.browseToOccurrence(snapshot, "child");
+		controller.setHoist("root");
+		const secondPane = controller.addBrowsingPane();
+		controller.browseToOccurrence(snapshot, "leaf");
+		const saved = controller.captureBrowsing();
+		controller.activateBrowsingPane("pane-1", snapshot);
+		controller.browseToOccurrence(snapshot, "other");
+		const current = controller.captureBrowsing();
+		expect(controller.restoreBrowsing(saved, snapshot, () => false)).toBe(false);
+		expect(controller.browsing).toEqual(current);
+		expect(saved.activePaneId).toBe(secondPane);
+		expect(
+			controller.restoreBrowsing(
+				saved,
+				snapshot,
+				(location) => location.selectedOccurrenceId === "leaf",
+			),
+		).toBe(true);
+		expect(controller.browsingLocation).toEqual({
+			selectedOccurrenceId: "leaf",
+			hoistOccurrenceId: "root",
+		});
+		expect(controller.browsing.panes).toHaveLength(2);
+	});
+
 	test("honors initial navigation options and skips occupied pane numbers", () => {
 		const controller = createNavigationController({
 			initialPaneId: "custom",

@@ -115,8 +115,18 @@ export function createNavigationController(options: NavigationControllerOptions 
 		get omniEntryCount() {
 			return suggestions.length + searchResults.length + (quickCaptureText.trim() ? 1 : 0);
 		},
-		restoreBrowsing(state: BrowsingNavigationState, snapshot: OutlineSnapshot): void {
-			browsing = reconcileBrowsingState(state, snapshot);
+		captureBrowsing(): BrowsingNavigationState {
+			return $state.snapshot(browsing);
+		},
+		restoreBrowsing(
+			state: BrowsingNavigationState,
+			snapshot: OutlineSnapshot,
+			select?: (location: BrowsingLocation) => boolean,
+		): boolean {
+			const restored = reconcileBrowsingState(state, snapshot);
+			if (select && !select(currentBrowsingLocation(restored))) return false;
+			browsing = restored;
+			return true;
 		},
 		resetBrowsing(
 			paneId = "pane-1",

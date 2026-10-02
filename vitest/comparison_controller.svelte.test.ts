@@ -48,6 +48,28 @@ function createApi(overrides: Partial<Api> = {}): Api {
 }
 
 describe("comparison controller", () => {
+	test("restores comparison context and invalidates pending comparison requests", async () => {
+		const pending = deferred<LinkComparisonProjection>();
+		const openView = vi.fn();
+		const controller = new ComparisonController({
+			api: createApi({ resolveLinkComparison: () => pending.promise }),
+			getSelectedWorkId: () => "work",
+			getSelectedId: () => "item",
+			openView,
+			reportError: vi.fn(),
+			comparisonPaneLabel: () => "比較",
+		});
+		controller.openRevision("saved");
+		const saved = controller.captureNavigationContext();
+		const request = controller.openLink("pending");
+		controller.restoreNavigationContext(saved);
+		pending.resolve(linkProjection("pending"));
+		await request;
+		expect(controller.preferredRevisionId).toBe("saved");
+		expect(controller.link).toBeNull();
+		expect(openView).toHaveBeenCalledOnce();
+	});
+
 	test("revision, Work, and Link entry points share one request generation", async () => {
 		const work = deferred<WorkComparisonDocuments>();
 		const link = deferred<LinkComparisonProjection>();

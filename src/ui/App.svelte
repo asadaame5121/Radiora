@@ -144,8 +144,7 @@
 		type SemanticLinkAnnotation,
 	} from "../services/semantic_link_annotations";
 	import type { ViewMode } from "./app_view_mode.ts";
-	import { ScreenNavigationController } from "./screen_navigation_controller.svelte.ts";
-	import { captureEditorPosition, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
+	import { ScreenNavigationWorkspace } from "./screen_navigation_workspace.svelte.ts";
 
 	const api = createRpcAdapter<RadioraBindings>();
 
@@ -172,10 +171,25 @@
 		reportError: (cause) => error = errorMessage(cause),
 	});
 	const longForm = $derived(longFormController.state);
-	const screenNavigation = new ScreenNavigationController({
-		capture: captureScreenContext,
-		restore: restoreScreenContext,
-		afterRestore: restoreScreenFocus,
+	const screenNavigation = new ScreenNavigationWorkspace({
+		browsing: {
+			captureBrowsing: () => navigationController.captureBrowsing(),
+			restore: (state) => navigationController.restoreBrowsing(state, snapshot, (location) => selectOccurrence(location.selectedOccurrenceId)),
+		},
+		selection: { current: () => selectedId, hasItem: (id) => itemById.has(id) },
+		outline: {
+			filter: () => outlineFilter, setFilter: (next) => outlineFilter = next,
+			expanded: () => transientExpandedIds, setExpanded: (next) => transientExpandedIds = next,
+		},
+		inspector: {
+			capture: () => ({ mode: asideMode, collapsed: inspectorCollapsed }),
+			restore: (context) => { asideMode = context.mode; inspectorCollapsed = context.collapsed; },
+		},
+		comparison: {
+			captureNavigationContext: () => comparison.captureNavigationContext(),
+			restoreNavigationContext: (context) => comparison.restoreNavigationContext(context),
+		},
+		editor: { save: () => longFormController.save(), flush: () => editorController.flushAutosave(), longFormActive: () => longForm.active },
 	});
 	let viewMode: ViewMode = $derived(screenNavigation.view);
 	// Side-effect boundary: record viewMode changes asynchronously for telemetry/analysis.
@@ -340,44 +354,6 @@
 		setCollapsed: (id, collapsed) => api.setCollapsed(id, collapsed),
 		reload: () => load(),
 	});
-	function captureScreenContext() {
-		return {
-			selectedId,
-			browsing: $state.snapshot(navigationController.browsing),
-			expandedIds: [...transientExpandedIds],
-			outlineFilter: $state.snapshot(outlineFilter),
-			asideMode,
-			inspectorCollapsed,
-			comparison: {
-				link: $state.snapshot(comparison.link),
-				work: $state.snapshot(comparison.work),
-				preferredRevisionId: comparison.preferredRevisionId,
-			},
-			editorPosition: selectedId && viewMode === "outline" && !longForm.active
-				? captureEditorPosition(selectedId, browsingLocation.hoistOccurrenceId) : undefined,
-		};
-	}
-	async function restoreScreenContext(context: ReturnType<typeof captureScreenContext>): Promise<boolean> {
-		if (!await longFormController.save()) return false;
-		await editorController.flushAutosave();
-		if (!historicalTimeController.select(snapshot.items.find((item) => item.id === context.selectedId) ?? null)) return false;
-		navigationController.restoreBrowsing(context.browsing, snapshot);
-		selectedId = navigationController.browsingLocation.selectedOccurrenceId;
-		transientExpandedIds = context.expandedIds.filter((id) => itemById.has(id));
-		outlineFilter = context.outlineFilter;
-		asideMode = context.asideMode;
-		inspectorCollapsed = context.inspectorCollapsed;
-		comparison.link = context.comparison.link;
-		comparison.work = context.comparison.work;
-		comparison.preferredRevisionId = context.comparison.preferredRevisionId;
-		return true;
-	}
-	async function restoreScreenFocus(context: ReturnType<typeof captureScreenContext>, view: ViewMode): Promise<void> {
-		await tick();
-		if (view === "outline") await focusOutlineEditor(selectedId, context.editorPosition);
-		else if (view === "globalLineage") document.querySelector<SVGElement>(".tree-node.selected, .tree-node")?.focus();
-	}
-
 	const keyboard = new KeyboardController({
 		context: () => commandContext,
 		blocked: () => startup.phase !== "ready" || commandPaletteOpen || Boolean(confirmationController.pending) || licensesDialogOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
@@ -1035,11 +1011,7 @@
 	}
 
 	async function openInspectorTool(mode: Extract<InspectorAsideMode, "query">): Promise<void> {
-		if (asideMode === mode && !dedicatedView && !inspectorCollapsed) return;
-		if (dedicatedView) screenNavigation.open("outline");
-		else screenNavigation.remember();
-		asideMode = mode;
-		inspectorCollapsed = false;
+		screenNavigation.openInspectorTool(mode, dedicatedView);
 		await tick();
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
