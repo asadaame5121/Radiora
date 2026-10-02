@@ -36,6 +36,7 @@ export function buildVisibleRows(
 	projection.rootOccurrenceIds
 		.map((id) => normalItems.find((item) => item.id === id))
 		.filter((item): item is OutlineItem => Boolean(item))
+		.sort((a, b) => a.orderKey - b.orderKey)
 		.forEach((root) => visit(root, 0));
 	if (showStash) {
 		snapshot.items.filter((item) => stash.has(item.id)).sort((a, b) => a.orderKey - b.orderKey)
