@@ -148,7 +148,6 @@
 				"src/services/sparse_outline.ts",
 				"src/storage/graph_mutation_validation.ts",
 				"src/storage/graph_state_validation.ts",
-				"src/storage/json_store.ts",
 				"src/storage/memory_store.ts",
 				"src/storage/migrations/0001_work_occurrence.ts",
 				"src/storage/surreal_backup_restore.ts",
