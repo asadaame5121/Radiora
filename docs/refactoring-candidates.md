@@ -1,6 +1,6 @@
 # リファクタリング・バックログ
 
-更新日: 2026-09-23。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
+更新日: 2026-10-02。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
 に変更なし）。
 
 責務、state ownership、I/O、transaction の変更理由に沿って、挙動を維持したまま整理する計画。
@@ -72,8 +72,8 @@ checkは通過。
 8. **G、O、C、残る R**: 明確な変更理由が生じるまで後順位。
 
 A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ」依存は撤回する。 R1 と Storage は App
-と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。 今週のA0は完了。次回は
-**A1a（履歴・比較の状態所有分離）** を一作業単位にする。
+と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。2026-10-02のP1完了後、次回は
+**P2（Markdown除外領域の走査と意味リンク文法の分離）** を一作業単位にする。
 
 ## 運用・難易度
 
@@ -105,7 +105,16 @@ A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
 
-## 今週の実績（2026-09-17、FおよびH完了）
+## 今週の実績（2026-10-02、P1完了）
+
+S4の完了を受け、P1として `inline_semantic_link.ts` と `advanced_link_parser.ts`
+の既存テスト28件を確認した。 未完入力とMarkdown除外領域は既存ケースを維持し、足りなかったUTF-16
+source range、開き記号直前の
+backslashの奇偶、CRLFを含むチルダfenceの閉鎖後の走査を3件追加した。production codeは変更していない。
+検証: 対象テスト31件、`deno task verify`（Deno 819件・Vitest
+156件、lint、format、型チェック、build、 品質ラチェット）成功。次回はP2に着手する。
+
+## 過去の実績（2026-09-17、FおよびH完了）
 
 作業ブランチ: `complete_refactoring_f_h`。今週の対象は、リファクタリング候補
 F（不要ファイルと旧資産の清掃: F1〜F4）および H（docs の現行仕様への整理: H1〜H3）の完了。
@@ -326,8 +335,8 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
 
 ## P / G / O: Parser と検証
 
-- [ ] **P1** — 難易度3: escape、未完入力、source range、Markdown
-      除外領域の既存テストを確認し不足だけ補強。
+- [x] **P1** — 難易度3: escape、未完入力、source range、Markdown
+      除外領域の既存テストを確認し不足だけ補強。2026-10-02完了。
 - [ ] **P2** — 難易度3、依存 P1: fence/code/link/URL の走査を意味リンク文法から分離。 Markdown
       parser と契約が一致する箇所だけ共有する。token 列の新設は必須としない。
 - [ ] **P3** — 難易度3、依存 P2: endpoint/type/reason の文法を整理。小さな scanner 関数で足りるなら
