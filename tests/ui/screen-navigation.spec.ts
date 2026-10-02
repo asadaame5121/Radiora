@@ -129,6 +129,62 @@ test("a cancelled Recent selection adds no history, while a confirmed selection 
 	await expect(back).toBeDisabled();
 });
 
+for (const choice of ["保存して移動", "破棄して移動", "キャンセル"] as const) {
+	test(`Back waits for the historical-time guard: ${choice}`, async ({ page }) => {
+		await page.route("**/api/rpc/projectDates", (route) =>
+			route.fulfill({
+				json: {
+					result: {
+						range: { startInclusive: "2026-09-05", endExclusive: "2026-09-06" },
+						created: [],
+						updated: [],
+					},
+				},
+			}));
+		await page.route(
+			"**/api/rpc/setWorkHistoricalTime",
+			(route) => route.fulfill({ json: { result: null } }),
+		);
+		await page.goto("/");
+		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
+		await page.keyboard.press("Control+Shift+H");
+		await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
+			name: "今日",
+			exact: true,
+		}).click();
+		await page.getByRole("region", { name: "最近編集した項目" }).getByRole("button", {
+			name: /mock-7/,
+		}).click();
+		await page.getByRole("textbox", { name: "年", exact: true }).fill("2026");
+		const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
+		await back.click();
+		const dialog = page.getByRole("dialog", { name: "年代の変更を保存しますか？" });
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole("button", { name: choice, exact: true }).click();
+		if (choice === "キャンセル") {
+			await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
+			await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue("2026");
+			await expect(back).toBeEnabled();
+			await back.click();
+			await dialog.getByRole("button", { name: "破棄して移動", exact: true }).click();
+		}
+		await expect(dialog).toHaveCount(0);
+		await expect(page.getByRole("region", { name: "今日", exact: true })).toBeVisible();
+		await expect(
+			page.getByRole("complementary").getByRole("heading", {
+				name: "mock-1 editable text",
+				exact: true,
+			}),
+		).toBeVisible();
+		await back.click();
+		await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
+		await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]')).toHaveCount(
+			0,
+		);
+		await expect(back).toBeDisabled();
+	});
+}
+
 for (const kind of ["work", "revision"] as const) {
 	test(`${kind} comparison restores an edited and swapped pair after leaving the screen`, async ({ page }) => {
 		const revisions = ["a", "b", "c"].map((id) => ({

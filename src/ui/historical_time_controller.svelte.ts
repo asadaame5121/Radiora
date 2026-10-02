@@ -10,6 +10,7 @@ export class HistoricalTimeController {
 	submitting = $state(false);
 	pending = $state<{ item: OutlineItem | null } | null>(null);
 	private pendingSelectionAction: (() => void) | null = null;
+	private pendingSelectionCancelled: (() => void) | null = null;
 	readonly dirty = $derived(JSON.stringify(this.draft) !== this.baseline);
 	constructor(
 		private readonly ports: {
@@ -33,19 +34,34 @@ export class HistoricalTimeController {
 		this.draft.kind = kind;
 	}
 
-	select(next: OutlineItem | null, pendingAction: (() => void) | null = null): boolean {
+	select(
+		next: OutlineItem | null,
+		pendingAction: (() => void) | null = null,
+		onCancelled: (() => void) | null = null,
+	): boolean {
 		if (next?.workId === this.item?.workId) {
 			if (!this.dirty && !this.submitting) this.reset(next);
 			else if (this.item && next) this.item = { ...this.item, id: next.id };
 			return true;
 		}
 		if (this.dirty || this.submitting) {
+			this.pendingSelectionCancelled?.();
 			this.pending = { item: next };
 			this.pendingSelectionAction = pendingAction;
+			this.pendingSelectionCancelled = onCancelled;
 			return false;
 		}
 		this.reset(next);
 		return true;
+	}
+
+	/** Keep navigation pending until the user accepts or cancels the selection guard. */
+	async selectWhenReady(next: OutlineItem | null, commit: () => void): Promise<boolean> {
+		const accepted = await new Promise<boolean>((resolve) => {
+			if (this.select(next, () => resolve(true), () => resolve(false))) resolve(true);
+		});
+		if (accepted) commit();
+		return accepted;
 	}
 
 	async save(remove = false): Promise<boolean> {
@@ -70,8 +86,10 @@ export class HistoricalTimeController {
 	async resolvePending(choice: "save" | "discard" | "cancel"): Promise<void> {
 		if (!this.pending || this.submitting) return;
 		if (choice === "cancel") {
+			this.pendingSelectionCancelled?.();
 			this.pending = null;
 			this.pendingSelectionAction = null;
+			this.pendingSelectionCancelled = null;
 			return;
 		}
 		const next = this.pending.item;
@@ -79,6 +97,7 @@ export class HistoricalTimeController {
 		const pendingSelectionAction = this.pendingSelectionAction;
 		this.pending = null;
 		this.pendingSelectionAction = null;
+		this.pendingSelectionCancelled = null;
 		this.reset(next);
 		if (pendingSelectionAction) pendingSelectionAction();
 		else this.ports.select(next?.id ?? null);

@@ -19,7 +19,7 @@ function setup() {
 				selectedOccurrenceId: "selected",
 				hoistOccurrenceId: "root",
 			}),
-		restore: vi.fn().mockReturnValue(true),
+		restore: vi.fn().mockResolvedValue(true),
 	};
 	let filter = { freeText: "original", tagsAll: "", tagsNone: "" };
 	let expanded = ["root", "deleted"];
@@ -37,10 +37,12 @@ function setup() {
 		flush: vi.fn().mockResolvedValue(undefined),
 		longFormActive: () => false,
 	};
+	const tree = { focus: vi.fn() };
 	const workspace = new ScreenNavigationWorkspace({
 		browsing,
 		comparison,
 		editor,
+		tree,
 		selection: { current: () => "selected", hasItem: (id) => id !== "deleted" },
 		outline: {
 			filter: () => filter,
@@ -58,6 +60,7 @@ function setup() {
 		browsing,
 		editor,
 		comparison,
+		tree,
 		changeFilter: (text = "changed") => filter.freeText = text,
 		resetFilter: () => filter = { freeText: "", tagsAll: "", tagsNone: "" },
 		filter: () => filter,
@@ -106,7 +109,7 @@ test("failed save or guarded browsing leaves the screen history available", asyn
 	editor.save.mockResolvedValueOnce(false);
 	await workspace.goBack();
 	expect(browsing.restore).not.toHaveBeenCalled();
-	browsing.restore.mockReturnValueOnce(false);
+	browsing.restore.mockResolvedValueOnce(false);
 	await workspace.goBack();
 	expect(comparison.restoreNavigationContext).not.toHaveBeenCalled();
 	expect(workspace.view).toBe("options");
@@ -123,19 +126,12 @@ test("Query remembers and restores the inspector without duplicate entries", asy
 	expect(workspace.canGoBack).toBe(false);
 });
 
-test("tree focus prioritizes the selected node and falls back when none is selected", async () => {
-	const { workspace } = setup();
-	const selected = { focus: vi.fn() };
-	const first = { focus: vi.fn() };
-	const query = vi.fn((selector: string) => selector === ".tree-node.selected" ? selected : first);
-	vi.stubGlobal("document", { querySelector: query });
+test("tree restoration delegates focus through the UI port without querying the DOM", async () => {
+	const { workspace, tree } = setup();
 	workspace.open("globalLineage");
 	workspace.open("help");
+	vi.mocked(document.querySelector).mockClear();
 	await workspace.goBack();
-	expect(selected.focus).toHaveBeenCalledOnce();
-	expect(first.focus).not.toHaveBeenCalled();
-	query.mockImplementation((selector) => selector === ".tree-node.selected" ? null : first);
-	workspace.open("help");
-	await workspace.goBack();
-	expect(first.focus).toHaveBeenCalledOnce();
+	expect(tree.focus).toHaveBeenCalledOnce();
+	expect(document.querySelector).not.toHaveBeenCalled();
 });

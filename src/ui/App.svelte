@@ -145,6 +145,7 @@
 	} from "../services/semantic_link_annotations";
 	import type { ViewMode } from "./app_view_mode.ts";
 	import { ScreenNavigationWorkspace } from "./screen_navigation_workspace.svelte.ts";
+	import { focusTreeSelection } from "./tree_focus_adapter.ts";
 
 	const api = createRpcAdapter<RadioraBindings>();
 
@@ -174,7 +175,11 @@
 	const screenNavigation = new ScreenNavigationWorkspace({
 		browsing: {
 			captureBrowsing: () => navigationController.captureBrowsing(),
-			restore: (state) => navigationController.restoreBrowsing(state, snapshot, (location) => selectOccurrence(location.selectedOccurrenceId)),
+			restore: (state) => navigationController.restoreBrowsing(state, snapshot, (location) =>
+				historicalTimeController.selectWhenReady(
+					itemById.get(location.selectedOccurrenceId ?? "") ?? null,
+					() => commitOccurrenceSelection(location.selectedOccurrenceId),
+				)),
 		},
 		selection: { current: () => selectedId, hasItem: (id) => itemById.has(id) },
 		outline: {
@@ -190,6 +195,7 @@
 			restoreNavigationContext: (context) => comparison.restoreNavigationContext(context),
 		},
 		editor: { save: () => longFormController.save(), flush: () => editorController.flushAutosave(), longFormActive: () => longForm.active },
+		tree: { focus: focusTreeSelection },
 	});
 	let viewMode: ViewMode = $derived(screenNavigation.view);
 	// Side-effect boundary: record viewMode changes asynchronously for telemetry/analysis.
@@ -817,11 +823,15 @@
 		});
 	}
 
+	function commitOccurrenceSelection(id: string | null): void {
+		if (selectedId !== id) editorController.clearCompletions();
+		selectedId = id;
+		navigationController.browseToOccurrence(snapshot, id);
+	}
+
 	function selectOccurrence(id: string | null, afterSelection?: () => void): boolean {
 		const commit = () => {
-			if (selectedId !== id) editorController.clearCompletions();
-			selectedId = id;
-			navigationController.browseToOccurrence(snapshot, id);
+			commitOccurrenceSelection(id);
 			afterSelection?.();
 		};
 		if (!historicalTimeController.select(snapshot.items.find((item) => item.id === id) ?? null, commit)) {

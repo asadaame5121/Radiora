@@ -18,7 +18,7 @@ interface InspectorContext {
 export interface ScreenNavigationWorkspacePorts {
 	browsing: {
 		captureBrowsing(): BrowsingNavigationState;
-		restore(state: BrowsingNavigationState): boolean;
+		restore(state: BrowsingNavigationState): Promise<boolean>;
 	};
 	selection: { current(): string | null; hasItem(id: string): boolean };
 	outline: {
@@ -33,6 +33,7 @@ export interface ScreenNavigationWorkspacePorts {
 		restoreNavigationContext(context: ComparisonNavigationContext): void;
 	};
 	editor: { save(): Promise<boolean>; flush(): Promise<void>; longFormActive(): boolean };
+	tree: { focus(): void };
 }
 
 /** Coordinates screen context through feature ports; each feature retains its own invariants. */
@@ -91,7 +92,7 @@ export class ScreenNavigationWorkspace {
 	): Promise<boolean> {
 		if (!await this.ports.editor.save()) return false;
 		await this.ports.editor.flush();
-		if (!this.ports.browsing.restore(context.browsing)) return false;
+		if (!await this.ports.browsing.restore(context.browsing)) return false;
 		this.ports.outline.setExpanded(
 			context.expandedIds.filter((id) => this.ports.selection.hasItem(id)),
 		);
@@ -115,8 +116,7 @@ export class ScreenNavigationWorkspace {
 				context.editorPosition?.itemId === id ? context.editorPosition : undefined,
 			);
 		} else if (view === "globalLineage") {
-			(document.querySelector<SVGElement>(".tree-node.selected") ??
-				document.querySelector<SVGElement>(".tree-node"))?.focus();
+			this.ports.tree.focus();
 		}
 	}
 }

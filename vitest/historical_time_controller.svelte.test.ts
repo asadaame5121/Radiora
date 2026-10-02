@@ -37,6 +37,68 @@ function ports(
 }
 
 describe("HistoricalTimeController", () => {
+	it("commits a clean selection without opening a confirmation", async () => {
+		const controller = new HistoricalTimeController(ports());
+		const commit = vi.fn();
+		await expect(controller.selectWhenReady(item("first"), commit)).resolves.toBe(true);
+		expect(commit).toHaveBeenCalledOnce();
+		expect(controller.pending).toBeNull();
+	});
+
+	it("cancels a superseded pending selection instead of leaving its caller waiting", async () => {
+		const controller = new HistoricalTimeController(ports());
+		controller.select(item("first", "first", POINT));
+		controller.draft.original = "unsaved";
+		const oldCommit = vi.fn();
+		const latestCommit = vi.fn();
+		const old = controller.selectWhenReady(item("second"), oldCommit);
+		const latest = controller.selectWhenReady(item("third"), latestCommit);
+		await expect(old).resolves.toBe(false);
+		await controller.resolvePending("discard");
+		await expect(latest).resolves.toBe(true);
+		expect(oldCommit).not.toHaveBeenCalled();
+		expect(latestCommit).toHaveBeenCalledOnce();
+		expect(controller.item?.id).toBe("third");
+	});
+
+	it.each(["save", "discard", "cancel"] as const)(
+		"settles a waiting selection only after %s resolves the dirty form",
+		async (choice) => {
+			const controller = new HistoricalTimeController(ports());
+			controller.select(item("first", "first", POINT));
+			controller.draft.original = "unsaved";
+			const commit = vi.fn();
+			const finished = vi.fn();
+			const pending = controller.selectWhenReady(item("second"), commit).then(finished);
+			await Promise.resolve();
+			expect(commit).not.toHaveBeenCalled();
+			expect(finished).not.toHaveBeenCalled();
+			await controller.resolvePending(choice);
+			await pending;
+			expect(finished).toHaveBeenCalledWith(choice !== "cancel");
+			expect(commit).toHaveBeenCalledTimes(choice === "cancel" ? 0 : 1);
+			expect(controller.item?.id).toBe(choice === "cancel" ? "first" : "second");
+		},
+	);
+
+	it("keeps a waiting selection pending after a failed save and allows cancellation", async () => {
+		const controller = new HistoricalTimeController(ports(async () => {
+			throw new Error("save failed");
+		}));
+		controller.select(item("first", "first", POINT));
+		controller.draft.original = "unsaved";
+		const commit = vi.fn();
+		const finished = vi.fn();
+		const pending = controller.selectWhenReady(item("second"), commit).then(finished);
+		await controller.resolvePending("save");
+		expect(finished).not.toHaveBeenCalled();
+		expect(commit).not.toHaveBeenCalled();
+		expect(controller.error).toBe("save failed");
+		await controller.resolvePending("cancel");
+		await pending;
+		expect(finished).toHaveBeenCalledWith(false);
+	});
+
 	it("loads, saves, and deletes a shared Work value", async () => {
 		const api = ports();
 		const controller = new HistoricalTimeController(api);

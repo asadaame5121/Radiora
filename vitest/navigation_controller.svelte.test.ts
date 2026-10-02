@@ -73,7 +73,7 @@ describe("navigation controller", () => {
 		expect(controller.addBrowsingPane()).toBe("pane-5");
 	});
 
-	test("screen restoration reconciles saved panes and preserves browsing when selection is blocked", () => {
+	test("screen restoration reconciles saved panes and preserves browsing when selection is blocked", async () => {
 		const snapshot = outline();
 		const controller = createNavigationController();
 		controller.browseToOccurrence(snapshot, "child");
@@ -84,11 +84,11 @@ describe("navigation controller", () => {
 		controller.activateBrowsingPane("pane-1", snapshot);
 		controller.browseToOccurrence(snapshot, "other");
 		const current = controller.captureBrowsing();
-		expect(controller.restoreBrowsing(saved, snapshot, () => false)).toBe(false);
+		expect(await controller.restoreBrowsing(saved, snapshot, async () => false)).toBe(false);
 		expect(controller.browsing).toEqual(current);
 		expect(saved.activePaneId).toBe(secondPane);
 		expect(
-			controller.restoreBrowsing(
+			await controller.restoreBrowsing(
 				saved,
 				snapshot,
 				(location) => location.selectedOccurrenceId === "leaf",
@@ -100,6 +100,26 @@ describe("navigation controller", () => {
 		});
 		expect(controller.browsing.panes).toHaveLength(2);
 	});
+
+	test.each([true, false])(
+		"waits for a deferred browsing selection: accepted=%s",
+		async (accepted) => {
+			const snapshot = outline();
+			const controller = createNavigationController();
+			controller.browseToOccurrence(snapshot, "child");
+			controller.setHoist("root");
+			const saved = controller.captureBrowsing();
+			controller.browseToOccurrence(snapshot, "other");
+			const current = controller.captureBrowsing();
+			let resolve!: (accepted: boolean) => void;
+			const confirmation = new Promise<boolean>((done) => resolve = done);
+			const pending = controller.restoreBrowsing(saved, snapshot, () => confirmation);
+			expect(controller.browsing).toEqual(current);
+			resolve(accepted);
+			expect(await pending).toBe(accepted);
+			expect(controller.browsing).toEqual(accepted ? saved : current);
+		},
+	);
 
 	test("honors initial navigation options and skips occupied pane numbers", () => {
 		const controller = createNavigationController({

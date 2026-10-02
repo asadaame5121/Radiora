@@ -44,7 +44,7 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 		app.indexOf("async function loadEmergence"),
 	);
 	const browsingControls = app.slice(
-		app.indexOf("function selectOccurrence"),
+		app.indexOf("function commitOccurrenceSelection"),
 		app.indexOf("async function createRoot"),
 	);
 

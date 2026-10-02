@@ -118,13 +118,13 @@ export function createNavigationController(options: NavigationControllerOptions 
 		captureBrowsing(): BrowsingNavigationState {
 			return $state.snapshot(browsing);
 		},
-		restoreBrowsing(
+		async restoreBrowsing(
 			state: BrowsingNavigationState,
 			snapshot: OutlineSnapshot,
-			select?: (location: BrowsingLocation) => boolean,
-		): boolean {
+			select?: (location: BrowsingLocation) => boolean | Promise<boolean>,
+		): Promise<boolean> {
 			const restored = reconcileBrowsingState(state, snapshot);
-			if (select && !select(currentBrowsingLocation(restored))) return false;
+			if (select && !await select(currentBrowsingLocation(restored))) return false;
 			browsing = restored;
 			return true;
 		},
