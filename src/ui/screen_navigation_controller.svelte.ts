@@ -24,9 +24,21 @@ export class ScreenNavigationController<Context> {
 	}
 
 	open(view: ViewMode): void {
-		if (this.restoring || this.view === view) return;
-		this.remember();
-		this.view = view;
+		this.prepareOpen(view)();
+	}
+
+	/** Capture before destination selection, then commit only after its guard accepts. */
+	prepareOpen(view: ViewMode): () => void {
+		const entry = this.restoring || this.view === view
+			? null
+			: { view: this.view, context: this.ports.capture() };
+		let committed = false;
+		return () => {
+			if (!entry || committed || this.restoring) return;
+			committed = true;
+			this.history = [...this.history, entry];
+			this.view = view;
+		};
 	}
 
 	goBack = async (): Promise<void> => {

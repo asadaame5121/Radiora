@@ -1,8 +1,14 @@
 import { afterEach, expect, test, vi } from "vitest";
+import { tick } from "svelte";
 import { createBrowsingNavigationState } from "../src/services/browsing_navigation_state.ts";
 import { ScreenNavigationWorkspace } from "../src/ui/screen_navigation_workspace.svelte.ts";
 
-afterEach(() => vi.unstubAllGlobals());
+vi.mock("svelte", () => ({ tick: vi.fn(async () => undefined) }));
+
+afterEach(() => {
+	vi.mocked(tick).mockReset();
+	vi.unstubAllGlobals();
+});
 
 function setup() {
 	vi.stubGlobal("CSS", { escape: (value: string) => value });
@@ -52,7 +58,8 @@ function setup() {
 		browsing,
 		editor,
 		comparison,
-		changeFilter: () => filter.freeText = "changed",
+		changeFilter: (text = "changed") => filter.freeText = text,
+		resetFilter: () => filter = { freeText: "", tagsAll: "", tagsNone: "" },
 		filter: () => filter,
 		expanded: () => expanded,
 		inspector: () => inspector,
@@ -75,6 +82,22 @@ test("workspace restores isolated screen context through feature ports", async (
 		link: null,
 		work: null,
 	});
+});
+
+test("saved filters survive the destination screen's reset effect", async () => {
+	const { workspace, changeFilter, resetFilter, filter } = setup();
+	changeFilter("saved filter");
+	filter().tagsAll = "#keep";
+	filter().tagsNone = "#exclude";
+	workspace.open("options");
+	resetFilter();
+	// Model App's view-dependent reset at the transition's next render flush.
+	vi.mocked(tick).mockImplementationOnce(async () => {
+		expect(workspace.view).toBe("outline");
+		resetFilter();
+	});
+	await workspace.goBack();
+	expect(filter()).toEqual({ freeText: "saved filter", tagsAll: "#keep", tagsNone: "#exclude" });
 });
 
 test("failed save or guarded browsing leaves the screen history available", async () => {

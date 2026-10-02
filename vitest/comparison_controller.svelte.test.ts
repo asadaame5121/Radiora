@@ -48,6 +48,50 @@ function createApi(overrides: Partial<Api> = {}): Api {
 }
 
 describe("comparison controller", () => {
+	test("captures the displayed Work pair after changing and swapping selectors", async () => {
+		const controller = new ComparisonController({
+			api: createApi({
+				listWorkComparisonDocuments: async () => ({
+					workId: "work",
+					documents: [document("a"), document("b"), document("c")],
+				}),
+			}),
+			getSelectedWorkId: () => "work",
+			getSelectedId: () => "item",
+			openView: vi.fn(),
+			reportError: vi.fn(),
+			comparisonPaneLabel: () => "比較",
+		});
+		await controller.openWork("revision", "c");
+		controller.selectPair("revision:b", "revision:a");
+		const saved = controller.captureNavigationContext();
+		controller.selectPair("revision:a", "revision:b");
+		controller.selectPair("revision:a", "revision:a");
+		controller.selectPair("revision:missing", "revision:b");
+		expect(controller.work?.preferredLeftKey).toBe("revision:a");
+		controller.restoreNavigationContext(saved);
+		expect(controller.work?.preferredLeftKey).toBe("revision:b");
+		expect(controller.work?.preferredRightKey).toBe("revision:a");
+	});
+
+	test("restores an edited revision pair and clears it for a fresh comparison", () => {
+		const controller = new ComparisonController({
+			api: createApi(),
+			getSelectedWorkId: () => "work",
+			getSelectedId: () => "item",
+			openView: vi.fn(),
+			reportError: vi.fn(),
+			comparisonPaneLabel: () => "比較",
+		});
+		controller.openRevision("c");
+		controller.selectPair("revision:b", "revision:a");
+		const saved = controller.captureNavigationContext();
+		controller.openRevision("d");
+		expect(controller.revisionPair).toBeUndefined();
+		controller.restoreNavigationContext(saved);
+		expect(controller.revisionPair).toEqual({ leftKey: "revision:b", rightKey: "revision:a" });
+	});
+
 	test("restores comparison context and invalidates pending comparison requests", async () => {
 		const pending = deferred<LinkComparisonProjection>();
 		const openView = vi.fn();

@@ -1021,9 +1021,10 @@
 	}
 
 	function openOutlineOccurrence(id: string, expandedIds = transientExpandedIds): void {
+		const open = screenNavigation.prepareOpen("outline");
 		selectOccurrence(id, () => {
 			transientExpandedIds = expandedIds;
-			screenNavigation.open("outline");
+			open();
 			requestFocus(id);
 		});
 	}
@@ -1300,16 +1301,17 @@
 
 	async function openNavigationTarget(target: NavigationTarget, caretOffset?: number): Promise<void> {
 		const state = navigationUiState(target, caretOffset);
+		const open = screenNavigation.prepareOpen("outline");
 		if (!state.selectedOccurrenceId) {
 			selectOccurrence(null, () => {
-				screenNavigation.open("outline");
+				open();
 				error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
 			});
 			return;
 		}
 		const occurrenceId = state.selectedOccurrenceId;
 		selectOccurrence(occurrenceId, () => {
-			screenNavigation.open("outline");
+			open();
 			transientExpandedIds = state.temporaryExpandedOccurrenceIds;
 			void load().then((loaded) => loaded && requestFocus(occurrenceId, state.caretOffset));
 		});
@@ -1497,7 +1499,7 @@
 
 	function openRecentItem(item: OutlineItem): void {
 		const ancestors = ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id);
-		selectItem(item, ancestors, () => screenNavigation.open("outline"));
+		selectItem(item, ancestors, screenNavigation.prepareOpen("outline"));
 	}
 
 	function openRecentNavigationItem(item: RecentNavigationItem): void {
@@ -1524,10 +1526,11 @@
 		const ancestorIds = node.breadcrumb ?? [];
 		const occurrenceId = node.occurrenceId;
 		if (occurrenceId && itemById.has(occurrenceId)) {
+			const open = screenNavigation.prepareOpen("outline");
 			selectOccurrence(occurrenceId, () => {
 				transientExpandedIds = ancestorIds;
 				void load(occurrenceId);
-				screenNavigation.open("outline");
+				open();
 			});
 		} else {
 			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
@@ -2316,6 +2319,7 @@
 						context={{ kind: "branch" }}
 						preferredLeftKey={comparison.work.preferredLeftKey}
 						preferredRightKey={comparison.work.preferredRightKey}
+						onPairChange={(left, right) => comparison.selectPair(left, right)}
 					/>
 				{/key}
 			{:else if selectedItem}
@@ -2329,6 +2333,8 @@
 								(selectedItem.revisionSelector.mode === "pinned"
 									? selectedItem.revisionSelector.revisionId
 									: undefined)}
+							selectedPair={comparison.revisionPair}
+							onPairChange={(left, right) => comparison.selectPair(left, right)}
 						/>
 					{/key}
 				{/if}

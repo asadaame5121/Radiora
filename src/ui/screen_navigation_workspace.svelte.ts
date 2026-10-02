@@ -45,7 +45,7 @@ export class ScreenNavigationWorkspace {
 		this.navigation = new ScreenNavigationController({
 			capture: () => this.capture(),
 			restore: (context) => this.restore(context),
-			afterRestore: (context, view) => this.focus(context, view),
+			afterRestore: (context, view) => this.afterRestore(context, view),
 		});
 	}
 
@@ -57,6 +57,9 @@ export class ScreenNavigationWorkspace {
 	}
 	open(view: ViewMode): void {
 		this.navigation.open(view);
+	}
+	prepareOpen(view: ViewMode): () => void {
+		return this.navigation.prepareOpen(view);
 	}
 	goBack = (): Promise<void> => this.navigation.goBack();
 
@@ -92,16 +95,18 @@ export class ScreenNavigationWorkspace {
 		this.ports.outline.setExpanded(
 			context.expandedIds.filter((id) => this.ports.selection.hasItem(id)),
 		);
-		this.ports.outline.setFilter(context.filter);
 		this.ports.inspector.restore(context.inspector);
 		this.ports.comparison.restoreNavigationContext(context.comparison);
 		return true;
 	}
 
-	private async focus(
+	private async afterRestore(
 		context: ReturnType<ScreenNavigationWorkspace["capture"]>,
 		view: ViewMode,
 	): Promise<void> {
+		// Let view-dependent reset effects settle before restoring the caller's filter.
+		await tick();
+		this.ports.outline.setFilter(context.filter);
 		await tick();
 		if (view === "outline") {
 			const id = this.ports.selection.current();

@@ -47,6 +47,31 @@ test("restores the selection and comparison context of the caller", async () => 
 	});
 });
 
+test("a guarded destination change preserves the context from before selection", async () => {
+	const { controller, change, context } = setup();
+	controller.open("today");
+	const commit = controller.prepareOpen("outline");
+	change("destination");
+	commit();
+	commit();
+	await controller.goBack();
+	expect(controller.view).toBe("today");
+	expect(context().selectedId).toBe("original");
+	await controller.goBack();
+	expect(controller.view).toBe("outline");
+	expect(controller.canGoBack).toBe(false);
+});
+
+test("an uncommitted guarded transition does not change the screen or history", async () => {
+	const { controller } = setup();
+	controller.prepareOpen("today");
+	expect(controller.view).toBe("outline");
+	expect(controller.canGoBack).toBe(false);
+	const commit = controller.prepareOpen("outline");
+	commit();
+	expect(controller.canGoBack).toBe(false);
+});
+
 test("opening the same screen does not add a duplicate entry", async () => {
 	const { controller } = setup();
 	controller.open("options");
