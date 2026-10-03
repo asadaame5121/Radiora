@@ -117,3 +117,29 @@ test("completion of an already pending screen move expires domain receipts captu
 	expect(await navigation.navigate({ view: "outline", selected: "created" }, origin)).toBe(false);
 	expect(commit).not.toHaveBeenCalled();
 });
+
+test("pending screen covers the whole preparation and rendering lifecycle", async () => {
+	const s = setup();
+	let release!: () => void;
+	s.afterCommit.mockImplementationOnce(async () => {
+		await new Promise<void>((resolve) => release = resolve);
+	});
+	const moving = s.navigation.navigate({ view: "today" });
+	expect(s.navigation.pendingView).toBe("today");
+	await vi.waitFor(() => expect(s.afterCommit).toHaveBeenCalledOnce());
+	expect(s.navigation.view).toBe("today");
+	expect(s.navigation.pendingView).toBe("today");
+	release();
+	await moving;
+	expect(s.navigation.pendingView).toBeNull();
+});
+
+test("save or guard failure clears pending state for the current request", async () => {
+	const s = setup();
+	s.guard.mockResolvedValueOnce(false);
+	await s.navigation.navigate({ view: "today" });
+	expect(s.navigation.pendingView).toBeNull();
+	s.prepare.mockRejectedValueOnce(new Error("save failed"));
+	await expect(s.navigation.navigate({ view: "today" })).rejects.toThrow("save failed");
+	expect(s.navigation.pendingView).toBeNull();
+});

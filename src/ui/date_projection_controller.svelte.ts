@@ -16,7 +16,6 @@ export class DateProjectionController {
 	start = $state(localDateValue(new Date()));
 	end = $state(localDateValue(addDays(new Date(), 1)));
 	projection = $state<DateProjection | null>(null);
-	loading = $state(false);
 
 	constructor(private readonly options: DateProjectionControllerOptions) {}
 
@@ -31,36 +30,44 @@ export class DateProjectionController {
 	prepareScreen = async (range: DateRange): Promise<() => void> => {
 		const projection = await this.options.projectDates(range);
 		return () => {
+			this.start = localDateValue(new Date(range.startInclusive));
+			this.end = localDateValue(new Date(range.endExclusive));
 			this.projection = projection;
 		};
 	};
 
 	load = async (): Promise<void> => {
-		await this.options.navigation.navigate({
-			view: "today",
-			dateRange: dateRangeFromInputs(this.start, this.end),
-		});
+		await this.requestRange(new Date(`${this.start}T00:00:00`), new Date(`${this.end}T00:00:00`));
 	};
 
 	openToday = async (): Promise<void> => {
 		const now = new Date();
-		this.start = localDateValue(now);
-		this.end = localDateValue(addDays(now, 1));
-		await this.load();
+		await this.requestRange(now, addDays(now, 1));
 	};
 
 	moveRange = async (days: number): Promise<void> => {
-		this.start = localDateValue(addDays(new Date(`${this.start}T00:00:00`), days));
-		this.end = localDateValue(addDays(new Date(`${this.end}T00:00:00`), days));
-		await this.load();
+		await this.requestRange(
+			addDays(new Date(`${this.start}T00:00:00`), days),
+			addDays(new Date(`${this.end}T00:00:00`), days),
+		);
 	};
 
 	showWeek = async (): Promise<void> => {
 		const today = new Date();
 		const offset = (today.getDay() + MONDAY_INDEX_OFFSET) % DAYS_IN_WEEK;
 		const monday = addDays(today, -offset);
-		this.start = localDateValue(monday);
-		this.end = localDateValue(addDays(monday, DAYS_IN_WEEK));
-		await this.load();
+		await this.requestRange(monday, addDays(monday, DAYS_IN_WEEK));
 	};
+
+	private async requestRange(start: Date, end: Date): Promise<void> {
+		try {
+			const range = dateRangeFromInputs(
+				Number.isFinite(start.getTime()) ? localDateValue(start) : "",
+				Number.isFinite(end.getTime()) ? localDateValue(end) : "",
+			);
+			await this.options.navigation.navigate({ view: "today", dateRange: range });
+		} catch (cause) {
+			this.options.onError(cause);
+		}
+	}
 }

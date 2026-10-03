@@ -2159,7 +2159,7 @@
 				bind:dateEnd={dateProjectionController.end}
 				bind:outlineFilter
 				projection={dateProjectionController.projection}
-				loading={dateProjectionController.loading}
+				loading={screenNavigation.pendingView === "today"}
 				onMoveDateRange={moveDateRange}
 				onShowWeek={showWeek}
 				onLoad={loadDateProjection}

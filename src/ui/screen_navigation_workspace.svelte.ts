@@ -68,6 +68,9 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 	get canGoBack() {
 		return this.navigation.canGoBack;
 	}
+	get pendingView() {
+		return this.navigation.pendingView;
+	}
 	get origin() {
 		return this.navigation.origin;
 	}

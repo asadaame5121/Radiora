@@ -17,3 +17,12 @@ test("tree focus prioritizes the selected node and falls back when none is selec
 	query.mockReturnValue(null);
 	expect(() => focusTreeSelection()).not.toThrow();
 });
+
+test("empty or filtered Tree falls back to the focusable SVG root", () => {
+	const root = { focus: vi.fn() };
+	vi.stubGlobal("document", {
+		querySelector: vi.fn((selector: string) => selector === ".tree-root svg" ? root : null),
+	});
+	focusTreeSelection();
+	expect(root.focus).toHaveBeenCalledOnce();
+});

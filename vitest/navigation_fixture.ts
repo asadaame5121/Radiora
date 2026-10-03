@@ -39,8 +39,11 @@ export function navigationFixture() {
 	});
 	guard.reset(source);
 	const presentation = vi.fn();
-	const prepare = vi.fn(async (_destination: ScreenDestination) => presentation);
+	const prepare = vi.fn(async (_destination: ScreenDestination): Promise<() => void> =>
+		presentation
+	);
 	const reportError = vi.fn();
+	const save = vi.fn(async () => true);
 	const navigation = new ScreenNavigationWorkspace({
 		outline: {
 			captureBrowsing: () => browsing,
@@ -81,7 +84,7 @@ export function navigationFixture() {
 			},
 			cancelPending: () => guard.cancelPending(),
 		},
-		editor: { save: vi.fn(async () => true), flush: vi.fn(async () => undefined) },
+		editor: { save, flush: vi.fn(async () => undefined) },
 		screens: { prepare, focusTree: vi.fn() },
 		reportError,
 	});
@@ -97,6 +100,7 @@ export function navigationFixture() {
 		prepare,
 		presentation,
 		reportError,
+		save,
 		dirty: () => {
 			guard.draft.start.year = "2026";
 			guard.draft.start.unknown = false;

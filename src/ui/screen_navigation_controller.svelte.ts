@@ -3,6 +3,7 @@ import type { ViewMode } from "./app_view_mode.ts";
 /** Owns the only boundary that may publish a prepared destination and its screen. */
 export class ScreenNavigationController<Destination extends { view: ViewMode }, Prepared> {
 	private currentView = $state<ViewMode>("outline");
+	private pendingScreen = $state<ViewMode | null>(null);
 	private request = 0;
 	private receipt = 0;
 
@@ -24,6 +25,9 @@ export class ScreenNavigationController<Destination extends { view: ViewMode }, 
 	get canGoBack(): boolean {
 		return this.view !== "outline";
 	}
+	get pendingView(): ViewMode | null {
+		return this.pendingScreen;
+	}
 	/** Read-only receipt for domain operations that finish after another navigation request. */
 	get origin(): number {
 		return this.receipt;
@@ -34,8 +38,9 @@ export class ScreenNavigationController<Destination extends { view: ViewMode }, 
 		const request = ++this.request;
 		++this.receipt;
 		const current = () => request === this.request;
-		this.ports.cancelPending();
+		this.pendingScreen = destination.view;
 		try {
+			this.ports.cancelPending();
 			const prepared = await this.ports.prepare(destination, current);
 			if (
 				!current() || !await this.ports.guard(prepared, current) || !current() ||
@@ -50,6 +55,8 @@ export class ScreenNavigationController<Destination extends { view: ViewMode }, 
 			if (!this.ports.reportError) throw cause;
 			if (current()) this.ports.reportError(cause);
 			return false;
+		} finally {
+			if (current()) this.pendingScreen = null;
 		}
 	};
 }
