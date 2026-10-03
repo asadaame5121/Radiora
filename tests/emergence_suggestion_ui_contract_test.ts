@@ -33,7 +33,7 @@ Deno.test("emergence decisions stay explicit and use injected vocabulary", async
 	assert(section.includes('onResolveEmergence(suggestion, "pin")'));
 	assert(section.includes('onResolveEmergence(suggestion, "dismiss")'));
 	assertFalse(section.includes("{#if suggestion.proposedLinkType}"));
-	assert(section.includes("disabled={!emergenceResolutionReasons[suggestion.id]?.trim()}"));
+	assertFalse(section.includes("disabled={!emergenceResolutionReasons[suggestion.id]?.trim()}"));
 	assertFalse(/>採用<|>保留<|>ピン<|>却下<|関係を探索中|新しい関係候補はありません/.test(section));
 	assert(app.includes("createEmergenceController"));
 	assert(app.includes("<Toast"));

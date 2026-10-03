@@ -60,6 +60,23 @@ Deno.test("emergence persistence dismisses a persisted suggestion after recreati
 	assertEquals((await store.listEmergenceSuggestions())[0].persistenceStatus, "dismissed");
 });
 
+for (const reason of [undefined, "", "   "]) {
+	Deno.test(`emergence persistence dismisses without a reason: ${JSON.stringify(reason)}`, async () => {
+		const store = new MemoryGraphStore();
+		const persistence = new EmergencePersistence(store);
+		const input = candidate();
+		const [pending] = await persistence.materialize([input]);
+
+		await persistence.resolve(pending.id, "dismiss", reason);
+		const [resolved] = await store.listEmergenceSuggestions();
+		assertEquals(resolved.persistenceStatus, "dismissed");
+		assertEquals(resolved.resolutionReason, reason?.trim());
+		assertEquals(typeof resolved.resolvedAt, "string");
+		assertEquals(await store.listLinks(), []);
+		assertEquals(await persistence.materialize([input]), []);
+	});
+}
+
 Deno.test("emergence persistence rejects stale resolutions before touching the store", async () => {
 	const persistence = new EmergencePersistence(new MemoryGraphStore());
 
