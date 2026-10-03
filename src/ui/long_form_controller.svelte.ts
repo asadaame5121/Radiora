@@ -4,6 +4,11 @@ export class LongFormController {
 	state = $state({ active: false, text: "", dirty: false, preview: false });
 	private itemId: string | null = null;
 	private savePromise: Promise<boolean> | null = null;
+	private inputVersion = 0;
+
+	get editVersion(): number {
+		return this.inputVersion;
+	}
 
 	constructor(
 		private readonly ports: {
@@ -22,6 +27,7 @@ export class LongFormController {
 	}
 	input(text: string): void {
 		if (!this.state.active || !this.itemId) return;
+		this.inputVersion++;
 		this.state.text = text;
 		this.state.dirty = true;
 	}

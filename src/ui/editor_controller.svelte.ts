@@ -46,6 +46,7 @@ export type EditorControllerPorts = {
 };
 
 export function createEditorController(ports: EditorControllerPorts) {
+	let editVersion = 0;
 	let workingCopySaveStatuses = $state<WorkingCopySaveStatus[]>([]);
 	let internalReferenceBacklinks = $state<InternalReferenceBacklink[]>([]);
 	let internalReferenceNotice = $state("");
@@ -70,6 +71,7 @@ export function createEditorController(ports: EditorControllerPorts) {
 		const snapshot = ports.getSnapshot();
 		const item = snapshot.items.find((candidate) => candidate.id === id);
 		if (!item || item.revisionSelector.mode !== "branch") return;
+		editVersion++;
 		const updatedAt = new Date().toISOString();
 		applyBranchWorkingCopyText(snapshot.items, item, text, updatedAt);
 		autosave.queue(item.workId, item.revisionSelector.branchId, id, text);
@@ -157,6 +159,9 @@ export function createEditorController(ports: EditorControllerPorts) {
 	}
 
 	return {
+		get editVersion() {
+			return editVersion;
+		},
 		get workingCopySaveStatuses() {
 			return workingCopySaveStatuses;
 		},

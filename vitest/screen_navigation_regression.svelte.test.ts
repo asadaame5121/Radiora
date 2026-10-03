@@ -171,3 +171,31 @@ describe("Deterministic regressions discovered through PBT and review audit", ()
 		expect(harness.store.items.get(newId)?.text).toBe("New Item");
 	});
 });
+
+it("saves manuscript input entered during the final snapshot read before publishing", async () => {
+	const h = createNavigationHarness();
+	const navigating = h.workspace.navigate({ view: "outline", occurrenceId: "child-1" });
+	await vi.waitFor(() =>
+		expect(h.registry.pendingTasks.some((t) => t.kind === "read_outline")).toBe(true)
+	);
+	const firstRead = h.registry.pendingTasks.find((t) => t.kind === "read_outline");
+	if (!firstRead) throw new Error("first read missing");
+	firstRead.resolve(structuredClone(h.state.getSnapshot()));
+	await vi.waitFor(() =>
+		expect(h.registry.pendingTasks.some((t) => t.kind === "screen_prepare")).toBe(true)
+	);
+	const screen = h.registry.pendingTasks.find((t) => t.kind === "screen_prepare");
+	if (!screen) throw new Error("screen preparation missing");
+	screen.resolve(() => undefined);
+	await vi.waitFor(() =>
+		expect(h.registry.pendingTasks.some((t) => t.kind === "read_outline")).toBe(true)
+	);
+	const finalRead = h.registry.pendingTasks.find((t) => t.kind === "read_outline");
+	if (!finalRead) throw new Error("final read missing");
+	const old = structuredClone(h.state.getSnapshot());
+	h.longForm.input("manuscript input during final read");
+	finalRead.resolve(old);
+	expect(await drainUntilSettled(navigating, h)).toBe(true);
+	expect(h.store.items.get("root-1")?.text).toBe("manuscript input during final read");
+	expect(h.state.selectedId()).toBe("child-1");
+});

@@ -29,6 +29,7 @@ function setup() {
 	let expanded = ["root"];
 	let inspector = { mode: "history" as "history" | "query", collapsed: false };
 	let manuscript = false;
+	let editVersion = 0;
 	const viewport = {
 		editorPosition: {
 			itemId: "last",
@@ -75,7 +76,7 @@ function setup() {
 			commit: (id) => selected = id,
 			cancelPending: vi.fn(),
 		},
-		editor: { save, flush },
+		editor: { save, flush, version: () => editVersion },
 		screens: { prepare: prepareScreen, focusTree: vi.fn() },
 		reportError,
 	});
@@ -97,6 +98,13 @@ function setup() {
 		selectAway: () => selected = "other",
 		changeFilter: () => filter.freeText = "away",
 		snapshot: () => snapshot,
+		editInline: (text: string) => {
+			editVersion++;
+			snapshot = {
+				...snapshot,
+				items: snapshot.items.map((item) => item.id === "last" ? { ...item, text } : item),
+			};
+		},
 		updateSourceText: () =>
 			snapshot = {
 				...snapshot,
@@ -305,4 +313,90 @@ test("late inline save failure leaves the screen and selection intact and permit
 	expect(s.workspace.pendingView).toBeNull();
 	expect(await s.workspace.navigate({ view: "help", occurrenceId: "other" })).toBe(true);
 	expect(s.workspace.view).toBe("help");
+});
+
+test.each(["outline", "help"] as const)(
+	"%s with an explicit occurrence publishes edits saved after screen preparation",
+	async (view) => {
+		const s = setup();
+		s.readOutline.mockImplementation(async () => structuredClone(s.snapshot()));
+		s.prepareScreen.mockImplementationOnce(async () => {
+			s.editInline("late inline edit");
+			return s.presentation;
+		});
+		expect(await s.workspace.navigate({ view, occurrenceId: "other" })).toBe(true);
+		expect(s.snapshot().items.find((item) => item.id === "last")?.text).toBe("late inline edit");
+		expect(s.selected()).toBe("other");
+	},
+);
+
+test("input during the final snapshot read is saved and fetched again before publication", async () => {
+	const s = setup();
+	let finishRead!: () => void;
+	const reading = new Promise<void>((resolve) => finishRead = resolve);
+	s.readOutline.mockImplementationOnce(async () => structuredClone(s.snapshot()));
+	s.readOutline.mockImplementationOnce(async () => {
+		const old = structuredClone(s.snapshot());
+		await reading;
+		return old;
+	});
+	s.readOutline.mockImplementation(async () => structuredClone(s.snapshot()));
+	const navigation = s.workspace.navigate({ view: "outline", occurrenceId: "other" });
+	await vi.waitFor(() => expect(s.readOutline).toHaveBeenCalledTimes(2));
+	s.editInline("typed during final read");
+	finishRead();
+	expect(await navigation).toBe(true);
+	expect(s.snapshot().items.find((item) => item.id === "last")?.text).toBe(
+		"typed during final read",
+	);
+	expect(s.readOutline).toHaveBeenCalledTimes(3);
+});
+
+test("a final snapshot failure retains the current screen and allows retry", async () => {
+	const s = setup();
+	const error = new Error("final read failed");
+	s.prepareScreen.mockImplementationOnce(async () => {
+		s.editInline("saved late edit");
+		s.readOutline.mockRejectedValueOnce(error);
+		return s.presentation;
+	});
+	expect(await s.workspace.navigate({ view: "help", occurrenceId: "other" })).toBe(false);
+	expect(s.workspace.view).toBe("outline");
+	expect(s.selected()).toBe("last");
+	expect(s.snapshot().items.find((item) => item.id === "last")?.text).toBe("saved late edit");
+	expect(s.presentation).not.toHaveBeenCalled();
+	expect(s.reportError).toHaveBeenCalledWith(error);
+	expect(await s.workspace.navigate({ view: "help", occurrenceId: "other" })).toBe(true);
+});
+
+test("a newer request prevents a delayed final snapshot from committing", async () => {
+	const s = setup();
+	let finishRead!: () => void;
+	const reading = new Promise<void>((resolve) => finishRead = resolve);
+	s.readOutline.mockImplementationOnce(async () => structuredClone(s.snapshot()));
+	s.readOutline.mockImplementationOnce(async () => {
+		const old = structuredClone(s.snapshot());
+		await reading;
+		return old;
+	});
+	const oldNavigation = s.workspace.navigate({ view: "outline", occurrenceId: "other" });
+	await vi.waitFor(() => expect(s.readOutline).toHaveBeenCalledTimes(2));
+	expect(await s.workspace.navigate({ view: "help" })).toBe(true);
+	finishRead();
+	expect(await oldNavigation).toBe(false);
+	expect(s.workspace.view).toBe("help");
+	expect(s.selected()).toBe("last");
+	expect(s.presentation).toHaveBeenCalledTimes(1);
+});
+
+test("the final refresh reconciles a suspended selection deleted during preparation", async () => {
+	const s = setup();
+	await s.workspace.navigate({ view: "help" });
+	s.prepareScreen.mockImplementationOnce(async () => {
+		s.deleteSelection();
+		return s.presentation;
+	});
+	expect(await s.workspace.goBack()).toBe(true);
+	expect(s.selected()).toBeNull();
+	expect(s.snapshot().items.some((item) => item.id === "last")).toBe(false);
 });

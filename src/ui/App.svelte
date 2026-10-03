@@ -196,10 +196,18 @@
 		selection: {
 			current: () => selectedId,
 			guard: (item, current) => historicalTimeController.canSelect(item, current),
-			commit: (id, item) => { selectedId = id; historicalTimeController.commitSelection(item); },
+			commit: (id, item) => {
+				if (selectedId !== id) editorController.clearCompletions();
+				selectedId = id;
+				historicalTimeController.commitSelection(item);
+			},
 			cancelPending: () => historicalTimeController.cancelPending(),
 		},
-		editor: { save: () => longFormController.save(false), flush: () => editorController.flushForNavigation() },
+		editor: {
+			save: () => longFormController.save(false),
+			flush: () => editorController.flushForNavigation(),
+			version: () => editorController.editVersion + longFormController.editVersion,
+		},
 		screens: { prepare: (destination) => screenPresenter.prepare(destination), focusTree: focusTreeSelection },
 		reportError: (cause) => error = errorMessage(cause),
 	});

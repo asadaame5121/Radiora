@@ -84,7 +84,7 @@ export function navigationFixture() {
 			},
 			cancelPending: () => guard.cancelPending(),
 		},
-		editor: { save, flush: vi.fn(async () => undefined) },
+		editor: { save, flush: vi.fn(async () => undefined), version: () => 0 },
 		screens: { prepare, focusTree: vi.fn() },
 		reportError,
 	});

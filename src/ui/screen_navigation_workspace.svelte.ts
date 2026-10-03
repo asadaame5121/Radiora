@@ -20,7 +20,12 @@ export interface ScreenNavigationWorkspacePorts {
 		commit(id: string | null, item: OutlineItem | null): void;
 		cancelPending(): void;
 	};
-	editor: { save(): Promise<boolean>; flush(): Promise<void> };
+	editor: {
+		save(): Promise<boolean>;
+		flush(): Promise<void>;
+		/** Monotonic version of accepted inline and manuscript input, including already-saved edits. */
+		version(): number;
+	};
 	screens: {
 		/** Feature-owned preparation returns an internal synchronous publication port. */
 		prepare(destination: ScreenDestination): Promise<() => void>;
@@ -130,10 +135,28 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 		}
 		prepared.publishScreen = await this.ports.screens.prepare(destination);
 		if (!current()) return false;
-		if (!await this.ports.editor.save() || !current()) return false;
-		// Inline editing remains available while guards and destination preparation are pending.
-		await this.ports.editor.flush();
-		return current();
+		return this.finishPreparation(prepared, current);
+	}
+
+	private async finishPreparation(
+		prepared: PreparedDestination,
+		current: () => boolean,
+	): Promise<boolean> {
+		while (current()) {
+			const version = this.ports.editor.version();
+			if (!await this.ports.editor.save() || !current()) return false;
+			await this.ports.editor.flush();
+			if (!current()) return false;
+			const { destination } = prepared;
+			if (destination.view === "outline" || destination.occurrenceId !== undefined) {
+				const item = prepared.snapshot.items.find((value) => value.id === prepared.selectedId) ??
+					null;
+				if (!await this.refreshGuardedDestination(prepared, item, current)) return false;
+			}
+			// A read or renewed selection guard may itself admit input. Save and read again in that case.
+			if (version === this.ports.editor.version()) return current();
+		}
+		return false;
 	}
 
 	private async refreshGuardedDestination(

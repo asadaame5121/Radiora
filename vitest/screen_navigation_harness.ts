@@ -228,6 +228,7 @@ export function createNavigationHarness(options: NavigationHarnessOptions = {}) 
 		},
 		editor: {
 			save: () => longForm.save(false),
+			version: () => longForm.editVersion,
 			flush: async () => undefined,
 		},
 		screens: {

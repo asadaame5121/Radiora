@@ -37,11 +37,11 @@ export class BranchRewriteController {
 			afterId: source.id,
 			contextualHeading: result.branch.name,
 		});
-		if (await this.ports.reload() === false) return;
-		if (
-			await this.ports.navigation.navigate({ view: "outline", occurrenceId: placement.id }, origin)
-		) {
-			await this.ports.refreshHistory(confirmation.workId);
-		}
+		const [reloaded] = await Promise.all([
+			this.ports.reload(),
+			this.ports.refreshHistory(confirmation.workId),
+		]);
+		if (reloaded === false) return;
+		await this.ports.navigation.navigate({ view: "outline", occurrenceId: placement.id }, origin);
 	}
 }

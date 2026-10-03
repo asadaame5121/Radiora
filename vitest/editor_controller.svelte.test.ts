@@ -184,7 +184,9 @@ describe("editor controller", () => {
 			const { controller, api, ports } = createController({ snapshot });
 			const textarea = mockTextarea("updated text", 12, 12);
 
+			const versionBeforeInput = controller.editVersion;
 			controller.updateLocalText("item-1", textarea);
+			expect(controller.editVersion).toBeGreaterThan(versionBeforeInput);
 
 			expect(item.text).toBe("updated text");
 			expect(controller.hasUnsavedChanges()).toBe(true);
@@ -193,6 +195,7 @@ describe("editor controller", () => {
 			await controller.flushAutosave("work-1");
 			expect(api.updateItemText).toHaveBeenCalledWith("item-1", "updated text");
 			expect(controller.hasUnsavedChanges()).toBe(false);
+			expect(controller.editVersion).toBeGreaterThan(versionBeforeInput);
 			expect(ports.persistSnapshotCache).toHaveBeenCalled();
 		});
 
