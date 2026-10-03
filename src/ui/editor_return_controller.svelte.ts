@@ -60,10 +60,10 @@ export class EditorReturnController {
 		private readonly ports: {
 			beforeRestore(): Promise<boolean>;
 			hasItem(id: string): boolean;
-			select(id: string): boolean;
+			select(id: string): Promise<boolean>;
 			setHoist(id: string | null): void;
 			reveal(id: string): void;
-			showEditor(): void;
+			prepareEditor(): () => void;
 		},
 	) {}
 
@@ -73,14 +73,16 @@ export class EditorReturnController {
 
 	restore = async (): Promise<void> => {
 		const position = this.position;
-		if (!position || !await this.ports.beforeRestore()) return;
+		if (!position) return;
+		const showEditor = this.ports.prepareEditor();
+		if (!await this.ports.beforeRestore()) return;
 		if (!this.ports.hasItem(position.itemId)) throw new Error("元の編集項目が見つかりません。");
-		if (!this.ports.select(position.itemId)) return;
+		if (!await this.ports.select(position.itemId)) return;
 		this.ports.setHoist(position.hoistId);
 		// Setting the hoist can select its root; restore the actual edited occurrence.
-		if (!this.ports.select(position.itemId)) return;
+		if (!await this.ports.select(position.itemId)) return;
 		this.ports.reveal(position.itemId);
-		this.ports.showEditor();
+		showEditor();
 		await focusOutlineEditor(position.itemId, position);
 	};
 }

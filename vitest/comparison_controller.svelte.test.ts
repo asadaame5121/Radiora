@@ -4,7 +4,9 @@ import type {
 	LinkComparisonProjection,
 	WorkComparisonDocuments,
 } from "../src/services/comparison_service.ts";
+import type { ComparisonNavigationContext } from "../src/ui/comparison_controller.svelte.ts";
 import { ComparisonController } from "../src/ui/comparison_controller.svelte.ts";
+import { ScreenNavigationController } from "../src/ui/screen_navigation_controller.svelte.ts";
 
 type Ports = ConstructorParameters<typeof ComparisonController>[0];
 type Api = Ports["api"];
@@ -48,6 +50,65 @@ function createApi(overrides: Partial<Api> = {}): Api {
 }
 
 describe("comparison controller", () => {
+	test.each(["work", "link"] as const)(
+		"a failed %s comparison leaves the caller's displayed pair and navigation unchanged",
+		async (kind) => {
+			const failure = new Error("offline");
+			const commitView = vi.fn();
+			const reportError = vi.fn();
+			const controller = new ComparisonController({
+				api: createApi({
+					listWorkComparisonDocuments: vi.fn().mockRejectedValue(failure),
+					resolveLinkComparison: vi.fn().mockRejectedValue(failure),
+				}),
+				getSelectedWorkId: () => "work",
+				getSelectedId: () => "item",
+				prepareView: () => commitView,
+				reportError,
+				comparisonPaneLabel: () => "比較",
+			});
+			controller.openRevision("saved");
+			controller.selectPair("revision:b", "revision:a");
+			const saved = controller.captureNavigationContext();
+			commitView.mockClear();
+			if (kind === "work") await controller.openWork("revision", "revision");
+			else await controller.openLink("link");
+			expect(controller.captureNavigationContext()).toEqual(saved);
+			expect(commitView).not.toHaveBeenCalled();
+			expect(reportError).toHaveBeenCalledWith(failure);
+		},
+	);
+	test.each(["work", "link"] as const)(
+		"opening a %s comparison captures the caller before clearing its comparison state",
+		async (kind) => {
+			const navigation = new ScreenNavigationController<ComparisonNavigationContext>({
+				capture: () => controller.captureNavigationContext(),
+				restore: async (context) => {
+					controller.restoreNavigationContext(context);
+					return true;
+				},
+			});
+			const controller = new ComparisonController({
+				api: createApi(),
+				getSelectedWorkId: () => "work",
+				getSelectedId: () => "item",
+				prepareView: () => navigation.prepareOpen("comparison"),
+				reportError: vi.fn(),
+				comparisonPaneLabel: () => "比較",
+			});
+			controller.openRevision("saved");
+			controller.selectPair("revision:b", "revision:a");
+			navigation.open("workLineage");
+			if (kind === "work") await controller.openWork("revision", "revision");
+			else await controller.openLink("link");
+			await navigation.goBack();
+			expect(navigation.view).toBe("workLineage");
+			expect(controller.captureNavigationContext()).toMatchObject({
+				preferredRevisionId: "saved",
+				revisionPair: { leftKey: "revision:b", rightKey: "revision:a" },
+			});
+		},
+	);
 	test("captures the displayed Work pair after changing and swapping selectors", async () => {
 		const controller = new ComparisonController({
 			api: createApi({
@@ -58,7 +119,7 @@ describe("comparison controller", () => {
 			}),
 			getSelectedWorkId: () => "work",
 			getSelectedId: () => "item",
-			openView: vi.fn(),
+			prepareView: () => vi.fn(),
 			reportError: vi.fn(),
 			comparisonPaneLabel: () => "比較",
 		});
@@ -79,7 +140,7 @@ describe("comparison controller", () => {
 			api: createApi(),
 			getSelectedWorkId: () => "work",
 			getSelectedId: () => "item",
-			openView: vi.fn(),
+			prepareView: () => vi.fn(),
 			reportError: vi.fn(),
 			comparisonPaneLabel: () => "比較",
 		});
@@ -99,7 +160,7 @@ describe("comparison controller", () => {
 			api: createApi({ resolveLinkComparison: () => pending.promise }),
 			getSelectedWorkId: () => "work",
 			getSelectedId: () => "item",
-			openView,
+			prepareView: () => openView,
 			reportError: vi.fn(),
 			comparisonPaneLabel: () => "比較",
 		});
@@ -126,7 +187,7 @@ describe("comparison controller", () => {
 			}),
 			getSelectedWorkId: () => "work",
 			getSelectedId: () => "item",
-			openView,
+			prepareView: () => openView,
 			reportError,
 			comparisonPaneLabel: () => "比較",
 		});
@@ -166,7 +227,7 @@ describe("comparison controller", () => {
 			api,
 			getSelectedWorkId: () => selectedWork,
 			getSelectedId: () => selectedId,
-			openView,
+			prepareView: () => openView,
 			reportError,
 			comparisonPaneLabel: () => "比較",
 		});

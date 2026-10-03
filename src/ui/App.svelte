@@ -56,6 +56,7 @@
 	import { RuleQueryController } from "./rule_query_controller.svelte.ts";
 	import { SearchAliasController } from "./search_alias_controller.svelte.ts";
 	import { HistoryController } from "./history_controller.svelte.ts";
+	import { BranchRewriteController } from "./branch_rewrite_controller.ts";
 	import { ComparisonController } from "./comparison_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { RelationTypeController } from "./relation_type_controller.svelte.ts";
@@ -168,11 +169,11 @@
 	const longFormController = new LongFormController({
 		flush: () => editorController.flushAutosave(),
 		save: (id, text) => api.updateItemText(id, text),
-		reload: (id) => load(id),
+		reload: async (id) => await load() && await selectOccurrenceWhenReady(id),
 		reportError: (cause) => error = errorMessage(cause),
 	});
 	const longForm = $derived(longFormController.state);
-	const screenNavigation = new ScreenNavigationWorkspace({
+	const screenNavigation: ScreenNavigationWorkspace = new ScreenNavigationWorkspace({
 		browsing: {
 			captureBrowsing: () => navigationController.captureBrowsing(),
 			restore: (state) => navigationController.restoreBrowsing(state, snapshot, (location) =>
@@ -309,11 +310,20 @@
 		() => selectedBranchId ?? null,
 		(cause) => error = errorMessage(cause),
 	);
+	const branchRewrite = new BranchRewriteController({
+		api,
+		getSnapshot: () => snapshot,
+		prepareView: () => screenNavigation.prepareOpen("outline"),
+		reload: load,
+		refreshHistory: async (workId) => {
+			await Promise.all([history.loadRevisions(workId), history.loadWorkLineage(workId)]);
+		},
+	});
 	const comparison = new ComparisonController({
 		api,
 		getSelectedWorkId: () => selectedItem?.workId ?? null,
 		getSelectedId: () => selectedId,
-		openView: () => screenNavigation.open("comparison"),
+		prepareView: () => screenNavigation.prepareOpen("comparison"),
 		reportError: (cause) => error = errorMessage(cause),
 		comparisonPaneLabel: () => vocabulary.comparisonPane,
 	});
@@ -348,11 +358,12 @@
 		selectedId: () => selectedId,
 		hoistId: () => browsingLocation.hoistOccurrenceId,
 		view: () => viewMode,
-		setView: (view) => screenNavigation.open(view),
+		prepareView: (view) => screenNavigation.prepareOpen(view),
 		longFormActive: () => longForm.active,
 		leaveLongForm: () => longFormController.save(),
 		startLongForm: async () => { if (selectedItem) await longFormController.start(selectedItem); },
 		select: selectOccurrence,
+		selectWhenReady: selectOccurrenceWhenReady,
 		setHoist: (id) => { if (id) navigationController.setHoist(id); else navigationController.clearHoist(); },
 		reveal: (id) => transientExpandedIds = ancestorBreadcrumb(snapshot, id).map((item) => item.id),
 		projection: () => browsingProjection,
@@ -833,6 +844,12 @@
 		navigationController.browseToOccurrence(snapshot, id);
 	}
 
+	function selectOccurrenceWhenReady(id: string): Promise<boolean> {
+		const item = itemById.get(id);
+		if (!item) return Promise.resolve(false);
+		return historicalTimeController.selectWhenReady(item, () => commitOccurrenceSelection(id));
+	}
+
 	function selectOccurrence(id: string | null, afterSelection?: () => void): boolean {
 		const commit = () => {
 			commitOccurrenceSelection(id);
@@ -898,16 +915,24 @@
 	async function executeOccurrenceContextMenuAction(id: string): Promise<void> {
 		const targetId = occurrenceContextMenu?.targetId ?? selectedId;
 		if (!targetId || !itemById.has(targetId)) return;
-		if (!selectOccurrence(targetId)) return;
+		if (id === "open-outline") {
+			openTreeOccurrence(targetId);
+			return;
+		}
+		if (id === "zoom" || id === "work-lineage") {
+			const commitView = screenNavigation.prepareOpen(id === "zoom" ? "outline" : "workLineage");
+			selectOccurrence(targetId, () => {
+				if (id === "zoom") {
+					transientExpandedIds = ancestorBreadcrumb(snapshot, targetId).map((item) => item.id);
+					navigationController.setHoist(targetId);
+				}
+				commitView();
+			});
+			return;
+		}
+		// Opening the menu already accepted its selection; ignore commands from a stale menu.
+		if (selectedId !== targetId) return;
 		switch (id) {
-			case "open-outline":
-				await openTreeOccurrence(targetId);
-				break;
-			case "zoom":
-				screenNavigation.open("outline");
-				transientExpandedIds = ancestorBreadcrumb(snapshot, targetId).map((item) => item.id);
-				navigationController.setHoist(targetId);
-				break;
 			case "long-form":
 				await executeCommand("startLongFormEditing");
 				break;
@@ -925,9 +950,6 @@
 				break;
 			case "create-branch":
 				await executeCommand("createBranch");
-				break;
-			case "work-lineage":
-				screenNavigation.open("workLineage");
 				break;
 			case "revision-comparison":
 				openSelectedRevisionComparison();
@@ -1947,30 +1969,7 @@
 			} else if (confirmation.action === "purge") {
 				await workController.confirmPurge(confirmation.workId);
 			} else if (confirmation.action === "rewrite") {
-				const source = snapshot.items.find((item) => item.id === confirmation.occurrenceId);
-				if (!source) {
-					throw new Error(`別稿の配置元が見つかりません: ${confirmation.occurrenceId}`);
-				}
-				const result = await api.rewriteAsNewBranch(
-					confirmation.sourceBranchId,
-					confirmationController.rewriteBranchName,
-					"confirmed",
-				);
-				if (result.status === "created") {
-					const placement = await api.createOccurrence({
-						workId: confirmation.workId,
-						branchId: result.branch.id,
-						parentId: source.parentId,
-						afterId: source.id,
-						contextualHeading: result.branch.name,
-					});
-					await load(placement.id);
-					await Promise.all([
-						history.loadRevisions(confirmation.workId),
-						history.loadWorkLineage(confirmation.workId),
-					]);
-					screenNavigation.open("outline");
-				}
+				await branchRewrite.confirmRewrite(confirmation, confirmationController.rewriteBranchName);
 			} else if (confirmation.action === "merge-duplicate") {
 				await workController.confirmDuplicateMerge(confirmation.preview);
 			} else if (confirmation.action === "cancel-longform") {

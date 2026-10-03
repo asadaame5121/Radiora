@@ -23,6 +23,7 @@ export class ScreenNavigationController<Context> {
 		this.history = [...this.history, { view: this.view, context: this.ports.capture() }];
 	}
 
+	/** Immediate screen-only transition; prepareOpen must precede any destination state changes. */
 	open(view: ViewMode): void {
 		this.prepareOpen(view)();
 	}

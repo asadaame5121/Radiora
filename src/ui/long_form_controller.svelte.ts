@@ -7,7 +7,8 @@ export class LongFormController {
 		private readonly ports: {
 			flush(): Promise<void>;
 			save(id: string, text: string): Promise<void>;
-			reload(id: string): Promise<unknown>;
+			/** Resolve only after selection accepts the saved occurrence; false means cancelled or failed. */
+			reload(id: string): Promise<boolean>;
 			reportError(cause: unknown): void;
 		},
 	) {}
@@ -31,7 +32,7 @@ export class LongFormController {
 		try {
 			await this.ports.flush();
 			if (this.state.dirty) await this.ports.save(id, this.state.text);
-			await this.ports.reload(id);
+			if (!await this.ports.reload(id)) return false;
 			this.reset();
 			return true;
 		} catch (cause) {

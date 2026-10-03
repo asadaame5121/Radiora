@@ -31,7 +31,7 @@ Deno.test("FROM FIX VS Revision and Branch use one read-only comparison pane", a
 	assertMatch(pane, /showDiff.*scope === "revision"/);
 });
 
-Deno.test("comparison entry points clear stale context and ignore stale async responses", async () => {
+Deno.test("comparison entry points invalidate stale async responses before opening", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/comparison_controller.svelte.ts", import.meta.url),
@@ -41,7 +41,7 @@ Deno.test("comparison entry points clear stale context and ignore stale async re
 	assertMatch(app, /comparison\.openWork\(scope, id\)/);
 	assertMatch(app, /comparison\.openLink\(link\.id\)/);
 	assertMatch(controller, /openRevision\(revisionId: string\)/);
-	assertMatch(controller, /const request = this\.clear\(\)/);
+	assertMatch(controller, /const request = \+\+this\.request/);
 	assertMatch(controller, /request !== this\.request/);
 });
 

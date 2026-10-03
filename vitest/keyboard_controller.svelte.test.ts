@@ -16,7 +16,7 @@ test.each(["globalLineage", "options"] as const)(
 		const persistence = {
 			flush: vi.fn().mockResolvedValue(undefined),
 			save: vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(undefined),
-			reload: vi.fn().mockResolvedValue(undefined),
+			reload: vi.fn().mockResolvedValue(true),
 			reportError: vi.fn(),
 		};
 		const longForm = new LongFormController(persistence);
@@ -26,13 +26,14 @@ test.each(["globalLineage", "options"] as const)(
 			selectedId: () => item.id,
 			hoistId: () => null,
 			view: () => view,
-			setView: (next: ViewMode) => {
+			prepareView: (next: ViewMode) => () => {
 				view = next;
 			},
 			longFormActive: () => longForm.state.active,
 			leaveLongForm: () => longForm.save(),
 			startLongForm: () => longForm.start(item),
 			select: vi.fn().mockReturnValue(true),
+			selectWhenReady: vi.fn().mockResolvedValue(true),
 			setHoist: vi.fn(),
 			reveal: vi.fn(),
 			items: () => [item],
@@ -69,11 +70,12 @@ test("collapse all includes hidden descendants in the current hoist and reloads 
 		selectedId: () => "root",
 		hoistId: () => "root",
 		view: () => "outline" as const,
-		setView: vi.fn(),
+		prepareView: () => vi.fn(),
 		longFormActive: () => false,
 		leaveLongForm: vi.fn().mockResolvedValue(true),
 		startLongForm: vi.fn(),
 		select: vi.fn().mockReturnValue(true),
+		selectWhenReady: vi.fn().mockResolvedValue(true),
 		setHoist: vi.fn(),
 		reveal: vi.fn(),
 		projection: () =>
@@ -81,7 +83,7 @@ test("collapse all includes hidden descendants in the current hoist and reloads 
 		items: () => items,
 		clearTemporaryExpansion: vi.fn(),
 		setCollapsed: vi.fn().mockResolvedValue(undefined),
-		reload: vi.fn().mockResolvedValue(undefined),
+		reload: vi.fn().mockResolvedValue(true),
 	};
 	const controller = new KeyboardWorkspaceController(ports);
 	await controller.setAllCollapsed(true);
@@ -194,7 +196,7 @@ test("manuscript save retains the original item and preserves edits on failure",
 	const ports = {
 		flush: vi.fn().mockResolvedValue(undefined),
 		save: vi.fn().mockRejectedValue(new Error("offline")),
-		reload: vi.fn().mockResolvedValue(undefined),
+		reload: vi.fn().mockResolvedValue(true),
 		reportError: vi.fn(),
 	};
 	const controller = new LongFormController(ports);
@@ -209,4 +211,26 @@ test("manuscript save retains the original item and preserves edits on failure",
 	expect(await controller.save()).toBe(true);
 	expect(ports.reload).toHaveBeenCalledWith("source");
 	expect(controller.state.active).toBe(false);
+});
+
+test("manuscript save waits for reload selection and retains the editor when selection is cancelled", async () => {
+	let settle!: (accepted: boolean) => void;
+	const selection = new Promise<boolean>((resolve) => {
+		settle = resolve;
+	});
+	const ports = {
+		flush: vi.fn().mockResolvedValue(undefined),
+		save: vi.fn().mockResolvedValue(undefined),
+		reload: vi.fn(() => selection),
+		reportError: vi.fn(),
+	};
+	const controller = new LongFormController(ports);
+	await controller.start({ id: "source", text: "original" } as OutlineItem);
+	controller.input("edited");
+	const save = controller.save();
+	await vi.waitFor(() => expect(ports.reload).toHaveBeenCalledWith("source"));
+	expect(controller.state.active).toBe(true);
+	settle(false);
+	expect(await save).toBe(false);
+	expect(controller.state).toMatchObject({ active: true, text: "edited" });
 });

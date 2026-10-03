@@ -55,10 +55,10 @@ test("return restores occurrence, hoist, selection and scroll only after saving 
 	const controller = new EditorReturnController({
 		beforeRestore: ports.leaveLongForm,
 		hasItem: (id) => ports.items().some((item) => item.id === id),
-		select: ports.select,
+		select: async (id) => ports.select(id),
 		setHoist: ports.setHoist,
 		reveal: ports.reveal,
-		showEditor: ports.setView,
+		prepareEditor: () => ports.setView,
 	});
 	controller.remember("original", "root");
 	selectedId = "different";

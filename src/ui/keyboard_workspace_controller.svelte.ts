@@ -14,11 +14,12 @@ export class KeyboardWorkspaceController {
 			selectedId(): string | null;
 			hoistId(): string | null;
 			view(): ViewMode;
-			setView(view: ViewMode): void;
+			prepareView(view: ViewMode): () => void;
 			longFormActive(): boolean;
 			leaveLongForm(): Promise<boolean>;
 			startLongForm(): Promise<void>;
 			select(id: string): boolean;
+			selectWhenReady(id: string): Promise<boolean>;
 			setHoist(id: string | null): void;
 			reveal(id: string): void;
 			projection(): BrowsingOutlineProjection;
@@ -31,10 +32,10 @@ export class KeyboardWorkspaceController {
 		this.editorReturn = new EditorReturnController({
 			beforeRestore: ports.leaveLongForm,
 			hasItem: (id) => ports.items().some((item) => item.id === id),
-			select: ports.select,
+			select: ports.selectWhenReady,
 			setHoist: ports.setHoist,
 			reveal: ports.reveal,
-			showEditor: () => ports.setView("outline"),
+			prepareEditor: () => ports.prepareView("outline"),
 		});
 	}
 	remember = (): void => {
@@ -44,31 +45,34 @@ export class KeyboardWorkspaceController {
 		}
 	};
 	openOutline = async (): Promise<void> => {
+		const commitView = this.ports.prepareView("outline");
 		if (!await this.ports.leaveLongForm()) return;
-		this.ports.setView("outline");
+		commitView();
 		const id = this.ports.selectedId();
 		if (id) this.ports.reveal(id);
 		await focusOutlineEditor(id);
 	};
 	openTree = async (): Promise<void> => {
+		const commitView = this.ports.prepareView("globalLineage");
 		this.remember();
 		if (!await this.ports.leaveLongForm()) return;
-		this.ports.setView("globalLineage");
+		commitView();
 		await tick();
 		(document.querySelector<SVGElement>(".tree-node.selected") ??
 			document.querySelector<SVGElement>(".tree-node, .tree-root svg"))?.focus();
 	};
 	openLongForm = async (): Promise<void> => {
+		const commitView = this.ports.prepareView("outline");
 		this.remember();
 		await this.ports.startLongForm();
-		this.ports.setView("outline");
+		commitView();
 		await tick();
 		document.querySelector<HTMLTextAreaElement>(".long-form-textarea")?.focus();
 	};
 	returnToEditor = (): Promise<void> => this.editorReturn.restore();
 	saveLongForm = async (): Promise<void> => {
-		if (!await this.ports.leaveLongForm()) return;
 		if (this.position) await this.returnToEditor();
+		else await this.ports.leaveLongForm();
 	};
 	focusSearch = (): void => {
 		this.remember();
