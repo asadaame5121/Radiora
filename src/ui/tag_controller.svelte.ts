@@ -29,6 +29,21 @@ export class TagController {
 
 	constructor(private readonly options: TagControllerOptions) {}
 
+	async prepareScreen(): Promise<() => void> {
+		const [scopes, aliases] = await Promise.all([
+			this.options.api.listScopedTags(),
+			this.options.api.listTagAliases(),
+		]);
+		return () => {
+			this.scopes = scopes;
+			this.aliases = aliases;
+			this.error = "";
+			if (
+				this.selectedTag && !scopes.some((scope) => scope.tags.includes(this.selectedTag ?? ""))
+			) this.selectedTag = null;
+		};
+	}
+
 	load = async (): Promise<void> => {
 		this.error = "";
 		try {

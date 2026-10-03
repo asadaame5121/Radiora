@@ -23,12 +23,14 @@
 		preferredLeftKey,
 		preferredRightKey,
 		locked = false,
+		onPairChange,
 	}: {
 		documents: ComparisonDocument[];
 		context: ComparisonContext;
 		preferredLeftKey?: string;
 		preferredRightKey?: string;
 		locked?: boolean;
+		onPairChange?: (leftKey: string, rightKey: string) => void;
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
@@ -83,11 +85,13 @@
 	function selectLeft(next: string): void {
 		if (next === rightKey) rightKey = leftKey;
 		leftKey = next;
+		onPairChange?.(leftKey, rightKey);
 	}
 
 	function selectRight(next: string): void {
 		if (next === leftKey) leftKey = rightKey;
 		rightKey = next;
+		onPairChange?.(leftKey, rightKey);
 	}
 
 	function relationLabel(): string {
