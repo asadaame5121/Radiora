@@ -87,7 +87,7 @@ export class KeyboardController {
 		}
 		event.preventDefault();
 		event.stopImmediatePropagation();
-		if (composing) this.cancel(false);
+		if (composing || this.ports.blocked()) this.cancel(false);
 		else if (!event.repeat) void this.choose("goBack").catch(this.ports.reportError);
 		return true;
 	}

@@ -121,16 +121,6 @@ export function createNavigationController(options: NavigationControllerOptions 
 		commitBrowsing(state: BrowsingNavigationState): void {
 			browsing = state;
 		},
-		async restoreBrowsing(
-			state: BrowsingNavigationState,
-			snapshot: OutlineSnapshot,
-			select?: (location: BrowsingLocation) => boolean | Promise<boolean>,
-		): Promise<boolean> {
-			const restored = reconcileBrowsingState(state, snapshot);
-			if (select && !await select(currentBrowsingLocation(restored))) return false;
-			browsing = restored;
-			return true;
-		},
 		resetBrowsing(
 			paneId = "pane-1",
 			initial: BrowsingLocation = { selectedOccurrenceId: null, hoistOccurrenceId: null },

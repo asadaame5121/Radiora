@@ -6,7 +6,11 @@ import {
 	type OutlineScreenPorts,
 	OutlineScreenState,
 } from "./outline_screen_state.svelte.ts";
-import type { ScreenDestination, ScreenNavigator } from "./screen_navigation_destination.ts";
+import {
+	type ScreenDestination,
+	type ScreenNavigator,
+	validateDestinationOccurrence,
+} from "./screen_navigation_destination.ts";
 import { ScreenNavigationController } from "./screen_navigation_controller.svelte.ts";
 
 export interface ScreenNavigationWorkspacePorts {
@@ -85,8 +89,6 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 
 	goBack = (): Promise<boolean> =>
 		this.canGoBack ? this.navigate({ view: "outline" }) : Promise.resolve(false);
-	openInspectorTool = (_mode: "query"): Promise<boolean> =>
-		this.navigate({ view: "outline", query: true });
 
 	private async prepare(
 		destination: ScreenDestination,
@@ -129,11 +131,8 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 		const item = prepared.snapshot.items.find((value) => value.id === prepared.selectedId) ?? null;
 		if (!await this.ports.selection.guard(item, current) || !current()) return false;
 		if (!await this.ports.editor.save() || !current()) return false;
-		const { destination } = prepared;
-		if (destination.view === "outline" || destination.occurrenceId !== undefined) {
-			if (!await this.refreshGuardedDestination(prepared, item, current)) return false;
-		}
-		prepared.publishScreen = await this.ports.screens.prepare(destination);
+		if (!await this.refreshGuardedDestination(prepared, current)) return false;
+		prepared.publishScreen = await this.ports.screens.prepare(prepared.destination);
 		if (!current()) return false;
 		return this.finishPreparation(prepared, current);
 	}
@@ -147,12 +146,7 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 			if (!await this.ports.editor.save() || !current()) return false;
 			await this.ports.editor.flush();
 			if (!current()) return false;
-			const { destination } = prepared;
-			if (destination.view === "outline" || destination.occurrenceId !== undefined) {
-				const item = prepared.snapshot.items.find((value) => value.id === prepared.selectedId) ??
-					null;
-				if (!await this.refreshGuardedDestination(prepared, item, current)) return false;
-			}
+			if (!await this.refreshGuardedDestination(prepared, current)) return false;
 			// A read or renewed selection guard may itself admit input. Save and read again in that case.
 			if (version === this.ports.editor.version()) return current();
 		}
@@ -161,17 +155,18 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 
 	private async refreshGuardedDestination(
 		prepared: PreparedDestination,
-		item: OutlineItem | null,
 		current: () => boolean,
 	): Promise<boolean> {
 		const { destination } = prepared;
+		if (destination.view !== "outline" && destination.occurrenceId === undefined) return current();
+		const item = prepared.snapshot.items.find((value) => value.id === prepared.selectedId) ?? null;
 		// Saving a guard may refresh source data. Publish a fresh snapshot, never the pre-guard one.
 		const snapshot = await this.ports.readOutline();
 		if (!current()) return false;
-		if (
-			destination.occurrenceId &&
-			!snapshot.items.some((value) => value.id === destination.occurrenceId)
-		) throw new Error("移動先の項目が見つかりません。");
+		// Outline preparation validates its explicit destination; other screens use the same rule here.
+		if (destination.view !== "outline") {
+			validateDestinationOccurrence(destination.occurrenceId, snapshot);
+		}
 		const outline = destination.view === "outline"
 			? this.outline.prepare(destination, snapshot, prepared.departure)
 			: null;

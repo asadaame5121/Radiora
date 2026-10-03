@@ -68,11 +68,15 @@ test("reserved Alt+Left suppresses native Back while dialogs or startup block co
 		execute,
 		reportError: vi.fn(),
 	});
+	const choose = vi.spyOn(keyboard, "choose");
+	const cancel = vi.spyOn(keyboard, "cancel");
 	const back = event("ArrowLeft", { altKey: true });
 	expect(keyboard.handle(back)).toBe(true);
 	expect(back.preventDefault).toHaveBeenCalledOnce();
 	expect(back.stopImmediatePropagation).toHaveBeenCalledOnce();
 	expect(execute).not.toHaveBeenCalled();
+	expect(choose).not.toHaveBeenCalled();
+	expect(cancel).toHaveBeenCalledWith(false);
 });
 
 test("reserved Alt+Left executes screen back once and ignores repeats", async () => {

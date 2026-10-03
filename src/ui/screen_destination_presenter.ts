@@ -23,11 +23,9 @@ export class ScreenDestinationPresenter {
 			return () => this.ports.comparison.restoreNavigationContext(context);
 		}
 		if (destination.dateRange) return this.ports.dates.prepareScreen(destination.dateRange);
-		if (["unplaced", "stubs", "duplicates", "trash"].includes(destination.view)) {
-			const view = destination.view;
-			if (view === "unplaced" || view === "stubs" || view === "duplicates" || view === "trash") {
-				return this.ports.work.prepareScreen(view);
-			}
+		const view = destination.view;
+		if (view === "unplaced" || view === "stubs" || view === "duplicates" || view === "trash") {
+			return this.ports.work.prepareScreen(view);
 		}
 		if (destination.view === "tags") {
 			const [tags, work] = await Promise.all([

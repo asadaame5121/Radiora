@@ -146,7 +146,7 @@ test("multi-screen return preserves Outline Hoist, pane, caret and scroll indepe
 
 test("Query switches only the inspector and does not enable Back on Outline", async () => {
 	const s = setup();
-	await s.workspace.openInspectorTool("query");
+	await s.workspace.navigate({ view: "outline", query: true });
 	expect(s.inspector().mode).toBe("query");
 	expect(s.workspace.canGoBack).toBe(false);
 });
@@ -400,3 +400,21 @@ test("the final refresh reconciles a suspended selection deleted during preparat
 	expect(s.selected()).toBeNull();
 	expect(s.snapshot().items.some((item) => item.id === "last")).toBe(false);
 });
+
+test.each(["outline", "help"] as const)(
+	"%s rejects an explicit occurrence deleted after its selection guard",
+	async (view) => {
+		const s = setup();
+		s.readOutline.mockResolvedValue({
+			...s.snapshot(),
+			items: s.snapshot().items.filter((item) => item.id !== "other"),
+		});
+		expect(await s.workspace.navigate({ view, occurrenceId: "other" })).toBe(false);
+		expect(s.workspace.view).toBe("outline");
+		expect(s.selected()).toBe("last");
+		expect(s.presentation).not.toHaveBeenCalled();
+		expect(s.reportError).toHaveBeenCalledWith(
+			expect.objectContaining({ message: "移動先の項目が見つかりません。" }),
+		);
+	},
+);
