@@ -10,10 +10,14 @@ import {
 import type { OutlineFilter } from "../services/outline_filter.ts";
 import type { InspectorAsideMode } from "./InspectorView.svelte";
 import type { EditorPosition } from "./editor_return_controller.svelte.ts";
-import type { ScreenDestination } from "./screen_navigation_destination.ts";
+import {
+	type ScreenDestination,
+	validateDestinationOccurrence,
+} from "./screen_navigation_destination.ts";
 
 export interface OutlineViewport {
 	editorPosition?: EditorPosition;
+	paneScroll?: Record<string, { top: number; left: number }>;
 	panelScrollTop: number;
 	panelScrollLeft: number;
 	restoreScroll?: boolean;
@@ -114,9 +118,7 @@ function prepareBrowsing(
 	let browsing = reconcileBrowsingState(saved, snapshot);
 	if (destination.hoistId !== undefined) browsing = setBrowsingHoist(browsing, destination.hoistId);
 	if (destination.occurrenceId === undefined) return browsing;
-	if (
-		destination.occurrenceId && !snapshot.items.some((item) => item.id === destination.occurrenceId)
-	) throw new Error("移動先の項目が見つかりません。");
+	validateDestinationOccurrence(destination.occurrenceId, snapshot);
 	return browseToOutlineOccurrence(browsing, snapshot, destination.occurrenceId);
 }
 

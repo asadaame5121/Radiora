@@ -728,3 +728,45 @@ test("an existing empty row resumes at caret zero without creating another occur
 	await expect(page.getByRole("treeitem")).toHaveCount(2);
 	expect(created).toBe(false);
 });
+
+for (const completion of ["reference", "link"] as const) {
+	test(`Recent navigation clears the previous row's ${completion} completion`, async ({ page }) => {
+		let snapshotItems = items.map((item) => ({ ...item }));
+		await page.route("**/api/rpc/listOutline", (route) =>
+			route.fulfill({
+				json: { result: { items: snapshotItems, links: [], knots: [], stashItemIds: [] } },
+			}));
+		await page.route("**/api/rpc/updateItemText", async (route) => {
+			const [id, text] = route.request().postDataJSON().args;
+			snapshotItems = snapshotItems.map((item) => item.id === id ? { ...item, text } : item);
+			await route.fulfill({ json: { result: null } });
+		});
+		await page.route("**/api/rpc/listInternalReferenceCompletions", (route) =>
+			route.fulfill({
+				json: {
+					result: [{
+						scope: "work",
+						id: "mock-7",
+						workId: "mock-7",
+						displayName: "mock-7 editable text",
+						scopeLabel: "Work",
+						shortId: "mock-7",
+						canonicalMarkdown: "[mock-7](radiora://work/mock-7)",
+					}],
+				},
+			}));
+		await page.goto("/");
+		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
+		const editor = page.locator('textarea[data-item-id="mock-1"]');
+		await editor.fill(completion === "reference" ? "[[mock" : "@mock");
+		const popup = page.locator(
+			completion === "reference" ? ".internal-reference-completions" : ".inline-link-completions",
+		);
+		await expect(popup).toBeVisible();
+		await page.getByRole("region", { name: "最近編集した項目" }).getByRole("button", {
+			name: /mock-7 editable text/,
+		}).click();
+		await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
+		await expect(popup).toHaveCount(0);
+	});
+}

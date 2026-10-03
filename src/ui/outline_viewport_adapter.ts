@@ -4,6 +4,7 @@ import type { OutlineViewport } from "./outline_screen_state.svelte.ts";
 
 /** DOM identity is recreated after render; only coordinates and logical targets are retained. */
 export class OutlineViewportAdapter {
+	private paneScroll: NonNullable<OutlineViewport["paneScroll"]> = {};
 	private focusedItem: string | null = null;
 	private focusedPosition: ReturnType<typeof captureEditorPosition> | undefined;
 	private focus: OutlineViewport["focus"] = "rows";
@@ -21,12 +22,35 @@ export class OutlineViewportAdapter {
 		return () => document.removeEventListener("focusin", trackFocus);
 	}
 
+	capturePanels(): void {
+		for (const panel of document.querySelectorAll<HTMLElement>(".outline-panel[data-pane-id]")) {
+			const id = panel.dataset.paneId;
+			if (id) this.paneScroll[id] = { top: panel.scrollTop, left: panel.scrollLeft };
+		}
+	}
+
+	async restorePanels(current: () => boolean): Promise<void> {
+		await tick();
+		if (!current()) return;
+		for (const panel of document.querySelectorAll<HTMLElement>(".outline-panel[data-pane-id]")) {
+			const scroll = this.paneScroll[panel.dataset.paneId ?? ""];
+			panel.scrollTop = scroll?.top ?? 0;
+			panel.scrollLeft = scroll?.left ?? 0;
+		}
+	}
+
+	async restorePane(itemId: string | null, current: () => boolean): Promise<void> {
+		await focusOutlineEditor(itemId, undefined, current, false);
+		await this.restorePanels(current);
+	}
+
 	track(itemId: string, hoistId: string | null, textarea: HTMLTextAreaElement): void {
 		this.focusedItem = itemId;
 		this.focusedPosition = captureEditorPosition(itemId, hoistId, textarea);
 	}
 
 	capture(selectedId: string | null, hoistId: string | null, longForm: boolean): OutlineViewport {
+		this.capturePanels();
 		const panel = document.querySelector<HTMLElement>(".outline-panel");
 		let editorPosition = selectedId ? captureEditorPosition(selectedId, hoistId) : undefined;
 		if (
@@ -36,6 +60,7 @@ export class OutlineViewportAdapter {
 		if (longForm && selectedId) editorPosition = this.captureManuscript(selectedId, hoistId);
 		return {
 			editorPosition,
+			paneScroll: structuredClone(this.paneScroll),
 			panelScrollTop: panel?.scrollTop ?? 0,
 			panelScrollLeft: panel?.scrollLeft ?? 0,
 			focus: longForm ? "long-form" : this.focus,
@@ -77,8 +102,17 @@ export class OutlineViewportAdapter {
 			)?.focus({ preventScroll: true });
 		}
 		if (!current()) return;
+		if (viewport.restoreScroll !== false) await this.restoreScroll(viewport, current);
+	}
+
+	private async restoreScroll(viewport: OutlineViewport, current: () => boolean): Promise<void> {
+		if (viewport.paneScroll) {
+			this.paneScroll = structuredClone(viewport.paneScroll);
+			await this.restorePanels(current);
+			return;
+		}
 		const panel = document.querySelector<HTMLElement>(".outline-panel");
-		if (panel && viewport.restoreScroll !== false) {
+		if (panel) {
 			panel.scrollTop = viewport.panelScrollTop;
 			panel.scrollLeft = viewport.panelScrollLeft;
 		}

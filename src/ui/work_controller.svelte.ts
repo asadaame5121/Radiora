@@ -1,3 +1,9 @@
+import {
+	createWorkListState,
+	duplicateCandidateKey,
+	duplicateCandidateReason,
+} from "./work_list_state.svelte.ts";
+export { duplicateCandidateKey, duplicateCandidateReason } from "./work_list_state.svelte.ts";
 import type {
 	CreateItemInput,
 	CreateLinkInput,
@@ -49,57 +55,20 @@ export interface WorkControllerPorts {
 	reloadBookmarks?(): Promise<void>;
 }
 
-export function duplicateCandidateKey(candidate: DuplicateCandidate): string {
-	return [candidate.workA.workId, candidate.workB.workId].sort().join(":");
-}
-
-export function duplicateCandidateReason(candidate: DuplicateCandidate): string {
-	return candidate.reasons.map((reason) => reason.label).join(" / ");
-}
-
 export function createWorkController(ports: WorkControllerPorts) {
 	let quickCaptureSubmitting = $state(false);
-	let unplacedWorks = $state<UnplacedWork[]>([]);
-	let stubEntries = $state<StubListEntry[]>([]);
-	let duplicateCandidates = $state<DuplicateCandidate[]>([]);
-	let excludedDuplicateCandidateKeys = $state<string[]>([]);
+	const lists = createWorkListState(ports.api);
+	const {
+		prepareScreen,
+		loadUnplacedWorks,
+		loadStubs,
+		loadDuplicates,
+		loadTrash,
+		excludeDuplicateCandidate,
+	} = lists;
 	let unplacedLinkTargets = $state<Record<string, string>>({});
 	let unplacedLinkDirections = $state<Record<string, UnplacedLinkDirection>>({});
 	let unplacedLinkType = $state<LinkType>("RELATED");
-	let trashEntries = $state<TrashEntry[]>([]);
-
-	async function prepareScreen(view: WorkView): Promise<() => void> {
-		switch (view) {
-			case "unplaced": {
-				const result = await ports.api.listUnplacedWorks();
-				return () => {
-					unplacedWorks = result;
-				};
-			}
-			case "stubs": {
-				const result = await ports.api.listStubs();
-				return () => {
-					stubEntries = result;
-				};
-			}
-			case "duplicates": {
-				const result = await ports.api.listDuplicateCandidates();
-				return () => {
-					duplicateCandidates = result.filter((candidate) =>
-						!excludedDuplicateCandidateKeys.includes(duplicateCandidateKey(candidate))
-					);
-				};
-			}
-			case "trash": {
-				const result = await ports.api.listTrash();
-				return () => {
-					trashEntries = result;
-				};
-			}
-			default:
-				return () => undefined;
-		}
-	}
 
 	function report(cause: unknown): void {
 		ports.reportError(cause);
@@ -121,22 +90,19 @@ export function createWorkController(ports: WorkControllerPorts) {
 					parentId: null,
 					afterId: roots.at(-1)?.id ?? null,
 				});
+				ports.clearQuickCaptureInput?.();
 				if (await ports.reload() === false) return;
 				await ports.navigation.navigate({ view: "outline", occurrenceId: created.id }, origin);
 			} else {
 				await ports.api.quickCapture(text);
+				ports.clearQuickCaptureInput?.();
 				await Promise.all([ports.reload(), loadUnplacedWorks()]);
 			}
-			ports.clearQuickCaptureInput?.();
 		} catch (cause) {
 			report(cause);
 		} finally {
 			quickCaptureSubmitting = false;
 		}
-	}
-
-	async function loadUnplacedWorks(): Promise<void> {
-		unplacedWorks = await ports.api.listUnplacedWorks();
 	}
 
 	async function openUnplaced(): Promise<void> {
@@ -185,10 +151,6 @@ export function createWorkController(ports: WorkControllerPorts) {
 		}
 	}
 
-	async function loadStubs(): Promise<void> {
-		stubEntries = await ports.api.listStubs();
-	}
-
 	async function openStubs(): Promise<void> {
 		try {
 			await ports.navigation.navigate({ view: "stubs" });
@@ -225,29 +187,12 @@ export function createWorkController(ports: WorkControllerPorts) {
 		}
 	}
 
-	async function loadDuplicates(): Promise<void> {
-		const candidates = await ports.api.listDuplicateCandidates();
-		duplicateCandidates = candidates.filter((candidate) =>
-			!excludedDuplicateCandidateKeys.includes(duplicateCandidateKey(candidate))
-		);
-	}
-
 	async function openDuplicates(): Promise<void> {
 		try {
 			await ports.navigation.navigate({ view: "duplicates" });
 		} catch (cause) {
 			report(cause);
 		}
-	}
-
-	function excludeDuplicateCandidate(candidate: DuplicateCandidate): void {
-		const key = duplicateCandidateKey(candidate);
-		if (!excludedDuplicateCandidateKeys.includes(key)) {
-			excludedDuplicateCandidateKeys = [...excludedDuplicateCandidateKeys, key];
-		}
-		duplicateCandidates = duplicateCandidates.filter((entry) =>
-			duplicateCandidateKey(entry) !== key
-		);
 	}
 
 	async function createDuplicateCandidateLink(
@@ -280,10 +225,6 @@ export function createWorkController(ports: WorkControllerPorts) {
 		} catch (cause) {
 			report(cause);
 		}
-	}
-
-	async function loadTrash(): Promise<void> {
-		trashEntries = await ports.api.listTrash();
 	}
 
 	async function openTrash(): Promise<void> {
@@ -342,16 +283,16 @@ export function createWorkController(ports: WorkControllerPorts) {
 			return quickCaptureSubmitting;
 		},
 		get unplacedWorks() {
-			return unplacedWorks;
+			return lists.unplacedWorks;
 		},
 		get stubEntries() {
-			return stubEntries;
+			return lists.stubEntries;
 		},
 		get duplicateCandidates() {
-			return duplicateCandidates;
+			return lists.duplicateCandidates;
 		},
 		get excludedDuplicateCandidateKeys() {
-			return excludedDuplicateCandidateKeys;
+			return lists.excludedDuplicateCandidateKeys;
 		},
 		get unplacedLinkTargets() {
 			return unplacedLinkTargets;
@@ -372,7 +313,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 			unplacedLinkType = value;
 		},
 		get trashEntries() {
-			return trashEntries;
+			return lists.trashEntries;
 		},
 		performQuickCapture,
 		loadUnplacedWorks,

@@ -196,10 +196,18 @@
 		selection: {
 			current: () => selectedId,
 			guard: (item, current) => historicalTimeController.canSelect(item, current),
-			commit: (id, item) => { selectedId = id; historicalTimeController.commitSelection(item); },
+			commit: (id, item) => {
+				if (selectedId !== id) editorController.clearCompletions();
+				selectedId = id;
+				historicalTimeController.commitSelection(item);
+			},
 			cancelPending: () => historicalTimeController.cancelPending(),
 		},
-		editor: { save: () => longFormController.save(false), flush: () => editorController.flushForNavigation() },
+		editor: {
+			save: () => longFormController.save(false),
+			flush: () => editorController.flushForNavigation(),
+			version: () => editorController.editVersion + longFormController.editVersion,
+		},
 		screens: { prepare: (destination) => screenPresenter.prepare(destination), focusTree: focusTreeSelection },
 		reportError: (cause) => error = errorMessage(cause),
 	});
@@ -1027,8 +1035,8 @@
 		window.addEventListener("pointerup", stop, { once: true });
 	}
 
-	async function openInspectorTool(mode: Extract<InspectorAsideMode, "query">): Promise<void> {
-		await screenNavigation.openInspectorTool(mode);
+	async function openQuery(): Promise<void> {
+		if (!await screenNavigation.navigate({ view: "outline", query: true })) return;
 		await tick();
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
@@ -1063,9 +1071,10 @@
 		const pane = navigationController.browsing.panes.find((candidate) => candidate.id === paneId);
 		const nextId = pane?.history[pane.historyIndex]?.selectedOccurrenceId ?? null;
 		const activate = () => {
+			outlineViewport.capturePanels();
 			selectedId = navigationController.activateBrowsingPane(paneId, snapshot).selectedOccurrenceId;
 			transientExpandedIds = ancestorBreadcrumb(snapshot, selectedId).map((item) => item.id);
-			if (selectedId) requestFocus(selectedId);
+			void outlineViewport.restorePane(selectedId, () => viewMode === "outline" && navigationController.browsing.activePaneId === paneId).catch((cause) => { error = errorMessage(cause); });
 		};
 		if (!historicalTimeController.select(itemById.get(nextId ?? "") ?? null, activate)) return;
 		activate();
@@ -1362,11 +1371,11 @@
 	}
 
 	function openSelectedRevisionComparison(): void {
-		comparison.openRevision(
+		void comparison.openRevision(
 			selectedItem?.revisionSelector.mode === "pinned"
 				? selectedItem.revisionSelector.revisionId
 				: "",
-		);
+		).catch((cause) => { error = errorMessage(cause); });
 	}
 
 	async function retryWorkingCopySave(): Promise<void> {
@@ -2055,7 +2064,7 @@
 		onOpenDuplicates={() => void openDuplicates()}
 		onOpenOptions={() => void screenNavigation.navigate({ view: "options" })}
 		onOpenTags={() => void openTags()}
-		onOpenQuery={() => void openInspectorTool("query")}
+		onOpenQuery={() => void openQuery().catch((cause) => { error = errorMessage(cause); })}
 		onOpenHelp={openHelp}
 		onOpenRecentItem={(item) => void openRecentNavigationItem(item)}
 	/>
@@ -2108,7 +2117,7 @@
 		style={`--inspector-width:${inspectorColumn}`}
 	>
 		{#if viewMode === "outline"}
-			<section class="outline-panel">
+			<section class="outline-panel" data-pane-id={navigationController.browsing.activePaneId}>
 				{#if longForm.active}
 					{#if selectedItem}
 						<LongFormEditor
@@ -2285,7 +2294,6 @@
 						context={{ kind: "branch" }}
 						preferredLeftKey={comparison.work.preferredLeftKey}
 						preferredRightKey={comparison.work.preferredRightKey}
-						onPairChange={(left, right) => comparison.selectPair(left, right)}
 					/>
 				{/key}
 			{:else if selectedItem}
@@ -2299,8 +2307,6 @@
 								(selectedItem.revisionSelector.mode === "pinned"
 									? selectedItem.revisionSelector.revisionId
 									: undefined)}
-							selectedPair={comparison.revisionPair}
-							onPairChange={(left, right) => comparison.selectPair(left, right)}
 						/>
 					{/key}
 				{/if}

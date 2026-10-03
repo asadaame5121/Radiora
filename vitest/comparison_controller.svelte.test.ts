@@ -51,13 +51,20 @@ for (const kind of ["work", "link"] as const) {
 	test(`${kind} preparation failure preserves the current pair and screen`, async () => {
 		const s = setup();
 		await s.controller.openRevision("a");
-		s.controller.selectPair("revision:a", "revision:b");
-		const before = s.controller.captureNavigationContext();
+		const before = {
+			preferredRevisionId: s.controller.preferredRevisionId,
+			work: s.controller.work,
+			link: s.controller.link,
+		};
 		s.api.listWorkComparisonDocuments.mockRejectedValueOnce(new Error("offline"));
 		s.api.resolveLinkComparison.mockRejectedValueOnce(new Error("offline"));
 		if (kind === "work") await s.controller.openWork("revision", "b");
 		else await s.controller.openLink("link");
-		expect(s.controller.captureNavigationContext()).toEqual(before);
+		expect({
+			preferredRevisionId: s.controller.preferredRevisionId,
+			work: s.controller.work,
+			link: s.controller.link,
+		}).toEqual(before);
 		expect(s.navigation.view).toBe("comparison");
 		expect(s.reportError).toHaveBeenCalledOnce();
 	});
@@ -94,28 +101,6 @@ for (const kind of ["work", "link"] as const) {
 		expect(s.selected()).toBe("source");
 	});
 }
-
-test("Work selectors preserve the changed and swapped pair in the feature context", async () => {
-	const s = setup();
-	await s.controller.openWork("revision", "b");
-	s.controller.selectPair("revision:b", "revision:a");
-	expect(s.controller.captureNavigationContext().work).toMatchObject({
-		preferredLeftKey: "revision:b",
-		preferredRightKey: "revision:a",
-	});
-	s.controller.selectPair("missing", "revision:b");
-	expect(s.controller.work?.preferredLeftKey).toBe("revision:b");
-});
-
-test("fresh revision comparison resets its feature pair only after accepted navigation", async () => {
-	const s = setup();
-	await s.controller.openRevision("a");
-	s.controller.selectPair("revision:a", "revision:b");
-	expect(s.controller.revisionPair).toEqual({ leftKey: "revision:a", rightKey: "revision:b" });
-	await s.controller.openRevision("b");
-	expect(s.controller.revisionPair).toBeUndefined();
-	expect(s.controller.preferredRevisionId).toBe("b");
-});
 
 test("preparation itself does not clear or apply the current feature state", async () => {
 	const s = setup();

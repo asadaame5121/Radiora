@@ -176,6 +176,52 @@ describe("work controller", () => {
 			expect(controller.quickCaptureSubmitting).toBe(false);
 		});
 
+		test.each(["false", "throw"])(
+			"clears a successful root capture even when reload returns %s",
+			async (failure) => {
+				const createItem = vi.fn().mockResolvedValue({ id: "created" });
+				const ports = createPorts({ createItem });
+				const error = new Error("refresh failed");
+				ports.reload = failure === "false"
+					? vi.fn().mockResolvedValue(false)
+					: vi.fn().mockRejectedValue(error);
+				ports.clearQuickCaptureInput = vi.fn();
+				const controller = createWorkController(ports);
+				await controller.performQuickCapture("Created memo", "root");
+				expect(createItem).toHaveBeenCalledTimes(1);
+				expect(ports.clearQuickCaptureInput).toHaveBeenCalledTimes(1);
+				expect(ports.navigation.navigate).not.toHaveBeenCalled();
+				expect(controller.quickCaptureSubmitting).toBe(false);
+				if (failure === "throw") expect(ports.reportError).toHaveBeenCalledWith(error);
+			},
+		);
+
+		test("retains root capture input when creation fails", async () => {
+			const error = new Error("create failed");
+			const ports = createPorts({ createItem: vi.fn().mockRejectedValue(error) });
+			ports.clearQuickCaptureInput = vi.fn();
+			const controller = createWorkController(ports);
+			await controller.performQuickCapture("Unsaved memo", "root");
+			expect(ports.clearQuickCaptureInput).not.toHaveBeenCalled();
+			expect(ports.reload).not.toHaveBeenCalled();
+			expect(ports.reportError).toHaveBeenCalledWith(error);
+			expect(controller.quickCaptureSubmitting).toBe(false);
+		});
+
+		test("clears an unplaced capture when refreshing the list fails", async () => {
+			const error = new Error("list failed");
+			const ports = createPorts({
+				quickCapture: vi.fn().mockResolvedValue({ workId: "created" }),
+				listUnplacedWorks: vi.fn().mockRejectedValue(error),
+			});
+			ports.clearQuickCaptureInput = vi.fn();
+			const controller = createWorkController(ports);
+			await controller.performQuickCapture("Created memo", "unplaced");
+			expect(ports.clearQuickCaptureInput).toHaveBeenCalledTimes(1);
+			expect(ports.reportError).toHaveBeenCalledWith(error);
+			expect(controller.quickCaptureSubmitting).toBe(false);
+		});
+
 		test("captures to root with afterId null when no roots exist", async () => {
 			const createItem = vi.fn().mockResolvedValue({ id: "item-first", workId: "work-first" });
 			const ports = createPorts({ createItem });

@@ -12,14 +12,8 @@ type ComparisonApi = Pick<
 	"listWorkComparisonDocuments" | "resolveLinkComparison"
 >;
 
-export interface ComparisonPair {
-	leftKey: string;
-	rightKey: string;
-}
-
 export interface ComparisonNavigationContext {
 	preferredRevisionId: string | undefined;
-	revisionPair?: ComparisonPair;
 	link: LinkComparisonProjection | null;
 	work:
 		| (WorkComparisonDocuments & { preferredLeftKey?: string; preferredRightKey?: string })
@@ -28,7 +22,6 @@ export interface ComparisonNavigationContext {
 
 export class ComparisonController {
 	preferredRevisionId = $state<string | undefined>();
-	revisionPair = $state<ComparisonPair | undefined>();
 	link = $state<LinkComparisonProjection | null>(null);
 	work = $state<
 		(WorkComparisonDocuments & { preferredLeftKey?: string; preferredRightKey?: string }) | null
@@ -45,32 +38,10 @@ export class ComparisonController {
 		},
 	) {}
 
-	captureNavigationContext(): ComparisonNavigationContext {
-		return {
-			preferredRevisionId: this.preferredRevisionId,
-			revisionPair: $state.snapshot(this.revisionPair),
-			link: $state.snapshot(this.link),
-			work: $state.snapshot(this.work),
-		};
-	}
-
 	restoreNavigationContext(context: ComparisonNavigationContext): void {
 		this.preferredRevisionId = context.preferredRevisionId;
-		this.revisionPair = context.revisionPair;
 		this.link = context.link;
 		this.work = context.work;
-	}
-
-	selectPair(leftKey: string, rightKey: string): void {
-		if (this.link || !leftKey || !rightKey || leftKey === rightKey) return;
-		if (this.work) {
-			const keys = this.work.documents.map(comparisonDocumentKey);
-			if (!keys.includes(leftKey) || !keys.includes(rightKey)) return;
-			this.work.preferredLeftKey = leftKey;
-			this.work.preferredRightKey = rightKey;
-		} else {
-			this.revisionPair = { leftKey, rightKey };
-		}
 	}
 
 	openRevision(revisionId: string): Promise<boolean> {

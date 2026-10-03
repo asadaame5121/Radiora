@@ -114,6 +114,7 @@ describe("P1: LongForm navigation race reproduction", () => {
 			},
 			editor: {
 				save: () => longForm.save(false),
+				version: () => longForm.editVersion,
 				flush: async () => undefined,
 			},
 			screens: {

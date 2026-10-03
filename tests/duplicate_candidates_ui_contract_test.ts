@@ -13,7 +13,11 @@ Deno.test("Duplicate candidates view is reachable and acts only through bindings
 	);
 
 	assert(bindings.includes("listDuplicateCandidates("));
-	assert(controller.includes("ports.api.listDuplicateCandidates("));
+	const lists = await Deno.readTextFile(
+		new URL("../src/ui/work_list_state.svelte.ts", import.meta.url),
+	);
+	assert(controller.includes("createWorkListState(ports.api)"));
+	assert(lists.includes("this.api.listDuplicateCandidates("));
 	assert(app.includes('"duplicates"'));
 	assert(app.includes("openDuplicates"));
 	assert(app.includes("<DuplicateCandidatesPanel"));
@@ -75,16 +79,12 @@ Deno.test("Duplicate candidates view keeps merge, link adoption, and dismissal e
 	assert(desktop.includes("service().mergeWorks(preview)"));
 });
 
-Deno.test("loadDuplicates function only calls read-only API", async () => {
-	const controller = await Deno.readTextFile(
-		new URL("../src/ui/work_controller.svelte.ts", import.meta.url),
+Deno.test("Work list state only calls read-only APIs", async () => {
+	const lists = await Deno.readTextFile(
+		new URL("../src/ui/work_list_state.svelte.ts", import.meta.url),
 	);
-
-	const loadDuplicates = controller.match(/async function loadDuplicates\(\)[\s\S]*?\n\t\}/)?.[0] ??
-		"";
-
-	assert(loadDuplicates.length > 0, "loadDuplicates function not found");
-	assert(loadDuplicates.includes("ports.api.listDuplicateCandidates("));
+	assert(lists.includes('await this.prepareScreen("duplicates")'));
+	assert(lists.includes("this.api.listDuplicateCandidates("));
 
 	const writeApis = [
 		"createLink",
@@ -109,8 +109,8 @@ Deno.test("loadDuplicates function only calls read-only API", async () => {
 
 	for (const api of writeApis) {
 		assertFalse(
-			loadDuplicates.includes(`api.${api}(`),
-			`loadDuplicates must not call write API: ${api}`,
+			lists.includes(`api.${api}(`),
+			`Work list state must not call write API: ${api}`,
 		);
 	}
 });
