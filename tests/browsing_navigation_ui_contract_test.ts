@@ -74,7 +74,7 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 	assertFalse(controller.includes("api."));
 });
 
-Deno.test("loading a focus target selects it before restoring editor focus", async () => {
+Deno.test("loading a focus target commits accepted navigation before restoring editor focus", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const load = app.slice(
 		app.indexOf("async function load"),
@@ -83,6 +83,6 @@ Deno.test("loading a focus target selects it before restoring editor focus", asy
 
 	assertMatch(
 		load,
-		/if \(focusId\) \{\s*selectOccurrence\(focusId, \(\) => void tick\(\)\.then\(\(\) => requestFocus\(focusId\)\)\);/,
+		/if \(focusId\) \{\s*selectOccurrence\(focusId, \(\) => \{\s*afterSelection\?\.\(\);\s*void tick\(\)\.then\(\(\) => requestFocus\(focusId\)\);\s*\}\);/,
 	);
 });

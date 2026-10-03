@@ -185,6 +185,89 @@ for (const choice of ["保存して移動", "破棄して移動", "キャンセ�
 	});
 }
 
+for (const operation of ["place", "root capture"] as const) {
+	for (const choice of ["保存して移動", "破棄して移動", "キャンセル"] as const) {
+		test(`${operation} defers navigation until the selection guard resolves: ${choice}`, async ({ page }) => {
+			const created = {
+				...items[1],
+				id: "created",
+				workId: "created",
+				text: "created work",
+				revisionSelector: { mode: "branch", branchId: "created-main" },
+			};
+			let snapshotItems = [...items];
+			let unplaced = [{
+				workId: created.workId,
+				branchId: "created-main",
+				text: created.text,
+				createdAt: created.createdAt,
+				updatedAt: created.updatedAt,
+			}];
+			await page.route(
+				"**/api/rpc/listOutline",
+				(route) =>
+					route.fulfill({
+						json: { result: { items: snapshotItems, links: [], knots: [], stashItemIds: [] } },
+					}),
+			);
+			await page.route(
+				"**/api/rpc/listUnplacedWorks",
+				(route) => route.fulfill({ json: { result: unplaced } }),
+			);
+			for (const method of ["placeUnplacedWork", "createItem"]) {
+				await page.route(`**/api/rpc/${method}`, (route) => {
+					snapshotItems = [...items, created];
+					if (method === "placeUnplacedWork") unplaced = [];
+					return route.fulfill({ json: { result: created } });
+				});
+			}
+			await page.route(
+				"**/api/rpc/setWorkHistoricalTime",
+				(route) => route.fulfill({ json: { result: null } }),
+			);
+			await page.goto("/");
+			await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
+			await page.keyboard.press("Control+Shift+H");
+			await page.getByRole("textbox", { name: "年", exact: true }).fill("2026");
+			await page.getByRole("button", { name: "未配置項目", exact: true }).click();
+			await page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }).fill("work");
+			if (operation === "place") {
+				await page.getByRole("button", { name: "Rootへ配置", exact: true }).click();
+			} else {
+				const input = page.getByRole("combobox", { name: "検索・クイック入力", exact: true });
+				await input.fill(created.text);
+				await input.press("Shift+Enter");
+			}
+			const dialog = page.getByRole("dialog", { name: "年代の変更を保存しますか？" });
+			await expect(dialog).toBeVisible();
+			await expect(page.locator(".unplaced-inbox")).toBeVisible();
+			await dialog.getByRole("button", { name: choice, exact: true }).click();
+			await expect(dialog).toHaveCount(0);
+			const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
+			if (choice === "キャンセル") {
+				await expect(page.getByRole("region", { name: "未配置項目", exact: true })).toBeVisible();
+				await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue("2026");
+			} else {
+				await expect(page.locator('textarea[data-item-id="created"]')).toBeFocused();
+				await back.click();
+				await expect(page.getByRole("region", { name: "未配置項目", exact: true })).toBeVisible();
+			}
+			await expect(
+				page.getByRole("complementary").getByRole("heading", {
+					name: "mock-1 editable text",
+					exact: true,
+				}),
+			).toBeVisible();
+			await expect(page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }))
+				.toHaveValue("work");
+			await back.click();
+			await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
+			await expect(page.locator('textarea[data-item-id="created"]')).toHaveCount(0);
+			await expect(back).toBeDisabled();
+		});
+	}
+}
+
 for (const kind of ["work", "revision"] as const) {
 	test(`${kind} comparison restores an edited and swapped pair after leaving the screen`, async ({ page }) => {
 		const revisions = ["a", "b", "c"].map((id) => ({

@@ -21,17 +21,22 @@ function candidate(firstId: string, secondId: string, label: string): DuplicateC
 }
 
 function createPorts(apiOverrides: Partial<WorkApiPort>): WorkControllerPorts {
-	return {
+	const ports: WorkControllerPorts = {
 		api: apiOverrides as WorkApiPort,
 		getSnapshot: () => EMPTY_SNAPSHOT,
-		reload: vi.fn(async () => true),
+		reload: vi.fn(async (_focusId?: string, afterSelection?: () => void) => {
+			afterSelection?.();
+			return true;
+		}),
 		openView: vi.fn(),
+		prepareView: vi.fn((view) => () => ports.openView(view)),
 		selectOccurrence: vi.fn(),
 		requestConfirmation: vi.fn(async () => {
 			// intentional no-op
 		}),
 		reportError: vi.fn(),
 	};
+	return ports;
 }
 
 describe("work controller", () => {
@@ -109,7 +114,10 @@ describe("work controller", () => {
 	describe("quick capture", () => {
 		test("captures to root with afterId from existing roots", async () => {
 			const createItem = vi.fn().mockResolvedValue({ id: "item-new", workId: "work-new" });
-			const reload = vi.fn().mockResolvedValue(true);
+			const reload = vi.fn(async (_focusId?: string, afterSelection?: () => void) => {
+				afterSelection?.();
+				return true;
+			});
 			const openView = vi.fn();
 			const clearQuickCaptureInput = vi.fn();
 			const snapshot: OutlineSnapshot = {
@@ -161,7 +169,7 @@ describe("work controller", () => {
 				afterId: "root-2",
 			});
 			expect(openView).toHaveBeenCalledWith("outline");
-			expect(reload).toHaveBeenCalledWith("item-new");
+			expect(reload).toHaveBeenCalledWith("item-new", expect.any(Function));
 			expect(clearQuickCaptureInput).toHaveBeenCalled();
 			expect(controller.quickCaptureSubmitting).toBe(false);
 		});
@@ -228,11 +236,14 @@ describe("work controller", () => {
 			expect(openView).toHaveBeenCalledWith("unplaced");
 		});
 
-		test("placeUnplaced places work, reloads, opens outline, and selects item", async () => {
+		test("placeUnplaced commits outline through the accepted reload selection", async () => {
 			const createdItem = { id: "occ-1", workId: "w-1" };
 			const placeUnplacedWork = vi.fn().mockResolvedValue(createdItem);
 			const listUnplacedWorks = vi.fn().mockResolvedValue([]);
-			const reload = vi.fn().mockResolvedValue(true);
+			const reload = vi.fn(async (_focusId?: string, afterSelection?: () => void) => {
+				afterSelection?.();
+				return true;
+			});
 			const openView = vi.fn();
 			const selectOccurrence = vi.fn();
 			const ports = createPorts({ placeUnplacedWork, listUnplacedWorks });
@@ -244,10 +255,10 @@ describe("work controller", () => {
 			await controller.placeUnplaced("w-1", "parent-1");
 
 			expect(placeUnplacedWork).toHaveBeenCalledWith({ workId: "w-1", parentId: "parent-1" });
-			expect(reload).toHaveBeenCalledWith("occ-1");
+			expect(reload).toHaveBeenCalledWith("occ-1", expect.any(Function));
 			expect(listUnplacedWorks).toHaveBeenCalled();
 			expect(openView).toHaveBeenCalledWith("outline");
-			expect(selectOccurrence).toHaveBeenCalledWith("occ-1");
+			expect(selectOccurrence).not.toHaveBeenCalled();
 		});
 
 		test("linkUnplaced creates link with specified direction and type, then clears target", async () => {

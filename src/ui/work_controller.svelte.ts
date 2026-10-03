@@ -38,8 +38,11 @@ export interface WorkApiPort {
 export interface WorkControllerPorts {
 	api: WorkApiPort;
 	getSnapshot(): OutlineSnapshot;
-	reload(focusId?: string): Promise<unknown>;
+	/** Selection may outlive reload; call afterSelection only when the focus target is accepted. */
+	reload(focusId?: string, afterSelection?: () => void): Promise<unknown>;
 	openView(view: WorkView): void;
+	/** Capture the caller now; the returned callback commits the screen and history later. */
+	prepareView(view: WorkView): () => void;
 	selectOccurrence(id: string | null): void;
 	requestConfirmation(confirmation: PendingConfirmation): Promise<void>;
 	reportError(cause: unknown): void;
@@ -77,6 +80,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 		quickCaptureSubmitting = true;
 		try {
 			if (destination === "root") {
+				const commitView = ports.prepareView("outline");
 				const roots = ports.getSnapshot().items
 					.filter((item) => item.parentId === null)
 					.sort((left, right) => left.orderKey - right.orderKey);
@@ -85,8 +89,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 					parentId: null,
 					afterId: roots.at(-1)?.id ?? null,
 				});
-				ports.openView("outline");
-				await ports.reload(created.id);
+				await ports.reload(created.id, commitView);
 			} else {
 				await ports.api.quickCapture(text);
 				await Promise.all([ports.reload(), loadUnplacedWorks()]);
@@ -123,10 +126,9 @@ export function createWorkController(ports: WorkControllerPorts) {
 
 	async function placeUnplaced(workId: string, parentId: string | null): Promise<void> {
 		try {
+			const commitView = ports.prepareView("outline");
 			const created = await ports.api.placeUnplacedWork({ workId, parentId });
-			await Promise.all([ports.reload(created.id), loadUnplacedWorks()]);
-			ports.openView("outline");
-			ports.selectOccurrence(created.id);
+			await Promise.all([ports.reload(created.id, commitView), loadUnplacedWorks()]);
 		} catch (cause) {
 			report(cause);
 		}

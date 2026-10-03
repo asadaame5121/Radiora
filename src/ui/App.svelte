@@ -270,6 +270,7 @@
 		getSnapshot: () => snapshot,
 		reload: load,
 		openView: (view) => screenNavigation.open(view),
+		prepareView: (view) => screenNavigation.prepareOpen(view),
 		selectOccurrence,
 		requestConfirmation,
 		reportError: (cause) => error = errorMessage(cause),
@@ -771,7 +772,7 @@
 		await ruleQuery.loadSavedQueries();
 	}
 
-	async function load(focusId?: string): Promise<boolean> {
+	async function load(focusId?: string, afterSelection?: () => void): Promise<boolean> {
 		const request = ++globalLineageRequest;
 		try {
 			error = "";
@@ -800,7 +801,10 @@
 			}
 			bookmarks = nextBookmarks;
 			if (focusId) {
-				selectOccurrence(focusId, () => void tick().then(() => requestFocus(focusId)));
+				selectOccurrence(focusId, () => {
+					afterSelection?.();
+					void tick().then(() => requestFocus(focusId));
+				});
 			}
 			persistStartupSnapshotCache(snapshotForStartupCache, navigationController.browsingLocation);
 			return true;
