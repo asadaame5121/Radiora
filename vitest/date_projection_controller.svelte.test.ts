@@ -15,6 +15,7 @@ describe("DateProjectionController", () => {
 		const controller = new DateProjectionController({
 			projectDates: vi.fn(),
 			onError: vi.fn(),
+			navigation: { origin: 0, navigate: vi.fn(async () => true) },
 		});
 		expect(controller.start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 		expect(controller.end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -29,15 +30,19 @@ describe("DateProjectionController", () => {
 		const controller = new DateProjectionController({
 			projectDates,
 			onError: vi.fn(),
-			onOpenView,
+			navigation: { origin: 0, navigate: onOpenView.mockResolvedValue(true) },
 		});
 
+		(await controller.prepareScreen({
+			startInclusive: "2026-09-28",
+			endExclusive: "2026-09-29",
+		}))();
 		await controller.load();
 
 		expect(projectDates).toHaveBeenCalledTimes(1);
 		expect(controller.projection).toBe(mockData);
 		expect(controller.loading).toBe(false);
-		expect(onOpenView).toHaveBeenCalledWith("today");
+		expect(onOpenView).toHaveBeenCalledWith(expect.objectContaining({ view: "today" }));
 	});
 
 	it("handles load error cleanly", async () => {
@@ -47,12 +52,12 @@ describe("DateProjectionController", () => {
 		const controller = new DateProjectionController({
 			projectDates,
 			onError,
+			navigation: { origin: 0, navigate: vi.fn(async () => true) },
 		});
 
-		await controller.load();
-
-		expect(controller.loading).toBe(false);
-		expect(onError).toHaveBeenCalledWith(error);
+		await expect(
+			controller.prepareScreen({ startInclusive: "2026-09-28", endExclusive: "2026-09-29" }),
+		).rejects.toThrow(error);
 	});
 
 	it("moves date range forward and backward", async () => {
@@ -60,6 +65,7 @@ describe("DateProjectionController", () => {
 		const controller = new DateProjectionController({
 			projectDates,
 			onError: vi.fn(),
+			navigation: { origin: 0, navigate: vi.fn(async () => true) },
 		});
 		controller.setStart("2026-09-01");
 		controller.setEnd("2026-09-02");
@@ -78,6 +84,7 @@ describe("DateProjectionController", () => {
 		const controller = new DateProjectionController({
 			projectDates,
 			onError: vi.fn(),
+			navigation: { origin: 0, navigate: vi.fn(async () => true) },
 		});
 
 		await controller.showWeek();

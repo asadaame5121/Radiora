@@ -2,8 +2,8 @@
 	let { enabled, onBack }: { enabled: boolean; onBack: () => void } = $props();
 </script>
 
-<button type="button" aria-label="前の画面へ戻る" title="前の画面へ戻る (Alt+←)"
-	disabled={!enabled} onclick={onBack}>← 戻る</button>
+<button type="button" aria-label="アウトラインに戻る" title="アウトラインに戻る (Alt+←)"
+	disabled={!enabled} onclick={onBack}>← アウトラインに戻る</button>
 
 <style>
 	button {

@@ -13,6 +13,7 @@ const items = ["mock-1", "mock-7"].map((id, index) => ({
 }));
 
 test.beforeEach(async ({ page }) => {
+	page.on("pageerror", (error) => console.log("PAGEERROR", error.message));
 	await page.route("**/api/rpc/listOutline", (route) =>
 		route.fulfill({
 			json: { result: { items, links: [], knots: [], stashItemIds: [] } },
@@ -33,139 +34,93 @@ test.beforeEach(async ({ page }) => {
 	}
 });
 
-test("rewriting a branch returns to Today's original occurrence instead of the new placement", async ({ page }) => {
-	const source = items[0];
-	const placement = {
-		...source,
-		id: "rewritten-placement",
-		revisionSelector: { mode: "branch", branchId: "rewritten-branch" },
-		contextualHeading: "rewritten branch",
-	};
-	let snapshotItems = [...items];
-	await page.route("**/api/rpc/listOutline", (route) =>
-		route.fulfill({
-			json: { result: { items: snapshotItems, links: [], knots: [], stashItemIds: [] } },
-		}));
-	await page.route("**/api/rpc/projectDates", (route) =>
-		route.fulfill({
-			json: {
-				result: {
-					range: { startInclusive: "2026-09-05", endExclusive: "2026-09-06" },
-					created: [],
-					updated: [],
-				},
-			},
-		}));
-	await page.route("**/api/rpc/rewriteAsNewBranch", (route) =>
-		route.fulfill({
-			json: {
-				result: { status: "created", branch: { id: "rewritten-branch", name: "rewritten branch" } },
-			},
-		}));
-	await page.route("**/api/rpc/createOccurrence", (route) => {
-		snapshotItems = [...items, placement];
-		return route.fulfill({ json: { result: placement } });
-	});
+test("Option and nested trash return directly to the retained Outline", async ({ page }) => {
 	await page.goto("/");
-	await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
-	await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
-		name: "今日",
-		exact: true,
-	}).click();
-	await page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }).fill(
-		"caller filter",
-	);
-	await page.keyboard.press("Control+Shift+S");
-	const dialog = page.getByRole("dialog", { name: "新しい別稿として書き直しますか？" });
-	await expect(dialog).toBeVisible();
-	await dialog.getByRole("textbox").fill("rewritten branch");
-	await dialog.getByRole("button", { name: "新しい別稿を作る", exact: true }).click();
-	await expect(dialog).toHaveCount(0);
-	await expect(
-		page.getByRole("complementary").getByRole("heading", {
-			name: "rewritten branch",
-			exact: true,
-		}),
-	).toBeVisible();
-	const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
+	await expect(back).toBeDisabled();
+	await page.getByRole("button", { name: "Option", exact: true }).click();
+	await page.getByRole("button", { name: "項目を復元する", exact: true }).click();
 	await back.click();
-	await expect(page.getByRole("region", { name: "今日", exact: true })).toBeVisible();
-	await expect(
-		page.getByRole("complementary").getByRole("heading", {
-			name: "mock-1 editable text",
-			exact: true,
-		}),
-	).toBeVisible();
-	await expect(page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }))
-		.toHaveValue("caller filter");
-	await back.click();
-	await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-1");
+	await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
 	await expect(back).toBeDisabled();
 });
 
-for (
-	const action of [
-		"アウトラインで開く",
-		"この位置へZoom",
-		"版の履歴を開く",
-		"原稿として開く",
-		"版比較を開く",
-	]
-) {
-	test(`Tree context menu preserves its selected caller: ${action}`, async ({ page }) => {
-		await page.goto("/");
-		await page.getByRole("button", { name: "ツリー", exact: true }).click();
-		const node = page.locator(".tree-node").nth(1);
-		await node.focus();
-		await node.press("Enter");
-		await expect(node).toHaveClass(/selected/);
-		await node.press("Shift+F10");
-		const command = page.getByRole("menuitem", { name: action, exact: true });
-		await command.focus();
-		await command.press("Enter");
-		await expect(page.getByRole("group", { name: "思索の系統樹" })).toHaveCount(0);
-		await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
-		await expect(node).toHaveClass(/selected/);
-		await expect(node).toBeFocused();
-		await page.getByRole("button", { name: "アウトライン", exact: true }).click();
-		await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
-		await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]')).toBeVisible();
-	});
-}
-
-test("Return to Editor remembers the Tree selection and hoist before restoring the editor", async ({ page }) => {
+test("Tree selection and Help do not overwrite suspended Outline Hoist or caret", async ({ page }) => {
 	await page.goto("/");
+	const editor = page.locator('textarea[data-item-id="mock-1"]');
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
 	await page.keyboard.press("Control+Shift+H");
+	await editor.evaluate((element: HTMLTextAreaElement) =>
+		element.setSelectionRange(element.value.length, element.value.length)
+	);
 	await page.getByRole("button", { name: "ツリー", exact: true }).click();
+	await expect(page.getByRole("group", { name: "思索の系統樹" })).toBeVisible();
 	const node = page.locator(".tree-node").nth(1);
 	await node.focus();
 	await node.press("Enter");
 	await expect(node).toHaveClass(/selected/);
-	await page.keyboard.press("Control+/");
-	await page.keyboard.press("b");
-	await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await page.getByRole("button", { name: "ナビゲーションを閉じる" }).click();
+	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+	await expect(editor).toBeFocused();
 	await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]')).toHaveCount(0);
-	await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
-	await expect(node).toHaveClass(/selected/);
-	await expect(node).toBeFocused();
-	await page.getByRole("button", { name: "アウトライン", exact: true }).click();
-	await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
-	await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]')).toBeVisible();
+	expect(
+		await editor.evaluate((
+			element: HTMLTextAreaElement,
+		) => [element.selectionStart, element.selectionEnd]),
+	).toEqual([items[0].text.length, items[0].text.length]);
+});
+
+test("every primary screen resumes the same Outline", async ({ page }) => {
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	const navigation = page.getByRole("navigation", { name: "主な画面" });
+	for (const name of ["今日", "未配置項目", "未完成項目一覧", "重複候補", "タグ管理", "Option"]) {
+		await navigation.getByRole("button", { name, exact: true }).click();
+		await expect(page.getByRole("button", { name: "アウトラインに戻る", exact: true }))
+			.toBeEnabled();
+		await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+		await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
+	}
+});
+
+test("Query changes the inspector without enabling screen Back", async ({ page }) => {
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	await page.getByRole("button", { name: "Query・検索別名", exact: true }).click();
+	await expect(page.locator(".query-panel")).toBeVisible();
+	const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
+	await expect(back).toBeDisabled();
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await back.click();
+	await expect(page.locator(".query-panel")).toBeVisible();
+	await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
+});
+test("revision comparison returns to the original occurrence and history tab", async ({ page }) => {
+	await page.goto("/");
+	const editor = page.locator('textarea[data-item-id="mock-7"]');
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	await expect(editor).toBeFocused();
+	await editor.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(3, 7));
+	await page.getByRole("tab", { name: "履歴", exact: true }).click();
+	await page.getByRole("button", { name: "版比較を開く", exact: true }).click();
+	await expect(page.locator(".revision-comparison")).toBeVisible();
+	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+	await expect(editor).toBeFocused();
+	await expect(page.getByRole("tab", { name: "履歴", exact: true })).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	expect(
+		await editor.evaluate((
+			element: HTMLTextAreaElement,
+		) => [element.selectionStart, element.selectionEnd]),
+	).toEqual([3, 7]);
 });
 
 for (const choice of ["保存して移動", "破棄して移動", "キャンセル"] as const) {
-	test(`Return to Editor waits for the historical-time guard: ${choice}`, async ({ page }) => {
-		await page.route("**/api/rpc/projectDates", (route) =>
-			route.fulfill({
-				json: {
-					result: {
-						range: { startInclusive: "2026-09-05", endExclusive: "2026-09-06" },
-						created: [],
-						updated: [],
-					},
-				},
-			}));
+	test(`Outline resume waits for the guard: ${choice}`, async ({ page }) => {
 		await page.route(
 			"**/api/rpc/setWorkHistoricalTime",
 			(route) => route.fulfill({ json: { result: null } }),
@@ -174,196 +129,24 @@ for (const choice of ["保存して移動", "破棄して移動", "キャンセ�
 		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
 		await page.keyboard.press("Control+Shift+H");
 		await page.getByRole("button", { name: "ツリー", exact: true }).click();
+		await expect(page.getByRole("group", { name: "思索の系統樹" })).toBeVisible();
 		const node = page.locator(".tree-node").nth(1);
 		await node.focus();
 		await node.press("Enter");
-		await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
-			name: "今日",
-			exact: true,
-		}).click();
-		await page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }).fill(
-			"caller filter",
-		);
+		await page.getByRole("button", { name: "今日", exact: true }).click();
 		await page.getByRole("textbox", { name: "年", exact: true }).fill("2026");
-		await page.keyboard.press("Control+/");
-		await page.keyboard.press("b");
+		const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
+		await back.click();
 		const dialog = page.getByRole("dialog", { name: "年代の変更を保存しますか？" });
 		await expect(dialog).toBeVisible();
 		await expect(page.getByRole("region", { name: "今日", exact: true })).toBeVisible();
 		await dialog.getByRole("button", { name: choice, exact: true }).click();
 		if (choice === "キャンセル") {
-			await expect(dialog).toHaveCount(0);
 			await expect(page.getByRole("region", { name: "今日", exact: true })).toBeVisible();
 			await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue("2026");
-			await page.keyboard.press("Control+/");
-			await page.keyboard.press("b");
-			await dialog.getByRole("button", { name: "破棄して移動", exact: true }).click();
-		}
-		await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
-		await expect(page.locator('textarea[data-item-id="mock-7"]')).toHaveCount(0);
-		const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
-		await back.click();
-		await expect(page.getByRole("region", { name: "今日", exact: true })).toBeVisible();
-		await expect(
-			page.getByRole("complementary").getByRole("heading", {
-				name: "mock-7 editable text",
-				exact: true,
-			}),
-		).toBeVisible();
-		await expect(page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }))
-			.toHaveValue("caller filter");
-		await back.click();
-		await expect(node).toHaveClass(/selected/);
-		await back.click();
-		await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
-		await expect(back).toBeDisabled();
-	});
-}
-
-test("Today restores the caller's selection, hoist, and filter after opening another occurrence", async ({ page }) => {
-	const destination = items[1];
-	await page.route("**/api/rpc/projectDates", (route) =>
-		route.fulfill({
-			json: {
-				result: {
-					range: { startInclusive: "2026-09-05", endExclusive: "2026-09-06" },
-					created: [{
-						work: {
-							id: destination.workId,
-							createdAt: destination.createdAt,
-							updatedAt: destination.updatedAt,
-						},
-						representative: destination,
-						placements: [{ occurrence: destination, breadcrumb: [] }],
-					}],
-					updated: [],
-				},
-			},
-		}));
-	await page.goto("/");
-	await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
-	await page.keyboard.press("Control+Shift+H");
-	await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]')).toHaveCount(0);
-	await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
-		name: "今日",
-		exact: true,
-	}).click();
-	await page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }).fill("mock-7");
-	await page.locator(".date-entry").click();
-	await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
-	await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
-	await expect(page.getByRole("textbox", { name: "テキストで絞り込み", exact: true })).toHaveValue(
-		"mock-7",
-	);
-	await expect(
-		page.getByRole("complementary").getByRole("heading", {
-			name: "mock-1 editable text",
-			exact: true,
-		}),
-	).toBeVisible();
-	await page.getByRole("button", { name: "アウトライン", exact: true }).click();
-	await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-1");
-	await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]')).toHaveCount(0);
-});
-
-test("a cancelled Recent selection adds no history, while a confirmed selection remembers its caller", async ({ page }) => {
-	await page.route("**/api/rpc/projectDates", (route) =>
-		route.fulfill({
-			json: {
-				result: {
-					range: { startInclusive: "2026-09-05", endExclusive: "2026-09-06" },
-					created: [],
-					updated: [],
-				},
-			},
-		}));
-	await page.goto("/");
-	await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
-	await page.getByRole("textbox", { name: "年", exact: true }).fill("2026");
-	await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
-		name: "今日",
-		exact: true,
-	}).click();
-	const recent = page.getByRole("region", { name: "最近編集した項目" }).getByRole("button", {
-		name: /mock-7/,
-	});
-	await recent.click();
-	const dialog = page.getByRole("dialog", { name: "年代の変更を保存しますか？" });
-	await expect(dialog).toBeVisible();
-	await dialog.getByRole("button", { name: "キャンセル", exact: true }).click();
-	await expect(dialog).toHaveCount(0);
-	await expect(page.getByRole("region", { name: "今日", exact: true })).toBeVisible();
-	await expect(
-		page.getByRole("complementary").getByRole("heading", {
-			name: "mock-1 editable text",
-			exact: true,
-		}),
-	).toBeVisible();
-	await recent.click();
-	await dialog.getByRole("button", { name: "破棄して移動", exact: true }).click();
-	await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
-	const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
-	await back.click();
-	await expect(page.getByRole("region", { name: "今日", exact: true })).toBeVisible();
-	await expect(
-		page.getByRole("complementary").getByRole("heading", {
-			name: "mock-1 editable text",
-			exact: true,
-		}),
-	).toBeVisible();
-	await back.click();
-	await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-1");
-	await expect(back).toBeDisabled();
-});
-
-for (const choice of ["保存して移動", "破棄して移動", "キャンセル"] as const) {
-	test(`Back waits for the historical-time guard: ${choice}`, async ({ page }) => {
-		await page.route("**/api/rpc/projectDates", (route) =>
-			route.fulfill({
-				json: {
-					result: {
-						range: { startInclusive: "2026-09-05", endExclusive: "2026-09-06" },
-						created: [],
-						updated: [],
-					},
-				},
-			}));
-		await page.route(
-			"**/api/rpc/setWorkHistoricalTime",
-			(route) => route.fulfill({ json: { result: null } }),
-		);
-		await page.goto("/");
-		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
-		await page.keyboard.press("Control+Shift+H");
-		await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
-			name: "今日",
-			exact: true,
-		}).click();
-		await page.getByRole("region", { name: "最近編集した項目" }).getByRole("button", {
-			name: /mock-7/,
-		}).click();
-		await page.getByRole("textbox", { name: "年", exact: true }).fill("2026");
-		const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
-		await back.click();
-		const dialog = page.getByRole("dialog", { name: "年代の変更を保存しますか？" });
-		await expect(dialog).toBeVisible();
-		await dialog.getByRole("button", { name: choice, exact: true }).click();
-		if (choice === "キャンセル") {
-			await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
-			await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue("2026");
-			await expect(back).toBeEnabled();
 			await back.click();
 			await dialog.getByRole("button", { name: "破棄して移動", exact: true }).click();
 		}
-		await expect(dialog).toHaveCount(0);
-		await expect(page.getByRole("region", { name: "今日", exact: true })).toBeVisible();
-		await expect(
-			page.getByRole("complementary").getByRole("heading", {
-				name: "mock-1 editable text",
-				exact: true,
-			}),
-		).toBeVisible();
-		await back.click();
 		await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
 		await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]')).toHaveCount(
 			0,
@@ -371,7 +154,6 @@ for (const choice of ["保存して移動", "破棄して移動", "キャンセ�
 		await expect(back).toBeDisabled();
 	});
 }
-
 for (const operation of ["place", "root capture"] as const) {
 	for (const choice of ["保存して移動", "破棄して移動", "キャンセル"] as const) {
 		test(`${operation} defers navigation until the selection guard resolves: ${choice}`, async ({ page }) => {
@@ -430,184 +212,23 @@ for (const operation of ["place", "root capture"] as const) {
 			await expect(page.locator(".unplaced-inbox")).toBeVisible();
 			await dialog.getByRole("button", { name: choice, exact: true }).click();
 			await expect(dialog).toHaveCount(0);
-			const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
+			const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
 			if (choice === "キャンセル") {
 				await expect(page.getByRole("region", { name: "未配置項目", exact: true })).toBeVisible();
 				await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue("2026");
+				await back.click();
+				await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
 			} else {
 				await expect(page.locator('textarea[data-item-id="created"]')).toBeFocused();
+				await expect(back).toBeDisabled();
+				await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
 				await back.click();
-				await expect(page.getByRole("region", { name: "未配置項目", exact: true })).toBeVisible();
+				await expect(page.locator('textarea[data-item-id="created"]')).toBeFocused();
 			}
-			await expect(
-				page.getByRole("complementary").getByRole("heading", {
-					name: "mock-1 editable text",
-					exact: true,
-				}),
-			).toBeVisible();
-			await expect(page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }))
-				.toHaveValue("work");
-			await back.click();
-			await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
-			await expect(page.locator('textarea[data-item-id="created"]')).toHaveCount(0);
 			await expect(back).toBeDisabled();
 		});
 	}
 }
-
-for (const kind of ["work", "revision"] as const) {
-	test(`${kind} comparison restores an edited and swapped pair after leaving the screen`, async ({ page }) => {
-		const revisions = ["a", "b", "c"].map((id) => ({
-			id,
-			workId: "mock-7",
-			text: `body ${id}`,
-			parentRevisionIds: [],
-			kind: "checkpoint",
-			createdAt: "2026-09-05T00:00:00.000Z",
-			message: id,
-		}));
-		await page.route(
-			"**/api/rpc/listRevisions",
-			(route) => route.fulfill({ json: { result: revisions } }),
-		);
-		await page.route("**/api/rpc/listWorkLineage", (route) =>
-			route.fulfill({
-				json: {
-					result: {
-						work: {
-							id: "mock-7",
-							createdAt: revisions[0].createdAt,
-							updatedAt: revisions[0].createdAt,
-						},
-						branches: [],
-						revisions,
-					},
-				},
-			}));
-		await page.route(
-			"**/api/rpc/listWorkComparisonDocuments",
-			(route) =>
-				route.fulfill({
-					json: {
-						result: {
-							workId: "mock-7",
-							documents: revisions.map((revision) => ({
-								scope: "revision",
-								workId: revision.workId,
-								revisionId: revision.id,
-								title: revision.message,
-								text: revision.text,
-							})),
-						},
-					},
-				}),
-		);
-		await page.goto("/");
-		await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
-		await page.getByRole("tab", { name: "履歴", exact: true }).click();
-		if (kind === "work") {
-			await page.getByRole("button", { name: "版の履歴を開く", exact: true }).click();
-			await page.getByRole("button", { name: "この版を比較", exact: true }).last().click();
-		} else {
-			await page.getByRole("button", { name: "版比較を開く", exact: true }).click();
-		}
-		const left = page.locator("#comparison-left");
-		const right = page.locator("#comparison-right");
-		await left.selectOption("revision:b");
-		await right.selectOption("revision:a");
-		await left.selectOption("revision:a");
-		await expect(right).toHaveValue("revision:b");
-		await page.getByRole("button", { name: "Option", exact: true }).click();
-		await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
-		await expect(left).toHaveValue("revision:a");
-		await expect(right).toHaveValue("revision:b");
-	});
-}
-
-test("Option → trash → Option → outline preserves the return chain", async ({ page }) => {
-	await page.goto("/");
-	const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
-	await expect(back).toBeDisabled();
-	await page.getByRole("button", { name: "Option", exact: true }).click();
-	await expect(back).toBeEnabled();
-	await page.getByRole("button", { name: "項目を復元する", exact: true }).click();
-	await back.click();
-	await expect(page.getByRole("heading", { name: "Option", exact: true })).toBeVisible();
-	await page.keyboard.press("Alt+ArrowLeft");
-	await expect(page.getByRole("tree")).toBeVisible();
-	await expect(back).toBeDisabled();
-});
-
-test("tree is the caller when opening help, including with collapsed navigation", async ({ page }) => {
-	await page.goto("/");
-	await page.getByRole("button", { name: "ツリー", exact: true }).click();
-	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
-	await page.getByRole("button", { name: "ナビゲーションを閉じる" }).click();
-	await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
-	await expect(page.getByRole("group", { name: "思索の系統樹" })).toBeVisible();
-});
-
-test("every primary navigation screen returns to the tree caller", async ({ page }) => {
-	await page.goto("/");
-	await page.getByRole("button", { name: "ツリー", exact: true }).click();
-	const navigation = page.getByRole("navigation", { name: "主な画面" });
-	for (const name of ["今日", "未配置項目", "未完成項目一覧", "重複候補", "タグ管理", "Option"]) {
-		await navigation.getByRole("button", { name, exact: true }).click();
-		await expect(page.getByRole("group", { name: "思索の系統樹" })).toHaveCount(0);
-		await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
-		await expect(page.getByRole("group", { name: "思索の系統樹" })).toBeVisible();
-	}
-});
-
-test("Query tool returns to the previous inspector and selection", async ({ page }) => {
-	await page.goto("/");
-	const editor = page.locator('textarea[data-item-id="mock-7"]');
-	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
-	await expect(editor).toBeFocused();
-	await page.getByRole("button", { name: "Query・検索別名", exact: true }).click();
-	await expect(page.locator(".query-panel")).toBeVisible();
-	await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
-	await expect(page.getByRole("tab", { name: "概要", exact: true })).toHaveAttribute(
-		"aria-selected",
-		"true",
-	);
-	await expect(editor).toBeFocused();
-});
-
-test("revision comparison returns to the original occurrence and history tab", async ({ page }) => {
-	await page.goto("/");
-	const editor = page.locator('textarea[data-item-id="mock-7"]');
-	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
-	await expect(editor).toBeFocused();
-	await editor.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(3, 7));
-	await page.getByRole("tab", { name: "履歴", exact: true }).click();
-	await page.getByRole("button", { name: "版比較を開く", exact: true }).click();
-	await expect(page.locator(".revision-comparison")).toBeVisible();
-	await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
-	await expect(editor).toBeFocused();
-	await expect(page.getByRole("tab", { name: "履歴", exact: true })).toHaveAttribute(
-		"aria-selected",
-		"true",
-	);
-	expect(
-		await editor.evaluate((
-			element: HTMLTextAreaElement,
-		) => [element.selectionStart, element.selectionEnd]),
-	).toEqual([3, 7]);
-});
-
-test("screen back focuses the selected tree node instead of the first node", async ({ page }) => {
-	await page.goto("/");
-	await page.getByRole("button", { name: "ツリー", exact: true }).click();
-	const node = page.locator(".tree-node").nth(1);
-	await node.focus();
-	await node.press("Enter");
-	await expect(node).toHaveClass(/selected/);
-	const nodeId = await node.getAttribute("data-tree-node-id");
-	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
-	await page.getByRole("button", { name: "前の画面へ戻る", exact: true }).click();
-	await expect(page.locator(`.tree-node[data-tree-node-id="${nodeId}"]`)).toBeFocused();
-});
 
 test("Alt+Left is suppressed while a dialog is open", async ({ page }) => {
 	await page.goto("/");
@@ -650,7 +271,8 @@ for (const composition of ["isComposing", "keyCode"] as const) {
 		await expect(page.getByRole("heading", { name: "Option", exact: true })).toBeVisible();
 		await page.keyboard.press("Alt+ArrowLeft");
 		await expect(page.getByRole("tree")).toBeVisible();
-		await expect(page.getByRole("button", { name: "前の画面へ戻る", exact: true })).toBeDisabled();
+		await expect(page.getByRole("button", { name: "アウトラインに戻る", exact: true }))
+			.toBeDisabled();
 	});
 }
 
@@ -718,13 +340,334 @@ test("a delayed comparison cannot replace Help or add an obsolete caller to hist
 			})
 		);
 		await expect(page.locator(".help-panel")).toBeVisible();
-		const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
-		await back.click();
-		await expect(page.locator(".work-lineage-workspace")).toBeVisible();
+		const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
 		await back.click();
 		await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
 		await expect(back).toBeDisabled();
 	} finally {
 		release();
 	}
+});
+
+test("last row caret and a scrolled Outline survive resume after Help", async ({ page }) => {
+	const rows = Array.from({ length: 45 }, (_, index) => ({
+		...items[0],
+		id: `scroll-${index}`,
+		workId: `scroll-${index}`,
+		text: `row ${index} with editable content`,
+		parentId: index === 0 ? null : "scroll-0",
+		orderKey: index,
+		revisionSelector: { mode: "branch", branchId: `scroll-${index}-main` },
+	}));
+	await page.route(
+		"**/api/rpc/listOutline",
+		(route) =>
+			route.fulfill({ json: { result: { items: rows, links: [], knots: [], stashItemIds: [] } } }),
+	);
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-0"]').click();
+	await page.keyboard.press("Control+Shift+H");
+	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-44"]').click();
+	const editor = page.locator('textarea[data-item-id="scroll-44"]');
+	await editor.evaluate((element: HTMLTextAreaElement) =>
+		element.setSelectionRange(element.value.length, element.value.length, "backward")
+	);
+	const scrollTop = await page.locator(".outline-panel").evaluate((element) => element.scrollTop);
+	expect(scrollTop).toBeGreaterThan(0);
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+	await expect(editor).toBeFocused();
+	expect(await editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(
+		rows[44].text.length,
+	);
+	await expect.poll(() => page.locator(".outline-panel").evaluate((element) => element.scrollTop))
+		.toBe(scrollTop);
+	await expect(page.getByRole("button", { name: "ここだけ表示を解除", exact: true })).toBeVisible();
+});
+
+test("manuscript display and caret survive leaving and resuming Outline", async ({ page }) => {
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	await page.getByRole("button", { name: "原稿として開く", exact: true }).click();
+	const manuscript = page.locator(".long-form-textarea");
+	await expect(manuscript).toBeFocused();
+	await manuscript.evaluate((element: HTMLTextAreaElement) =>
+		element.setSelectionRange(3, 7, "backward")
+	);
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+	await expect(manuscript).toBeFocused();
+	expect(
+		await manuscript.evaluate((
+			element: HTMLTextAreaElement,
+		) => [element.selectionStart, element.selectionEnd, element.selectionDirection]),
+	).toEqual([3, 7, "backward"]);
+});
+
+test("failed Outline retrieval leaves Help open and a subsequent resume succeeds", async ({ page }) => {
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await page.route(
+		"**/api/rpc/listOutline",
+		(route) => route.fulfill({ status: 500, json: { error: "offline" } }),
+		{ times: 1 },
+	);
+	const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
+	await back.click();
+	await expect(page.locator(".error")).toContainText("API request failed");
+	await expect(page.locator(".help-panel")).toBeVisible();
+	await back.click();
+	await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
+});
+
+test("resume uses latest text and clamps the caret without undoing a data change", async ({ page }) => {
+	let current = [...items];
+	await page.route(
+		"**/api/rpc/listOutline",
+		(route) =>
+			route.fulfill({
+				json: { result: { items: current, links: [], knots: [], stashItemIds: [] } },
+			}),
+	);
+	await page.goto("/");
+	const editor = page.locator('textarea[data-item-id="mock-7"]');
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	await editor.evaluate((element: HTMLTextAreaElement) =>
+		element.setSelectionRange(element.value.length, element.value.length)
+	);
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	current = items.map((item) => item.id === "mock-7" ? { ...item, text: "短い" } : item);
+	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+	await expect(editor).toHaveValue("短い");
+	await expect(editor).toBeFocused();
+	expect(await editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(2);
+});
+
+test("rewriting a branch creates an explicit Outline destination for subsequent resume", async ({ page }) => {
+	const source = items[0];
+	const placement = {
+		...source,
+		id: "rewritten-placement",
+		revisionSelector: { mode: "branch", branchId: "rewritten-branch" },
+		contextualHeading: "rewritten branch",
+	};
+	let snapshotItems = [...items];
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({
+			json: { result: { items: snapshotItems, links: [], knots: [], stashItemIds: [] } },
+		}));
+	await page.route("**/api/rpc/projectDates", (route) =>
+		route.fulfill({
+			json: {
+				result: {
+					range: { startInclusive: "2026-09-05", endExclusive: "2026-09-06" },
+					created: [],
+					updated: [],
+				},
+			},
+		}));
+	await page.route("**/api/rpc/rewriteAsNewBranch", (route) =>
+		route.fulfill({
+			json: {
+				result: { status: "created", branch: { id: "rewritten-branch", name: "rewritten branch" } },
+			},
+		}));
+	await page.route("**/api/rpc/createOccurrence", (route) => {
+		snapshotItems = [...items, placement];
+		return route.fulfill({ json: { result: placement } });
+	});
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
+	await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
+		name: "今日",
+		exact: true,
+	}).click();
+	await page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }).fill(
+		"",
+	);
+	await page.keyboard.press("Control+Shift+S");
+	const dialog = page.getByRole("dialog", { name: "新しい別稿として書き直しますか？" });
+	await expect(dialog).toBeVisible();
+	await dialog.getByRole("textbox").fill("rewritten branch");
+	await dialog.getByRole("button", { name: "新しい別稿を作る", exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect(
+		page.getByRole("complementary").getByRole("heading", {
+			name: "rewritten branch",
+			exact: true,
+		}),
+	).toBeVisible();
+	const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
+	await expect(back).toBeDisabled();
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await back.click();
+	await expect(page.locator('textarea[data-item-id="rewritten-placement"]')).toBeFocused();
+	await expect(back).toBeDisabled();
+});
+
+for (
+	const action of [
+		"アウトラインで開く",
+		"この位置へZoom",
+		"版の履歴を開く",
+		"原稿として開く",
+		"版比較を開く",
+	]
+) {
+	test(`Tree context-menu destination uses the common gateway: ${action}`, async ({ page }) => {
+		await page.goto("/");
+		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
+		await page.getByRole("button", { name: "ツリー", exact: true }).click();
+		const node = page.locator(".tree-node").nth(1);
+		await node.focus();
+		await node.press("Enter");
+		await node.press("Shift+F10");
+		const command = page.getByRole("menuitem", { name: action, exact: true });
+		await command.focus();
+		await command.press("Enter");
+		await expect(page.getByRole("group", { name: "思索の系統樹" })).toHaveCount(0);
+		const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
+		const explicit = ["アウトラインで開く", "この位置へZoom", "原稿として開く"].includes(action);
+		if (explicit) {
+			await expect(back).toBeDisabled();
+			await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+		}
+		await back.click();
+		if (action === "原稿として開く") {
+			await expect(page.locator(".long-form-textarea")).toBeFocused();
+			await expect(
+				page.getByRole("complementary").getByRole("heading", {
+					name: "mock-7 editable text",
+					exact: true,
+				}),
+			).toBeVisible();
+		} else {
+			await expect(page.getByRole("treeitem", { selected: true })).toContainText(
+				explicit ? "mock-7" : "mock-1",
+			);
+		}
+		await expect(back).toBeDisabled();
+	});
+}
+
+test("row focus survives toolbar blur independently of the selected item", async ({ page }) => {
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	await page.locator(".rows").focus();
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+	await expect(page.locator(".rows")).toBeFocused();
+	await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
+});
+
+test("an empty Outline restores its first-item focus without creating an item", async ({ page }) => {
+	await page.route(
+		"**/api/rpc/listOutline",
+		(route) =>
+			route.fulfill({ json: { result: { items: [], links: [], knots: [], stashItemIds: [] } } }),
+	);
+	await page.goto("/");
+	await page.locator(".first-item").focus();
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+	await expect(page.locator(".first-item")).toBeFocused();
+	await expect(page.getByRole("treeitem")).toHaveCount(0);
+});
+
+test("Return to Editor restores remembered caret and panel scroll after another Tree selection", async ({ page }) => {
+	const rows = Array.from({ length: 45 }, (_, index) => ({
+		...items[0],
+		id: `scroll-${index}`,
+		workId: `scroll-${index}`,
+		text: `row ${index} with editable content`,
+		parentId: index === 0 ? null : "scroll-0",
+		orderKey: index,
+		revisionSelector: { mode: "branch", branchId: `scroll-${index}-main` },
+	}));
+	await page.route(
+		"**/api/rpc/listOutline",
+		(route) =>
+			route.fulfill({ json: { result: { items: rows, links: [], knots: [], stashItemIds: [] } } }),
+	);
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-0"]').click();
+	await page.keyboard.press("Control+Shift+H");
+	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-44"]').click();
+	const editor = page.locator('textarea[data-item-id="scroll-44"]');
+	await editor.evaluate((element: HTMLTextAreaElement) =>
+		element.setSelectionRange(element.value.length, element.value.length, "backward")
+	);
+	const scrollTop = await page.locator(".outline-panel").evaluate((element) => element.scrollTop);
+	expect(scrollTop).toBeGreaterThan(0);
+	await page.getByRole("button", { name: "ツリー", exact: true }).click();
+	const node = page.locator(".tree-node").nth(1);
+	await node.focus();
+	await node.press("Enter");
+	await page.keyboard.press("Control+/");
+	await page.keyboard.press("b");
+	await expect(editor).toBeFocused();
+	expect(await editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(
+		rows[44].text.length,
+	);
+	await expect.poll(() => page.locator(".outline-panel").evaluate((element) => element.scrollTop))
+		.toBe(scrollTop);
+	await expect(page.getByRole("button", { name: "ここだけ表示を解除", exact: true })).toBeVisible();
+});
+
+test("an explicit offscreen target scrolls into view instead of restoring panel position zero", async ({ page }) => {
+	const rows = Array.from({ length: 45 }, (_, index) => ({
+		...items[0],
+		id: `scroll-${index}`,
+		workId: `scroll-${index}`,
+		text: `row ${index} with editable content`,
+		parentId: index === 0 ? null : "scroll-0",
+		orderKey: index,
+		revisionSelector: { mode: "branch", branchId: `scroll-${index}-main` },
+	}));
+	rows[44] = { ...rows[44], updatedAt: "2026-10-04T00:00:00.000Z" };
+	await page.route(
+		"**/api/rpc/listOutline",
+		(route) =>
+			route.fulfill({ json: { result: { items: rows, links: [], knots: [], stashItemIds: [] } } }),
+	);
+
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-0"]').click();
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await page.getByRole("region", { name: "最近編集した項目" }).getByRole("button", {
+		name: /row 44 with editable content/,
+	}).click();
+
+	const editor = page.locator('textarea[data-item-id="scroll-44"]');
+	await expect(editor).toBeFocused();
+	await expect(editor).toBeInViewport();
+	expect(await page.locator(".outline-panel").evaluate((element) => element.scrollTop))
+		.toBeGreaterThan(0);
+});
+
+test("an existing empty row resumes at caret zero without creating another occurrence", async ({ page }) => {
+	const emptyRows = items.map((item) => item.id === "mock-7" ? { ...item, text: "" } : item);
+	let created = false;
+	await page.route("**/api/rpc/createItem", (route) => {
+		created = true;
+		return route.fulfill({ json: { result: items[0] } });
+	});
+	await page.route(
+		"**/api/rpc/listOutline",
+		(route) =>
+			route.fulfill({
+				json: { result: { items: emptyRows, links: [], knots: [], stashItemIds: [] } },
+			}),
+	);
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	const editor = page.locator('textarea[data-item-id="mock-7"]');
+	await expect(editor).toHaveValue("");
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+	await expect(editor).toBeFocused();
+	expect(await editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(0);
+	await expect(page.getByRole("treeitem")).toHaveCount(2);
+	expect(created).toBe(false);
 });

@@ -1,75 +1,58 @@
-# PR #285: 画面遷移と履歴保存の順序の点検
+# PR #285: 共通ナビゲーションへの移行点検
 
-2026-10-03。`screenNavigation.open()` と、Controller の `openView` / `setView` 経由の呼び出し、
-既存の `prepareOpen()` 経路を点検した。
+2026-10-03。#239 の現行仕様に合わせ、「戻る」を保持した Outline への直接復帰に変更した。
+[設計と契約](design/outline-screen-navigation.md) を実装・テストの基準にする。
 
-画面履歴は呼び出し元の選択、Zoom 範囲、フィルター、インスペクター、比較状態を保存する。
-遷移先の状態に書き換えた後の `open()` は、その書き換え後の状態を呼び出し元として保存する。
-未保存フォームが選択を保留する場合も、画面と履歴を先に確定してはいけない。
+## 確定の境界
 
-## 今回の修正対象
+遷移を要求する View / feature は `ScreenNavigator.navigate(destination, origin?)` に値を渡す。
+呼び出し側が選択・Hoist・画面を別々に確定する API は撤去した。 `ScreenNavigationController`
+が最新要求を検証し、Workspace の同期確定と画面の公開を同じ処理で行う。
 
-| 経路                                                             | 変更前の問題・候補                                                                                                         | 修正                                                                                                                                                               |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `EditorReturnController.restore` → `KeyboardWorkspaceController` | 編集項目と Zoom 範囲を復元してから Outline を開き、Tree の呼び出し元を失う。選択が保留されると、承認後も復帰処理が続かない | 保存・復元前に準備し、選択の承認を待って復元・確定する。Cancel は画面・範囲・履歴を変更しない                                                                      |
-| `confirmPendingAction` の別稿作成                                | 新しい配置を `load()` で選択してから Outline を開く                                                                        | `BranchRewriteController` に委譲し、作成前に準備、再読込の選択承認コールバックから確定する                                                                         |
-| `openOutline` / `openTree` / `openLongForm` / `saveLongForm`     | 原稿の保存・再読込・開始の後に履歴を保存するため、その処理が選択を変えると元の選択を失う                                   | 処理前に準備する。保存による再選択も承認を待ち、失敗・Cancel は遷移しない。原稿保存後の復帰は `restore()` に保存も委譲する                                         |
-| `ComparisonController.openWork` / `openLink`                     | `clear()` が比較ペア・Work・Link の状態を消した後に履歴を保存する                                                          | 状態を消す前に準備し、取得成功時に確定して結果を置き換える。取得失敗時は元の比較状態を保持する                                                                     |
-| コンテキストメニューの Outline / Zoom / Work lineage             | 対象を再選択してから遷移する。通常はメニューを開いた時点で同じ対象を選択済みだが、順序上は同じ問題の候補                   | 遷移処理前の再選択を除き、選択前に準備、承認後に範囲変更・確定する。その他のコマンドもメニューを開いた時点の選択を使い、対象が変わった古いメニューからは実行しない |
+- 公開 `open()` / `prepareOpen()` / `openView` / `prepareView` は残さない。
+- `reload(..., afterSelection)` による画面確定は残さない。作成後の再読込はデータ更新だけを行う。
+- ガードは承認を返すだけにし、承認前に移動先の選択や年代フォームを公開しない。
+- 最新の選択・最新要求を再検証した後に確定する。描画後の復元にも同じ要求の確認を渡す。
+- Save の後には Outline を再取得し、ガード前のスナップショットで保存結果を上書きしない。
+- DB 操作の移動元は操作開始時の受領番号で識別する。別要求の開始・確定後の自動移動を抑止する。
 
-## 既に準備・確定を分離していた経路
+取得結果の同期公開コールバックは Workspace と feature preparation port の内部だけで扱う。
+遷移を要求する feature に準備・確定の順序を守らせる契約には戻さない。
 
-- Tree の項目、Today の配置、Inspector の配置、Query 結果、内部参照バックリンク:
-  `openOutlineOccurrence()`。
-- 栞、前回の編集位置、内部参照の解決先: `openNavigationTarget()`。
-- 最近編集した項目: `openRecentItem()`。
-- 疎アウトライン: `handleSparseOutlineSelect()`。
-- 未配置 Work の配置、Root へのクイック入力: `WorkController.prepareView()` と
-  `reload(..., afterSelection)`。
+## 移行した経路
 
-これらは選択前に履歴を準備し、選択が受理されたコールバックから確定する。
+| 経路                                                                 | 共通窓口への要求                                                     |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 戻る、Alt+←、パレット、Help / 系統樹の Outline ボタン                | `{ view: "outline" }`。保持文脈に直接復帰                            |
+| Tree 切替、Help、Option、各 Work 一覧                                | 画面を指定。休止中の Outline の選択は上書きしない                    |
+| Recent、検索、栞、前回位置、Today / Inspector の配置、疎アウトライン | Outline と明示的な occurrence ID。必要な展開やキャレットも値で指定   |
+| 内部参照                                                             | 解決開始の受領番号を保持。版参照は選択と比較を一つの移動先として渡す |
+| 未配置の配置・Root へのクイック入力                                  | DB 操作後に Outline と作成された配置 ID。ガード受理後に確定          |
+| 別稿の作成・配置                                                     | 同上。受理した新しい Outline が次の復帰先になる                      |
+| Tree / Outline のコンテキストメニュー                                | Outline、Zoom、系統樹、原稿、比較をそれぞれ値で指定                  |
+| Work / Link / Revision の比較                                        | 比較対象を値で指定。取得失敗・古い応答は比較状態を公開しない         |
+| 日付投影・タグ管理                                                   | feature の取得結果を窓口の内部で準備し、受理時だけ公開               |
+| Query                                                                | Outline の Inspector を指定。同一画面の戻る履歴を作らない            |
+| 編集位置への復帰・原稿の開始 / 保存                                  | 保存済みの編集位置または表示モードを移動先の値に含める               |
 
-## 準備済み遷移の寿命
+## 状態保持
 
-`ScreenNavigationController` が履歴の世代を管理し、`prepareOpen()` は準備時の世代を保存する。
-別の画面遷移、Inspector の `remember()`、成功した Back が履歴を変更すると世代を進める。
-古い世代の確定コールバックは画面・履歴を変更しない。元の画面へ戻っても古いコールバックは復活しない。
-Back の Cancel・保存失敗は遷移を確定しないため、世代を変更しない。
+`OutlineScreenState` はペイン構成、選択・Hoist、表示条件、一時展開、Inspector、表示モード、
+フォーカス・編集位置・スクロールを保持する。別画面での選択は共有の選択フォームだけを更新し、 Outline
+の browsing state を更新しない。
 
-これにより、Work lineage で比較を取得中に Help を開いても、遅延した比較応答は Help を上書きせず、
-Back は Help → Work lineage → 元の画面の順に戻る。
+本文は最新のデータを使う。削除済み ID を補正し、本文短縮時はキャレットを文字数に収める。
+汎用画面履歴・Query の同一画面履歴を削除し、Browser History API は導入しない。 Undo/Redo は #286
+の別実装とする。
 
-## 即時の `open()` を維持する経路
+## 検証の根拠
 
-| 経路                                                              | 確認した順序                                                            |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Today / 日付範囲 / 週表示 (`DateProjectionController`)            | 日付投影の取得後に開く。保存対象の選択・Zoom 範囲・比較状態は変更しない |
-| 未配置 / Stub / 重複候補 / ゴミ箱 (`WorkController`)              | 一覧取得後に開く。呼び出し元の保存対象は変更しない                      |
-| タグ管理 (`openTags`)                                             | タグと未配置一覧の取得後に開く。呼び出し元の保存対象は変更しない        |
-| Option / Help / Help から Outline・Option                         | 画面を直接切り替える                                                    |
-| Work lineage の Outline ボタン / Inspector の Work lineage ボタン | 選択と範囲を変えずに画面を切り替える                                    |
-| Query Inspector (`openInspectorTool`)                             | `open()` または `remember()` で履歴を保存してから Inspector を変更する  |
+- 共通窓口の単体テスト: 取消、古い取得・承認、操作途中の受領番号、描画後の復元の無効化。
+- Workspace の単体テスト: ペイン・Hoist・表示条件の保持、明示的な項目移動、削除・保存・取得失敗。
+- 実際の HistoricalTimeController と共通窓口を使った feature テスト: 作成・配置・別稿の Save /
+  Discard / Cancel と、DB 操作完了後の自動移動の抑止。
+- ブラウザテスト: 多段の画面移動、最後尾のキャレット・スクロール、選択方向、原稿表示、行・空の
+  Outline のフォーカス、Tree のメニュー経由、ガードの三択、取得失敗と再試行、本文短縮、
+  編集位置へのショートカット、IME とモーダル中の抑止。
 
-`ComparisonController.openRevision()` も、従来は履歴保存後に比較状態を変更しており安全だった。
-今回、比較 Controller の port を `prepareView()` に統一した。
-
-## 回帰テスト
-
-- `vitest/screen_navigation_controller.svelte.test.ts`: 別の遷移・Inspector・Back による古い遷移の
-  無効化、同じ画面へ戻った場合の無効化、Back の Cancel 後の有効性。
-- `vitest/keyboard_navigation.svelte.test.ts`: Tree 呼び出し元、選択の Save / Discard / Cancel、
-  原稿処理前の履歴保存。
-- `vitest/branch_rewrite_navigation.svelte.test.ts`: 元の配置、選択の Save / Discard / Cancel、
-  作成・再読込失敗時の履歴。
-- `vitest/comparison_controller.svelte.test.ts`: Work / Link 比較を開く前の比較ペアの保持。
-- `vitest/keyboard_controller.svelte.test.ts`: 保存後の再選択が Cancel された場合の原稿保持、
-  `isComposing` / `keyCode === 229` 中の Alt+← の抑止とアプリ内遷移の停止。
-- `tests/ui/screen-navigation.spec.ts`: 別稿作成後の Today
-  の元の選択・フィルター、編集位置への復帰後の Tree の選択・Zoom 範囲、年代フォームの Save / Discard
-  / Cancel と戻る履歴、Tree のコンテキストメニューからの Outline / Zoom / Work lineage / 原稿 /
-  版比較。
-- 同じ画面テストで、比較の取得中に Help を開く場合の履歴と、IME 中の Alt+←
-  のグローバル処理も検証する。
-
-別稿の新しい配置は通常、元の配置と同じ Work に属するため、年代フォームのガードを通過する。 別 Work
-の未保存フォームによる保留は、Controller の port テストで承認コールバックの契約を検証する。
+テストの実行結果と既存の環境依存失敗は PR 本文に記録する。

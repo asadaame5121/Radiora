@@ -9,55 +9,6 @@ import type { ViewMode } from "../src/ui/app_view_mode.ts";
 
 afterEach(() => vi.unstubAllGlobals());
 
-test.each(["globalLineage", "options"] as const)(
-	"Save persists manuscripts opened from %s without a return position",
-	async (initialView) => {
-		vi.stubGlobal("document", { querySelector: vi.fn().mockReturnValue(null) });
-		const persistence = {
-			flush: vi.fn().mockResolvedValue(undefined),
-			save: vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(undefined),
-			reload: vi.fn().mockResolvedValue(true),
-			reportError: vi.fn(),
-		};
-		const longForm = new LongFormController(persistence);
-		let view: ViewMode = initialView;
-		const item = { id: "tree-item", text: "original" } as OutlineItem;
-		const ports = {
-			selectedId: () => item.id,
-			hoistId: () => null,
-			view: () => view,
-			prepareView: (next: ViewMode) => () => {
-				view = next;
-			},
-			longFormActive: () => longForm.state.active,
-			leaveLongForm: () => longForm.save(),
-			startLongForm: () => longForm.start(item),
-			select: vi.fn().mockReturnValue(true),
-			selectWhenReady: vi.fn().mockResolvedValue(true),
-			setHoist: vi.fn(),
-			reveal: vi.fn(),
-			items: () => [item],
-			projection: vi.fn(),
-			clearTemporaryExpansion: vi.fn(),
-			setCollapsed: vi.fn(),
-			reload: vi.fn(),
-		};
-		const workspace = new KeyboardWorkspaceController(ports);
-		await workspace.openLongForm();
-		expect(workspace.position).toBeNull();
-		longForm.input("edited manuscript");
-		await workspace.saveLongForm();
-		expect(persistence.save).toHaveBeenCalledWith(item.id, "edited manuscript");
-		expect(longForm.state).toMatchObject({ active: true, dirty: true, text: "edited manuscript" });
-		expect(persistence.reload).not.toHaveBeenCalled();
-		await workspace.saveLongForm();
-		expect(persistence.reload).toHaveBeenCalledWith(item.id);
-		expect(longForm.state.active).toBe(false);
-		expect(ports.select).not.toHaveBeenCalled();
-		expect(view).toBe("outline");
-	},
-);
-
 test("collapse all includes hidden descendants in the current hoist and reloads after partial failure", async () => {
 	vi.stubGlobal("document", { querySelector: vi.fn().mockReturnValue(null) });
 	vi.stubGlobal("CSS", { escape: (value: string) => value });
@@ -70,7 +21,7 @@ test("collapse all includes hidden descendants in the current hoist and reloads 
 		selectedId: () => "root",
 		hoistId: () => "root",
 		view: () => "outline" as const,
-		prepareView: () => vi.fn(),
+		navigation: { origin: 0, navigate: vi.fn(async () => true) },
 		longFormActive: () => false,
 		leaveLongForm: vi.fn().mockResolvedValue(true),
 		startLongForm: vi.fn(),
@@ -230,11 +181,11 @@ test("manuscript save retains the original item and preserves edits on failure",
 	expect(ports.reload).not.toHaveBeenCalled();
 	ports.save.mockResolvedValue(undefined);
 	expect(await controller.save()).toBe(true);
-	expect(ports.reload).toHaveBeenCalledWith("source");
+	expect(ports.reload).toHaveBeenCalledWith();
 	expect(controller.state.active).toBe(false);
 });
 
-test("manuscript save waits for reload selection and retains the editor when selection is cancelled", async () => {
+test("manuscript save waits for data refresh and retains the editor when refresh fails", async () => {
 	let settle!: (accepted: boolean) => void;
 	const selection = new Promise<boolean>((resolve) => {
 		settle = resolve;
@@ -249,7 +200,7 @@ test("manuscript save waits for reload selection and retains the editor when sel
 	await controller.start({ id: "source", text: "original" } as OutlineItem);
 	controller.input("edited");
 	const save = controller.save();
-	await vi.waitFor(() => expect(ports.reload).toHaveBeenCalledWith("source"));
+	await vi.waitFor(() => expect(ports.reload).toHaveBeenCalledWith());
 	expect(controller.state.active).toBe(true);
 	settle(false);
 	expect(await save).toBe(false);

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, test, vi } from "vitest";
 import type { HistoricalTime } from "../src/domain/historical_time.ts";
 import type { OutlineItem } from "../src/domain/models.ts";
 import { HistoricalTimeController } from "../src/ui/historical_time_controller.svelte.ts";
@@ -255,4 +255,38 @@ describe("HistoricalTimeController", () => {
 		});
 		expect(controller.item).toBe(first);
 	});
+});
+
+test("navigation permission does not apply the target form even after accepting Discard", async () => {
+	const controller = new HistoricalTimeController({
+		save: vi.fn(),
+		reload: vi.fn(),
+		select: vi.fn(),
+	});
+	const first = item("first"), second = item("second");
+	controller.reset(first);
+	controller.draft.start.year = "2026";
+	const permission = controller.canSelect(second, () => true);
+	expect(controller.item?.id).toBe("first");
+	await controller.resolvePending("discard");
+	expect(await permission).toBe(true);
+	expect(controller.item?.id).toBe("first");
+	controller.commitSelection(second);
+	expect(controller.item?.id).toBe("second");
+});
+
+test("invalidated navigation permission cannot apply a stale destination form", async () => {
+	const controller = new HistoricalTimeController({
+		save: vi.fn(),
+		reload: vi.fn(),
+		select: vi.fn(),
+	});
+	controller.reset(item("first"));
+	controller.draft.start.year = "2026";
+	let current = true;
+	const permission = controller.canSelect(item("second"), () => current);
+	current = false;
+	await controller.resolvePending("discard");
+	expect(await permission).toBe(false);
+	expect(controller.item?.id).toBe("first");
 });

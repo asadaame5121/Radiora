@@ -118,6 +118,9 @@ export function createNavigationController(options: NavigationControllerOptions 
 		captureBrowsing(): BrowsingNavigationState {
 			return $state.snapshot(browsing);
 		},
+		commitBrowsing(state: BrowsingNavigationState): void {
+			browsing = state;
+		},
 		async restoreBrowsing(
 			state: BrowsingNavigationState,
 			snapshot: OutlineSnapshot,

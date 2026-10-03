@@ -1,185 +1,119 @@
 import { expect, test, vi } from "vitest";
 import { ScreenNavigationController } from "../src/ui/screen_navigation_controller.svelte.ts";
+import type { ViewMode } from "../src/ui/app_view_mode.ts";
 
 function setup() {
-	let context = { selectedId: "original", comparison: "revision-a", aside: "overview" };
-	const restore = vi.fn(async (saved: typeof context) => {
-		context = saved;
-		return true;
+	let selected = "outline-item";
+	const prepare = vi.fn(async (destination: { view: ViewMode; selected?: string }) => destination);
+	const guard = vi.fn(async () => true);
+	const commit = vi.fn((destination: { view: ViewMode; selected?: string }) => {
+		if (destination.selected) selected = destination.selected;
 	});
-	const controller = new ScreenNavigationController({
-		capture: () => ({ ...context }),
-		restore,
+	const afterCommit = vi.fn(async (
+		_prepared: { view: ViewMode; selected?: string },
+		_current: () => boolean,
+	) => undefined);
+	const navigation = new ScreenNavigationController({
+		prepare,
+		guard,
+		commit,
+		afterCommit,
+		cancelPending: vi.fn(),
 	});
-	return {
-		controller,
-		restore,
-		change: (id: string) => context.selectedId = id,
-		context: () => context,
-	};
+	return { navigation, prepare, guard, commit, afterCommit, selected: () => selected };
 }
 
-test("Option and trash return to their immediate caller without adding history", async () => {
-	const { controller } = setup();
-	expect(controller.canGoBack).toBe(false);
-	controller.open("options");
-	controller.open("trash");
-	await controller.goBack();
-	expect(controller.view).toBe("options");
-	await controller.goBack();
-	expect(controller.view).toBe("outline");
-	expect(controller.canGoBack).toBe(false);
-	await controller.goBack();
-	expect(controller.view).toBe("outline");
+test("Back always resumes Outline, including after multiple screens", async () => {
+	const { navigation } = setup();
+	expect(navigation.canGoBack).toBe(false);
+	await navigation.navigate({ view: "globalLineage" });
+	await navigation.navigate({ view: "help" });
+	await navigation.navigate({ view: "outline" });
+	expect(navigation.view).toBe("outline");
+	expect(navigation.canGoBack).toBe(false);
 });
 
-test("restores the selection and comparison context of the caller", async () => {
-	const { controller, change, context } = setup();
-	controller.open("workLineage");
-	controller.open("comparison");
-	change("other");
-	await controller.goBack();
-	expect(controller.view).toBe("workLineage");
-	expect(context()).toEqual({
-		selectedId: "original",
-		comparison: "revision-a",
-		aside: "overview",
+test("guard cancellation changes neither selection nor screen", async () => {
+	const { navigation, guard, commit, selected } = setup();
+	await navigation.navigate({ view: "today" });
+	commit.mockClear();
+	guard.mockResolvedValueOnce(false);
+	expect(await navigation.navigate({ view: "outline", selected: "destination" })).toBe(false);
+	expect(navigation.view).toBe("today");
+	expect(selected()).toBe("outline-item");
+	expect(commit).not.toHaveBeenCalled();
+});
+
+test("an older prepared response cannot change feature state after a newer request", async () => {
+	const { navigation, prepare, commit, selected } = setup();
+	let resolve!: (value: { view: ViewMode; selected?: string }) => void;
+	prepare.mockImplementationOnce(() => new Promise((done) => resolve = done));
+	const pending = navigation.navigate({ view: "comparison", selected: "old" });
+	await navigation.navigate({ view: "help" });
+	commit.mockClear();
+	resolve({ view: "comparison", selected: "old" });
+	expect(await pending).toBe(false);
+	expect(navigation.view).toBe("help");
+	expect(selected()).toBe("outline-item");
+	expect(commit).not.toHaveBeenCalled();
+});
+
+test("a newer cancelled request still invalidates an older guarded request", async () => {
+	const { navigation, guard, commit } = setup();
+	let accept!: (accepted: boolean) => void;
+	guard.mockImplementationOnce(() => new Promise((resolve) => accept = resolve));
+	const old = navigation.navigate({ view: "comparison", selected: "old" });
+	await vi.waitFor(() => expect(guard).toHaveBeenCalledOnce());
+	guard.mockResolvedValueOnce(false);
+	await navigation.navigate({ view: "help" });
+	accept(true);
+	expect(await old).toBe(false);
+	expect(navigation.view).toBe("outline");
+	expect(commit).not.toHaveBeenCalled();
+});
+
+test("origin of a slow domain operation expires even if the user returns to the same screen", async () => {
+	const { navigation, commit } = setup();
+	const origin = navigation.origin;
+	await navigation.navigate({ view: "help" });
+	await navigation.navigate({ view: "outline" });
+	commit.mockClear();
+	expect(await navigation.navigate({ view: "outline", selected: "created" }, origin)).toBe(false);
+	expect(commit).not.toHaveBeenCalled();
+});
+
+test("preparation failure leaves the current screen and feature state intact", async () => {
+	const { navigation, prepare, selected, commit } = setup();
+	await navigation.navigate({ view: "help" });
+	commit.mockClear();
+	prepare.mockRejectedValueOnce(new Error("load failed"));
+	await expect(navigation.navigate({ view: "outline" })).rejects.toThrow("load failed");
+	expect(navigation.view).toBe("help");
+	expect(selected()).toBe("outline-item");
+	expect(commit).not.toHaveBeenCalled();
+});
+
+test("post-render restoration receives a current-request check", async () => {
+	const { navigation, afterCommit } = setup();
+	let isCurrent!: () => boolean;
+	afterCommit.mockImplementationOnce(async (_destination, current) => {
+		isCurrent = current;
 	});
+	await navigation.navigate({ view: "today" });
+	expect(isCurrent()).toBe(true);
+	await navigation.navigate({ view: "help" });
+	expect(isCurrent()).toBe(false);
 });
 
-test("a guarded destination change preserves the context from before selection", async () => {
-	const { controller, change, context } = setup();
-	controller.open("today");
-	const commit = controller.prepareOpen("outline");
-	change("destination");
-	commit();
-	commit();
-	await controller.goBack();
-	expect(controller.view).toBe("today");
-	expect(context().selectedId).toBe("original");
-	await controller.goBack();
-	expect(controller.view).toBe("outline");
-	expect(controller.canGoBack).toBe(false);
-});
-
-test("an uncommitted guarded transition does not change the screen or history", async () => {
-	const { controller } = setup();
-	controller.prepareOpen("today");
-	expect(controller.view).toBe("outline");
-	expect(controller.canGoBack).toBe(false);
-	const commit = controller.prepareOpen("outline");
-	commit();
-	expect(controller.canGoBack).toBe(false);
-});
-
-test("opening the same screen does not add a duplicate entry", async () => {
-	const { controller } = setup();
-	controller.open("options");
-	controller.open("options");
-	await controller.goBack();
-	expect(controller.view).toBe("outline");
-	expect(controller.canGoBack).toBe(false);
-});
-
-test("an inspector-only transition can remember the current screen", async () => {
-	const { controller, restore } = setup();
-	controller.remember();
-	await controller.goBack();
-	expect(controller.view).toBe("outline");
-	expect(restore).toHaveBeenCalledOnce();
-});
-
-test("a blocked or failed restore retains the screen and return entry", async () => {
-	const { controller, restore } = setup();
-	controller.open("help");
-	restore.mockResolvedValueOnce(false);
-	await controller.goBack();
-	expect(controller.view).toBe("help");
-	expect(controller.canGoBack).toBe(true);
-	restore.mockRejectedValueOnce(new Error("save failed"));
-	await expect(controller.goBack()).rejects.toThrow("save failed");
-	expect(controller.view).toBe("help");
-	expect(controller.canGoBack).toBe(true);
-	await controller.goBack();
-	expect(controller.view).toBe("outline");
-});
-
-test("concurrent back requests only restore one entry", async () => {
-	const { controller, restore } = setup();
-	controller.open("options");
-	controller.open("trash");
-	await Promise.all([controller.goBack(), controller.goBack()]);
-	expect(restore).toHaveBeenCalledOnce();
-	expect(controller.view).toBe("options");
-});
-
-test("a prepared transition cannot supersede a later screen transition", async () => {
-	const { controller } = setup();
-	controller.open("workLineage");
-	const comparison = controller.prepareOpen("comparison");
-	controller.open("help");
-	comparison();
-	expect(controller.view).toBe("help");
-	await controller.goBack();
-	expect(controller.view).toBe("workLineage");
-	await controller.goBack();
-	expect(controller.view).toBe("outline");
-	expect(controller.canGoBack).toBe(false);
-});
-
-test("returning to the same origin does not reactivate an old prepared transition", async () => {
-	const { controller } = setup();
-	controller.open("workLineage");
-	const comparison = controller.prepareOpen("comparison");
-	controller.open("help");
-	await controller.goBack();
-	comparison();
-	expect(controller.view).toBe("workLineage");
-	await controller.goBack();
-	expect(controller.view).toBe("outline");
-	expect(controller.canGoBack).toBe(false);
-});
-
-test("a successful Back invalidates a transition prepared on the screen being left", async () => {
-	const { controller } = setup();
-	controller.open("workLineage");
-	const comparison = controller.prepareOpen("comparison");
-	await controller.goBack();
-	comparison();
-	expect(controller.view).toBe("outline");
-	expect(controller.canGoBack).toBe(false);
-});
-
-test("an inspector transition invalidates older prepared screen transitions", async () => {
-	const { controller } = setup();
-	const comparison = controller.prepareOpen("comparison");
-	controller.remember();
-	comparison();
-	expect(controller.view).toBe("outline");
-	await controller.goBack();
-	expect(controller.canGoBack).toBe(false);
-});
-
-test("only the first of two prepared transitions on one origin can commit", async () => {
-	const { controller } = setup();
-	const comparison = controller.prepareOpen("comparison");
-	const help = controller.prepareOpen("help");
-	help();
-	comparison();
-	expect(controller.view).toBe("help");
-	await controller.goBack();
-	expect(controller.view).toBe("outline");
-	expect(controller.canGoBack).toBe(false);
-});
-
-test("a cancelled Back preserves a prepared transition on the unchanged screen", async () => {
-	const { controller, restore } = setup();
-	controller.open("workLineage");
-	const comparison = controller.prepareOpen("comparison");
-	restore.mockResolvedValueOnce(false);
-	await controller.goBack();
-	comparison();
-	expect(controller.view).toBe("comparison");
-	await controller.goBack();
-	expect(controller.view).toBe("workLineage");
+test("completion of an already pending screen move expires domain receipts captured mid-flight", async () => {
+	const { navigation, prepare, commit } = setup();
+	let finish!: (destination: { view: ViewMode }) => void;
+	prepare.mockImplementationOnce(() => new Promise((resolve) => finish = resolve));
+	const moving = navigation.navigate({ view: "help" });
+	const origin = navigation.origin;
+	finish({ view: "help" });
+	await moving;
+	commit.mockClear();
+	expect(await navigation.navigate({ view: "outline", selected: "created" }, origin)).toBe(false);
+	expect(commit).not.toHaveBeenCalled();
 });

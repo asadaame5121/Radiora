@@ -1,137 +1,234 @@
-import { afterEach, expect, test, vi } from "vitest";
-import { tick } from "svelte";
-import { createBrowsingNavigationState } from "../src/services/browsing_navigation_state.ts";
+import { expect, test, vi } from "vitest";
+import {
+	createBrowsingNavigationState,
+	currentBrowsingLocation,
+	openBrowsingPane,
+} from "../src/services/browsing_navigation_state.ts";
+import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
 import { ScreenNavigationWorkspace } from "../src/ui/screen_navigation_workspace.svelte.ts";
 
-vi.mock("svelte", () => ({ tick: vi.fn(async () => undefined) }));
-
-afterEach(() => {
-	vi.mocked(tick).mockReset();
-	vi.unstubAllGlobals();
-});
+vi.mock("svelte", () => ({ tick: async () => undefined }));
 
 function setup() {
-	vi.stubGlobal("CSS", { escape: (value: string) => value });
-	vi.stubGlobal("document", { querySelector: vi.fn().mockReturnValue(null) });
-	const browsing = {
-		captureBrowsing: () =>
-			createBrowsingNavigationState("pane-2", {
-				selectedOccurrenceId: "selected",
-				hoistOccurrenceId: "root",
-			}),
-		restore: vi.fn().mockResolvedValue(true),
-	};
-	let filter = { freeText: "original", tagsAll: "", tagsNone: "" };
-	let expanded = ["root", "deleted"];
+	const items = [
+		{ id: "root", parentId: null, workId: "root-work", text: "root" },
+		{ id: "last", parentId: "root", workId: "last-work", text: "last text" },
+		{ id: "other", parentId: null, workId: "other-work", text: "other" },
+	] as OutlineItem[];
+	let snapshot: OutlineSnapshot = { items, links: [], knots: [], stashItemIds: [] };
+	let browsing = openBrowsingPane(
+		createBrowsingNavigationState("pane-1", {
+			selectedOccurrenceId: "other",
+			hoistOccurrenceId: null,
+		}),
+		"pane-2",
+		{ selectedOccurrenceId: "last", hoistOccurrenceId: "root" },
+	);
+	let selected: string | null = "last";
+	let filter = { freeText: "saved", tagsAll: "", tagsNone: "" };
+	let expanded = ["root"];
 	let inspector = { mode: "history" as "history" | "query", collapsed: false };
-	const comparison = {
-		captureNavigationContext: vi.fn(() => ({
-			preferredRevisionId: "revision",
-			link: null,
-			work: null,
-		})),
-		restoreNavigationContext: vi.fn(),
+	let manuscript = false;
+	const viewport = {
+		editorPosition: {
+			itemId: "last",
+			hoistId: "root",
+			start: 9,
+			end: 9,
+			scrollTop: 2,
+			scrollLeft: 3,
+			panelScrollTop: 450,
+		},
+		panelScrollTop: 450,
+		panelScrollLeft: 12,
+		focus: "editor" as const,
 	};
-	const editor = {
-		save: vi.fn().mockResolvedValue(true),
-		flush: vi.fn().mockResolvedValue(undefined),
-		longFormActive: () => false,
-	};
-	const tree = { focus: vi.fn() };
+	const presentation = vi.fn();
+	const prepareScreen = vi.fn(async () => presentation);
+	const guard = vi.fn(async () => true);
+	const restorePosition = vi.fn(async () => undefined);
+	const save = vi.fn(async () => true);
+	const readOutline = vi.fn(async () => snapshot);
 	const workspace = new ScreenNavigationWorkspace({
-		browsing,
-		comparison,
-		editor,
-		tree,
-		selection: { current: () => "selected", hasItem: (id) => id !== "deleted" },
 		outline: {
+			captureBrowsing: () => browsing,
+			commitBrowsing: (next) => browsing = next,
 			filter: () => filter,
 			setFilter: (next) => filter = next,
 			expanded: () => expanded,
 			setExpanded: (next) => expanded = next,
+			inspector: () => inspector,
+			setInspector: (next) => inspector = next as typeof inspector,
+			longForm: () => manuscript,
+			setLongForm: (next) => manuscript = next,
+			capturePosition: () => viewport,
+			restorePosition,
 		},
-		inspector: {
-			capture: () => inspector,
-			restore: (next) => inspector = next as typeof inspector,
+		snapshot: () => snapshot,
+		readOutline,
+		publishOutline: (next) => snapshot = next,
+		selection: {
+			current: () => selected,
+			guard,
+			commit: (id) => selected = id,
+			cancelPending: vi.fn(),
 		},
+		editor: { save, flush: vi.fn(async () => undefined) },
+		screens: { prepare: prepareScreen, focusTree: vi.fn() },
+		reportError: vi.fn(),
 	});
 	return {
 		workspace,
-		browsing,
-		editor,
-		comparison,
-		tree,
-		changeFilter: (text = "changed") => filter.freeText = text,
-		resetFilter: () => filter = { freeText: "", tagsAll: "", tagsNone: "" },
+		guard,
+		save,
+		readOutline,
+		restorePosition,
+		presentation,
+		prepareScreen,
+		browsing: () => browsing,
+		selected: () => selected,
 		filter: () => filter,
-		expanded: () => expanded,
 		inspector: () => inspector,
+		manuscript: () => manuscript,
+		selectAway: () => selected = "other",
+		changeFilter: () => filter.freeText = "away",
+		snapshot: () => snapshot,
+		updateSourceText: () =>
+			snapshot = {
+				...snapshot,
+				items: snapshot.items.map((item) =>
+					item.id === "last" ? { ...item, text: "saved while guarding" } : item
+				),
+			},
+		deleteSelection: () =>
+			snapshot = { ...snapshot, items: snapshot.items.filter((item) => item.id !== "last") },
+		deleteRoot: () =>
+			snapshot = { ...snapshot, items: snapshot.items.filter((item) => item.id !== "root") },
+		setManuscript: () => manuscript = true,
 	};
 }
 
-test("workspace restores isolated screen context through feature ports", async () => {
-	const { workspace, browsing, comparison, changeFilter, filter, expanded } = setup();
-	workspace.open("options");
-	changeFilter();
-	await workspace.goBack();
-	expect(browsing.restore).toHaveBeenCalledWith(createBrowsingNavigationState("pane-2", {
-		selectedOccurrenceId: "selected",
-		hoistOccurrenceId: "root",
-	}));
-	expect(filter().freeText).toBe("original");
-	expect(expanded()).toEqual(["root"]);
-	expect(comparison.restoreNavigationContext).toHaveBeenCalledWith({
-		preferredRevisionId: "revision",
-		link: null,
-		work: null,
+test("multi-screen return preserves Outline Hoist, pane, caret and scroll independently of away selection", async () => {
+	const s = setup();
+	await s.workspace.navigate({ view: "globalLineage" });
+	s.selectAway();
+	s.changeFilter();
+	await s.workspace.navigate({ view: "help" });
+	await s.workspace.goBack();
+	expect(s.workspace.view).toBe("outline");
+	expect(s.selected()).toBe("last");
+	expect(s.browsing().activePaneId).toBe("pane-2");
+	expect(s.browsing().panes).toHaveLength(2);
+	expect(s.browsing().panes[0].history[0]).toEqual({
+		selectedOccurrenceId: "other",
+		hoistOccurrenceId: null,
+	});
+	expect(currentBrowsingLocation(s.browsing()).hoistOccurrenceId).toBe("root");
+	expect(s.filter().freeText).toBe("saved");
+	expect(s.restorePosition.mock.calls[0][0]).toMatchObject({
+		panelScrollTop: 450,
+		editorPosition: { itemId: "last", start: 9, end: 9 },
+	});
+	expect(s.workspace.canGoBack).toBe(false);
+});
+
+test("Query switches only the inspector and does not enable Back on Outline", async () => {
+	const s = setup();
+	await s.workspace.openInspectorTool("query");
+	expect(s.inspector().mode).toBe("query");
+	expect(s.workspace.canGoBack).toBe(false);
+});
+
+test("a rejected destination changes no selection, Hoist or presentation", async () => {
+	const s = setup();
+	await s.workspace.navigate({ view: "today" });
+	s.presentation.mockClear();
+	s.guard.mockResolvedValueOnce(false);
+	await s.workspace.navigate({ view: "outline", occurrenceId: "other" });
+	expect(s.workspace.view).toBe("today");
+	expect(s.selected()).toBe("last");
+	expect(currentBrowsingLocation(s.browsing()).hoistOccurrenceId).toBe("root");
+	expect(s.presentation).not.toHaveBeenCalled();
+	await s.workspace.goBack();
+	expect(s.selected()).toBe("last");
+});
+
+test("explicit target outside saved Hoist clears Hoist and becomes the next resume location", async () => {
+	const s = setup();
+	await s.workspace.navigate({ view: "help" });
+	await s.workspace.navigate({ view: "outline", occurrenceId: "other" });
+	expect(currentBrowsingLocation(s.browsing()).hoistOccurrenceId).toBeNull();
+	await s.workspace.navigate({ view: "help" });
+	s.selectAway();
+	await s.workspace.goBack();
+	expect(s.selected()).toBe("other");
+});
+
+test("deleted Hoist is reconciled against latest data without discarding the remaining selection", async () => {
+	const s = setup();
+	await s.workspace.navigate({ view: "help" });
+	s.deleteRoot();
+	await s.workspace.goBack();
+	expect(currentBrowsingLocation(s.browsing())).toEqual({
+		selectedOccurrenceId: "last",
+		hoistOccurrenceId: null,
 	});
 });
 
-test("saved filters survive the destination screen's reset effect", async () => {
-	const { workspace, changeFilter, resetFilter, filter } = setup();
-	changeFilter("saved filter");
-	filter().tagsAll = "#keep";
-	filter().tagsNone = "#exclude";
-	workspace.open("options");
-	resetFilter();
-	// Model App's view-dependent reset at the transition's next render flush.
-	vi.mocked(tick).mockImplementationOnce(async () => {
-		expect(workspace.view).toBe("outline");
-		resetFilter();
+test("save and fetch failures retain the resume context for retry", async () => {
+	const s = setup();
+	await s.workspace.navigate({ view: "help" });
+	s.save.mockResolvedValueOnce(false);
+	await s.workspace.goBack();
+	expect(s.workspace.view).toBe("help");
+	s.readOutline.mockRejectedValueOnce(new Error("load failed"));
+	await s.workspace.goBack();
+	expect(s.workspace.view).toBe("help");
+	await s.workspace.goBack();
+	expect(s.selected()).toBe("last");
+});
+
+test("manuscript mode is retained through screen return", async () => {
+	const s = setup();
+	s.setManuscript();
+	await s.workspace.navigate({ view: "help" });
+	await s.workspace.goBack();
+	expect(s.manuscript()).toBe(true);
+});
+
+test("guard-side saves are included in the snapshot published with the accepted destination", async () => {
+	const s = setup();
+	await s.workspace.navigate({ view: "help" });
+	s.guard.mockImplementationOnce(async () => {
+		s.updateSourceText();
+		return true;
 	});
-	await workspace.goBack();
-	expect(filter()).toEqual({ freeText: "saved filter", tagsAll: "#keep", tagsNone: "#exclude" });
+	await s.workspace.navigate({ view: "outline", occurrenceId: "other" });
+	expect(s.snapshot().items.find((item) => item.id === "last")?.text).toBe("saved while guarding");
 });
 
-test("failed save or guarded browsing leaves the screen history available", async () => {
-	const { workspace, browsing, editor, comparison } = setup();
-	workspace.open("options");
-	editor.save.mockResolvedValueOnce(false);
-	await workspace.goBack();
-	expect(browsing.restore).not.toHaveBeenCalled();
-	browsing.restore.mockResolvedValueOnce(false);
-	await workspace.goBack();
-	expect(comparison.restoreNavigationContext).not.toHaveBeenCalled();
-	expect(workspace.view).toBe("options");
-	expect(workspace.canGoBack).toBe(true);
+test("a deleted suspended selection resumes without substituting or creating an item", async () => {
+	const s = setup();
+	await s.workspace.navigate({ view: "help" });
+	s.deleteSelection();
+	await s.workspace.goBack();
+	expect(s.selected()).toBeNull();
+	expect(currentBrowsingLocation(s.browsing()).hoistOccurrenceId).toBe("root");
+	expect(s.restorePosition.mock.calls[0][0]).toMatchObject({
+		focus: "rows",
+		editorPosition: undefined,
+	});
 });
 
-test("Query remembers and restores the inspector without duplicate entries", async () => {
-	const { workspace, inspector } = setup();
-	workspace.openInspectorTool("query", false);
-	workspace.openInspectorTool("query", false);
-	expect(inspector().mode).toBe("query");
-	await workspace.goBack();
-	expect(inspector().mode).toBe("history");
-	expect(workspace.canGoBack).toBe(false);
-});
-
-test("tree restoration delegates focus through the UI port without querying the DOM", async () => {
-	const { workspace, tree } = setup();
-	workspace.open("globalLineage");
-	workspace.open("help");
-	vi.mocked(document.querySelector).mockClear();
-	await workspace.goBack();
-	expect(tree.focus).toHaveBeenCalledOnce();
-	expect(document.querySelector).not.toHaveBeenCalled();
+test("a rejected selection does not prepare or publish the destination feature", async () => {
+	const s = setup();
+	s.guard.mockResolvedValueOnce(false);
+	await s.workspace.navigate({
+		view: "comparison",
+		occurrenceId: "other",
+		comparison: { kind: "revision", revisionId: "target-revision" },
+	});
+	expect(s.workspace.view).toBe("outline");
+	expect(s.prepareScreen).not.toHaveBeenCalled();
+	expect(s.presentation).not.toHaveBeenCalled();
 });

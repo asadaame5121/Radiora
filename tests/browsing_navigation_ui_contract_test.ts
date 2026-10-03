@@ -48,7 +48,8 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 		app.indexOf("async function createRoot"),
 	);
 
-	assert(selectItem.includes("transientExpandedIds = ancestorIds"));
+	assert(selectItem.includes("expandedIds: ancestorIds"));
+	assert(selectItem.includes("screenNavigation.navigate"));
 	assertFalse(selectItem.includes("api.setCollapsed"));
 	assert(browsingControls.includes("navigationController.browseToOccurrence(snapshot, id)"));
 	assert(browsingControls.includes("navigationController.activateBrowsingPane(paneId, snapshot)"));
@@ -83,6 +84,6 @@ Deno.test("loading a focus target commits accepted navigation before restoring e
 
 	assertMatch(
 		load,
-		/if \(focusId\) \{\s*selectOccurrence\(focusId, \(\) => \{\s*afterSelection\?\.\(\);\s*void tick\(\)\.then\(\(\) => requestFocus\(focusId\)\);\s*\}\);/,
+		/if \(focusId\) \{\s*selectOccurrence\(focusId, \(\) => \{\s*void tick\(\)\.then\(\(\) => requestFocus\(focusId\)\);\s*\}\);/,
 	);
 });

@@ -10,6 +10,7 @@ export class HistoricalTimeController {
 	submitting = $state(false);
 	pending = $state<{ item: OutlineItem | null } | null>(null);
 	private pendingSelectionAction: (() => void) | null = null;
+	private pendingGuard = false;
 	private pendingSelectionCancelled: (() => void) | null = null;
 	readonly dirty = $derived(JSON.stringify(this.draft) !== this.baseline);
 	constructor(
@@ -45,6 +46,7 @@ export class HistoricalTimeController {
 			return true;
 		}
 		if (this.dirty || this.submitting) {
+			this.pendingGuard = false;
 			this.pendingSelectionCancelled?.();
 			this.pending = { item: next };
 			this.pendingSelectionAction = pendingAction;
@@ -53,6 +55,36 @@ export class HistoricalTimeController {
 		}
 		this.reset(next);
 		return true;
+	}
+
+	/** Ask permission without changing the destination form or selection. */
+	canSelect(next: OutlineItem | null, current: () => boolean): Promise<boolean> {
+		if (!current()) return Promise.resolve(false);
+		if (next?.workId === this.item?.workId || (!this.dirty && !this.submitting)) {
+			return Promise.resolve(true);
+		}
+		this.cancelPending();
+		this.pendingGuard = true;
+		this.pending = { item: next };
+		return new Promise((resolve) => {
+			this.pendingSelectionAction = () => resolve(current());
+			this.pendingSelectionCancelled = () => resolve(false);
+		});
+	}
+
+	cancelPending(): void {
+		this.pendingSelectionCancelled?.();
+		this.pending = null;
+		this.pendingSelectionAction = null;
+		this.pendingSelectionCancelled = null;
+		this.pendingGuard = false;
+	}
+
+	/** Synchronous accepted selection; a dirty same-Work draft remains owned by its form. */
+	commitSelection(next: OutlineItem | null): void {
+		if (next?.workId === this.item?.workId && (this.dirty || this.submitting)) {
+			if (this.item && next) this.item = { ...this.item, id: next.id };
+		} else this.reset(next);
 	}
 
 	/** Keep navigation pending until the user accepts or cancels the selection guard. */
@@ -92,13 +124,18 @@ export class HistoricalTimeController {
 			this.pendingSelectionCancelled = null;
 			return;
 		}
-		const next = this.pending.item;
+		const pending = this.pending;
+		const next = pending.item;
 		if (choice === "save" && !(await this.save())) return;
+		if (this.pending !== pending) return;
+		const guarded = this.pendingGuard;
 		const pendingSelectionAction = this.pendingSelectionAction;
 		this.pending = null;
 		this.pendingSelectionAction = null;
 		this.pendingSelectionCancelled = null;
-		this.reset(next);
+		this.pendingGuard = false;
+		if (!guarded) this.reset(next);
+		else if (choice === "discard") this.reset(this.item);
 		if (pendingSelectionAction) pendingSelectionAction();
 		else this.ports.select(next?.id ?? null);
 	}

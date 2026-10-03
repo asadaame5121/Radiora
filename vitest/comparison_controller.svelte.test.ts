@@ -1,253 +1,131 @@
-import { describe, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import type {
-	ComparisonDocument,
 	LinkComparisonProjection,
 	WorkComparisonDocuments,
 } from "../src/services/comparison_service.ts";
-import type { ComparisonNavigationContext } from "../src/ui/comparison_controller.svelte.ts";
 import { ComparisonController } from "../src/ui/comparison_controller.svelte.ts";
-import { ScreenNavigationController } from "../src/ui/screen_navigation_controller.svelte.ts";
+import { navigationFixture } from "./navigation_fixture.ts";
 
-type Ports = ConstructorParameters<typeof ComparisonController>[0];
-type Api = Ports["api"];
-
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	let reject!: (cause: unknown) => void;
-	const promise = new Promise<T>((done, fail) => {
-		resolve = done;
-		reject = fail;
-	});
-	return { promise, resolve, reject };
-}
-
-function document(id: string): ComparisonDocument {
-	return { scope: "revision", workId: "work", revisionId: id, title: id, text: id };
-}
-
-function workDocuments(id: string): WorkComparisonDocuments {
-	return { workId: "work", documents: [document(id)] };
-}
-
-function linkProjection(id: string): LinkComparisonProjection {
-	return {
+function setup() {
+	const f = navigationFixture();
+	const documents: WorkComparisonDocuments = {
+		workId: "work-source",
+		documents: ["a", "b"].map((id) => ({
+			scope: "revision",
+			workId: "work-source",
+			revisionId: id,
+			title: id,
+			text: id,
+		})),
+	};
+	const link: LinkComparisonProjection = {
 		kind: "semantic-link",
-		linkId: id,
+		linkId: "link",
 		type: "FROM",
 		direction: "directed",
 		createdAt: "now",
-		left: document("left"),
-		right: document("right"),
+		left: documents.documents[0],
+		right: documents.documents[1],
 	};
+	const api = {
+		listWorkComparisonDocuments: vi.fn(async () => documents),
+		resolveLinkComparison: vi.fn(async () => link),
+	};
+	const controller = new ComparisonController({
+		api,
+		navigation: f.navigation,
+		getSelectedWorkId: () => "work-source",
+		getSelectedId: f.selected,
+		reportError: f.reportError,
+		comparisonPaneLabel: () => "比較",
+	});
+	f.prepare.mockImplementation(async (destination) => {
+		if (!destination?.comparison) return f.presentation;
+		const context = await controller.prepareScreen(destination.comparison);
+		return () => controller.restoreNavigationContext(context);
+	});
+	return { ...f, controller, api, documents };
 }
 
-function createApi(overrides: Partial<Api> = {}): Api {
-	return {
-		listWorkComparisonDocuments: vi.fn(async () => workDocuments("revision")),
-		resolveLinkComparison: vi.fn(async (id) => linkProjection(id)),
-		...overrides,
-	};
-}
-
-describe("comparison controller", () => {
-	test.each(["work", "link"] as const)(
-		"a failed %s comparison leaves the caller's displayed pair and navigation unchanged",
-		async (kind) => {
-			const failure = new Error("offline");
-			const commitView = vi.fn();
-			const reportError = vi.fn();
-			const controller = new ComparisonController({
-				api: createApi({
-					listWorkComparisonDocuments: vi.fn().mockRejectedValue(failure),
-					resolveLinkComparison: vi.fn().mockRejectedValue(failure),
-				}),
-				getSelectedWorkId: () => "work",
-				getSelectedId: () => "item",
-				prepareView: () => commitView,
-				reportError,
-				comparisonPaneLabel: () => "比較",
-			});
-			controller.openRevision("saved");
-			controller.selectPair("revision:b", "revision:a");
-			const saved = controller.captureNavigationContext();
-			commitView.mockClear();
-			if (kind === "work") await controller.openWork("revision", "revision");
-			else await controller.openLink("link");
-			expect(controller.captureNavigationContext()).toEqual(saved);
-			expect(commitView).not.toHaveBeenCalled();
-			expect(reportError).toHaveBeenCalledWith(failure);
-		},
-	);
-	test.each(["work", "link"] as const)(
-		"opening a %s comparison captures the caller before clearing its comparison state",
-		async (kind) => {
-			const navigation = new ScreenNavigationController<ComparisonNavigationContext>({
-				capture: () => controller.captureNavigationContext(),
-				restore: async (context) => {
-					controller.restoreNavigationContext(context);
-					return true;
-				},
-			});
-			const controller = new ComparisonController({
-				api: createApi(),
-				getSelectedWorkId: () => "work",
-				getSelectedId: () => "item",
-				prepareView: () => navigation.prepareOpen("comparison"),
-				reportError: vi.fn(),
-				comparisonPaneLabel: () => "比較",
-			});
-			controller.openRevision("saved");
-			controller.selectPair("revision:b", "revision:a");
-			navigation.open("workLineage");
-			if (kind === "work") await controller.openWork("revision", "revision");
-			else await controller.openLink("link");
-			await navigation.goBack();
-			expect(navigation.view).toBe("workLineage");
-			expect(controller.captureNavigationContext()).toMatchObject({
-				preferredRevisionId: "saved",
-				revisionPair: { leftKey: "revision:b", rightKey: "revision:a" },
-			});
-		},
-	);
-	test("captures the displayed Work pair after changing and swapping selectors", async () => {
-		const controller = new ComparisonController({
-			api: createApi({
-				listWorkComparisonDocuments: async () => ({
-					workId: "work",
-					documents: [document("a"), document("b"), document("c")],
-				}),
-			}),
-			getSelectedWorkId: () => "work",
-			getSelectedId: () => "item",
-			prepareView: () => vi.fn(),
-			reportError: vi.fn(),
-			comparisonPaneLabel: () => "比較",
-		});
-		await controller.openWork("revision", "c");
-		controller.selectPair("revision:b", "revision:a");
-		const saved = controller.captureNavigationContext();
-		controller.selectPair("revision:a", "revision:b");
-		controller.selectPair("revision:a", "revision:a");
-		controller.selectPair("revision:missing", "revision:b");
-		expect(controller.work?.preferredLeftKey).toBe("revision:a");
-		controller.restoreNavigationContext(saved);
-		expect(controller.work?.preferredLeftKey).toBe("revision:b");
-		expect(controller.work?.preferredRightKey).toBe("revision:a");
+for (const kind of ["work", "link"] as const) {
+	test(`${kind} preparation failure preserves the current pair and screen`, async () => {
+		const s = setup();
+		await s.controller.openRevision("a");
+		s.controller.selectPair("revision:a", "revision:b");
+		const before = s.controller.captureNavigationContext();
+		s.api.listWorkComparisonDocuments.mockRejectedValueOnce(new Error("offline"));
+		s.api.resolveLinkComparison.mockRejectedValueOnce(new Error("offline"));
+		if (kind === "work") await s.controller.openWork("revision", "b");
+		else await s.controller.openLink("link");
+		expect(s.controller.captureNavigationContext()).toEqual(before);
+		expect(s.navigation.view).toBe("comparison");
+		expect(s.reportError).toHaveBeenCalledOnce();
 	});
-
-	test("restores an edited revision pair and clears it for a fresh comparison", () => {
-		const controller = new ComparisonController({
-			api: createApi(),
-			getSelectedWorkId: () => "work",
-			getSelectedId: () => "item",
-			prepareView: () => vi.fn(),
-			reportError: vi.fn(),
-			comparisonPaneLabel: () => "比較",
-		});
-		controller.openRevision("c");
-		controller.selectPair("revision:b", "revision:a");
-		const saved = controller.captureNavigationContext();
-		controller.openRevision("d");
-		expect(controller.revisionPair).toBeUndefined();
-		controller.restoreNavigationContext(saved);
-		expect(controller.revisionPair).toEqual({ leftKey: "revision:b", rightKey: "revision:a" });
-	});
-
-	test("restores comparison context and invalidates pending comparison requests", async () => {
-		const pending = deferred<LinkComparisonProjection>();
-		const openView = vi.fn();
-		const controller = new ComparisonController({
-			api: createApi({ resolveLinkComparison: () => pending.promise }),
-			getSelectedWorkId: () => "work",
-			getSelectedId: () => "item",
-			prepareView: () => openView,
-			reportError: vi.fn(),
-			comparisonPaneLabel: () => "比較",
-		});
-		controller.openRevision("saved");
-		const saved = controller.captureNavigationContext();
-		const request = controller.openLink("pending");
-		controller.restoreNavigationContext(saved);
-		pending.resolve(linkProjection("pending"));
-		await request;
-		expect(controller.preferredRevisionId).toBe("saved");
-		expect(controller.link).toBeNull();
-		expect(openView).toHaveBeenCalledOnce();
-	});
-
-	test("revision, Work, and Link entry points share one request generation", async () => {
-		const work = deferred<WorkComparisonDocuments>();
-		const link = deferred<LinkComparisonProjection>();
-		const openView = vi.fn();
-		const reportError = vi.fn();
-		const controller = new ComparisonController({
-			api: createApi({
-				listWorkComparisonDocuments: vi.fn(() => work.promise),
-				resolveLinkComparison: vi.fn(() => link.promise),
-			}),
-			getSelectedWorkId: () => "work",
-			getSelectedId: () => "item",
-			prepareView: () => openView,
-			reportError,
-			comparisonPaneLabel: () => "比較",
-		});
-		const oldWork = controller.openWork("revision", "revision");
-		controller.openRevision("chosen");
-		work.resolve(workDocuments("revision"));
-		await oldWork;
-		expect(controller.work).toBeNull();
-		expect(controller.preferredRevisionId).toBe("chosen");
-
-		const oldLink = controller.openLink("link");
-		const currentWork = controller.openWork("revision", "revision");
-		link.reject(new Error("stale"));
-		await oldLink;
-		work.resolve(workDocuments("revision"));
-		await currentWork;
-		expect(controller.link).toBeNull();
-		expect(controller.work?.preferredRightKey).toBe("revision:revision");
-		expect(openView).toHaveBeenCalledTimes(2);
-		expect(reportError).not.toHaveBeenCalled();
-	});
-
-	test("selection changes suppress stale responses and current failures report errors", async () => {
-		let selectedWork = "work";
-		let selectedId = "item";
-		const pendingWork = deferred<WorkComparisonDocuments>();
-		const pendingLink = deferred<LinkComparisonProjection>();
-		const reportError = vi.fn();
-		const openView = vi.fn();
-		const api = createApi({
-			listWorkComparisonDocuments: vi.fn().mockImplementationOnce(() => pendingWork.promise)
-				.mockResolvedValue(workDocuments("revision")),
-			resolveLinkComparison: vi.fn().mockImplementationOnce(() => pendingLink.promise)
-				.mockRejectedValueOnce(new Error("current failure")),
-		});
-		const controller = new ComparisonController({
-			api,
-			getSelectedWorkId: () => selectedWork,
-			getSelectedId: () => selectedId,
-			prepareView: () => openView,
-			reportError,
-			comparisonPaneLabel: () => "比較",
-		});
-		const staleWork = controller.openWork("revision", "revision");
-		selectedWork = "other";
-		pendingWork.resolve(workDocuments("revision"));
-		await staleWork;
-		expect(controller.work).toBeNull();
-		const staleLink = controller.openLink("link");
-		selectedId = "other-item";
-		pendingLink.reject(new Error("stale"));
-		await staleLink;
-		expect(controller.link).toBeNull();
-		expect(reportError).not.toHaveBeenCalled();
-		expect(openView).not.toHaveBeenCalled();
-
-		await controller.openLink("current-link");
-		expect(reportError).toHaveBeenCalledWith(
-			expect.objectContaining({ message: "current failure" }),
+	test(`${kind} delayed response cannot publish after Help is requested`, async () => {
+		const s = setup();
+		let finish!: () => void;
+		const waiting = new Promise<void>((resolve) => finish = resolve);
+		if (kind === "work") {
+			s.api.listWorkComparisonDocuments.mockImplementationOnce(async () => {
+				await waiting;
+				return s.documents;
+			});
+		} else {
+			const result = await s.api.resolveLinkComparison("link");
+			s.api.resolveLinkComparison.mockImplementationOnce(async () => {
+				await waiting;
+				return result;
+			});
+		}
+		const pending = kind === "work"
+			? s.controller.openWork("revision", "b")
+			: s.controller.openLink("link");
+		await vi.waitFor(() =>
+			expect(s.api[kind === "work" ? "listWorkComparisonDocuments" : "resolveLinkComparison"])
+				.toHaveBeenCalled()
 		);
-		expect(controller.link).toBeNull();
+		await s.navigation.navigate({ view: "help" });
+		finish();
+		await pending;
+		expect(s.navigation.view).toBe("help");
+		expect(s.controller.work).toBeNull();
+		expect(s.controller.link).toBeNull();
+		await s.navigation.goBack();
+		expect(s.selected()).toBe("source");
 	});
+}
+
+test("Work selectors preserve the changed and swapped pair in the feature context", async () => {
+	const s = setup();
+	await s.controller.openWork("revision", "b");
+	s.controller.selectPair("revision:b", "revision:a");
+	expect(s.controller.captureNavigationContext().work).toMatchObject({
+		preferredLeftKey: "revision:b",
+		preferredRightKey: "revision:a",
+	});
+	s.controller.selectPair("missing", "revision:b");
+	expect(s.controller.work?.preferredLeftKey).toBe("revision:b");
+});
+
+test("fresh revision comparison resets its feature pair only after accepted navigation", async () => {
+	const s = setup();
+	await s.controller.openRevision("a");
+	s.controller.selectPair("revision:a", "revision:b");
+	expect(s.controller.revisionPair).toEqual({ leftKey: "revision:a", rightKey: "revision:b" });
+	await s.controller.openRevision("b");
+	expect(s.controller.revisionPair).toBeUndefined();
+	expect(s.controller.preferredRevisionId).toBe("b");
+});
+
+test("preparation itself does not clear or apply the current feature state", async () => {
+	const s = setup();
+	await s.controller.openRevision("a");
+	await s.controller.prepareScreen({
+		kind: "work",
+		workId: "work-source",
+		scope: "revision",
+		id: "b",
+	});
+	expect(s.controller.preferredRevisionId).toBe("a");
+	expect(s.controller.work).toBeNull();
 });

@@ -1,6 +1,6 @@
-import { tick } from "svelte";
 import type { OutlineItem } from "../domain/models.ts";
 import type { BrowsingOutlineProjection } from "../services/browsing_navigation_state.ts";
+import type { ScreenNavigator } from "./screen_navigation_destination.ts";
 import type { ViewMode } from "./app_view_mode.ts";
 import { EditorReturnController, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
 
@@ -14,14 +14,10 @@ export class KeyboardWorkspaceController {
 			selectedId(): string | null;
 			hoistId(): string | null;
 			view(): ViewMode;
-			prepareView(view: ViewMode): () => void;
+			navigation: ScreenNavigator;
 			longFormActive(): boolean;
-			leaveLongForm(): Promise<boolean>;
-			startLongForm(): Promise<void>;
 			select(id: string): boolean;
-			selectWhenReady(id: string): Promise<boolean>;
 			setHoist(id: string | null): void;
-			reveal(id: string): void;
 			projection(): BrowsingOutlineProjection;
 			items(): readonly OutlineItem[];
 			clearTemporaryExpansion(): void;
@@ -30,12 +26,8 @@ export class KeyboardWorkspaceController {
 		},
 	) {
 		this.editorReturn = new EditorReturnController({
-			beforeRestore: ports.leaveLongForm,
+			navigation: ports.navigation,
 			hasItem: (id) => ports.items().some((item) => item.id === id),
-			select: ports.selectWhenReady,
-			setHoist: ports.setHoist,
-			reveal: ports.reveal,
-			prepareEditor: () => ports.prepareView("outline"),
 		});
 	}
 	remember = (): void => {
@@ -45,34 +37,25 @@ export class KeyboardWorkspaceController {
 		}
 	};
 	openOutline = async (): Promise<void> => {
-		const commitView = this.ports.prepareView("outline");
-		if (!await this.ports.leaveLongForm()) return;
-		commitView();
-		const id = this.ports.selectedId();
-		if (id) this.ports.reveal(id);
-		await focusOutlineEditor(id);
+		await this.ports.navigation.navigate({ view: "outline" });
 	};
 	openTree = async (): Promise<void> => {
-		const commitView = this.ports.prepareView("globalLineage");
 		this.remember();
-		if (!await this.ports.leaveLongForm()) return;
-		commitView();
-		await tick();
-		(document.querySelector<SVGElement>(".tree-node.selected") ??
-			document.querySelector<SVGElement>(".tree-node, .tree-root svg"))?.focus();
+		await this.ports.navigation.navigate({ view: "globalLineage" });
 	};
 	openLongForm = async (): Promise<void> => {
-		const commitView = this.ports.prepareView("outline");
 		this.remember();
-		await this.ports.startLongForm();
-		commitView();
-		await tick();
-		document.querySelector<HTMLTextAreaElement>(".long-form-textarea")?.focus();
+		await this.ports.navigation.navigate({
+			view: "outline",
+			occurrenceId: this.ports.selectedId(),
+			longForm: true,
+		});
 	};
+
 	returnToEditor = (): Promise<void> => this.editorReturn.restore();
 	saveLongForm = async (): Promise<void> => {
 		if (this.position) await this.returnToEditor();
-		else await this.ports.leaveLongForm();
+		else await this.ports.navigation.navigate({ view: "outline", longForm: false });
 	};
 	focusSearch = (): void => {
 		this.remember();

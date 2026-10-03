@@ -35,14 +35,13 @@ export interface WorkApiPort {
 	purgeWork(workId: string): Promise<unknown>;
 }
 
+import type { ScreenNavigator } from "./screen_navigation_destination.ts";
+
 export interface WorkControllerPorts {
 	api: WorkApiPort;
 	getSnapshot(): OutlineSnapshot;
-	/** Selection may outlive reload; call afterSelection only when the focus target is accepted. */
-	reload(focusId?: string, afterSelection?: () => void): Promise<unknown>;
-	openView(view: WorkView): void;
-	/** Capture the caller now; the returned callback commits the screen and history later. */
-	prepareView(view: WorkView): () => void;
+	reload(): Promise<unknown>;
+	navigation: ScreenNavigator;
 	selectOccurrence(id: string | null): void;
 	requestConfirmation(confirmation: PendingConfirmation): Promise<void>;
 	reportError(cause: unknown): void;
@@ -69,6 +68,39 @@ export function createWorkController(ports: WorkControllerPorts) {
 	let unplacedLinkType = $state<LinkType>("RELATED");
 	let trashEntries = $state<TrashEntry[]>([]);
 
+	async function prepareScreen(view: WorkView): Promise<() => void> {
+		switch (view) {
+			case "unplaced": {
+				const result = await ports.api.listUnplacedWorks();
+				return () => {
+					unplacedWorks = result;
+				};
+			}
+			case "stubs": {
+				const result = await ports.api.listStubs();
+				return () => {
+					stubEntries = result;
+				};
+			}
+			case "duplicates": {
+				const result = await ports.api.listDuplicateCandidates();
+				return () => {
+					duplicateCandidates = result.filter((candidate) =>
+						!excludedDuplicateCandidateKeys.includes(duplicateCandidateKey(candidate))
+					);
+				};
+			}
+			case "trash": {
+				const result = await ports.api.listTrash();
+				return () => {
+					trashEntries = result;
+				};
+			}
+			default:
+				return () => undefined;
+		}
+	}
+
 	function report(cause: unknown): void {
 		ports.reportError(cause);
 	}
@@ -80,7 +112,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 		quickCaptureSubmitting = true;
 		try {
 			if (destination === "root") {
-				const commitView = ports.prepareView("outline");
+				const origin = ports.navigation.origin;
 				const roots = ports.getSnapshot().items
 					.filter((item) => item.parentId === null)
 					.sort((left, right) => left.orderKey - right.orderKey);
@@ -89,7 +121,8 @@ export function createWorkController(ports: WorkControllerPorts) {
 					parentId: null,
 					afterId: roots.at(-1)?.id ?? null,
 				});
-				await ports.reload(created.id, commitView);
+				if (await ports.reload() === false) return;
+				await ports.navigation.navigate({ view: "outline", occurrenceId: created.id }, origin);
 			} else {
 				await ports.api.quickCapture(text);
 				await Promise.all([ports.reload(), loadUnplacedWorks()]);
@@ -108,8 +141,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 
 	async function openUnplaced(): Promise<void> {
 		try {
-			await loadUnplacedWorks();
-			ports.openView("unplaced");
+			await ports.navigation.navigate({ view: "unplaced" });
 		} catch (cause) {
 			report(cause);
 		}
@@ -126,9 +158,11 @@ export function createWorkController(ports: WorkControllerPorts) {
 
 	async function placeUnplaced(workId: string, parentId: string | null): Promise<void> {
 		try {
-			const commitView = ports.prepareView("outline");
+			const origin = ports.navigation.origin;
 			const created = await ports.api.placeUnplacedWork({ workId, parentId });
-			await Promise.all([ports.reload(created.id, commitView), loadUnplacedWorks()]);
+			const [reloaded] = await Promise.all([ports.reload(), loadUnplacedWorks()]);
+			if (reloaded === false) return;
+			await ports.navigation.navigate({ view: "outline", occurrenceId: created.id }, origin);
 		} catch (cause) {
 			report(cause);
 		}
@@ -157,8 +191,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 
 	async function openStubs(): Promise<void> {
 		try {
-			await loadStubs();
-			ports.openView("stubs");
+			await ports.navigation.navigate({ view: "stubs" });
 		} catch (cause) {
 			report(cause);
 		}
@@ -201,8 +234,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 
 	async function openDuplicates(): Promise<void> {
 		try {
-			await loadDuplicates();
-			ports.openView("duplicates");
+			await ports.navigation.navigate({ view: "duplicates" });
 		} catch (cause) {
 			report(cause);
 		}
@@ -256,8 +288,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 
 	async function openTrash(): Promise<void> {
 		try {
-			await loadTrash();
-			ports.openView("trash");
+			await ports.navigation.navigate({ view: "trash" });
 		} catch (cause) {
 			report(cause);
 		}
@@ -306,6 +337,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 	}
 
 	return {
+		prepareScreen,
 		get quickCaptureSubmitting() {
 			return quickCaptureSubmitting;
 		},

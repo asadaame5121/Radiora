@@ -145,6 +145,8 @@
 		type SemanticLinkAnnotation,
 	} from "../services/semantic_link_annotations";
 	import type { ViewMode } from "./app_view_mode.ts";
+	import { OutlineViewportAdapter } from "./outline_viewport_adapter.ts";
+	import { ScreenDestinationPresenter } from "./screen_destination_presenter.ts";
 	import { ScreenNavigationWorkspace } from "./screen_navigation_workspace.svelte.ts";
 	import { focusTreeSelection } from "./tree_focus_adapter.ts";
 
@@ -169,34 +171,37 @@
 	const longFormController = new LongFormController({
 		flush: () => editorController.flushAutosave(),
 		save: (id, text) => api.updateItemText(id, text),
-		reload: async (id) => await load() && await selectOccurrenceWhenReady(id),
+		reload: () => load(),
 		reportError: (cause) => error = errorMessage(cause),
 	});
 	const longForm = $derived(longFormController.state);
+	const outlineViewport = new OutlineViewportAdapter();
+	onMount(() => outlineViewport.connect());
 	const screenNavigation: ScreenNavigationWorkspace = new ScreenNavigationWorkspace({
-		browsing: {
-			captureBrowsing: () => navigationController.captureBrowsing(),
-			restore: (state) => navigationController.restoreBrowsing(state, snapshot, (location) =>
-				historicalTimeController.selectWhenReady(
-					itemById.get(location.selectedOccurrenceId ?? "") ?? null,
-					() => commitOccurrenceSelection(location.selectedOccurrenceId),
-				)),
-		},
-		selection: { current: () => selectedId, hasItem: (id) => itemById.has(id) },
 		outline: {
+			captureBrowsing: () => navigationController.captureBrowsing(),
+			commitBrowsing: (state) => navigationController.commitBrowsing(state),
 			filter: () => outlineFilter, setFilter: (next) => outlineFilter = next,
 			expanded: () => transientExpandedIds, setExpanded: (next) => transientExpandedIds = next,
+			inspector: () => ({ mode: asideMode, collapsed: inspectorCollapsed }),
+			setInspector: (context) => { asideMode = context.mode; inspectorCollapsed = context.collapsed; },
+			longForm: () => longForm.active,
+			setLongForm: (active, id) => longFormController.setMode(active, itemById.get(id ?? "") ?? null),
+			capturePosition: () => outlineViewport.capture(browsingLocation.selectedOccurrenceId, browsingLocation.hoistOccurrenceId, longForm.active),
+			restorePosition: (position, current) => outlineViewport.restore(position, current),
 		},
-		inspector: {
-			capture: () => ({ mode: asideMode, collapsed: inspectorCollapsed }),
-			restore: (context) => { asideMode = context.mode; inspectorCollapsed = context.collapsed; },
+		snapshot: () => snapshot,
+		readOutline: () => api.listOutline(),
+		publishOutline: (next) => snapshot = next,
+		selection: {
+			current: () => selectedId,
+			guard: (item, current) => historicalTimeController.canSelect(item, current),
+			commit: (id, item) => { selectedId = id; historicalTimeController.commitSelection(item); },
+			cancelPending: () => historicalTimeController.cancelPending(),
 		},
-		comparison: {
-			captureNavigationContext: () => comparison.captureNavigationContext(),
-			restoreNavigationContext: (context) => comparison.restoreNavigationContext(context),
-		},
-		editor: { save: () => longFormController.save(), flush: () => editorController.flushAutosave(), longFormActive: () => longForm.active },
-		tree: { focus: focusTreeSelection },
+		editor: { save: () => longFormController.save(false), flush: () => editorController.flushForNavigation() },
+		screens: { prepare: (destination) => screenPresenter.prepare(destination), focusTree: focusTreeSelection },
+		reportError: (cause) => error = errorMessage(cause),
 	});
 	let viewMode: ViewMode = $derived(screenNavigation.view);
 	// Side-effect boundary: record viewMode changes asynchronously for telemetry/analysis.
@@ -207,7 +212,7 @@
 	const dateProjectionController = new DateProjectionController({
 		projectDates: (range) => api.projectDates(range),
 		onError: (cause) => error = errorMessage(cause),
-		onOpenView: (view) => screenNavigation.open(view),
+		navigation: screenNavigation,
 	});
 	let selectedId = $state<string | null>(null);
 	const navigationController = createNavigationController({
@@ -270,8 +275,7 @@
 		api,
 		getSnapshot: () => snapshot,
 		reload: load,
-		openView: (view) => screenNavigation.open(view),
-		prepareView: (view) => screenNavigation.prepareOpen(view),
+		navigation: screenNavigation,
 		selectOccurrence,
 		requestConfirmation,
 		reportError: (cause) => error = errorMessage(cause),
@@ -293,7 +297,7 @@
 		untrack(() => {
 			if (!historicalTimeController.select(next)) {
 				selectedId = historicalTimeController.item?.id ?? null;
-				navigationController.browseToOccurrence(snapshot, selectedId);
+				if (viewMode === "outline") navigationController.browseToOccurrence(snapshot, selectedId);
 			}
 		});
 	});
@@ -313,7 +317,7 @@
 	const branchRewrite = new BranchRewriteController({
 		api,
 		getSnapshot: () => snapshot,
-		prepareView: () => screenNavigation.prepareOpen("outline"),
+		navigation: screenNavigation,
 		reload: load,
 		refreshHistory: async (workId) => {
 			await Promise.all([history.loadRevisions(workId), history.loadWorkLineage(workId)]);
@@ -323,7 +327,7 @@
 		api,
 		getSelectedWorkId: () => selectedItem?.workId ?? null,
 		getSelectedId: () => selectedId,
-		prepareView: () => screenNavigation.prepareOpen("comparison"),
+		navigation: screenNavigation,
 		reportError: (cause) => error = errorMessage(cause),
 		comparisonPaneLabel: () => vocabulary.comparisonPane,
 	});
@@ -333,9 +337,7 @@
 		getSelectedId: () => selectedId,
 		reload: load,
 		loadUnplacedWorks: () => workController.loadUnplacedWorks(),
-		openNavigationTarget,
-		loadRevisions: (workId) => history.loadRevisions(workId),
-		openRevisionComparison: (revisionId) => comparison.openRevision(revisionId),
+		navigation: screenNavigation,
 		requestFocus,
 		findTextarea: (itemId) => document.querySelector<HTMLTextAreaElement>(
 			`textarea[data-item-id="${CSS.escape(itemId)}"]`,
@@ -358,20 +360,18 @@
 		selectedId: () => selectedId,
 		hoistId: () => browsingLocation.hoistOccurrenceId,
 		view: () => viewMode,
-		prepareView: (view) => screenNavigation.prepareOpen(view),
+		navigation: screenNavigation,
 		longFormActive: () => longForm.active,
-		leaveLongForm: () => longFormController.save(),
-		startLongForm: async () => { if (selectedItem) await longFormController.start(selectedItem); },
 		select: selectOccurrence,
-		selectWhenReady: selectOccurrenceWhenReady,
 		setHoist: (id) => { if (id) navigationController.setHoist(id); else navigationController.clearHoist(); },
-		reveal: (id) => transientExpandedIds = ancestorBreadcrumb(snapshot, id).map((item) => item.id),
 		projection: () => browsingProjection,
 		items: () => snapshot.items,
 		clearTemporaryExpansion: () => transientExpandedIds = [],
 		setCollapsed: (id, collapsed) => api.setCollapsed(id, collapsed),
 		reload: () => load(),
 	});
+	const screenPresenter = new ScreenDestinationPresenter({ comparison, dates: dateProjectionController, work: workController, tags: tagController });
+
 	const keyboard = new KeyboardController({
 		context: () => commandContext,
 		blocked: () => startup.phase !== "ready" || commandPaletteOpen || Boolean(confirmationController.pending) || licensesDialogOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
@@ -588,13 +588,6 @@
 		else emergenceController.clear();
 	});
 
-	// Side-effect boundary: reset view-specific outline filter when switching away from today/unplaced views.
-	// Dependency: viewMode. Cleanup: not needed (synchronous state reset).
-	$effect(() => {
-		if (viewMode !== "today" && viewMode !== "unplaced") {
-			outlineFilter = { ...EMPTY_OUTLINE_FILTER };
-		}
-	});
 
 	// Side-effect boundary: sync work-level history, recovery snapshots, and reference backlinks with selection.
 	// Dependency: selectedItem?.workId, selectedBranchId, startup.phase.
@@ -783,7 +776,7 @@
 		await ruleQuery.loadSavedQueries();
 	}
 
-	async function load(focusId?: string, afterSelection?: () => void): Promise<boolean> {
+	async function load(focusId?: string): Promise<boolean> {
 		const request = ++globalLineageRequest;
 		try {
 			error = "";
@@ -805,7 +798,8 @@
 			});
 			snapshot = next;
 			editorController.clearCompletions();
-			selectedId = navigationController.reconcileBrowsing(snapshot).selectedOccurrenceId;
+			if (viewMode === "outline") selectedId = navigationController.reconcileBrowsing(snapshot).selectedOccurrenceId;
+			else if (selectedId && !snapshot.items.some((item) => item.id === selectedId)) selectedId = null;
 			if (request === globalLineageRequest) {
 				globalLineage = nextGlobalLineage;
 				lastLoadedGlobalLineageFilterKey = globalLineageFilterKey();
@@ -813,7 +807,6 @@
 			bookmarks = nextBookmarks;
 			if (focusId) {
 				selectOccurrence(focusId, () => {
-					afterSelection?.();
 					void tick().then(() => requestFocus(focusId));
 				});
 			}
@@ -841,14 +834,9 @@
 	function commitOccurrenceSelection(id: string | null): void {
 		if (selectedId !== id) editorController.clearCompletions();
 		selectedId = id;
-		navigationController.browseToOccurrence(snapshot, id);
+		if (viewMode === "outline") navigationController.browseToOccurrence(snapshot, id);
 	}
 
-	function selectOccurrenceWhenReady(id: string): Promise<boolean> {
-		const item = itemById.get(id);
-		if (!item) return Promise.resolve(false);
-		return historicalTimeController.selectWhenReady(item, () => commitOccurrenceSelection(id));
-	}
 
 	function selectOccurrence(id: string | null, afterSelection?: () => void): boolean {
 		const commit = () => {
@@ -920,14 +908,7 @@
 			return;
 		}
 		if (id === "zoom" || id === "work-lineage") {
-			const commitView = screenNavigation.prepareOpen(id === "zoom" ? "outline" : "workLineage");
-			selectOccurrence(targetId, () => {
-				if (id === "zoom") {
-					transientExpandedIds = ancestorBreadcrumb(snapshot, targetId).map((item) => item.id);
-					navigationController.setHoist(targetId);
-				}
-				commitView();
-			});
+			await screenNavigation.navigate({ view: id === "zoom" ? "outline" : "workLineage", occurrenceId: targetId, ...(id === "zoom" ? { hoistId: targetId } : {}) });
 			return;
 		}
 		// Opening the menu already accepted its selection; ignore commands from a stale menu.
@@ -1047,7 +1028,7 @@
 	}
 
 	async function openInspectorTool(mode: Extract<InspectorAsideMode, "query">): Promise<void> {
-		screenNavigation.openInspectorTool(mode, dedicatedView);
+		await screenNavigation.openInspectorTool(mode);
 		await tick();
 		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
@@ -1057,12 +1038,7 @@
 	}
 
 	function openOutlineOccurrence(id: string, expandedIds = transientExpandedIds): void {
-		const open = screenNavigation.prepareOpen("outline");
-		selectOccurrence(id, () => {
-			transientExpandedIds = expandedIds;
-			open();
-			requestFocus(id);
-		});
+		void screenNavigation.navigate({ view: "outline", occurrenceId: id, expandedIds });
 	}
 
 	function requestFocus(id: string, caretOffset?: number): void {
@@ -1264,7 +1240,10 @@
 		pendingEmptyItemController.noteTextChange(id, textarea.value);
 		editorController.updateLocalText(id, textarea);
 	}
-	const updateEditorSelection = editorController.updateEditorSelection;
+	function updateEditorSelection(id: string, textarea: HTMLTextAreaElement): void {
+		outlineViewport.track(id, browsingLocation.hoistOccurrenceId, textarea);
+		editorController.updateEditorSelection(id, textarea);
+	}
 	const updateInlineLinkSearch = editorController.updateInlineLinkSearch;
 	const handleInlineLinkOmniKeydown = editorController.handleInlineLinkOmniKeydown;
 	const createInlineLinkTarget = editorController.createInlineLinkTarget;
@@ -1325,32 +1304,22 @@
 	}
 
 	async function openBookmark(id: string): Promise<void> {
+		const origin = screenNavigation.origin;
 		const resolved = await api.resolveBookmark(id);
-		await openNavigationTarget(resolved.target);
+		await openNavigationTarget(resolved.target, undefined, origin);
 	}
 
 	async function resumeEditing(): Promise<void> {
+		const origin = screenNavigation.origin;
 		const resolved = await api.resolveResumePosition();
 		if (!resolved) return;
-		await openNavigationTarget(resolved.target, resolved.resolvedCaretOffset);
+		await openNavigationTarget(resolved.target, resolved.resolvedCaretOffset, origin);
 	}
 
-	async function openNavigationTarget(target: NavigationTarget, caretOffset?: number): Promise<void> {
+	async function openNavigationTarget(target: NavigationTarget, caretOffset?: number, origin = screenNavigation.origin): Promise<void> {
 		const state = navigationUiState(target, caretOffset);
-		const open = screenNavigation.prepareOpen("outline");
-		if (!state.selectedOccurrenceId) {
-			selectOccurrence(null, () => {
-				open();
-				error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
-			});
-			return;
-		}
-		const occurrenceId = state.selectedOccurrenceId;
-		selectOccurrence(occurrenceId, () => {
-			open();
-			transientExpandedIds = state.temporaryExpandedOccurrenceIds;
-			void load().then((loaded) => loaded && requestFocus(occurrenceId, state.caretOffset));
-		});
+		const accepted = await screenNavigation.navigate({ view: "outline", occurrenceId: state.selectedOccurrenceId, expandedIds: state.temporaryExpandedOccurrenceIds, caretOffset: state.caretOffset }, origin);
+		if (accepted && !state.selectedOccurrenceId) error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
 	}
 
 	async function restoreRecoverySnapshot(snapshotId: string): Promise<void> {
@@ -1524,18 +1493,12 @@
 		}
 	}
 
-	function selectItem(item: OutlineItem, ancestorIds: string[], afterSelection?: () => void): void {
-		selectOccurrence(item.id, () => {
-			transientExpandedIds = ancestorIds;
-			navigationController.clearOmniwindow();
-			void load(item.id);
-			afterSelection?.();
-		});
+	async function selectItem(item: OutlineItem, ancestorIds: string[]): Promise<void> {
+		if (await screenNavigation.navigate({ view: "outline", occurrenceId: item.id, expandedIds: ancestorIds })) navigationController.clearOmniwindow();
 	}
 
 	function openRecentItem(item: OutlineItem): void {
-		const ancestors = ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id);
-		selectItem(item, ancestors, screenNavigation.prepareOpen("outline"));
+		void selectItem(item, ancestorBreadcrumb(snapshot, item.id).map((ancestor) => ancestor.id));
 	}
 
 	function openRecentNavigationItem(item: RecentNavigationItem): void {
@@ -1544,7 +1507,7 @@
 	}
 
 	function openHelp(): void {
-		screenNavigation.open("help");
+		void screenNavigation.navigate({ view: "help" });
 	}
 
 	async function loadEmergence(id: string): Promise<void> {
@@ -1559,18 +1522,9 @@
 	}
 
 	async function handleSparseOutlineSelect(node: TransientProjectionNode): Promise<void> {
-		const ancestorIds = node.breadcrumb ?? [];
-		const occurrenceId = node.occurrenceId;
-		if (occurrenceId && itemById.has(occurrenceId)) {
-			const open = screenNavigation.prepareOpen("outline");
-			selectOccurrence(occurrenceId, () => {
-				transientExpandedIds = ancestorIds;
-				void load(occurrenceId);
-				open();
-			});
-		} else {
-			error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
-		}
+		if (node.occurrenceId && itemById.has(node.occurrenceId)) {
+			await screenNavigation.navigate({ view: "outline", occurrenceId: node.occurrenceId, expandedIds: node.breadcrumb ?? [] });
+		} else error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
 	}
 
 	async function performAddLink(input: CreateLinkInput): Promise<void> {
@@ -1611,8 +1565,7 @@
 		await load();
 	}
 	async function openTags(): Promise<void> {
-		await loadTags();
-		screenNavigation.open("tags");
+		await screenNavigation.navigate({ view: "tags" });
 	}
 
 	async function loadTags(): Promise<void> {
@@ -2100,7 +2053,7 @@
 		onOpenUnplaced={() => void openUnplaced()}
 		onOpenStubs={() => void openStubs()}
 		onOpenDuplicates={() => void openDuplicates()}
-		onOpenOptions={() => screenNavigation.open("options")}
+		onOpenOptions={() => void screenNavigation.navigate({ view: "options" })}
 		onOpenTags={() => void openTags()}
 		onOpenQuery={() => void openInspectorTool("query")}
 		onOpenHelp={openHelp}
@@ -2302,10 +2255,10 @@
 			<InAppHelp
 				shortcuts={helpShortcuts}
 				editorShortcuts={helpEditorShortcuts}
-				onOpenOutline={() => { screenNavigation.open("outline"); }}
+				onOpenOutline={() => { void screenNavigation.navigate({ view: "outline" }); }}
 				onOpenToday={() => void openToday()}
 				onOpenUnplaced={() => void openUnplaced()}
-				onOpenOptions={() => { screenNavigation.open("options"); }}
+				onOpenOptions={() => { void screenNavigation.navigate({ view: "options" }); }}
 				onOpenCommandPalette={() => void openCommandPalette()}
 			/>
 		{:else if viewMode === "comparison"}
@@ -2363,7 +2316,7 @@
 						<WorkLineage
 							projection={history.workLineage}
 							onCompare={(scope, id) => comparison.openWork(scope, id)}
-							onBack={() => { screenNavigation.open("outline"); }}
+							onBack={() => { void screenNavigation.navigate({ view: "outline" }); }}
 						/>
 						{#if selectedItem && selectedBranchId}
 							<RecoverySnapshots
@@ -2466,7 +2419,7 @@
 				onOpenBacklink={openInternalReferenceBacklink}
 				onSetEmergenceReason={(id, value) => emergenceController.setResolutionReason(id, value)}
 				onResolveEmergence={resolveEmergence}
-				onOpenWorkLineage={() => screenNavigation.open("workLineage")}
+				onOpenWorkLineage={() => void screenNavigation.navigate({ view: "workLineage" })}
 				onOpenRevisionComparison={openSelectedRevisionComparison}
 				onSelectRevision={setSelectedOccurrenceRevision}
 				onCreateBranch={() => executeCommand("createBranch")}

@@ -18,7 +18,7 @@ Deno.test("FROM FIX VS Revision and Branch use one read-only comparison pane", a
 		new URL("../src/ui/WorkLineage.svelte", import.meta.url),
 	);
 
-	assertMatch(controller, /resolveLinkComparison\(linkId\)/);
+	assertMatch(controller, /resolveLinkComparison\(target\.linkId\)/);
 	assertMatch(linkEditor, /isComparableLinkType\(link\.type\)/);
 	assertMatch(controller, /listWorkComparisonDocuments/);
 	assertMatch(app, /<ComparisonPane/);
@@ -37,12 +37,15 @@ Deno.test("comparison entry points invalidate stale async responses before openi
 		new URL("../src/ui/comparison_controller.svelte.ts", import.meta.url),
 	);
 
-	assertMatch(app, /comparison\.openRevision\(revisionId\)/);
+	assertMatch(app, /comparison\.openRevision\(/);
 	assertMatch(app, /comparison\.openWork\(scope, id\)/);
 	assertMatch(app, /comparison\.openLink\(link\.id\)/);
 	assertMatch(controller, /openRevision\(revisionId: string\)/);
-	assertMatch(controller, /const request = \+\+this\.request/);
-	assertMatch(controller, /request !== this\.request/);
+	assertMatch(controller, /this\.ports\.navigation\.navigate/);
+	const navigation = await Deno.readTextFile(
+		new URL("../src/ui/screen_navigation_controller.svelte.ts", import.meta.url),
+	);
+	assertMatch(navigation, /request === this\.request/);
 });
 
 Deno.test("comparison UI uses UiVocabulary and has no persistence calls", async () => {

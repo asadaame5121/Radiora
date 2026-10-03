@@ -1,122 +1,183 @@
 import { tick } from "svelte";
+import type { OutlineItem, OutlineSnapshot } from "../domain/models.ts";
+import { currentBrowsingLocation } from "../services/browsing_navigation_state.ts";
 import {
-	type BrowsingNavigationState,
-	currentBrowsingLocation,
-} from "../services/browsing_navigation_state.ts";
-import type { OutlineFilter } from "../services/outline_filter.ts";
-import type { InspectorAsideMode } from "./InspectorView.svelte";
-import type { ViewMode } from "./app_view_mode.ts";
-import type { ComparisonNavigationContext } from "./comparison_controller.svelte.ts";
-import { captureEditorPosition, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
+	type OutlineScreenContext,
+	type OutlineScreenPorts,
+	OutlineScreenState,
+} from "./outline_screen_state.svelte.ts";
+import type { ScreenDestination, ScreenNavigator } from "./screen_navigation_destination.ts";
 import { ScreenNavigationController } from "./screen_navigation_controller.svelte.ts";
 
-interface InspectorContext {
-	mode: InspectorAsideMode;
-	collapsed: boolean;
-}
-
 export interface ScreenNavigationWorkspacePorts {
-	browsing: {
-		captureBrowsing(): BrowsingNavigationState;
-		restore(state: BrowsingNavigationState): Promise<boolean>;
+	outline: OutlineScreenPorts;
+	snapshot(): OutlineSnapshot;
+	readOutline(): Promise<OutlineSnapshot>;
+	publishOutline(snapshot: OutlineSnapshot): void;
+	selection: {
+		current(): string | null;
+		guard(item: OutlineItem | null, current: () => boolean): Promise<boolean>;
+		commit(id: string | null, item: OutlineItem | null): void;
+		cancelPending(): void;
 	};
-	selection: { current(): string | null; hasItem(id: string): boolean };
-	outline: {
-		filter(): OutlineFilter;
-		setFilter(filter: OutlineFilter): void;
-		expanded(): readonly string[];
-		setExpanded(ids: string[]): void;
+	editor: { save(): Promise<boolean>; flush(): Promise<void> };
+	screens: {
+		/** Feature-owned preparation returns an internal synchronous publication port. */
+		prepare(destination: ScreenDestination): Promise<() => void>;
+		focusTree(): void;
 	};
-	inspector: { capture(): InspectorContext; restore(context: InspectorContext): void };
-	comparison: {
-		captureNavigationContext(): ComparisonNavigationContext;
-		restoreNavigationContext(context: ComparisonNavigationContext): void;
-	};
-	editor: { save(): Promise<boolean>; flush(): Promise<void>; longFormActive(): boolean };
-	tree: { focus(): void };
+	reportError(cause: unknown): void;
 }
 
-/** Coordinates screen context through feature ports; each feature retains its own invariants. */
-export class ScreenNavigationWorkspace {
-	private readonly navigation: ScreenNavigationController<
-		ReturnType<ScreenNavigationWorkspace["capture"]>
-	>;
+interface PreparedDestination {
+	destination: ScreenDestination;
+	departure: OutlineScreenContext | null;
+	outline: OutlineScreenContext | null;
+	snapshot: OutlineSnapshot;
+	selectedId: string | null;
+	originSelectedId: string | null;
+	publishScreen(): void;
+}
 
+/** All cross-screen requests pass this boundary; callers never receive a commit callback. */
+export class ScreenNavigationWorkspace implements ScreenNavigator {
+	private readonly outline: OutlineScreenState;
+	private readonly navigation: ScreenNavigationController<
+		ScreenDestination,
+		PreparedDestination | null
+	>;
 	constructor(private readonly ports: ScreenNavigationWorkspacePorts) {
+		this.outline = new OutlineScreenState(ports.outline);
 		this.navigation = new ScreenNavigationController({
-			capture: () => this.capture(),
-			restore: (context) => this.restore(context),
-			afterRestore: (context, view) => this.afterRestore(context, view),
+			prepare: (destination, current) => this.prepare(destination, current),
+			guard: (prepared, current) => this.guard(prepared, current),
+			valid: (prepared) =>
+				Boolean(prepared && prepared.originSelectedId === ports.selection.current()),
+			commit: (prepared) => {
+				if (prepared) this.commit(prepared);
+			},
+			afterCommit: (prepared, current) =>
+				prepared ? this.afterCommit(prepared, current) : Promise.resolve(),
+			cancelPending: () => ports.selection.cancelPending(),
+			reportError: ports.reportError,
 		});
 	}
-
-	get view(): ViewMode {
+	get view() {
 		return this.navigation.view;
 	}
-	get canGoBack(): boolean {
+	get canGoBack() {
 		return this.navigation.canGoBack;
 	}
-	open(view: ViewMode): void {
-		this.navigation.open(view);
-	}
-	prepareOpen(view: ViewMode): () => void {
-		return this.navigation.prepareOpen(view);
-	}
-	goBack = (): Promise<void> => this.navigation.goBack();
-
-	openInspectorTool(mode: "query", dedicatedView: boolean): void {
-		const current = this.ports.inspector.capture();
-		if (current.mode === mode && !dedicatedView && !current.collapsed) return;
-		if (dedicatedView) this.open("outline");
-		else this.navigation.remember();
-		this.ports.inspector.restore({ mode, collapsed: false });
+	get origin() {
+		return this.navigation.origin;
 	}
 
-	private capture() {
-		const browsing = this.ports.browsing.captureBrowsing();
-		const selectedId = this.ports.selection.current();
+	navigate = (destination: ScreenDestination, origin = this.origin): Promise<boolean> =>
+		this.navigation.navigate(destination, origin);
+
+	goBack = (): Promise<boolean> =>
+		this.canGoBack ? this.navigate({ view: "outline" }) : Promise.resolve(false);
+	openInspectorTool = (_mode: "query"): Promise<boolean> =>
+		this.navigate({ view: "outline", query: true });
+
+	private async prepare(
+		destination: ScreenDestination,
+		current: () => boolean,
+	): Promise<PreparedDestination | null> {
+		const originSelectedId = this.ports.selection.current();
+		const departure = this.view === "outline" ? this.outline.capture() : null;
+		if (!await this.ports.editor.save() || !current()) return null;
+		await this.ports.editor.flush();
+		if (!current()) return null;
+		let snapshot = this.ports.snapshot();
+		if (
+			destination.occurrenceId &&
+			!snapshot.items.some((item) => item.id === destination.occurrenceId)
+		) snapshot = await this.ports.readOutline();
+		if (!current()) return null;
+		const outline = destination.view === "outline"
+			? this.outline.prepare(destination, snapshot, departure)
+			: null;
 		return {
-			browsing,
-			expandedIds: [...this.ports.outline.expanded()],
-			filter: $state.snapshot(this.ports.outline.filter()),
-			inspector: { ...this.ports.inspector.capture() },
-			comparison: this.ports.comparison.captureNavigationContext(),
-			editorPosition: selectedId && this.view === "outline" && !this.ports.editor.longFormActive()
-				? captureEditorPosition(selectedId, currentBrowsingLocation(browsing).hoistOccurrenceId)
-				: undefined,
+			destination,
+			departure,
+			outline,
+			snapshot,
+			publishScreen: () => undefined,
+			originSelectedId,
+			selectedId: outline
+				? currentBrowsingLocation(outline.browsing).selectedOccurrenceId
+				: destination.occurrenceId ?? this.ports.selection.current(),
 		};
 	}
 
-	private async restore(
-		context: ReturnType<ScreenNavigationWorkspace["capture"]>,
+	private async guard(
+		prepared: PreparedDestination | null,
+		requestCurrent: () => boolean,
 	): Promise<boolean> {
-		if (!await this.ports.editor.save()) return false;
-		await this.ports.editor.flush();
-		if (!await this.ports.browsing.restore(context.browsing)) return false;
-		this.ports.outline.setExpanded(
-			context.expandedIds.filter((id) => this.ports.selection.hasItem(id)),
-		);
-		this.ports.inspector.restore(context.inspector);
-		this.ports.comparison.restoreNavigationContext(context.comparison);
-		return true;
+		if (!prepared) return false;
+		const current = () =>
+			requestCurrent() && prepared.originSelectedId === this.ports.selection.current();
+		const item = prepared.snapshot.items.find((value) => value.id === prepared.selectedId) ?? null;
+		if (!await this.ports.selection.guard(item, current) || !current()) return false;
+		const { destination } = prepared;
+		if (destination.view === "outline" || destination.occurrenceId !== undefined) {
+			if (!await this.refreshGuardedDestination(prepared, item, current)) return false;
+		}
+		prepared.publishScreen = await this.ports.screens.prepare(destination);
+		return current();
 	}
 
-	private async afterRestore(
-		context: ReturnType<ScreenNavigationWorkspace["capture"]>,
-		view: ViewMode,
-	): Promise<void> {
-		// Let view-dependent reset effects settle before restoring the caller's filter.
+	private async refreshGuardedDestination(
+		prepared: PreparedDestination,
+		item: OutlineItem | null,
+		current: () => boolean,
+	): Promise<boolean> {
+		const { destination } = prepared;
+		// Saving a guard may refresh source data. Publish a fresh snapshot, never the pre-guard one.
+		const snapshot = await this.ports.readOutline();
+		if (!current()) return false;
+		if (
+			destination.occurrenceId &&
+			!snapshot.items.some((value) => value.id === destination.occurrenceId)
+		) throw new Error("移動先の項目が見つかりません。");
+		const outline = destination.view === "outline"
+			? this.outline.prepare(destination, snapshot, prepared.departure)
+			: null;
+		const selectedId = outline
+			? currentBrowsingLocation(outline.browsing).selectedOccurrenceId
+			: prepared.selectedId;
+		const next = snapshot.items.find((value) => value.id === selectedId) ?? null;
+		if (
+			next?.workId !== item?.workId &&
+			(!await this.ports.selection.guard(next, current) || !current())
+		) return false;
+		prepared.snapshot = snapshot;
+		prepared.outline = outline;
+		prepared.selectedId = selectedId;
+		return current();
+	}
+
+	private commit(prepared: PreparedDestination): void {
+		const { outline, departure, destination, snapshot, selectedId } = prepared;
+		if (departure && destination.view !== "outline") this.outline.remember(departure);
+		if (outline || destination.occurrenceId !== undefined) this.ports.publishOutline(snapshot);
+		if (outline) this.outline.apply(outline);
+		this.ports.selection.commit(
+			selectedId,
+			snapshot.items.find((item) => item.id === selectedId) ?? null,
+		);
+		prepared.publishScreen();
+	}
+
+	private async afterCommit(prepared: PreparedDestination, current: () => boolean): Promise<void> {
 		await tick();
-		this.ports.outline.setFilter(context.filter);
-		await tick();
-		if (view === "outline") {
-			const id = this.ports.selection.current();
-			await focusOutlineEditor(
-				id,
-				context.editorPosition?.itemId === id ? context.editorPosition : undefined,
+		if (!current()) return;
+		if (prepared.outline) {
+			await this.outline.restoreViewport(
+				prepared.outline,
+				() => current() && prepared.selectedId === this.ports.selection.current(),
 			);
-		} else if (view === "globalLineage") {
-			this.ports.tree.focus();
-		}
+		} else if (prepared.destination.view === "globalLineage") this.ports.screens.focusTree();
 	}
 }

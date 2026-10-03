@@ -1,63 +1,55 @@
 import type { ViewMode } from "./app_view_mode.ts";
 
-/** Screen history is independent of outline browsing and the editor return shortcut. */
-export class ScreenNavigationController<Context> {
-	view = $state<ViewMode>("outline");
-	private history = $state.raw<{ view: ViewMode; context: Context }[]>([]);
-	private restoring = false;
-	private generation = 0;
+/** Owns the only boundary that may publish a prepared destination and its screen. */
+export class ScreenNavigationController<Destination extends { view: ViewMode }, Prepared> {
+	private currentView = $state<ViewMode>("outline");
+	private request = 0;
+	private receipt = 0;
 
 	constructor(
 		private readonly ports: {
-			capture(): Context;
-			restore(context: Context): Promise<boolean>;
-			afterRestore?(context: Context, view: ViewMode): Promise<void>;
+			prepare(destination: Destination, current: () => boolean): Promise<Prepared>;
+			guard(prepared: Prepared, current: () => boolean): Promise<boolean>;
+			valid?(prepared: Prepared): boolean;
+			commit(prepared: Prepared): void;
+			afterCommit?(prepared: Prepared, current: () => boolean): Promise<void>;
+			cancelPending(): void;
+			reportError?(cause: unknown): void;
 		},
 	) {}
 
+	get view(): ViewMode {
+		return this.currentView;
+	}
 	get canGoBack(): boolean {
-		return this.history.length > 0;
+		return this.view !== "outline";
+	}
+	/** Read-only receipt for domain operations that finish after another navigation request. */
+	get origin(): number {
+		return this.receipt;
 	}
 
-	remember(): void {
-		if (this.restoring) return;
-		this.history = [...this.history, { view: this.view, context: this.ports.capture() }];
-		++this.generation;
-	}
-
-	/** Immediate screen-only transition; prepareOpen must precede any destination state changes. */
-	open(view: ViewMode): void {
-		this.prepareOpen(view)();
-	}
-
-	/** Capture before destination selection, then commit only after its guard accepts. */
-	prepareOpen(view: ViewMode): () => void {
-		const generation = this.generation;
-		const entry = this.restoring || this.view === view
-			? null
-			: { view: this.view, context: this.ports.capture() };
-		let committed = false;
-		return () => {
-			if (!entry || committed || this.restoring || generation !== this.generation) return;
-			committed = true;
-			++this.generation;
-			this.history = [...this.history, entry];
-			this.view = view;
-		};
-	}
-
-	goBack = async (): Promise<void> => {
-		const entry = this.history.at(-1);
-		if (!entry || this.restoring) return;
-		this.restoring = true;
+	navigate = async (destination: Destination, origin = this.origin): Promise<boolean> => {
+		if (origin !== this.origin) return false;
+		const request = ++this.request;
+		++this.receipt;
+		const current = () => request === this.request;
+		this.ports.cancelPending();
 		try {
-			if (!await this.ports.restore(entry.context)) return;
-			++this.generation;
-			this.view = entry.view;
-			this.history = this.history.slice(0, -1);
-			await this.ports.afterRestore?.(entry.context, entry.view);
-		} finally {
-			this.restoring = false;
+			const prepared = await this.ports.prepare(destination, current);
+			if (
+				!current() || !await this.ports.guard(prepared, current) || !current() ||
+				this.ports.valid?.(prepared) === false
+			) return false;
+			this.ports.commit(prepared);
+			this.currentView = destination.view;
+			++this.receipt;
+			await this.ports.afterCommit?.(prepared, current);
+			return true;
+		} catch (cause) {
+			if (!this.ports.reportError) throw cause;
+			if (current()) this.ports.reportError(cause);
+			return false;
 		}
 	};
 }

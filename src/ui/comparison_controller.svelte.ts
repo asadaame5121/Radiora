@@ -5,6 +5,8 @@ import {
 } from "../services/comparison_service.ts";
 import type { RadioraBindings } from "../shared/bindings.ts";
 
+import type { ComparisonTarget, ScreenNavigator } from "./screen_navigation_destination.ts";
+
 type ComparisonApi = Pick<
 	RadioraBindings,
 	"listWorkComparisonDocuments" | "resolveLinkComparison"
@@ -31,14 +33,13 @@ export class ComparisonController {
 	work = $state<
 		(WorkComparisonDocuments & { preferredLeftKey?: string; preferredRightKey?: string }) | null
 	>(null);
-	private request = 0;
 
 	constructor(
 		private readonly ports: {
 			api: ComparisonApi;
 			getSelectedWorkId(): string | null;
 			getSelectedId(): string | null;
-			prepareView(): () => void;
+			navigation: ScreenNavigator;
 			reportError(cause: unknown): void;
 			comparisonPaneLabel(): string;
 		},
@@ -54,7 +55,6 @@ export class ComparisonController {
 	}
 
 	restoreNavigationContext(context: ComparisonNavigationContext): void {
-		++this.request;
 		this.preferredRevisionId = context.preferredRevisionId;
 		this.revisionPair = context.revisionPair;
 		this.link = context.link;
@@ -73,63 +73,56 @@ export class ComparisonController {
 		}
 	}
 
-	openRevision(revisionId: string): void {
-		const commitView = this.ports.prepareView();
-		commitView();
-		this.clear();
-		this.preferredRevisionId = revisionId;
+	openRevision(revisionId: string): Promise<boolean> {
+		return this.ports.navigation.navigate({
+			view: "comparison",
+			comparison: { kind: "revision", revisionId },
+		});
 	}
 
 	async openWork(scope: "branch" | "revision", id: string): Promise<void> {
 		const workId = this.ports.getSelectedWorkId();
-		if (!workId) return;
-		const commitView = this.ports.prepareView();
-		const request = ++this.request;
-		try {
-			const result = await this.ports.api.listWorkComparisonDocuments(workId);
-			if (request !== this.request || this.ports.getSelectedWorkId() !== workId) return;
-			const selected = result.documents.find((document) =>
-				document.scope === scope &&
-				(scope === "branch" ? document.branchId === id : document.revisionId === id)
-			);
-			if (!selected) throw new Error(`${this.ports.comparisonPaneLabel()}対象が見つかりません。`);
-			const key = comparisonDocumentKey(selected);
-			commitView();
-			this.clearResults();
-			this.work = {
-				...result,
-				...(scope === "revision" ? { preferredRightKey: key } : { preferredLeftKey: key }),
-			};
-		} catch (cause) {
-			if (request !== this.request || this.ports.getSelectedWorkId() !== workId) return;
-			this.ports.reportError(cause);
+		if (workId) {
+			await this.ports.navigation.navigate({
+				view: "comparison",
+				comparison: { kind: "work", workId, scope, id },
+			});
 		}
 	}
 
 	async openLink(linkId: string): Promise<void> {
-		const selectedId = this.ports.getSelectedId();
-		const commitView = this.ports.prepareView();
-		const request = ++this.request;
-		try {
-			const result = await this.ports.api.resolveLinkComparison(linkId);
-			if (request !== this.request || this.ports.getSelectedId() !== selectedId) return;
-			commitView();
-			this.clearResults();
-			this.link = result;
-		} catch (cause) {
-			if (request !== this.request || this.ports.getSelectedId() !== selectedId) return;
-			this.ports.reportError(cause);
+		await this.ports.navigation.navigate({
+			view: "comparison",
+			comparison: { kind: "link", linkId },
+		});
+	}
+
+	/** Resolve into a value. Only the navigation boundary may publish it. */
+	async prepareScreen(target: ComparisonTarget): Promise<ComparisonNavigationContext> {
+		const empty: ComparisonNavigationContext = {
+			preferredRevisionId: undefined,
+			link: null,
+			work: null,
+		};
+		if (target.kind === "revision") return { ...empty, preferredRevisionId: target.revisionId };
+		if (target.kind === "link") {
+			return { ...empty, link: await this.ports.api.resolveLinkComparison(target.linkId) };
 		}
-	}
-
-	private clear(): number {
-		this.clearResults();
-		return ++this.request;
-	}
-
-	private clearResults(): void {
-		this.revisionPair = undefined;
-		this.link = null;
-		this.work = null;
+		const result = await this.ports.api.listWorkComparisonDocuments(target.workId);
+		const selected = result.documents.find((document) =>
+			document.scope === target.scope &&
+			(target.scope === "branch"
+				? document.branchId === target.id
+				: document.revisionId === target.id)
+		);
+		if (!selected) throw new Error(`${this.ports.comparisonPaneLabel()}対象が見つかりません。`);
+		const key = comparisonDocumentKey(selected);
+		return {
+			...empty,
+			work: {
+				...result,
+				...(target.scope === "revision" ? { preferredRightKey: key } : { preferredLeftKey: key }),
+			},
+		};
 	}
 }

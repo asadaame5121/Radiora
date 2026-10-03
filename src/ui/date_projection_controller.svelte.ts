@@ -1,10 +1,12 @@
 import type { DateProjection, DateRange } from "../services/date_projection.ts";
 import { addDays, dateRangeFromInputs, localDateValue } from "./calendar_display.ts";
 
+import type { ScreenNavigator } from "./screen_navigation_destination.ts";
+
 export interface DateProjectionControllerOptions {
 	projectDates: (range: DateRange) => Promise<DateProjection>;
 	onError: (cause: unknown) => void;
-	onOpenView?: (view: "today") => void;
+	navigation: ScreenNavigator;
 }
 
 const DAYS_IN_WEEK = 7;
@@ -26,18 +28,18 @@ export class DateProjectionController {
 		this.end = value;
 	};
 
+	prepareScreen = async (range: DateRange): Promise<() => void> => {
+		const projection = await this.options.projectDates(range);
+		return () => {
+			this.projection = projection;
+		};
+	};
+
 	load = async (): Promise<void> => {
-		try {
-			this.loading = true;
-			this.projection = await this.options.projectDates(
-				dateRangeFromInputs(this.start, this.end),
-			);
-			this.options.onOpenView?.("today");
-		} catch (cause) {
-			this.options.onError(cause);
-		} finally {
-			this.loading = false;
-		}
+		await this.options.navigation.navigate({
+			view: "today",
+			dateRange: dateRangeFromInputs(this.start, this.end),
+		});
 	};
 
 	openToday = async (): Promise<void> => {
@@ -48,10 +50,8 @@ export class DateProjectionController {
 	};
 
 	moveRange = async (days: number): Promise<void> => {
-		const startDate = new Date(`${this.start}T00:00:00`);
-		const endDate = new Date(`${this.end}T00:00:00`);
-		this.start = localDateValue(addDays(startDate, days));
-		this.end = localDateValue(addDays(endDate, days));
+		this.start = localDateValue(addDays(new Date(`${this.start}T00:00:00`), days));
+		this.end = localDateValue(addDays(new Date(`${this.end}T00:00:00`), days));
 		await this.load();
 	};
 

@@ -16,10 +16,12 @@ const selected = (context: CommandContext) =>
 export const KEYBOARD_COMMANDS: readonly CommandDefinition[] = [
 	{
 		id: "goBack",
-		label: () => "前の画面へ戻る",
+		label: () => "アウトラインに戻る",
 		shortcut: "Alt+ArrowLeft",
 		availability: (context) =>
-			context.canGoBack ? ready(context) : { enabled: false, reason: "戻る画面がありません。" },
+			context.canGoBack
+				? ready(context)
+				: { enabled: false, reason: "アウトラインを表示しています。" },
 	},
 	{ id: "showOutline", label: () => "Outlineへ移動", chordKey: "o", availability: ready },
 	{ id: "showTree", label: () => "Treeへ移動", chordKey: "t", availability: ready },

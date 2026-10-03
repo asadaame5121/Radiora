@@ -75,7 +75,11 @@ Deno.test("branch rewrite and link commands remain keyboard-first and confirmati
 	);
 	assert(rewrite.includes("api.rewriteAsNewBranch("));
 	assert(rewrite.includes("branchId: result.branch.id"));
-	assert(rewrite.includes("await this.ports.reload(placement.id, commitView)"));
+	assert(
+		rewrite.includes(
+			'this.ports.navigation.navigate({ view: "outline", occurrenceId: placement.id }, origin)',
+		),
+	);
 	assert(rewrite.includes('"confirmed"'));
 	assert(confirmation.includes("rewriteInput?.focus()"));
 	assert(confirmation.includes('event.key === "Enter" && rewriteBranchName.trim()'));

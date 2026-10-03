@@ -2,16 +2,18 @@ import type { OutlineSnapshot } from "../domain/models.ts";
 import type { RadioraBindings } from "../shared/bindings.ts";
 import type { PendingConfirmation } from "./confirmation_controller.svelte.ts";
 
+import type { ScreenNavigator } from "./screen_navigation_destination.ts";
+
 type RewriteConfirmation = Extract<PendingConfirmation, { action: "rewrite" }>;
 
-/** Owns branch creation and placement; screen history commits with accepted selection. */
+/** Owns branch creation and placement; the common gateway accepts the resulting destination. */
 export class BranchRewriteController {
 	constructor(
 		private readonly ports: {
 			api: Pick<RadioraBindings, "rewriteAsNewBranch" | "createOccurrence">;
 			getSnapshot(): OutlineSnapshot;
-			prepareView(): () => void;
-			reload(focusId: string, afterSelection: () => void): Promise<unknown>;
+			navigation: ScreenNavigator;
+			reload(): Promise<unknown>;
 			refreshHistory(workId: string): Promise<void>;
 		},
 	) {}
@@ -21,7 +23,7 @@ export class BranchRewriteController {
 			item.id === confirmation.occurrenceId
 		);
 		if (!source) throw new Error(`別稿の配置元が見つかりません: ${confirmation.occurrenceId}`);
-		const commitView = this.ports.prepareView();
+		const origin = this.ports.navigation.origin;
 		const result = await this.ports.api.rewriteAsNewBranch(
 			confirmation.sourceBranchId,
 			branchName,
@@ -35,7 +37,11 @@ export class BranchRewriteController {
 			afterId: source.id,
 			contextualHeading: result.branch.name,
 		});
-		await this.ports.reload(placement.id, commitView);
-		await this.ports.refreshHistory(confirmation.workId);
+		if (await this.ports.reload() === false) return;
+		if (
+			await this.ports.navigation.navigate({ view: "outline", occurrenceId: placement.id }, origin)
+		) {
+			await this.ports.refreshHistory(confirmation.workId);
+		}
 	}
 }
