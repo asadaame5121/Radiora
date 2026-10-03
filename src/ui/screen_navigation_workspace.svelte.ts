@@ -123,11 +123,14 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 			requestCurrent() && prepared.originSelectedId === this.ports.selection.current();
 		const item = prepared.snapshot.items.find((value) => value.id === prepared.selectedId) ?? null;
 		if (!await this.ports.selection.guard(item, current) || !current()) return false;
+		if (!await this.ports.editor.save() || !current()) return false;
 		const { destination } = prepared;
 		if (destination.view === "outline" || destination.occurrenceId !== undefined) {
 			if (!await this.refreshGuardedDestination(prepared, item, current)) return false;
 		}
 		prepared.publishScreen = await this.ports.screens.prepare(destination);
+		if (!current()) return false;
+		if (!await this.ports.editor.save() || !current()) return false;
 		return current();
 	}
 

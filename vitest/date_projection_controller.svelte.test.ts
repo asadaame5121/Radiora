@@ -1,14 +1,12 @@
 import { expect, test, vi } from "vitest";
 import type { DateProjection, DateRange } from "../src/services/date_projection.ts";
+import { dateRangeFromInputs } from "../src/ui/calendar_display.ts";
 import { DateProjectionController } from "../src/ui/date_projection_controller.svelte.ts";
 import { navigationFixture } from "./navigation_fixture.ts";
 
 vi.mock("svelte", () => ({ tick: async () => undefined }));
 
-const INITIAL = {
-	startInclusive: "2026-09-28T00:00:00.000Z",
-	endExclusive: "2026-09-29T00:00:00.000Z",
-};
+const INITIAL = dateRangeFromInputs("2026-09-28", "2026-09-29");
 function projection(range: DateRange): DateProjection {
 	return { range, created: [], updated: [] };
 }
@@ -82,7 +80,9 @@ test("custom input remains a draft on failure and does not relabel the accepted 
 	expect(s.dates.projection?.range).toEqual(INITIAL);
 	expect([s.dates.start, s.dates.end]).toEqual(["2026-10-01", "2026-10-05"]);
 	await s.dates.load();
-	expect(s.dates.projection?.range.startInclusive).toBe("2026-10-01T00:00:00.000Z");
+	expect(s.dates.projection?.range.startInclusive).toBe(
+		dateRangeFromInputs("2026-10-01", "2026-10-05").startInclusive,
+	);
 });
 
 for (const action of ["openToday", "showWeek"] as const) {

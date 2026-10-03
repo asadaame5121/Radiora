@@ -404,6 +404,63 @@ test("manuscript display and caret survive leaving and resuming Outline", async 
 	).toEqual([3, 7, "backward"]);
 });
 
+test("F1 navigation preserves manuscript edits entered while async save is in-flight", async ({ page }) => {
+	let currentText = "mock-7 editable text";
+	let saveBlocked: (() => void) | null = null;
+	const saveGate = new Promise<void>((resolve) => {
+		saveBlocked = resolve;
+	});
+
+	await page.route("**/api/rpc/updateItemText", async (route) => {
+		const request = route.request().postDataJSON() as { args?: string[] };
+		if (request?.args?.[1]) {
+			currentText = request.args[1];
+		}
+		await saveGate;
+		await route.fulfill({ json: { result: null } });
+	});
+	await page.route("**/api/rpc/listOutline", (route) => {
+		const updatedItems = items.map((item) =>
+			item.id === "mock-7" ? { ...item, text: currentText } : item
+		);
+		return route.fulfill({
+			json: { result: { items: updatedItems, links: [], knots: [], stashItemIds: [] } },
+		});
+	});
+
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+	await page.getByRole("button", { name: "原稿として開く", exact: true }).click();
+	const manuscript = page.locator(".long-form-textarea");
+	await expect(manuscript).toBeFocused();
+
+	// Type initial text in manuscript
+	await manuscript.fill("Text A");
+	await manuscript.focus();
+
+	// Press F1 to start navigation to Help
+	await page.keyboard.press("F1");
+
+	// While save is in-flight behind saveGate, type additional text
+	await manuscript.evaluate((el: HTMLTextAreaElement) => {
+		el.value = "Text A and B";
+		el.dispatchEvent(new Event("input", { bubbles: true }));
+	});
+
+	// Unblock save
+	saveBlocked?.();
+
+	// Help panel opens
+	await expect(page.locator(".help-panel")).toBeVisible();
+
+	// Click Back to Outline
+	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+
+	// Manuscript re-mounts and retains Text A and B
+	await expect(manuscript).toBeFocused();
+	await expect(manuscript).toHaveValue("Text A and B");
+});
+
 test("failed Outline retrieval leaves Help open and a subsequent resume succeeds", async ({ page }) => {
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
