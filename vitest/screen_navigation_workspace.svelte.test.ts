@@ -49,6 +49,8 @@ function setup() {
 	const restorePosition = vi.fn(async () => undefined);
 	const save = vi.fn(async () => true);
 	const readOutline = vi.fn(async () => snapshot);
+	const flush = vi.fn(async () => undefined);
+	const reportError = vi.fn();
 	const workspace = new ScreenNavigationWorkspace({
 		outline: {
 			captureBrowsing: () => browsing,
@@ -73,14 +75,16 @@ function setup() {
 			commit: (id) => selected = id,
 			cancelPending: vi.fn(),
 		},
-		editor: { save, flush: vi.fn(async () => undefined) },
+		editor: { save, flush },
 		screens: { prepare: prepareScreen, focusTree: vi.fn() },
-		reportError: vi.fn(),
+		reportError,
 	});
 	return {
 		workspace,
 		guard,
 		save,
+		flush,
+		reportError,
 		readOutline,
 		restorePosition,
 		presentation,
@@ -231,4 +235,74 @@ test("a rejected selection does not prepare or publish the destination feature",
 	expect(s.workspace.view).toBe("outline");
 	expect(s.prepareScreen).not.toHaveBeenCalled();
 	expect(s.presentation).not.toHaveBeenCalled();
+});
+
+test.each(["selection", "refresh", "screen"] as const)(
+	"navigation waits for inline edits queued during %s preparation",
+	async (phase) => {
+		const s = setup();
+		let resumePreparation!: () => void;
+		const preparation = new Promise<void>((resolve) => resumePreparation = resolve);
+		let saveDraft!: () => void;
+		const saving = new Promise<void>((resolve) => saveDraft = resolve);
+		let dirty = false;
+		s.flush.mockImplementation(async () => {
+			if (dirty) {
+				await saving;
+				dirty = false;
+			}
+		});
+		if (phase === "selection") {
+			s.guard.mockImplementationOnce(async () => {
+				await preparation;
+				return true;
+			});
+		} else if (phase === "refresh") {
+			s.readOutline.mockImplementationOnce(async () => {
+				await preparation;
+				return s.snapshot();
+			});
+		} else {
+			s.prepareScreen.mockImplementationOnce(async () => {
+				await preparation;
+				return s.presentation;
+			});
+		}
+		const navigation = s.workspace.navigate({ view: "outline", occurrenceId: "other" });
+		await vi.waitFor(() => {
+			const pending = phase === "selection"
+				? s.guard
+				: phase === "refresh"
+				? s.readOutline
+				: s.prepareScreen;
+			expect(pending).toHaveBeenCalled();
+		});
+		dirty = true;
+		resumePreparation();
+		await vi.waitFor(() => expect(s.flush).toHaveBeenCalledTimes(2));
+		expect(s.selected()).toBe("last");
+		expect(s.presentation).not.toHaveBeenCalled();
+		expect(s.workspace.pendingView).toBe("outline");
+		saveDraft();
+		expect(await navigation).toBe(true);
+		expect(dirty).toBe(false);
+		expect(s.selected()).toBe("other");
+	},
+);
+
+test("late inline save failure leaves the screen and selection intact and permits retry", async () => {
+	const s = setup();
+	const error = new Error("inline save failed");
+	s.prepareScreen.mockImplementationOnce(async () => {
+		s.flush.mockRejectedValueOnce(error);
+		return s.presentation;
+	});
+	expect(await s.workspace.navigate({ view: "help", occurrenceId: "other" })).toBe(false);
+	expect(s.workspace.view).toBe("outline");
+	expect(s.selected()).toBe("last");
+	expect(s.presentation).not.toHaveBeenCalled();
+	expect(s.reportError).toHaveBeenCalledWith(error);
+	expect(s.workspace.pendingView).toBeNull();
+	expect(await s.workspace.navigate({ view: "help", occurrenceId: "other" })).toBe(true);
+	expect(s.workspace.view).toBe("help");
 });

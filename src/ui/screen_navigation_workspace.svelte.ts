@@ -131,6 +131,8 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 		prepared.publishScreen = await this.ports.screens.prepare(destination);
 		if (!current()) return false;
 		if (!await this.ports.editor.save() || !current()) return false;
+		// Inline editing remains available while guards and destination preparation are pending.
+		await this.ports.editor.flush();
 		return current();
 	}
 

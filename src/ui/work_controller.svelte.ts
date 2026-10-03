@@ -121,13 +121,14 @@ export function createWorkController(ports: WorkControllerPorts) {
 					parentId: null,
 					afterId: roots.at(-1)?.id ?? null,
 				});
+				ports.clearQuickCaptureInput?.();
 				if (await ports.reload() === false) return;
 				await ports.navigation.navigate({ view: "outline", occurrenceId: created.id }, origin);
 			} else {
 				await ports.api.quickCapture(text);
+				ports.clearQuickCaptureInput?.();
 				await Promise.all([ports.reload(), loadUnplacedWorks()]);
 			}
-			ports.clearQuickCaptureInput?.();
 		} catch (cause) {
 			report(cause);
 		} finally {
