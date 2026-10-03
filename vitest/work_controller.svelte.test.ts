@@ -21,21 +21,17 @@ function candidate(firstId: string, secondId: string, label: string): DuplicateC
 }
 
 function createPorts(apiOverrides: Partial<WorkApiPort>): WorkControllerPorts {
-	const ports: WorkControllerPorts = {
+	return {
 		api: apiOverrides as WorkApiPort,
 		getSnapshot: () => EMPTY_SNAPSHOT,
-		reload: vi.fn(async (_focusId?: string, afterSelection?: () => void) => {
-			afterSelection?.();
-			return true;
-		}),
-		navigation: { origin: 0, navigate: vi.fn(async () => true) },
+		reload: vi.fn(async () => true),
+		openView: vi.fn(),
 		selectOccurrence: vi.fn(),
 		requestConfirmation: vi.fn(async () => {
 			// intentional no-op
 		}),
 		reportError: vi.fn(),
 	};
-	return ports;
 }
 
 describe("work controller", () => {
@@ -113,10 +109,7 @@ describe("work controller", () => {
 	describe("quick capture", () => {
 		test("captures to root with afterId from existing roots", async () => {
 			const createItem = vi.fn().mockResolvedValue({ id: "item-new", workId: "work-new" });
-			const reload = vi.fn(async (_focusId?: string, afterSelection?: () => void) => {
-				afterSelection?.();
-				return true;
-			});
+			const reload = vi.fn().mockResolvedValue(true);
 			const openView = vi.fn();
 			const clearQuickCaptureInput = vi.fn();
 			const snapshot: OutlineSnapshot = {
@@ -156,7 +149,7 @@ describe("work controller", () => {
 			const ports = createPorts({ createItem });
 			ports.getSnapshot = () => snapshot;
 			ports.reload = reload;
-			ports.navigation.navigate = openView.mockResolvedValue(true);
+			ports.openView = openView;
 			ports.clearQuickCaptureInput = clearQuickCaptureInput;
 
 			const controller = createWorkController(ports);
@@ -167,11 +160,8 @@ describe("work controller", () => {
 				parentId: null,
 				afterId: "root-2",
 			});
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "outline" }),
-				0,
-			);
-			expect(reload).toHaveBeenCalledWith();
+			expect(openView).toHaveBeenCalledWith("outline");
+			expect(reload).toHaveBeenCalledWith("item-new");
 			expect(clearQuickCaptureInput).toHaveBeenCalled();
 			expect(controller.quickCaptureSubmitting).toBe(false);
 		});
@@ -229,44 +219,35 @@ describe("work controller", () => {
 			const listUnplacedWorks = vi.fn().mockResolvedValue([]);
 			const openView = vi.fn();
 			const ports = createPorts({ listUnplacedWorks });
-			ports.navigation.navigate = openView.mockResolvedValue(true);
+			ports.openView = openView;
 
 			const controller = createWorkController(ports);
-			(await controller.prepareScreen("unplaced"))();
 			await controller.openUnplaced();
 
 			expect(listUnplacedWorks).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "unplaced" }),
-			);
+			expect(openView).toHaveBeenCalledWith("unplaced");
 		});
 
-		test("placeUnplaced commits outline through the accepted reload selection", async () => {
+		test("placeUnplaced places work, reloads, opens outline, and selects item", async () => {
 			const createdItem = { id: "occ-1", workId: "w-1" };
 			const placeUnplacedWork = vi.fn().mockResolvedValue(createdItem);
 			const listUnplacedWorks = vi.fn().mockResolvedValue([]);
-			const reload = vi.fn(async (_focusId?: string, afterSelection?: () => void) => {
-				afterSelection?.();
-				return true;
-			});
+			const reload = vi.fn().mockResolvedValue(true);
 			const openView = vi.fn();
 			const selectOccurrence = vi.fn();
 			const ports = createPorts({ placeUnplacedWork, listUnplacedWorks });
 			ports.reload = reload;
-			ports.navigation.navigate = openView.mockResolvedValue(true);
+			ports.openView = openView;
 			ports.selectOccurrence = selectOccurrence;
 
 			const controller = createWorkController(ports);
 			await controller.placeUnplaced("w-1", "parent-1");
 
 			expect(placeUnplacedWork).toHaveBeenCalledWith({ workId: "w-1", parentId: "parent-1" });
-			expect(reload).toHaveBeenCalledWith();
+			expect(reload).toHaveBeenCalledWith("occ-1");
 			expect(listUnplacedWorks).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "outline" }),
-				0,
-			);
-			expect(selectOccurrence).not.toHaveBeenCalled();
+			expect(openView).toHaveBeenCalledWith("outline");
+			expect(selectOccurrence).toHaveBeenCalledWith("occ-1");
 		});
 
 		test("linkUnplaced creates link with specified direction and type, then clears target", async () => {
@@ -321,7 +302,8 @@ describe("work controller", () => {
 			ports.reportError = reportError;
 
 			const controller = createWorkController(ports);
-			await expect(controller.prepareScreen("unplaced")).rejects.toThrow(error);
+			await controller.openUnplaced();
+			expect(reportError).toHaveBeenCalledWith(error);
 
 			await controller.placeUnplaced("w-1", null);
 			expect(reportError).toHaveBeenCalledWith(error);
@@ -350,16 +332,13 @@ describe("work controller", () => {
 			const listStubs = vi.fn().mockResolvedValue([]);
 			const openView = vi.fn();
 			const ports = createPorts({ listStubs });
-			ports.navigation.navigate = openView.mockResolvedValue(true);
+			ports.openView = openView;
 
 			const controller = createWorkController(ports);
-			(await controller.prepareScreen("stubs"))();
 			await controller.openStubs();
 
 			expect(listStubs).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "stubs" }),
-			);
+			expect(openView).toHaveBeenCalledWith("stubs");
 		});
 
 		test("createStubFromList creates stub and reloads stubs", async () => {
@@ -430,7 +409,8 @@ describe("work controller", () => {
 			ports.reportError = reportError;
 
 			const controller = createWorkController(ports);
-			await expect(controller.prepareScreen("stubs")).rejects.toThrow(error);
+			await controller.openStubs();
+			expect(reportError).toHaveBeenCalledWith(error);
 
 			await controller.createStubFromList();
 			expect(reportError).toHaveBeenCalledWith(error);
@@ -457,16 +437,13 @@ describe("work controller", () => {
 			const listDuplicateCandidates = vi.fn().mockResolvedValue([]);
 			const openView = vi.fn();
 			const ports = createPorts({ listDuplicateCandidates });
-			ports.navigation.navigate = openView.mockResolvedValue(true);
+			ports.openView = openView;
 
 			const controller = createWorkController(ports);
-			(await controller.prepareScreen("duplicates"))();
 			await controller.openDuplicates();
 
 			expect(listDuplicateCandidates).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "duplicates" }),
-			);
+			expect(openView).toHaveBeenCalledWith("duplicates");
 		});
 
 		test("createDuplicateCandidateLink creates link, excludes candidate, and reloads", async () => {
@@ -549,7 +526,8 @@ describe("work controller", () => {
 			ports.reportError = reportError;
 
 			const controller = createWorkController(ports);
-			await expect(controller.prepareScreen("duplicates")).rejects.toThrow(error);
+			await controller.openDuplicates();
+			expect(reportError).toHaveBeenCalledWith(error);
 
 			await controller.createDuplicateCandidateLink(candidate("a", "b", "reason"), "RELATED");
 			expect(reportError).toHaveBeenCalledWith(error);
@@ -564,16 +542,13 @@ describe("work controller", () => {
 			const listTrash = vi.fn().mockResolvedValue([]);
 			const openView = vi.fn();
 			const ports = createPorts({ listTrash });
-			ports.navigation.navigate = openView.mockResolvedValue(true);
+			ports.openView = openView;
 
 			const controller = createWorkController(ports);
-			(await controller.prepareScreen("trash"))();
 			await controller.openTrash();
 
 			expect(listTrash).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "trash" }),
-			);
+			expect(openView).toHaveBeenCalledWith("trash");
 		});
 
 		test("restoreTrash restores work, reloads trash and outline", async () => {
@@ -703,7 +678,8 @@ describe("work controller", () => {
 			ports.reportError = reportError;
 
 			const controller = createWorkController(ports);
-			await expect(controller.prepareScreen("trash")).rejects.toThrow(error);
+			await controller.openTrash();
+			expect(reportError).toHaveBeenCalledWith(error);
 
 			await controller.restoreTrash("w-1");
 			expect(reportError).toHaveBeenCalledWith(error);

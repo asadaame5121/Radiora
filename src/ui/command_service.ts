@@ -15,7 +15,6 @@ export interface CommandContext {
 	isHoisted: boolean;
 	isOutline?: boolean;
 	hasReturnPosition?: boolean;
-	canGoBack?: boolean;
 }
 
 export type CommandId =
@@ -33,7 +32,6 @@ export type CommandId =
 	| "showOutline"
 	| "showTree"
 	| "returnToEditor"
-	| "goBack"
 	| "focusSearch"
 	| "focusQuickCapture"
 	| "toggleSidebar"

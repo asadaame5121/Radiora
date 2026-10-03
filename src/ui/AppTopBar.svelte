@@ -1,5 +1,4 @@
 <script lang="ts">
-	import BackButton from "./BackButton.svelte";
 	import type { Bookmark, OutlineItem, SearchResult } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import WorkingCopySaveStatus from "./WorkingCopySaveStatus.svelte";
@@ -11,8 +10,6 @@
 	let {
 		viewMode,
 		viewModeLabel,
-		canGoBack = false,
-		onGoBack = () => undefined,
 		quickCaptureText,
 		quickCaptureDestinationLabel,
 		quickCaptureSubmitting,
@@ -43,8 +40,6 @@
 	}: {
 		viewMode: string;
 		viewModeLabel: string;
-		canGoBack?: boolean;
-		onGoBack?: () => void;
 		quickCaptureText: string;
 		quickCaptureDestinationLabel: string;
 		quickCaptureSubmitting: boolean;
@@ -79,8 +74,6 @@
 
 <header class="top-bar">
 	<div class="current-location">
-		<div class="location-navigation">
-			<BackButton enabled={canGoBack} onBack={onGoBack} />
 		<fieldset class="view-switcher" aria-label="アウトラインとツリー">
 			<button
 				type="button"
@@ -95,7 +88,6 @@
 				onclick={() => onSetViewMode("globalLineage")}
 			>ツリー</button>
 		</fieldset>
-		</div>
 		{#if viewMode !== "outline" && viewMode !== "globalLineage"}
 			<small class="current-location__status">表示中: {viewModeLabel}</small>
 		{/if}
@@ -190,7 +182,6 @@
 </header>
 
 <style>
-	.location-navigation { display: flex; align-items: center; gap: 6px; }
 	.top-bar {
 		grid-column: 2;
 		grid-row: 1;
@@ -198,7 +189,7 @@
 		z-index: 20;
 		height: 66px;
 		display: grid;
-		grid-template-columns: max-content minmax(160px, 1fr) auto;
+		grid-template-columns: minmax(190px, 230px) minmax(280px, 680px) minmax(180px, auto);
 		justify-content: stretch;
 		align-items: center;
 		gap: 16px;
@@ -220,8 +211,7 @@
 	.view-switcher {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		width: auto;
-		flex: 0 0 auto;
+		width: 100%;
 		min-width: 180px;
 		padding: 3px;
 		border: 1px solid var(--border);
@@ -365,7 +355,7 @@
 	}
 	@media (max-width: 1120px) {
 		.top-bar {
-			grid-template-columns: max-content minmax(160px, 1fr) auto;
+			grid-template-columns: minmax(180px, 210px) minmax(260px, 1fr) auto;
 			padding-inline: 12px;
 			gap: 8px;
 		}
@@ -375,11 +365,8 @@
 	}
 	@media (max-width: 820px) {
 		.top-bar {
-			grid-template-columns: minmax(0, 1fr) auto;
-			height: auto;
-			padding-block: 8px;
+			grid-template-columns: minmax(170px, 190px) minmax(220px, 1fr) auto;
 		}
-		.omniwindow { grid-column: 1 / -1; grid-row: 2; }
 		.current-location__status {
 			display: none;
 		}

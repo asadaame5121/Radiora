@@ -44,12 +44,11 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 		app.indexOf("async function loadEmergence"),
 	);
 	const browsingControls = app.slice(
-		app.indexOf("function commitOccurrenceSelection"),
+		app.indexOf("function selectOccurrence"),
 		app.indexOf("async function createRoot"),
 	);
 
-	assert(selectItem.includes("expandedIds: ancestorIds"));
-	assert(selectItem.includes("screenNavigation.navigate"));
+	assert(selectItem.includes("transientExpandedIds = ancestorIds"));
 	assertFalse(selectItem.includes("api.setCollapsed"));
 	assert(browsingControls.includes("navigationController.browseToOccurrence(snapshot, id)"));
 	assert(browsingControls.includes("navigationController.activateBrowsingPane(paneId, snapshot)"));
@@ -75,7 +74,7 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 	assertFalse(controller.includes("api."));
 });
 
-Deno.test("loading a focus target commits accepted navigation before restoring editor focus", async () => {
+Deno.test("loading a focus target selects it before restoring editor focus", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const load = app.slice(
 		app.indexOf("async function load"),
@@ -84,6 +83,6 @@ Deno.test("loading a focus target commits accepted navigation before restoring e
 
 	assertMatch(
 		load,
-		/if \(focusId\) \{\s*selectOccurrence\(focusId, \(\) => \{\s*void tick\(\)\.then\(\(\) => requestFocus\(focusId\)\);\s*\}\);/,
+		/if \(focusId\) \{\s*selectOccurrence\(focusId, \(\) => void tick\(\)\.then\(\(\) => requestFocus\(focusId\)\)\);/,
 	);
 });

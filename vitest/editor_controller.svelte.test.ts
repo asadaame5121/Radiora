@@ -53,7 +53,9 @@ function createController(overrides?: {
 		getSelectedId: () => overrides?.selectedId ?? null,
 		reload: vi.fn().mockResolvedValue(true),
 		loadUnplacedWorks: vi.fn().mockResolvedValue(undefined),
-		navigation: { origin: 0, navigate: vi.fn(async () => true) },
+		openNavigationTarget: vi.fn().mockResolvedValue(undefined),
+		loadRevisions: vi.fn().mockResolvedValue(undefined),
+		openRevisionComparison: vi.fn(),
 		requestFocus: vi.fn(),
 		findTextarea: overrides?.findTextarea ?? vi.fn().mockReturnValue(null),
 		reportError: vi.fn(),
@@ -737,10 +739,7 @@ describe("editor controller", () => {
 				"work-target",
 			);
 
-			expect(ports.navigation.navigate).toHaveBeenCalledWith(
-				expect.objectContaining({ occurrenceId: resolution.navigationTarget.occurrenceId }),
-				0,
-			);
+			expect(ports.openNavigationTarget).toHaveBeenCalledWith(resolution.navigationTarget);
 			expect(controller.internalReferenceNotice).toBe("");
 		});
 
@@ -770,15 +769,9 @@ describe("editor controller", () => {
 				"rev-1",
 			);
 
-			expect(ports.navigation.navigate).toHaveBeenCalledWith(
-				expect.objectContaining({ occurrenceId: resolution.navigationTarget.occurrenceId }),
-				0,
-			);
-			expect(ports.navigation.navigate).toHaveBeenCalledWith({
-				view: "comparison",
-				occurrenceId: "occ-target",
-				comparison: { kind: "revision", revisionId: "rev-1" },
-			}, 0);
+			expect(ports.openNavigationTarget).toHaveBeenCalledWith(resolution.navigationTarget);
+			expect(ports.loadRevisions).toHaveBeenCalledWith("work-target");
+			expect(ports.openRevisionComparison).toHaveBeenCalledWith("rev-1");
 		});
 
 		test("openEditorInternalReference parses radiora URL", async () => {
@@ -800,10 +793,7 @@ describe("editor controller", () => {
 			});
 
 			await controller.openEditorInternalReference("radiora://work/w-url");
-			expect(ports.navigation.navigate).toHaveBeenCalledWith(
-				expect.objectContaining({ occurrenceId: resolution.navigationTarget.occurrenceId }),
-				0,
-			);
+			expect(ports.openNavigationTarget).toHaveBeenCalledWith(resolution.navigationTarget);
 		});
 
 		test("loadInternalReferenceBacklinks loads backlinks and clearBacklinks clears them", async () => {
@@ -881,10 +871,7 @@ describe("editor controller", () => {
 				target: { scope: "work", workId: "work-target" },
 			});
 
-			expect(ports.navigation.navigate).toHaveBeenCalledWith(
-				expect.objectContaining({ occurrenceId: resolution.navigationTarget.occurrenceId }),
-				0,
-			);
+			expect(ports.openNavigationTarget).toHaveBeenCalledWith(resolution.navigationTarget);
 		});
 
 		test("openInternalReference handles unresolved states and errors", async () => {

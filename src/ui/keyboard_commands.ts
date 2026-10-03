@@ -14,15 +14,6 @@ const selected = (context: CommandContext) =>
 		: outline(context);
 
 export const KEYBOARD_COMMANDS: readonly CommandDefinition[] = [
-	{
-		id: "goBack",
-		label: () => "アウトラインに戻る",
-		shortcut: "Alt+ArrowLeft",
-		availability: (context) =>
-			context.canGoBack
-				? ready(context)
-				: { enabled: false, reason: "アウトラインを表示しています。" },
-	},
 	{ id: "showOutline", label: () => "Outlineへ移動", chordKey: "o", availability: ready },
 	{ id: "showTree", label: () => "Treeへ移動", chordKey: "t", availability: ready },
 	{

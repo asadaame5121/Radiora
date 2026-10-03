@@ -24,7 +24,7 @@ Deno.test("global and selected Work lineage have separate UI responsibilities", 
 	assert(work.includes("projection.branches"));
 	assert(work.includes("revision.parentRevisionIds"));
 	assert(work.includes("← アウトラインに戻る"));
-	assert(app.includes('onBack={() => { void screenNavigation.navigate({ view: "outline" }); }}'));
+	assert(app.includes('onBack={() => { viewMode = "outline"; }}'));
 	assertFalse(work.includes("PhylogeneticTree"));
 	assertFalse(work.includes("semanticLink"));
 });
@@ -45,10 +45,8 @@ Deno.test("global tree clears selection, opens real nodes, and restores its proj
 	assert(global.includes("{onOpen}"));
 	assert(app.includes("function openTreeOccurrence"));
 	assert(app.includes("openOutlineOccurrence(id"));
-	assert(app.includes('void screenNavigation.navigate({ view: "outline" })'));
-	assert(
-		app.includes('screenNavigation.navigate({ view: "outline", occurrenceId: id, expandedIds })'),
-	);
+	assert(app.includes('viewMode = "outline"'));
+	assert(app.includes("requestFocus(id)"));
 });
 
 Deno.test("global tree preserves Work-based selection and closure highlighting", async () => {

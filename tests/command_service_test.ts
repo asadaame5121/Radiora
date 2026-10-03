@@ -83,7 +83,6 @@ Deno.test("command metadata covers the shared primary actions", () => {
 			"createLink",
 			"runQuery",
 			"saveQuery",
-			"goBack",
 			"showOutline",
 			"showTree",
 			"returnToEditor",

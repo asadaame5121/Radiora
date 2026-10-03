@@ -58,18 +58,17 @@
 <section class="outline-panel date-projection" aria-label={vocabulary.today}>
 	<div class="section-title"><span>{vocabulary.today}</span></div>
 	<div class="date-controls">
-		<button onclick={() => onMoveDateRange(-1)} disabled={loading}>前日</button>
-		<button onclick={() => onMoveDateRange(1)} disabled={loading}>翌日</button>
-		<button onclick={onShowWeek} disabled={loading}>週</button>
-		<label>開始 <input type="date" bind:value={dateStart} disabled={loading} /></label>
-		<label>終了（含まない） <input type="date" bind:value={dateEnd} disabled={loading} /></label>
-		<button onclick={onLoad} disabled={loading}>表示</button>
+		<button onclick={() => onMoveDateRange(-1)}>前日</button>
+		<button onclick={() => onMoveDateRange(1)}>翌日</button>
+		<button onclick={onShowWeek}>週</button>
+		<label>開始 <input type="date" bind:value={dateStart} /></label>
+		<label>終了（含まない） <input type="date" bind:value={dateEnd} /></label>
+		<button onclick={onLoad}>表示</button>
 	</div>
 	<OutlineFilterBar bind:outlineFilter onClear={onClearFilter} />
 	{#if loading}
 		<p class="empty">読み込み中…</p>
 	{:else if projection}
-		<p class="hint date-result-range">結果の期間：{formatCreatedAt(projection.range.startInclusive)} 〜 {formatCreatedAt(projection.range.endExclusive)}（終了日は含まない）</p>
 		<section aria-label="この期間に作成">
 			<h2>
 				この期間に作成 <small>{filteredCreated.length}件{#if filteredCreated.length !== projection.created.length} / {projection.created.length}件{/if}</small>

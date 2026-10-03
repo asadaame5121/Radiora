@@ -54,9 +54,7 @@ export class KeyboardController {
 	};
 
 	handle = (event: KeyboardEvent): boolean => {
-		const composing = event.isComposing || event.keyCode === IME_PROCESS_KEY_CODE;
-		if (this.reserveBrowserBack(event, composing)) return true;
-		if (composing) {
+		if (event.isComposing || event.keyCode === IME_PROCESS_KEY_CODE) {
 			this.cancel(false);
 			return false;
 		}
@@ -76,21 +74,6 @@ export class KeyboardController {
 		else this.chooseKey(event);
 		return true;
 	};
-
-	private reserveBrowserBack(event: KeyboardEvent, composing: boolean): boolean {
-		// Reserve browser Back before IME, dialog, or startup guards can skip handling.
-		if (
-			event.key !== "ArrowLeft" || !event.altKey || event.ctrlKey || event.shiftKey ||
-			event.metaKey
-		) {
-			return false;
-		}
-		event.preventDefault();
-		event.stopImmediatePropagation();
-		if (composing) this.cancel(false);
-		else if (!event.repeat) void this.choose("goBack").catch(this.ports.reportError);
-		return true;
-	}
 
 	private toggleNavigation(): void {
 		if (this.open) {

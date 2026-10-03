@@ -7,8 +7,7 @@ import {
 } from "../services/working_copy_autosave.ts";
 import type { InternalReferenceBacklink } from "../services/internal_reference_service.ts";
 import { parseMarkdownCandidates } from "../services/markdown_parser.ts";
-import type { ScreenNavigator } from "./screen_navigation_destination.ts";
-import { navigationUiState } from "./navigation_state.ts";
+import type { NavigationTarget } from "../domain/models.ts";
 import { createEditorCompletionController } from "./editor_completion_controller.svelte.ts";
 import { applyBranchWorkingCopyText } from "./editor_working_copy.ts";
 
@@ -29,7 +28,9 @@ export type EditorControllerPorts = {
 	getSelectedId(): string | null;
 	reload(focusId?: string): Promise<unknown>;
 	loadUnplacedWorks(): Promise<void>;
-	navigation: ScreenNavigator;
+	openNavigationTarget(target: NavigationTarget): Promise<void>;
+	loadRevisions(workId: string): Promise<void>;
+	openRevisionComparison(revisionId: string): void;
 	requestFocus(itemId: string, caretOffset?: number): void;
 	findTextarea(itemId: string): HTMLTextAreaElement | null;
 	reportError(cause: unknown): void;
@@ -89,10 +90,8 @@ export function createEditorController(ports: EditorControllerPorts) {
 		id: string,
 		start?: number,
 	): Promise<void> {
-		const origin = ports.navigation.origin;
 		try {
 			const resolutions = await ports.api.resolveInternalReferences(markdown);
-			if (ports.navigation.origin !== origin) return;
 			const resolution = resolutions.find((candidate) =>
 				candidate.reference.scope === scope && candidate.reference.id === id &&
 				(start === undefined || candidate.reference.range.start === start)
@@ -112,19 +111,12 @@ export function createEditorController(ports: EditorControllerPorts) {
 						`固定${ports.vocabulary.revision}は存在しますが、所有${ports.vocabulary.work}に表示可能な${ports.vocabulary.occurrence}がありません。`;
 					return;
 				}
-				await ports.navigation.navigate({
-					view: "comparison",
-					occurrenceId: resolution.navigationTarget.occurrenceId,
-					comparison: { kind: "revision", revisionId: resolution.revision.id },
-				}, origin);
+				await ports.openNavigationTarget(resolution.navigationTarget);
+				await ports.loadRevisions(resolution.workId!);
+				ports.openRevisionComparison(resolution.revision.id);
 				return;
 			}
-			const target = navigationUiState(resolution.navigationTarget);
-			await ports.navigation.navigate({
-				view: "outline",
-				occurrenceId: target.selectedOccurrenceId,
-				expandedIds: target.temporaryExpandedOccurrenceIds,
-			}, origin);
+			await ports.openNavigationTarget(resolution.navigationTarget);
 		} catch (cause) {
 			internalReferenceNotice = ports.errorMessage(cause);
 		}
@@ -185,12 +177,6 @@ export function createEditorController(ports: EditorControllerPorts) {
 		hasUnsavedChanges: () => autosave.hasUnsavedChanges(),
 		drafts: () => autosave.drafts(),
 		flushAutosave: (workId?: string) => autosave.flush(workId),
-		flushForNavigation: async (): Promise<void> => {
-			await autosave.flush();
-			if (autosave.hasUnsavedChanges()) {
-				throw new Error("本文の保存に失敗したため、画面を移動できません。");
-			}
-		},
 		flushResume: () => resumeAutosave.flush(),
 		retryAutosave: () => autosave.retry(),
 		updateLocalText,

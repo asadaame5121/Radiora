@@ -28,7 +28,7 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 	assertMatch(completion, /listInternalReferenceCompletions/);
 	assertMatch(controller, /resolveInternalReferences/);
 	assertMatch(controller, /resolution\.status !== "resolved"/);
-	assertMatch(controller, /revisionId: resolution\.revision\.id/);
+	assertMatch(controller, /openRevisionComparison\(resolution\.revision\.id\)/);
 	assertMatch(controller, /listInternalReferenceBacklinks\("work", workId\)/);
 	assertMatch(app, /editorController\.updateEditorSelection/);
 	assertMatch(outlineRowItem, /vocabulary\.internalReference/);

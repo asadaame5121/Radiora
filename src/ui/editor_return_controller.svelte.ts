@@ -1,5 +1,4 @@
 import { tick } from "svelte";
-import type { ScreenNavigator } from "./screen_navigation_destination.ts";
 
 export interface EditorPosition {
 	itemId: string;
@@ -9,22 +8,17 @@ export interface EditorPosition {
 	scrollTop: number;
 	scrollLeft: number;
 	panelScrollTop: number;
-	direction?: "forward" | "backward" | "none";
 }
 
-export function captureEditorPosition(
-	itemId: string,
-	hoistId: string | null,
-	textarea = document.querySelector<HTMLTextAreaElement>(
+export function captureEditorPosition(itemId: string, hoistId: string | null): EditorPosition {
+	const textarea = document.querySelector<HTMLTextAreaElement>(
 		`textarea[data-item-id="${CSS.escape(itemId)}"]`,
-	),
-): EditorPosition {
+	);
 	return {
 		itemId,
 		hoistId,
 		start: textarea?.selectionStart ?? 0,
 		end: textarea?.selectionEnd ?? 0,
-		direction: textarea?.selectionDirection ?? "none",
 		scrollTop: textarea?.scrollTop ?? 0,
 		scrollLeft: textarea?.scrollLeft ?? 0,
 		panelScrollTop: document.querySelector<HTMLElement>(".outline-panel")?.scrollTop ?? 0,
@@ -34,11 +28,8 @@ export function captureEditorPosition(
 export async function focusOutlineEditor(
 	itemId: string | null,
 	position?: EditorPosition,
-	current: () => boolean = () => true,
-	restoreScroll = true,
 ): Promise<void> {
 	await tick();
-	if (!current()) return;
 	if (!itemId) {
 		document.querySelector<HTMLElement>(".rows, .outline-panel button")?.focus();
 		return;
@@ -53,19 +44,13 @@ export async function focusOutlineEditor(
 	const textarea = document.querySelector<HTMLTextAreaElement>(
 		`textarea[data-item-id="${CSS.escape(itemId)}"]`,
 	);
-	if (textarea) {
-		textarea.setSelectionRange(
-			Math.min(position.start, textarea.value.length),
-			Math.min(position.end, textarea.value.length),
-			position.direction ?? "none",
-		);
-	}
+	textarea?.setSelectionRange(position.start, position.end);
 	if (textarea) {
 		textarea.scrollTop = position.scrollTop;
 		textarea.scrollLeft = position.scrollLeft;
 	}
 	const panel = document.querySelector<HTMLElement>(".outline-panel");
-	if (panel && restoreScroll) panel.scrollTop = position.panelScrollTop;
+	if (panel) panel.scrollTop = position.panelScrollTop;
 }
 
 /** Owns the saved editing location independently of shortcuts or the manuscript view. */
@@ -73,8 +58,12 @@ export class EditorReturnController {
 	position = $state.raw<EditorPosition | null>(null);
 	constructor(
 		private readonly ports: {
-			navigation: ScreenNavigator;
+			beforeRestore(): Promise<boolean>;
 			hasItem(id: string): boolean;
+			select(id: string): boolean;
+			setHoist(id: string | null): void;
+			reveal(id: string): void;
+			showEditor(): void;
 		},
 	) {}
 
@@ -84,14 +73,14 @@ export class EditorReturnController {
 
 	restore = async (): Promise<void> => {
 		const position = this.position;
-		if (!position) return;
+		if (!position || !await this.ports.beforeRestore()) return;
 		if (!this.ports.hasItem(position.itemId)) throw new Error("元の編集項目が見つかりません。");
-		await this.ports.navigation.navigate({
-			view: "outline",
-			occurrenceId: position.itemId,
-			hoistId: position.hoistId,
-			editorPosition: position,
-			longForm: false,
-		});
+		if (!this.ports.select(position.itemId)) return;
+		this.ports.setHoist(position.hoistId);
+		// Setting the hoist can select its root; restore the actual edited occurrence.
+		if (!this.ports.select(position.itemId)) return;
+		this.ports.reveal(position.itemId);
+		this.ports.showEditor();
+		await focusOutlineEditor(position.itemId, position);
 	};
 }
