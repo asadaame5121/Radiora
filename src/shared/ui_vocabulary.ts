@@ -170,7 +170,7 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	emergenceAccept: "採用",
 	emergenceHold: "保留",
 	emergenceDismiss: "却下",
-	emergenceResolutionReason: "判断理由（却下時は必須）",
+	emergenceResolutionReason: "判断理由（任意）",
 	noEmergenceSuggestion: "新しい関係候補はありません",
 	manuscript: "原稿",
 	manuscriptOpen: "原稿として開く",

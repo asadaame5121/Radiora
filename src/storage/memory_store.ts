@@ -540,9 +540,6 @@ export class MemoryGraphStore implements GraphStore {
 			return Promise.reject(new Error(`Emergence suggestion already resolved: ${id}`));
 		}
 		const normalizedReason = reason?.trim();
-		if (action === "dismiss" && !normalizedReason) {
-			return Promise.reject(new Error("Dismissed emergence suggestion requires a reason"));
-		}
 		if (action === "accept") {
 			if (!link || link.origin !== "suggestion" || link.status !== "asserted") {
 				return Promise.reject(

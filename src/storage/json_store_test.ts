@@ -664,11 +664,12 @@ Deno.test("version 6 round-trip preserves emergence state, timestamps, reasons, 
 			await store.upsertEmergenceSuggestion(candidate(id));
 		}
 		await store.resolveEmergenceSuggestion("held", "pin");
-		await assertRejects(
-			() => store.resolveEmergenceSuggestion("dismissed", "dismiss"),
-			Error,
-			"requires a reason",
-		);
+		const emptyReasons = [undefined, "", "   "];
+		for (const [index, reason] of emptyReasons.entries()) {
+			const id = `dismissed-without-reason-${index}`;
+			await store.upsertEmergenceSuggestion(candidate(id));
+			await store.resolveEmergenceSuggestion(id, "dismiss", undefined, reason);
+		}
 		await store.resolveEmergenceSuggestion(
 			"dismissed",
 			"dismiss",
@@ -697,6 +698,12 @@ Deno.test("version 6 round-trip preserves emergence state, timestamps, reasons, 
 		assertEquals(byId.get("dismissed")?.persistenceStatus, "dismissed");
 		assertEquals(byId.get("dismissed")?.resolutionReason, "not relevant");
 		assertEquals(typeof byId.get("dismissed")?.resolvedAt, "string");
+		for (const [index, reason] of emptyReasons.entries()) {
+			const dismissed = byId.get(`dismissed-without-reason-${index}`);
+			assertEquals(dismissed?.persistenceStatus, "dismissed");
+			assertEquals(dismissed?.resolutionReason, reason?.trim());
+			assertEquals(typeof dismissed?.resolvedAt, "string");
+		}
 		assertEquals(byId.get("accepted")?.persistenceStatus, "accepted");
 		assertEquals(byId.get("accepted")?.createdAt, timestamp);
 		assertEquals((await reloaded.listLinks()).map((link) => link.origin).sort(), [

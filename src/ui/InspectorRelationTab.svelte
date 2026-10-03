@@ -111,7 +111,7 @@
 					<div class="suggestion-actions">
 						<button type="button" onclick={() => void onResolveEmergence(suggestion, "accept")}>{vocabulary.emergenceAccept}</button>
 						<button type="button" onclick={() => void onResolveEmergence(suggestion, "pin")}>{vocabulary.emergenceHold}</button>
-						<button type="button" onclick={() => void onResolveEmergence(suggestion, "dismiss")} disabled={!emergenceResolutionReasons[suggestion.id]?.trim()}>{vocabulary.emergenceDismiss}</button>
+						<button type="button" onclick={() => void onResolveEmergence(suggestion, "dismiss")}>{vocabulary.emergenceDismiss}</button>
 					</div>
 				</article>
 			{:else}
