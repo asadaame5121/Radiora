@@ -139,6 +139,27 @@ test("reserved Alt+Left executes screen back once and ignores repeats", async ()
 	expect(execute).toHaveBeenCalledOnce();
 });
 
+test.each([{ isComposing: true }, { keyCode: 229 }])(
+	"reserved Alt+Left prevents browser Back without application navigation during IME: %j",
+	async (composition) => {
+		const execute = vi.fn().mockResolvedValue(undefined);
+		const keyboard = new KeyboardController({
+			context: () => ({ startupReady: true, canGoBack: true }) as CommandContext,
+			blocked: () => false,
+			execute,
+			reportError: vi.fn(),
+		});
+		keyboard.open = true;
+		const back = event("ArrowLeft", { altKey: true, ...composition });
+		expect(keyboard.handle(back)).toBe(true);
+		expect(back.preventDefault).toHaveBeenCalledOnce();
+		expect(back.stopImmediatePropagation).toHaveBeenCalledOnce();
+		expect(keyboard.open).toBe(false);
+		await Promise.resolve();
+		expect(execute).not.toHaveBeenCalled();
+	},
+);
+
 test("chords consume input, reject unavailable commands, and leave reserved keys alone", async () => {
 	vi.stubGlobal("document", { activeElement: null });
 	vi.stubGlobal("HTMLTextAreaElement", class {});

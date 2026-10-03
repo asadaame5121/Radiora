@@ -649,8 +649,8 @@
 			}
 		};
 		const handleGlobalShortcut = (event: KeyboardEvent) => {
-			if (event.isComposing || event.keyCode === IME_PROCESS_KEY_CODE) return;
 			if (keyboard.handle(event)) return;
+			if (event.isComposing || event.keyCode === IME_PROCESS_KEY_CODE) return;
 			const openHelpPanel = () => {
 				event.preventDefault();
 				if (commandPaletteOpen) void closeCommandPalette();

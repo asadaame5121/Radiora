@@ -5,6 +5,7 @@ export class ScreenNavigationController<Context> {
 	view = $state<ViewMode>("outline");
 	private history = $state.raw<{ view: ViewMode; context: Context }[]>([]);
 	private restoring = false;
+	private generation = 0;
 
 	constructor(
 		private readonly ports: {
@@ -21,6 +22,7 @@ export class ScreenNavigationController<Context> {
 	remember(): void {
 		if (this.restoring) return;
 		this.history = [...this.history, { view: this.view, context: this.ports.capture() }];
+		++this.generation;
 	}
 
 	/** Immediate screen-only transition; prepareOpen must precede any destination state changes. */
@@ -30,13 +32,15 @@ export class ScreenNavigationController<Context> {
 
 	/** Capture before destination selection, then commit only after its guard accepts. */
 	prepareOpen(view: ViewMode): () => void {
+		const generation = this.generation;
 		const entry = this.restoring || this.view === view
 			? null
 			: { view: this.view, context: this.ports.capture() };
 		let committed = false;
 		return () => {
-			if (!entry || committed || this.restoring) return;
+			if (!entry || committed || this.restoring || generation !== this.generation) return;
 			committed = true;
+			++this.generation;
 			this.history = [...this.history, entry];
 			this.view = view;
 		};
@@ -48,6 +52,7 @@ export class ScreenNavigationController<Context> {
 		this.restoring = true;
 		try {
 			if (!await this.ports.restore(entry.context)) return;
+			++this.generation;
 			this.view = entry.view;
 			this.history = this.history.slice(0, -1);
 			await this.ports.afterRestore?.(entry.context, entry.view);

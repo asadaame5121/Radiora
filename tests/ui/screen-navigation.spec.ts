@@ -629,3 +629,102 @@ test("Alt+Left is suppressed while a dialog is open", async ({ page }) => {
 	await page.keyboard.press("Escape");
 	await expect(page.getByRole("heading", { name: "Option", exact: true })).toBeVisible();
 });
+
+for (const composition of ["isComposing", "keyCode"] as const) {
+	test(`Alt+Left is suppressed without navigating during IME: ${composition}`, async ({ page }) => {
+		await page.goto("/");
+		await page.getByRole("button", { name: "Option", exact: true }).click();
+		const prevented = await page.evaluate((kind) => {
+			const event = new KeyboardEvent("keydown", {
+				key: "ArrowLeft",
+				altKey: true,
+				bubbles: true,
+				cancelable: true,
+				isComposing: kind === "isComposing",
+				keyCode: kind === "keyCode" ? 229 : 0,
+			});
+			window.dispatchEvent(event);
+			return event.defaultPrevented;
+		}, composition);
+		expect(prevented).toBe(true);
+		await expect(page.getByRole("heading", { name: "Option", exact: true })).toBeVisible();
+		await page.keyboard.press("Alt+ArrowLeft");
+		await expect(page.getByRole("tree")).toBeVisible();
+		await expect(page.getByRole("button", { name: "前の画面へ戻る", exact: true })).toBeDisabled();
+	});
+}
+
+test("a delayed comparison cannot replace Help or add an obsolete caller to history", async ({ page }) => {
+	const revision = {
+		id: "pending",
+		workId: "mock-7",
+		text: "pending comparison",
+		parentRevisionIds: [],
+		kind: "checkpoint",
+		createdAt: items[1].createdAt,
+		message: "pending",
+	};
+	await page.route(
+		"**/api/rpc/listRevisions",
+		(route) => route.fulfill({ json: { result: [revision] } }),
+	);
+	await page.route("**/api/rpc/listWorkLineage", (route) =>
+		route.fulfill({
+			json: {
+				result: {
+					work: { id: "mock-7", createdAt: items[1].createdAt, updatedAt: items[1].updatedAt },
+					branches: [],
+					revisions: [revision],
+				},
+			},
+		}));
+	let release!: () => void;
+	let requested = false;
+	const pending = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/api/rpc/listWorkComparisonDocuments", async (route) => {
+		requested = true;
+		await pending;
+		await route.fulfill({
+			json: {
+				result: {
+					workId: "mock-7",
+					documents: [{
+						scope: "revision",
+						workId: "mock-7",
+						revisionId: "pending",
+						title: "pending",
+						text: "pending comparison",
+					}],
+				},
+			},
+		});
+	});
+	try {
+		await page.goto("/");
+		await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
+		await page.getByRole("tab", { name: "履歴", exact: true }).click();
+		await page.getByRole("button", { name: "版の履歴を開く", exact: true }).click();
+		await page.getByRole("button", { name: "この版を比較", exact: true }).click();
+		await expect.poll(() => requested).toBe(true);
+		await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+		const response = page.waitForResponse("**/api/rpc/listWorkComparisonDocuments");
+		release();
+		await response;
+		await page.evaluate(() =>
+			new Promise<void>((resolve) => {
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+			})
+		);
+		await expect(page.locator(".help-panel")).toBeVisible();
+		const back = page.getByRole("button", { name: "前の画面へ戻る", exact: true });
+		await back.click();
+		await expect(page.locator(".work-lineage-workspace")).toBeVisible();
+		await back.click();
+		await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
+		await expect(back).toBeDisabled();
+	} finally {
+		release();
+	}
+});

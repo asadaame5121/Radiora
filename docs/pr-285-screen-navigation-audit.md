@@ -29,6 +29,16 @@
 
 これらは選択前に履歴を準備し、選択が受理されたコールバックから確定する。
 
+## 準備済み遷移の寿命
+
+`ScreenNavigationController` が履歴の世代を管理し、`prepareOpen()` は準備時の世代を保存する。
+別の画面遷移、Inspector の `remember()`、成功した Back が履歴を変更すると世代を進める。
+古い世代の確定コールバックは画面・履歴を変更しない。元の画面へ戻っても古いコールバックは復活しない。
+Back の Cancel・保存失敗は遷移を確定しないため、世代を変更しない。
+
+これにより、Work lineage で比較を取得中に Help を開いても、遅延した比較応答は Help を上書きせず、
+Back は Help → Work lineage → 元の画面の順に戻る。
+
 ## 即時の `open()` を維持する経路
 
 | 経路                                                              | 確認した順序                                                            |
@@ -45,16 +55,21 @@
 
 ## 回帰テスト
 
+- `vitest/screen_navigation_controller.svelte.test.ts`: 別の遷移・Inspector・Back による古い遷移の
+  無効化、同じ画面へ戻った場合の無効化、Back の Cancel 後の有効性。
 - `vitest/keyboard_navigation.svelte.test.ts`: Tree 呼び出し元、選択の Save / Discard / Cancel、
   原稿処理前の履歴保存。
 - `vitest/branch_rewrite_navigation.svelte.test.ts`: 元の配置、選択の Save / Discard / Cancel、
   作成・再読込失敗時の履歴。
 - `vitest/comparison_controller.svelte.test.ts`: Work / Link 比較を開く前の比較ペアの保持。
-- `vitest/keyboard_controller.svelte.test.ts`: 保存後の再選択が Cancel された場合の原稿保持。
+- `vitest/keyboard_controller.svelte.test.ts`: 保存後の再選択が Cancel された場合の原稿保持、
+  `isComposing` / `keyCode === 229` 中の Alt+← の抑止とアプリ内遷移の停止。
 - `tests/ui/screen-navigation.spec.ts`: 別稿作成後の Today
   の元の選択・フィルター、編集位置への復帰後の Tree の選択・Zoom 範囲、年代フォームの Save / Discard
   / Cancel と戻る履歴、Tree のコンテキストメニューからの Outline / Zoom / Work lineage / 原稿 /
   版比較。
+- 同じ画面テストで、比較の取得中に Help を開く場合の履歴と、IME 中の Alt+←
+  のグローバル処理も検証する。
 
 別稿の新しい配置は通常、元の配置と同じ Work に属するため、年代フォームのガードを通過する。 別 Work
 の未保存フォームによる保留は、Controller の port テストで承認コールバックの契約を検証する。
