@@ -1,3 +1,4 @@
+<!-- Deprecated (#236): retained for Query reevaluation; not mounted by the app. -->
 <script lang="ts">
 	import type { RuleQueryResult, SavedRuleQuery, SearchAlias, TransientProjectionNode } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";

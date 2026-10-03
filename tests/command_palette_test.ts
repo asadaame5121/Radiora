@@ -21,10 +21,10 @@ const context = (overrides: Partial<CommandContext> = {}): CommandContext => ({
 	...overrides,
 });
 
-Deno.test("command palette searches command labels while retaining every command for an empty query", () => {
+Deno.test("command palette searches command labels while retaining active commands for an empty query", () => {
 	assertEquals(
 		commandPaletteItems("", context(), DEFAULT_UI_VOCABULARY).map((command) => command.id),
-		COMMAND_DEFINITIONS.map((command) => command.id),
+		COMMAND_DEFINITIONS.filter((command) => !command.deprecated).map((command) => command.id),
 	);
 	assertEquals(
 		commandPaletteItems("クイック", context(), DEFAULT_UI_VOCABULARY).map((command) => command.id),
@@ -42,6 +42,11 @@ Deno.test("command palette exposes command-service disabled reasons", () => {
 		enabled: false,
 		reason: "クイック入力の本文を入力してください。",
 	});
+});
+
+Deno.test("command palette omits deprecated Query execution and saving", () => {
+	const items = commandPaletteItems("", context(), DEFAULT_UI_VOCABULARY);
+	assertFalse(items.some((command) => command.id === "runQuery" || command.id === "saveQuery"));
 });
 
 Deno.test("command palette includes Markdown export", () => {

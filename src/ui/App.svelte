@@ -53,8 +53,6 @@
 	import { createEditorController } from "./editor_controller.svelte.ts";
 	import { createPendingEmptyItemController } from "./pending_empty_item_controller.svelte.ts";
 	import { createEmergenceController } from "./emergence_controller.svelte.ts";
-	import { RuleQueryController } from "./rule_query_controller.svelte.ts";
-	import { SearchAliasController } from "./search_alias_controller.svelte.ts";
 	import { HistoryController } from "./history_controller.svelte.ts";
 	import { BranchRewriteController } from "./branch_rewrite_controller.ts";
 	import { ComparisonController } from "./comparison_controller.svelte.ts";
@@ -72,7 +70,6 @@
 		OutlineSnapshot,
 		NavigationTarget,
 		RelationTypeDirection,
-		TransientProjectionNode,
 	} from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
 	import type {
@@ -246,8 +243,6 @@
 		},
 		errorMessage,
 	});
-	const ruleQuery = new RuleQueryController(api, errorMessage);
-	const searchAliases = new SearchAliasController(api, errorMessage);
 	let globalLineage = $state<GlobalLineageProjection | null>(null);
 	const confirmationController = createConfirmationController();
 	let confirmationDialog: ConfirmationDialog;
@@ -521,8 +516,6 @@
 		canOpenLinkEditor: Boolean(selectedItem),
 		quickCaptureText,
 		quickCaptureSubmitting,
-		ruleSource: ruleQuery.source,
-		ruleName: ruleQuery.name,
 		isHoisted: Boolean(browsingLocation.hoistOccurrenceId),
 		isOutline: viewMode === "outline" && !longForm.active,
 		hasReturnPosition: Boolean(keyboardWorkspace.position),
@@ -779,9 +772,7 @@
 		startupDataLoaded = true;
 		startupCacheActive = false;
 		persistStartupSnapshotCache();
-		await searchAliases.load();
 		await loadTags();
-		await ruleQuery.loadSavedQueries();
 	}
 
 	async function load(focusId?: string): Promise<boolean> {
@@ -1033,12 +1024,6 @@
 		};
 		window.addEventListener("pointermove", move);
 		window.addEventListener("pointerup", stop, { once: true });
-	}
-
-	async function openQuery(): Promise<void> {
-		if (!await screenNavigation.navigate({ view: "outline", query: true })) return;
-		await tick();
-		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
 	}
 
 	function selectInspectorPlacement(id: string): void {
@@ -1530,12 +1515,6 @@
 		await emergenceController.resolve(suggestion, action);
 	}
 
-	async function handleSparseOutlineSelect(node: TransientProjectionNode): Promise<void> {
-		if (node.occurrenceId && itemById.has(node.occurrenceId)) {
-			await screenNavigation.navigate({ view: "outline", occurrenceId: node.occurrenceId, expandedIds: node.breadcrumb ?? [] });
-		} else error = `この${vocabulary.work}には表示できる${vocabulary.occurrence}がありません。`;
-	}
-
 	async function performAddLink(input: CreateLinkInput): Promise<void> {
 		await api.createLink(input);
 		await load();
@@ -1674,8 +1653,6 @@
 					if (linkInput) await performAddLink(linkInput);
 					else await openLinkEditor();
 					break;
-				case "runQuery": await ruleQuery.execute(); break;
-				case "saveQuery": await ruleQuery.save(); break;
 			case "saveRevision": if (snapshotId) await performPromoteRecoverySnapshot(snapshotId); break;
 				case "createBranch": await requestRewriteAsNewBranch(); break;
 				case "startLongFormEditing": await keyboardWorkspace.openLongForm(); break;
@@ -1780,8 +1757,6 @@
 	function requestClearHoist(): void { void executeCommand("clearHoist"); }
 	function exportMarkdown(): void { void executeCommand("exportMarkdown"); }
 	function addBookmark(): void { void executeCommand("addBookmark"); }
-	function executeRule(): void { void executeCommand("runQuery"); }
-	function saveRule(): void { void executeCommand("saveQuery"); }
 	function promoteRecoverySnapshot(snapshotId: string): Promise<void> {
 		return executeCommand("saveRevision", snapshotId);
 	}
@@ -2053,8 +2028,6 @@
 	<PrimaryNavigation
 		collapsed={navCollapsed}
 		activeView={viewMode}
-		queryActive={asideMode === "query"}
-		queryAvailable={Boolean(selectedItem)}
 		recentItems={primaryNavigationRecentItems}
 		selectedId={selectedId}
 		onToggleCollapse={toggleNavigation}
@@ -2064,7 +2037,6 @@
 		onOpenDuplicates={() => void openDuplicates()}
 		onOpenOptions={() => void screenNavigation.navigate({ view: "options" })}
 		onOpenTags={() => void openTags()}
-		onOpenQuery={() => void openQuery().catch((cause) => { error = errorMessage(cause); })}
 		onOpenHelp={openHelp}
 		onOpenRecentItem={(item) => void openRecentNavigationItem(item)}
 	/>
@@ -2378,32 +2350,6 @@
 				{emergenceSuggestions}
 				emergenceResolutionReasons={emergenceResolutionReasons}
 				{emergenceLoading}
-				query={{
-					ruleSource: ruleQuery.source,
-					ruleResult: ruleQuery.result,
-					ruleName: ruleQuery.name,
-					ruleError: ruleQuery.error,
-					savedRuleQueries: ruleQuery.savedQueries,
-					sparseOutlineNodes: ruleQuery.nodes,
-					sparseOutlineQueryName: ruleQuery.projectionName,
-					showSparseOutline: ruleQuery.showProjection,
-					aliases: searchAliases.aliases,
-					aliasCanonical: searchAliases.canonical,
-					aliasVariants: searchAliases.variants,
-					aliasError: searchAliases.error,
-					onRuleSourceChange: ruleQuery.setSource,
-					onRuleNameChange: ruleQuery.setName,
-					onAliasCanonicalChange: searchAliases.setCanonical,
-					onAliasVariantsChange: searchAliases.setVariants,
-					onExecuteRule: executeRule,
-					onSaveRule: saveRule,
-					onLoadSavedQuery: ruleQuery.loadProjection,
-					onRemoveRule: ruleQuery.remove,
-					onSaveAlias: searchAliases.save,
-					onRemoveAlias: searchAliases.remove,
-					onSelectSparseNode: handleSparseOutlineSelect,
-					onToggleSparseOutline: ruleQuery.toggleProjection,
-				}}
 				onAsideModeChange={(mode) => asideMode = mode}
 				onElement={(element) => inspectorElement = element}
 				onStartResize={startInspectorResize}

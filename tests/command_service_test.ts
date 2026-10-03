@@ -68,6 +68,19 @@ Deno.test("dispatching a disabled command has no side effects", async () => {
 	assertEquals(calls, 0);
 });
 
+for (const id of ["runQuery", "saveQuery"] as const) {
+	Deno.test(`deprecated Query command cannot execute: ${id}`, async () => {
+		let calls = 0;
+		const result = await dispatchCommand(id, context(), () => {
+			calls++;
+		});
+		assertFalse(result.executed);
+		assertEquals(result.reason, "Queryは再評価のため利用を停止しています。");
+		assertEquals(calls, 0);
+		assertEquals(COMMAND_DEFINITIONS.find((command) => command.id === id)?.shortcut, undefined);
+	});
+}
+
 Deno.test("command metadata covers the shared primary actions", () => {
 	assertEquals(
 		COMMAND_DEFINITIONS.map((command) => command.id),

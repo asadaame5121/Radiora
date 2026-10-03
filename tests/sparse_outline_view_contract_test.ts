@@ -94,14 +94,14 @@ Deno.test("Sparse Outline computeDepth handles cycles with visited set", async (
 	assert(source.includes("visited"), "uses visited set for cycle protection");
 });
 
-Deno.test("App.svelte integrates SparseOutlineView in query mode", async () => {
+Deno.test("deprecated Query panel retains SparseOutlineView for reevaluation", async () => {
 	const inspector = await Deno.readTextFile(
 		new URL("../src/ui/InspectorView.svelte", import.meta.url),
 	);
 	const queryPanel = await Deno.readTextFile(
 		new URL("../src/ui/InspectorQueryPanel.svelte", import.meta.url),
 	);
-	assertMatch(inspector, /<InspectorQueryPanel/);
+	assert(!inspector.includes("<InspectorQueryPanel"));
 	assert(queryPanel.includes("SparseOutlineView"), "imports SparseOutlineView");
 	assertMatch(queryPanel, /<SparseOutlineView/, "renders SparseOutlineView component");
 	assert(queryPanel.includes("onSelectSparseNode"), "has node selection callback");

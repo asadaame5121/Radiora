@@ -567,6 +567,9 @@ metadataを検討する。
 
 ### 7.10 保存Query / 生きたアウトライン
 
+2026-10-04更新: Issue #236により、Queryの利用者向けUIは再評価まで休止する。
+以下は再導入時の検討案とし、現行の扱いは[Queryの非推奨化](query-deprecation.md)に従う。
+
 既存の読み取り専用Datalog風Queryを、保存可能な仮想ビューへ発展させる。
 
 - Queryに名前を付けて保存する
@@ -673,9 +676,9 @@ Markdown単独へ要求しない。
 
 JSONバックアップと実DBのversioning規則は[[schema-evolution]]に従う。versionなしJSONはlegacy payload
 version `0`として読み取る。現行sourceはJSON backup payload `8`を出力する意図だが、source storage
-versionとテスト期待値に未解決の不整合がある。2026-09-23の`deno task test`は742件が成功し、backup versionの
-期待値など12件が失敗した。物理SQLite schema `2`やlegacy Surreal schema `7`と同じversionとして扱わず、
-確定した互換性は成功したverify/CI結果を得るまで保留する。
+versionとテスト期待値に未解決の不整合がある。2026-09-23の`deno task test`は742件が成功し、backup
+versionの 期待値など12件が失敗した。物理SQLite schema `2`やlegacy Surreal schema
+`7`と同じversionとして扱わず、 確定した互換性は成功したverify/CI結果を得るまで保留する。
 
 ### 7.15 Markdown本文と内部参照
 
@@ -773,7 +776,8 @@ AI生成物と人間作成物を明確に区別し、採用履歴を残す。
 
 ### Phase 0: 現行PoCの基準化（歴史的基準）
 
-version 0のSurrealDB/JSONと`OutlineItem.parentId`を棚卸し、fixtureとmigration方針を作った段階を記録する。
+version
+0のSurrealDB/JSONと`OutlineItem.parentId`を棚卸し、fixtureとmigration方針を作った段階を記録する。
 これは現在のproduction storageの説明ではない。backendとschema versionは[[schema-evolution]]を参照。
 以下は当時の基準化チェックリストであり、現在の未実施タスク一覧ではない。
 

@@ -85,18 +85,23 @@ test("every primary screen resumes the same Outline", async ({ page }) => {
 	}
 });
 
-test("Query changes the inspector without enabling screen Back", async ({ page }) => {
+test("deprecated Query has no navigation entry, palette command, or execution shortcut", async ({ page }) => {
+	let executions = 0;
+	await page.route("**/api/rpc/runRuleQuery", (route) => {
+		executions++;
+		return route.fulfill({ json: { result: { columns: [], rows: [], elapsedMs: 0 } } });
+	});
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
-	await page.getByRole("button", { name: "Query・検索別名", exact: true }).click();
-	await expect(page.locator(".query-panel")).toBeVisible();
-	const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
-	await expect(back).toBeDisabled();
-	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
-	await back.click();
-	await expect(page.locator(".query-panel")).toBeVisible();
-	await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
+	await expect(page.getByRole("button", { name: /Query/ })).toHaveCount(0);
+	await expect(page.locator(".query-panel")).toHaveCount(0);
+	await page.keyboard.press("Control+Shift+Q");
+	await page.keyboard.press("Control+k");
+	await expect(page.getByRole("dialog")).toBeVisible();
+	await expect(page.getByRole("option", { name: /検索を実行|検索を保存/ })).toHaveCount(0);
+	expect(executions).toBe(0);
 });
+
 test("revision comparison returns to the original occurrence and history tab", async ({ page }) => {
 	await page.goto("/");
 	const editor = page.locator('textarea[data-item-id="mock-7"]');

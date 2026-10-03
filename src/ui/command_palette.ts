@@ -25,6 +25,7 @@ export function commandPaletteItems(
 	const normalizedQuery = query.trim().toLocaleLowerCase();
 	const availability = commandAvailability(context, definitions);
 	return definitions
+		.filter((command) => !command.deprecated)
 		.map((command) => ({
 			id: command.id,
 			label: command.label(vocabulary),

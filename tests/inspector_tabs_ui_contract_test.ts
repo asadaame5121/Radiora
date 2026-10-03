@@ -3,9 +3,6 @@ import { assert, assertMatch } from "jsr:@std/assert@1";
 const inspector = await Deno.readTextFile(
 	new URL("../src/ui/InspectorView.svelte", import.meta.url),
 );
-const queryPanel = await Deno.readTextFile(
-	new URL("../src/ui/InspectorQueryPanel.svelte", import.meta.url),
-);
 const history = await Deno.readTextFile(
 	new URL("../src/ui/InspectorHistoryTab.svelte", import.meta.url),
 );
@@ -35,15 +32,9 @@ Deno.test("Inspector forwards Bits tab props and keeps active state controlled b
 	assert(!inspector.includes("onkeydown"), "Inspector does not replace Bits keyboard handling");
 });
 
-Deno.test("Inspector keeps query mode outside the Tabs model", () => {
-	const queryBranch = inspector.search(
-		/\{#if (?:props\.)?selectedItem && (?:props\.)?asideMode === "query"\}/,
-	);
-	const tabsRoot = inspector.indexOf("<Tabs.Root");
-	assert(queryBranch >= 0, "query branch exists");
-	assert(tabsRoot > queryBranch, "Tabs are rendered after the query branch");
-	assertMatch(inspector, /<InspectorQueryPanel/);
-	assertMatch(queryPanel, /<div class="query-panel">/);
+Deno.test("Inspector falls back to overview for the deprecated query mode", () => {
+	assert(!inspector.includes("<InspectorQueryPanel"));
+	assertMatch(inspector, /props.asideMode === "query" \? "overview" : props.asideMode/);
 });
 
 Deno.test("App delegates Inspector state and callbacks to the extracted View", async () => {

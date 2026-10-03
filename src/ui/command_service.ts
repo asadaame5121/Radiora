@@ -10,8 +10,8 @@ export interface CommandContext {
 	canOpenLinkEditor: boolean;
 	quickCaptureText: string;
 	quickCaptureSubmitting: boolean;
-	ruleSource: string;
-	ruleName: string;
+	ruleSource?: string;
+	ruleName?: string;
 	isHoisted: boolean;
 	isOutline?: boolean;
 	hasReturnPosition?: boolean;
@@ -53,6 +53,7 @@ export interface CommandDefinition {
 	label: (vocabulary: UiVocabulary) => string;
 	shortcut?: string;
 	chordKey?: string;
+	deprecated?: boolean;
 	availability: (context: CommandContext) => CommandAvailability;
 }
 
@@ -65,6 +66,11 @@ const selection = (context: CommandContext): CommandAvailability =>
 	!context.selectedOccurrenceId
 		? { enabled: false, reason: "項目を選択してください。" }
 		: ready(context);
+
+const queryDeprecated = (): CommandAvailability => ({
+	enabled: false,
+	reason: "Queryは再評価のため利用を停止しています。",
+});
 
 export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 	{
@@ -148,25 +154,14 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 	{
 		id: "runQuery",
 		label: (vocabulary) => `${vocabulary.query}を実行`,
-		shortcut: "Ctrl+Shift+Q",
-		availability: (context) =>
-			!ready(context).enabled
-				? ready(context)
-				: context.ruleSource.trim()
-				? { enabled: true }
-				: { enabled: false, reason: "検索を入力してください。" },
+		deprecated: true,
+		availability: queryDeprecated,
 	},
 	{
 		id: "saveQuery",
 		label: (vocabulary) => `${vocabulary.query}を保存`,
-		availability: (context) =>
-			!ready(context).enabled
-				? ready(context)
-				: !context.ruleSource.trim()
-				? { enabled: false, reason: "検索を入力してください。" }
-				: !context.ruleName.trim()
-				? { enabled: false, reason: "保存名を入力してください。" }
-				: { enabled: true },
+		deprecated: true,
+		availability: queryDeprecated,
 	},
 	...KEYBOARD_COMMANDS,
 ] as const;
