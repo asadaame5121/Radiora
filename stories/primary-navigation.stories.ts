@@ -10,7 +10,6 @@ const callbacks = {
 	onOpenDuplicates: fn(),
 	onOpenOptions: fn(),
 	onOpenTags: fn(),
-	onOpenQuery: fn(),
 	onOpenHelp: fn(),
 	onOpenRecentItem: fn(),
 };
@@ -21,8 +20,6 @@ const meta = {
 	args: {
 		collapsed: false,
 		activeView: "outline",
-		queryActive: false,
-		queryAvailable: true,
 		recentItems: [{
 			workId: "work-1",
 			id: "occurrence-1",

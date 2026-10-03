@@ -27,7 +27,8 @@ Deno.test("in-app help is a dedicated, reachable and scannable page", async () =
 	assert(help.includes("日々の確認と長文執筆"));
 	assert(help.includes("参照と意味関係"));
 	assert(help.includes("版・別稿・系統と復元"));
-	assert(help.includes("発見・Query・重複候補"));
+	assert(help.includes("発見・重複候補"));
+	assert(help.includes("Queryは再評価のため利用を停止しています。"));
 	assert(help.includes("保存・移行・バックアップ"));
 	assert(help.includes("キーボードで素早く操作する"));
 

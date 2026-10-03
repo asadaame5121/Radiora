@@ -13,8 +13,6 @@
 	let {
 		collapsed,
 		activeView,
-		queryActive,
-		queryAvailable,
 		recentItems,
 		selectedId,
 		onToggleCollapse,
@@ -24,14 +22,11 @@
 		onOpenDuplicates,
 		onOpenOptions,
 		onOpenTags,
-		onOpenQuery,
 		onOpenHelp,
 		onOpenRecentItem,
 	}: {
 		collapsed: boolean;
 		activeView: ViewMode;
-		queryActive: boolean;
-		queryAvailable: boolean;
 		recentItems: RecentNavigationItem[];
 		selectedId: string | null;
 		onToggleCollapse: () => void;
@@ -41,7 +36,6 @@
 		onOpenDuplicates: () => void | Promise<void>;
 		onOpenOptions: () => void;
 		onOpenTags: () => void | Promise<void>;
-		onOpenQuery: () => void | Promise<void>;
 		onOpenHelp: () => void;
 		onOpenRecentItem: (item: RecentNavigationItem) => void | Promise<void>;
 	} = $props();
@@ -91,8 +85,6 @@
 	<section class="nav-tools">
 		<p>ツール</p>
 		<button type="button" class:active={activeView === "tags"} onclick={onOpenTags}>{vocabulary.tag}管理</button>
-		<button type="button" class:active={queryActive} onclick={onOpenQuery}
-			disabled={!queryAvailable}>Query・検索別名</button>
 		<div class="nav-icon-row">
 			<button type="button" class:active={activeView === "options" || activeView === "trash"}
 				aria-pressed={activeView === "options" || activeView === "trash"} aria-label="Option" title="Option"

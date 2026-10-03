@@ -13,19 +13,15 @@
 	import InspectorOverviewTab, {
 		type InspectorOverviewTabProps,
 	} from "./InspectorOverviewTab.svelte";
-	import InspectorQueryPanel, {
-		type InspectorQueryState,
-	} from "./InspectorQueryPanel.svelte";
 	import InspectorRelationTab, {
 		type InspectorRelationTabProps,
 	} from "./InspectorRelationTab.svelte";
 
 	export type InspectorAsideMode = "overview" | "relation" | "history" | "query";
 	type InspectorTab = Exclude<InspectorAsideMode, "query">;
-	export type { InspectorQueryState };
 	type InspectorCommands = Pick<
 		Readonly<Record<CommandId, CommandAvailability>>,
-		"addBookmark" | "createBranch" | "createLink" | "runQuery" | "saveQuery" | "startLongFormEditing"
+		"addBookmark" | "createBranch" | "createLink" | "startLongFormEditing"
 	>;
 
 	export type InspectorViewProps = InspectorOverviewTabProps &
@@ -35,7 +31,6 @@
 			selectedItem: OutlineItem | null;
 			commands: InspectorCommands;
 			vocabulary: UiVocabulary;
-			query: InspectorQueryState;
 			onAsideModeChange: (mode: InspectorAsideMode) => void;
 			onElement: (element: HTMLElement | null) => void;
 			onStartResize: (event: PointerEvent) => void;
@@ -71,14 +66,7 @@
 		onpointerdown={props.onStartResize}
 		title="ドラッグして幅を変更"
 	></button>
-	{#if props.selectedItem && props.asideMode === "query"}
-		<InspectorQueryPanel
-			query={props.query}
-			vocabulary={props.vocabulary}
-			commands={props.commands}
-			titleForId={props.titleForId}
-		/>
-	{:else if props.selectedItem}
+	{#if props.selectedItem}
 		<Tabs.Root
 			value={tabValue}
 			orientation="horizontal"

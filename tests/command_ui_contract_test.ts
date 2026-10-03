@@ -17,7 +17,6 @@ Deno.test("App routes command buttons and global shortcuts through the command s
 			"addBookmark",
 			"saveRevision",
 			"createLink",
-			"runQuery",
 		]
 	) {
 		assert(app.includes(`executeCommand("${id}"`));
