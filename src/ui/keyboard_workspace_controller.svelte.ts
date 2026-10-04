@@ -16,7 +16,8 @@ export class KeyboardWorkspaceController {
 			view(): ViewMode;
 			navigation: ScreenNavigator;
 			longFormActive(): boolean;
-			select(id: string): boolean;
+			select(id: string, afterSelection?: () => void): boolean;
+			focus(id: string): void;
 			setHoist(id: string | null): void;
 			projection(): BrowsingOutlineProjection;
 			items(): readonly OutlineItem[];
@@ -78,8 +79,9 @@ export class KeyboardWorkspaceController {
 	zoomOut = async (): Promise<void> => {
 		const root = this.ports.items().find((item) => item.id === this.ports.hoistId());
 		if (!root) return;
-		this.ports.setHoist(root.parentId);
-		this.ports.select(root.id);
-		await focusOutlineEditor(root.id);
+		this.ports.select(root.id, () => {
+			this.ports.setHoist(root.parentId);
+			this.ports.focus(root.id);
+		});
 	};
 }

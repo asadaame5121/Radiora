@@ -26,6 +26,7 @@ test("collapse all includes hidden descendants in the current hoist and reloads 
 		leaveLongForm: vi.fn().mockResolvedValue(true),
 		startLongForm: vi.fn(),
 		select: vi.fn().mockReturnValue(true),
+		focus: vi.fn(),
 		selectWhenReady: vi.fn().mockResolvedValue(true),
 		setHoist: vi.fn(),
 		reveal: vi.fn(),

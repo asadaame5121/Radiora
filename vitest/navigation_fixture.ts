@@ -7,6 +7,7 @@ import {
 } from "../src/services/browsing_navigation_state.ts";
 import { HistoricalTimeController } from "../src/ui/historical_time_controller.svelte.ts";
 import { ScreenNavigationWorkspace } from "../src/ui/screen_navigation_workspace.svelte.ts";
+import { OccurrenceSelectionWorkspace } from "../src/ui/occurrence_selection_workspace.ts";
 
 export function navigationFixture() {
 	const item = (id: string): OutlineItem => ({
@@ -78,18 +79,35 @@ export function navigationFixture() {
 		selection: {
 			current: () => selected,
 			guard: (next, current) => guard.canSelect(next, current),
-			commit: (id, next) => {
-				selected = id;
-				guard.commitSelection(next);
-			},
-			cancelPending: () => guard.cancelPending(),
+			commit: (id, next) => selection.commitPrepared(id, next),
+			cancelPending: () => selection.cancelPending(),
 		},
 		editor: { save, flush: vi.fn(async () => undefined), version: () => 0 },
 		screens: { prepare, focusTree: vi.fn() },
 		reportError,
 	});
+	const selection = new OccurrenceSelectionWorkspace({
+		current: () => selected,
+		publish: (id) => selected = id,
+		snapshot: () => snapshot,
+		publishStartupSnapshot: (next) => snapshot = next,
+		interruptNavigation: () => navigation.invalidate(),
+		clearCompletions: vi.fn(),
+		form: guard,
+		outline: {
+			visible: () => navigation.view === "outline",
+			browsing: () => browsing,
+			publishBrowsing: (next) => browsing = next,
+			expanded: () => [],
+			publishExpanded: vi.fn(),
+			capturePanels: vi.fn(),
+			restorePane: vi.fn(async () => undefined),
+		},
+		reportError,
+	});
 	return {
 		navigation,
+		selection,
 		source,
 		other,
 		created,

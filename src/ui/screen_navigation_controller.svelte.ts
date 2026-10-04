@@ -33,6 +33,14 @@ export class ScreenNavigationController<Destination extends { view: ViewMode }, 
 		return this.receipt;
 	}
 
+	/** Same-screen selection supersedes pending navigation and its delayed focus. */
+	invalidate(): void {
+		this.request++;
+		this.receipt++;
+		this.pendingScreen = null;
+		this.ports.cancelPending();
+	}
+
 	navigate = async (destination: Destination, origin = this.origin): Promise<boolean> => {
 		if (origin !== this.origin) return false;
 		const request = ++this.request;

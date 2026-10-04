@@ -32,5 +32,8 @@ Deno.test("outline rows container and row blank areas both dispatch deselect", (
 });
 
 Deno.test("editing a row still selects it via textarea focus", () => {
-	assertMatch(outlineRowItem, /onFocus=\{\(\) => handlers\.selectOccurrence\(row\.item\.id\)\}/);
+	assertMatch(
+		outlineRowItem,
+		/onFocus=\{\(\) => \{ if \(selectedId !== row\.item\.id\) handlers\.selectOccurrence\(row\.item\.id\); \}\}/,
+	);
 });
