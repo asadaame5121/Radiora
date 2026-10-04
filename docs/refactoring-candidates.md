@@ -1,6 +1,6 @@
 # リファクタリング・バックログ
 
-更新日: 2026-10-03。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
+更新日: 2026-10-04。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
 に変更なし）。
 
 責務、state ownership、I/O、transaction の変更理由に沿って、挙動を維持したまま整理する計画。
@@ -72,8 +72,8 @@ checkは通過。
 8. **G、O、C、残る R**: 明確な変更理由が生じるまで後順位。
 
 A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ」依存は撤回する。 R1 と Storage は App
-と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。2026-10-03のP2完了後、次回は
-**P3（endpoint/type/reasonの文法整理）** を一作業単位にする。
+と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。2026-10-04にP3（endpoint/type/reasonの文法整理）を完了した。
+P4はdiagnosticsの独立した変更理由が残る場合に限り再評価し、次回は **T1** を一作業単位にする。
 
 ## 運用・難易度
 
@@ -105,7 +105,27 @@ A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
 
-## 今週の実績（2026-10-03、P2完了）
+## 今週の実績（2026-10-04、P3完了）
+
+`inline_semantic_link_grammar.ts` に本文文法を分離し、endpoint token、引用文字列、TYPE、 optional
+reason、delimiterを小さなscanner関数で整理した。`inline_semantic_link.ts` はMarkdown
+除外走査と候補のclosing選択、公開candidate/diagnosticへの変換を所有する。source/type/reason/target
+の検証順、未知typeより先にreason/delimiter構文を検証する順序、診断文言とUTF-16位置を維持した。
+parser framework、token列、diagnostics専用moduleは追加していない。
+
+新moduleの直接テスト6件で空endpoint/空reason、許可type、escape、改行、未完入力、複数不正時の
+優先順とUTF-16位置を確認した。公開parserに2件を追加し、引用内の`]]`で後続closingを試す経路と、
+すべて失敗したときに最初の診断を保持して次の候補へ進む経路を固定した。関連62件成功。
+変更前HEADとの一時比較では、生成した15,000入力について候補・診断・rangeが一致した。 両production
+moduleが400実装行以下になったため、意味リンクparserの行数例外を削除した。
+新moduleにはcomplexity/function-line例外を追加していない。
+
+検証: lint、format、型チェック（Svelte 0 errors / 0 warnings）、品質ラチェット、Vitest
+244件、build成功。`deno task verify` はDeno841件成功・3件失敗で停止。
+legacy移行パスの1件とWindows専用MSIXの2件について、変更前HEAD（`085ce1e`）でも
+対象テストを実行し、同じ3件の失敗を確認した。停止後のVitestとbuildは個別に実行した。
+
+## 過去の実績（2026-10-03、P2完了）
 
 `markdown_source_scanner.ts` にfence/code/autolink/Markdown link/URLの走査を抽出。
 `MarkdownExclusionScanner` が意味リンク用の除外走査とfence状態を所有し、 `inline_semantic_link.ts`
@@ -363,8 +383,9 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
 - [x] **P2** — 2026-10-03完了。難易度3、依存 P1: fence/code/link/URL
       の走査を意味リンク文法から分離。 Markdown parser と契約が一致する箇所だけ共有する。token
       列の新設は必須としない。
-- [ ] **P3** — 難易度3、依存 P2: endpoint/type/reason の文法を整理。小さな scanner 関数で足りるなら
-      parser framework は作らない。
+- [x] **P3** — 2026-10-04完了。難易度3、依存 P2: endpoint/type/reason の本文文法を
+      `inline_semantic_link_grammar.ts` に分離し、小さなscanner関数で整理。診断と公開範囲を維持し、
+      parser frameworkは追加していない。
 - [ ] **P4** — 難易度2、依存 P3: diagnostics
       の独立した変更理由が残る場合だけ抽出。公開位置・診断文言を維持。
 - [ ] **G1** — 難易度2: 既存 snapshot 検証テストに、複数不正時のエラー順・既定 relation
