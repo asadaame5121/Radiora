@@ -2,6 +2,55 @@ import { assertEquals } from "jsr:@std/assert@1";
 import { LINK_TYPES } from "../domain/models.ts";
 import { parseInlineSemanticLinks } from "./inline_semantic_link.ts";
 
+Deno.test("inline semantic links try later closings inside quoted fields before resuming scanning", () => {
+	const raw = '[["A ]] 名"::RELATED("理由 ]] 名")::"B ]] 名"]]';
+	const text = `😀 ${raw} [[C::RELATED::D]]`;
+	const start = text.indexOf(raw);
+	const nextStart = text.lastIndexOf("[[");
+	const result = parseInlineSemanticLinks(text);
+	assertEquals(result.diagnostics, []);
+	assertEquals(result.candidates, [
+		{
+			start,
+			end: start + raw.length,
+			range: { start, end: start + raw.length },
+			raw,
+			source: "A ]] 名",
+			type: "RELATED",
+			reason: "理由 ]] 名",
+			target: "B ]] 名",
+		},
+		{
+			start: nextStart,
+			end: text.length,
+			range: { start: nextStart, end: text.length },
+			raw: "[[C::RELATED::D]]",
+			source: "C",
+			type: "RELATED",
+			target: "D",
+		},
+	]);
+});
+
+Deno.test("inline semantic links keep the first failed closing diagnostic and continue after it", () => {
+	const text = '😀 [[A::RELATED("bad ]] reason")::]] [[C::RELATED::D]]';
+	const result = parseInlineSemanticLinks(text);
+	const start = text.indexOf('"');
+	const end = text.indexOf("]]");
+	assertEquals(result.diagnostics, [{
+		code: "SYNTAX_ERROR",
+		field: "reason",
+		message: "Quoted field is missing its closing quote",
+		start,
+		end,
+		range: { start, end },
+	}]);
+	assertEquals(result.candidates.map(({ raw, range }) => ({ raw, range })), [{
+		raw: "[[C::RELATED::D]]",
+		range: { start: text.lastIndexOf("[["), end: text.length },
+	}]);
+});
+
 Deno.test("inline semantic links parse Japanese fields, reason, and source ranges", () => {
 	const source = '前置き [[自由意志::RELATED("理由：相互に影響する")::"従来の概念"]] 後置き';
 	const start = source.indexOf("[[");
