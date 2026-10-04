@@ -250,3 +250,19 @@ for (const failed of [false, true]) {
 		expect(s.onError).not.toHaveBeenCalled();
 	});
 }
+
+test("an optional startup Tree read reports its failure without rejecting Outline readiness", async () => {
+	const s = setup();
+	const cause = new Error("initial Tree offline");
+	s.listGlobalLineage.mockRejectedValueOnce(cause);
+	const request = s.tree.prepareRefresh(() => true, false);
+	await request.result;
+	request.publish();
+	expect(s.tree.projection).toBeNull();
+	expect(s.tree.error).toBe(cause);
+	expect(s.tree.loading).toBe(false);
+	expect(s.onError).toHaveBeenCalledWith(cause);
+	await s.tree.refresh();
+	expect(s.tree.error).toBeNull();
+	expect(s.tree.projection?.totalWorkCount).toBe(1);
+});

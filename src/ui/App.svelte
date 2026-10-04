@@ -758,7 +758,7 @@
 		if (!startupCurrent) startupController.invalidateDataLoad();
 		const current = startupCurrent ?? (() => !startupController.cancelled);
 		if (!current()) return false;
-		const treeRequest = tree.prepareRefresh(current);
+		const treeRequest = tree.prepareRefresh(current, !startupCurrent);
 		try {
 			error = "";
 			const [next, , nextBookmarks] = await Promise.all([

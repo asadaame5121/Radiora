@@ -395,6 +395,8 @@ LongForm、Tree ControllerのVitestを実行し、9ファイル112件成功。
 - 正式loadと復元した空データの処理が成功してから`markDataLoaded`でinertを解除する。
   初期load/cleanup失敗はfailedとして再試行可能にする。正式load後の補助一覧失敗は ready
   shellを保持して既存error表示へ渡す。cache保存入口とtheme/shortcut/flushは移さない。
+- 起動時のTree projection取得失敗はTree ownerのerror/再試行に残し、成功したOutlineの利用を妨げない。
+  通常reloadのTree取得は従来どおり必須。初期失敗からTree画面で再試行するUI回帰で確認する。
 - pending empty cleanupはflush後に有効性を再確認する。完了済み削除とpending記録の更新は
   起動要求の失効で巻き戻さず、旧要求からのreload/error公開だけを止める。
 
