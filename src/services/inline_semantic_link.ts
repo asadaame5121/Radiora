@@ -1,4 +1,8 @@
 import { LINK_TYPES, type LinkType } from "../domain/models.ts";
+import {
+	type InlineSemanticLinkBodyResult,
+	parseInlineSemanticLinkBody,
+} from "./inline_semantic_link_grammar.ts";
 import { isEscaped, MarkdownExclusionScanner } from "./markdown_source_scanner.ts";
 
 /** A half-open UTF-16 range in the original outline body. */
@@ -47,37 +51,6 @@ export interface InlineSemanticLinkParseResult {
 	diagnostics: InlineSemanticLinkDiagnostic[];
 }
 
-interface ParsedEndpoint {
-	value: string;
-	next: number;
-}
-
-interface ParsedType {
-	value: LinkType | null;
-	reason?: string;
-	next: number;
-	typeStart: number;
-	typeEnd: number;
-}
-
-interface ParseFailure {
-	code: Exclude<InlineSemanticLinkDiagnosticCode, "UNTERMINATED_LINK">;
-	field: InlineSemanticLinkDiagnosticField;
-	message: string;
-	start: number;
-	end: number;
-}
-
-type BodyParseResult =
-	| {
-		kind: "success";
-		source: string;
-		type: LinkType;
-		target: string;
-		reason?: string;
-	}
-	| { kind: "failure"; failure: ParseFailure };
-
 /**
  * Parses inline semantic-link candidates from an outline body.
  *
@@ -115,10 +88,10 @@ export function parseInlineSemanticLinks(
 				break;
 			}
 
-			let parsed: BodyParseResult | null = null;
+			let parsed: InlineSemanticLinkBodyResult | null = null;
 			let closing = closings[0];
 			for (const possibleClosing of closings) {
-				const attempt = parseBody(
+				const attempt = parseInlineSemanticLinkBody(
 					source.slice(index + 2, possibleClosing),
 					index + 2,
 					allowedTypes,
@@ -148,9 +121,13 @@ export function parseInlineSemanticLinks(
 				continue;
 			}
 
-			const failure = parsed?.kind === "failure"
-				? parsed.failure
-				: syntaxFailure("link", index, closing + 2, "Invalid inline semantic link syntax");
+			const failure = parsed?.kind === "failure" ? parsed.failure : {
+				code: "SYNTAX_ERROR" as const,
+				field: "link" as const,
+				start: index,
+				end: closing + 2,
+				message: "Invalid inline semantic link syntax",
+			};
 			diagnostics.push({
 				code: failure.code,
 				field: failure.field,
@@ -177,311 +154,6 @@ export function parseInlineSemanticLinks(
 /** Short alias for callers that prefer the candidate-oriented name. */
 export const parseInlineSemanticLinkCandidates = parseInlineSemanticLinks;
 
-function parseBody(
-	body: string,
-	offset: number,
-	allowedTypes: readonly string[] = LINK_TYPES,
-): BodyParseResult {
-	let cursor = 0;
-	const source = readEndpoint(body, cursor, offset, "source", true);
-	if (source.kind === "failure") return source;
-	cursor = source.value.next;
-
-	const type = readType(body, cursor, offset, allowedTypes);
-	if (type.kind === "failure") return type;
-	cursor = type.value.next;
-	if (!type.value.value) {
-		return {
-			kind: "failure",
-			failure: {
-				code: "UNKNOWN_TYPE",
-				field: "type",
-				message: `Unknown inline semantic link type: ${
-					body.slice(type.value.typeStart, type.value.typeEnd)
-				}`,
-				start: offset + type.value.typeStart,
-				end: offset + type.value.typeEnd,
-			},
-		};
-	}
-
-	const target = readEndpoint(body, cursor, offset, "target", false);
-	if (target.kind === "failure") return target;
-
-	return {
-		kind: "success",
-		source: source.value.value,
-		type: type.value.value,
-		target: target.value.value,
-		...(type.value.reason === undefined ? {} : { reason: type.value.reason }),
-	};
-}
-
-function readEndpoint(
-	input: string,
-	cursor: number,
-	offset: number,
-	field: "source" | "target",
-	requireDelimiter: boolean,
-):
-	| { kind: "success"; value: ParsedEndpoint }
-	| { kind: "failure"; failure: ParseFailure } {
-	cursor = skipHorizontalWhitespace(input, cursor);
-	const fieldStart = cursor;
-	let value: string;
-
-	if (input[cursor] === '"') {
-		const quoted = readQuoted(input, cursor, offset, field, false);
-		if (quoted.kind === "failure") return quoted;
-		value = quoted.value.value;
-		cursor = quoted.value.next;
-	} else {
-		const tokenStart = cursor;
-		while (cursor < input.length) {
-			const character = input[cursor];
-			if (isWhitespace(character) || input.startsWith("::", cursor)) break;
-			if (character === "]" || character === "[") break;
-			if (character === '"') {
-				return {
-					kind: "failure",
-					failure: syntaxFailure(
-						field,
-						offset + cursor,
-						offset + cursor + 1,
-						"A quote must enclose the complete Source or Target token",
-					),
-				};
-			}
-			cursor++;
-		}
-		if (cursor === tokenStart) {
-			return {
-				kind: "failure",
-				failure: syntaxFailure(
-					field,
-					offset + fieldStart,
-					offset + Math.min(fieldStart + 1, input.length),
-					`${field} must be a quoted string or a non-whitespace token`,
-				),
-			};
-		}
-		value = input.slice(tokenStart, cursor);
-	}
-
-	if (!value) {
-		return {
-			kind: "failure",
-			failure: syntaxFailure(
-				field,
-				offset + fieldStart,
-				offset + Math.max(fieldStart + 1, cursor),
-				`${field} must not be empty`,
-			),
-		};
-	}
-
-	cursor = skipHorizontalWhitespace(input, cursor);
-	if (requireDelimiter) {
-		if (!input.startsWith("::", cursor)) {
-			return {
-				kind: "failure",
-				failure: syntaxFailure(
-					field,
-					offset + cursor,
-					offset + Math.min(cursor + 1, input.length),
-					`Expected the :: delimiter after ${field}`,
-				),
-			};
-		}
-		return { kind: "success", value: { value, next: cursor + 2 } };
-	}
-
-	if (cursor !== input.length) {
-		return {
-			kind: "failure",
-			failure: syntaxFailure(
-				"target",
-				offset + cursor,
-				offset + Math.min(cursor + 2, input.length),
-				"Target must be the final field of an inline semantic link",
-			),
-		};
-	}
-	return { kind: "success", value: { value, next: cursor } };
-}
-
-function readType(
-	input: string,
-	cursor: number,
-	offset: number,
-	allowedTypes: readonly string[] = LINK_TYPES,
-):
-	| { kind: "success"; value: ParsedType }
-	| { kind: "failure"; failure: ParseFailure } {
-	cursor = skipHorizontalWhitespace(input, cursor);
-	const typeStart = cursor;
-	while (cursor < input.length) {
-		const character = input[cursor];
-		if (isWhitespace(character) || character === "(" || input.startsWith("::", cursor)) break;
-		if (character === "]" || character === "[") break;
-		cursor++;
-	}
-	const typeEnd = cursor;
-	if (typeStart === typeEnd) {
-		return {
-			kind: "failure",
-			failure: syntaxFailure(
-				"type",
-				offset + typeStart,
-				offset + Math.min(typeStart + 1, input.length),
-				"TYPE must be a link type name",
-			),
-		};
-	}
-
-	cursor = skipHorizontalWhitespace(input, cursor);
-	let reason: string | undefined;
-	if (input[cursor] === "(") {
-		cursor++;
-		cursor = skipHorizontalWhitespace(input, cursor);
-		if (input[cursor] !== '"') {
-			return {
-				kind: "failure",
-				failure: syntaxFailure(
-					"reason",
-					offset + cursor,
-					offset + Math.min(cursor + 1, input.length),
-					"reason must be a quoted string",
-				),
-			};
-		}
-		const parsedReason = readQuoted(input, cursor, offset, "reason", true);
-		if (parsedReason.kind === "failure") return parsedReason;
-		reason = parsedReason.value.value;
-		cursor = parsedReason.value.next;
-		if (input[cursor] !== ")") {
-			return {
-				kind: "failure",
-				failure: syntaxFailure(
-					"reason",
-					offset + cursor,
-					offset + Math.min(cursor + 1, input.length),
-					"reason is missing its closing parenthesis",
-				),
-			};
-		}
-		cursor++;
-		cursor = skipHorizontalWhitespace(input, cursor);
-	}
-
-	if (!input.startsWith("::", cursor)) {
-		return {
-			kind: "failure",
-			failure: syntaxFailure(
-				"type",
-				offset + cursor,
-				offset + Math.min(cursor + 1, input.length),
-				"Expected the :: delimiter after TYPE",
-			),
-		};
-	}
-
-	const normalized = input.slice(typeStart, typeEnd).toUpperCase();
-	const value = (allowedTypes.find((candidate) => candidate === normalized) ?? null) as
-		| LinkType
-		| null;
-	return {
-		kind: "success",
-		value: {
-			value,
-			reason,
-			next: cursor + 2,
-			typeStart,
-			typeEnd,
-		},
-	};
-}
-
-function readQuoted(
-	input: string,
-	start: number,
-	offset: number,
-	field: "source" | "target" | "reason",
-	allowEmpty: boolean,
-):
-	| { kind: "success"; value: ParsedEndpoint }
-	| { kind: "failure"; failure: ParseFailure } {
-	let cursor = start + 1;
-	let value = "";
-	while (cursor < input.length) {
-		const character = input[cursor];
-		if (character === '"') {
-			cursor++;
-			cursor = skipHorizontalWhitespace(input, cursor);
-			if (!allowEmpty && !value) {
-				return {
-					kind: "failure",
-					failure: syntaxFailure(
-						field,
-						offset + start,
-						offset + cursor,
-						`${field} must not be empty`,
-					),
-				};
-			}
-			return { kind: "success", value: { value, next: cursor } };
-		}
-		if (character === "\r" || character === "\n") {
-			return {
-				kind: "failure",
-				failure: syntaxFailure(
-					field,
-					offset + cursor,
-					offset + cursor + 1,
-					"Quoted inline semantic-link fields cannot contain a line break",
-				),
-			};
-		}
-		if (character !== "\\") {
-			value += character;
-			cursor++;
-			continue;
-		}
-		if (cursor + 1 >= input.length || (input[cursor + 1] !== '"' && input[cursor + 1] !== "\\")) {
-			return {
-				kind: "failure",
-				failure: syntaxFailure(
-					field,
-					offset + cursor,
-					offset + Math.min(cursor + 2, input.length),
-					"Only escaped quotes and backslashes are allowed in quoted fields",
-				),
-			};
-		}
-		value += input[cursor + 1];
-		cursor += 2;
-	}
-
-	return {
-		kind: "failure",
-		failure: syntaxFailure(
-			field,
-			offset + start,
-			offset + input.length,
-			"Quoted field is missing its closing quote",
-		),
-	};
-}
-
-function syntaxFailure(
-	field: InlineSemanticLinkDiagnosticField,
-	start: number,
-	end: number,
-	message: string,
-): ParseFailure {
-	return { code: "SYNTAX_ERROR", field, message, start, end };
-}
-
 function findPossibleClosings(source: string, opening: number): number[] {
 	const closings: number[] = [];
 	for (let index = opening + 2; index < source.length - 1; index++) {
@@ -489,14 +161,4 @@ function findPossibleClosings(source: string, opening: number): number[] {
 		closings.push(index);
 	}
 	return closings;
-}
-
-function isWhitespace(character: string | undefined): boolean {
-	return character === " " || character === "\t" || character === "\r" || character === "\n";
-}
-
-function skipHorizontalWhitespace(source: string, start: number): number {
-	let index = start;
-	while (source[index] === " " || source[index] === "\t") index++;
-	return index;
 }
