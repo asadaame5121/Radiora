@@ -2,6 +2,8 @@
 
 2026-10-03。Issue #239 / PR #285 の設計を、利用者から示された機能の範囲に合わせる。
 この文書は、共通ナビゲーションと保持した Outline への復帰の実装契約を定める。
+全画面選択とpane選択、live stateと復帰文脈、snapshot/draftの所有とwriterは
+[UI所有契約](ui-state-ownership.md)を参照する。
 
 ## 機能の範囲
 
