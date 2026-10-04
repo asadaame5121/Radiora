@@ -14,6 +14,28 @@
 - 300〜400行を超えたコンポーネントは、責務分割の候補としてレビューする。
 - 新機能を追加するときは、実装前に「既存featureに属するか、新しいfeatureとして分離するか」を判定する。
 
+### UI state ownership / Controller contract
+
+- UIを変更する前に [UI所有契約](docs/design/ui-state-ownership.md) を確認する。 Treeは
+  [Tree所有契約](docs/design/tree-state-ownership.md)、画面復帰は
+  [Outline画面遷移設計](docs/design/outline-screen-navigation.md) も参照する。
+- stateごとに正本、owner、writer/公開操作、読み手、寿命、永続化先、失効条件を定める。
+  保存済みデータはbackend/API、snapshotは描画キャッシュ、未保存入力はfeature draftとして区別する。
+- Controllerは一つのfeatureの状態遷移を所有し、Viewへ読み取り値と操作callbackを渡す。
+  生のsetter増設や双方向の`$effect`でowner間の同期を作らない。
+- 複数featureの保存・guard・prepare・最新要求確認・同期commitはWorkspaceが調停できる。
+  画面を跨ぐ移動は`ScreenNavigationWorkspace.navigate(destination, origin)`を通す。
+  commit内部の公開portを呼び出し側へ渡さず、描画後のfocus/caret/scrollも有効性を再確認する。
+- 全画面選択とOutline pane位置を区別する。Outline表示中は同じcommitで整合させ、
+  別画面の選択で休止中Outlineを上書きしない。初期復元・削除補正はユーザー選択と異なる内部権限とする。
+- OutlineScreenStateは復帰文脈のownerとし、live state全体のstoreにしない。
+  localStorageのwriterは設定ごとに一箇所。復帰状態の適用と明示ユーザー設定の保存を区別する。
+- 非同期公開は要求世代と必要な選択ID/入力範囲/filter key等を検証する。
+  旧成功・失敗・finallyから最新stateへ書かず、cancel/disposeでtimer/listener/observerと公開権限を解放する。
+  完了したDB書込をUI要求の失効で巻き戻さない。
+- 現状と決定した契約の差、後続Issue、回帰シナリオを文書に残す。 完了記録はPRのbase
+  branchとmainのsymbol/テストを照合し、積み上げ上の完了とmain反映を区別する。
+
 ### Styling
 
 - component固有のCSSは、原則としてそのViewを所有する `.svelte` ファイルの `<style>` に置く。

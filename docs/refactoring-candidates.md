@@ -73,7 +73,7 @@ checkは通過。
 
 A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ」依存は撤回する。 R1 と Storage は App
 と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。2026-10-04にT1→T2→T3を実施した。
-P3はPR #301で実装済み（取り込み待ち）。今後は#294の残るUI所有契約とmain未反映分を再評価する。
+P3はPR #301でmain反映済み。今後は#294の残るUI所有契約とmain未反映分を再評価する。
 
 ## 運用・難易度
 
@@ -92,20 +92,27 @@ P3はPR #301で実装済み（取り込み待ち）。今後は#294の残るUI�
 - [x] Memory の純粋操作を `memory_store_operations.ts` へ分離し、service の依存を feature port
       へ縮小。
 - [x] D1〜D4: search 契約と ranking、emergence 計算と persistence を分離。
-- [x] A2: `OutlineOperationsController.svelte.ts`
-      へツリー構造変異（インデント・行分割・空行削除等）を集約（キーボードイベント処理自体は App
-      側に残置）。
+- [ ] A2のmain反映: PR #274の積み上げbase上でOutlineOperationsControllerへの構造変異の集約を完了。
+      mainにはController/テストとApp委譲が未反映。#299で既存実装を再利用・適合する。
 - [x] A3: `InspectorView.svelte` と Overview/Relation/History/Query の View を分離。
 - [x] A1c: `DateProjectionController`、`TagController`、`SearchAliasController` の抽出と状態分離。
-- [x] A4: `StartupController.svelte.ts`
-      へ起動監視、キャッシュ復元、再試行処理を集約（進行中中断・onReady失敗分離を含む）。
-- [x] A5: `App.svelte` の未使用インポート・変数削除、副作用境界（$effect）の明文化、および
-      `recentEditedItems` ランキング計算の `recent_edited_items.ts` 抽出を完了。
+      Query/検索alias編集は#236でUIから休止し、Controllerと単体テストを保持する。
+- [ ] A4のmain反映: PR #275の積み上げbase上でStartupControllerへ起動処理を集約済み。
+      mainにはController/テストとApp委譲が未反映。#300で既存実装を再利用・適合する。
+- [ ] A5のcomposition整理: PR #277で未使用変数削除、副作用境界の明文化、recent編集項目の
+      計算分離等はmain反映済み。A2/A4のmain反映とAppの残る調停責務の分離は未完了。
 - [x] T4 の Sidebar/Inspector/Filter/Displayed 描画部分を分離。Tree 全体の状態整理は T3 に残す。
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
 
 ## 今週の実績（2026-10-04、T1→T2→T3完了）
+
+#295で全UIの[所有契約](design/ui-state-ownership.md)を文書化した。
+snapshot/draft、全画面選択/pane位置、live state/復帰文脈、設定writer、
+startupと通常reloadの権限、非同期失効・cleanup、後続Issueの回帰シナリオを記録する。
+AGENTS.mdにController規約を追加し、PR #274/#275/#277/#302のbaseと main
+`b208ea0`のsymbol/テストを照合して、上記A2/A4/A5の完了表記を訂正した。
+契約の確定であり、#298/#299/#300や描画cache/Layout/Navigationの移行完了ではない。
 
 T1: `tree_lineage_projection.ts` に世代計算、`tree_lineage_cycles.ts` にSCC循環membership、
 `tree_lane_order.ts` にoutline/semantic近接順を分離した。既存exportは維持し、直接moduleを
@@ -125,8 +132,9 @@ filter補正入口を通る。camera・hover・寸法はTree View、cluster/side
 投影変更のfitは更新済みlayoutの描画後に行い、再変更/unmountで古いfitを取り消す。
 
 所有・寿命・失効・reloadの公開手順は[Tree所有契約](design/tree-state-ownership.md)へ記録した。
-#296/#297のTree部分を実装したが、#295の全UI所有表や#294の他featureの完了を意味しない。
-実装行数例外をApp 2431→2179、Tree View 653→595、layout 626→427へ縮小し、解消した対象の
+#296/#297のTree部分はPR #302でmain反映済み。#295の全UI所有表は上記文書を参照する。
+#294の他featureの移行完了を意味しない。 実装行数例外をApp 2431→2179、Tree View 653→595、layout
+626→427へ縮小し、解消した対象の
 magic-number登録9件を削除した。新moduleにcomplexity/function-line例外を追加していない。
 
 検証: lint、format、型チェック（Svelte 0 errors / 0 warnings）、品質ラチェット、Vitest
@@ -273,20 +281,23 @@ magic-number ratchetは281 current/281 baseline、duplicate ratchetは34 current
   - source/name/result/error/saved query と sparse projection の状態遷移を所有する。
   - 完了条件: `InspectorQueryPanel` は表示と callback のみ、query の一時ノードを永続化しない。
 - [x] **A1c: tag・alias・日付投影の残存状態を整理** — 難易度3（PR #273）
-  - `DateProjectionController`、`TagController` を抽出し、alias 状態を `RuleQueryController`
-    に統合。
+  - `DateProjectionController`、`TagController`、`SearchAliasController`を抽出。
+    Query/alias編集は#236でUIを休止し、実装・保存データ・単体テストを保持する。
   - 完了条件: 無関係な状態を巨大な analysis Controller に集めず、各 feature owner に分離。
-- [x] **A2: Outline 操作の残作業** — 難易度3、依存 A0（PR #274）
-  - `OutlineOperationsController` を抽出し、indent/outdent/sibling move/splitRow/deleteEmptyRow
-    などのツリー構造変異および keydown 処理を集約。
+- [ ] **A2: Outline 操作のmain反映** — 難易度3、依存 #298（#299、既存PR #274）
+  - PR #274はbase `refactor/a1c-tag-alias-date-projection`で完了。main未反映の
+    Controller/テスト/委譲を再利用し、indent/outdent/sibling move/splitRow/deleteEmptyRow、
+    collapseとkeydownを[所有契約](design/ui-state-ownership.md)へ適合する。
   - 完了条件: 選択・操作の owner が一意になり、View に直接 RPC を入れず委譲完了。
 - [x] **A3: Inspector View 分離** — 上記完了記録を参照。
-- [x] **A4: startup lifecycle と preference I/O** — 難易度4（PR #275）
-  - `StartupController` を抽出し、起動監視・cache 復元・再試行・データ読み込み完了通知をカプセル化。
+- [ ] **A4: startup lifecycleのmain反映** — 難易度4（#300、既存PR #275）
+  - PR #275はbase `refactor/a2-outline-operations`で完了。main未反映のStartupControllerと
+    テスト/委譲を再利用し、起動監視・cache復元・retry/失効を所有契約へ適合する。 通常reload、Editor
+    draft、theme、global shortcut、visibility/unload flushのownerは維持する。
   - 完了条件: cache 有無、polling 監視、retry、dispose (unmount キャンセル) の単体テストを網羅。
-- [x] **A5: composition root の最終整理** — 難易度3、依存 A1/A2/A4（PR #276）
-  - 未使用インポート・不要中間変数の削除、および残存する 6 つの `$effect`
-    の副作用境界・依存関係・cleanup 方針の明文化を実施。
+- [ ] **A5: composition root の最終整理** — 難易度3、依存 A1/A2/A4（既存PR #276/#277）
+  - PR #277でPR #276の一部をmainへ移植済み。Appには構造操作・startup・reload等が残るため、
+    composition全体の完了とはしない。既存削除/副作用明文化を再実装せず、#294の残作業を進める。
   - 完了条件: `App.svelte` は純粋な Composition Root（Controller 接続・View
     選択・シェルレイアウト）として完成。
 
