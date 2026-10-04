@@ -232,3 +232,21 @@ test("staged reload keeps loading until publication or cancellation after Tree I
 	next.publish();
 	expect(s.tree.loading).toBe(false);
 });
+
+for (const failed of [false, true]) {
+	test(`revoked startup authority suppresses Tree ${failed ? "error" : "result"} publication`, async () => {
+		const s = setup();
+		const pending = Promise.withResolvers<GlobalLineageProjection>();
+		s.listGlobalLineage.mockReturnValueOnce(pending.promise);
+		let current = true;
+		const request = s.tree.prepareRefresh(() => current);
+		current = false;
+		if (failed) pending.reject(new Error("old startup Tree"));
+		else pending.resolve(projection(2));
+		await request.result;
+		request.publish();
+		expect(s.tree.projection).toBeNull();
+		expect(s.tree.error).toBeNull();
+		expect(s.onError).not.toHaveBeenCalled();
+	});
+}

@@ -376,3 +376,34 @@ Issueのopen/closedやバックログのチェックだけでmainへの反映を
 既存のScreenNavigation Controller/Workspace/regression/PBT、Navigation、Editor、HistoricalTime、
 LongForm、Tree ControllerのVitestを実行し、9ファイル112件成功。
 文書の照合を目的とした検証であり、実装待ちのシナリオが通ったことや全UI/browser検証を意味しない。
+
+## #300: StartupControllerの現行mainへの適合
+
+実装基点はmain `c4a1557`（#305反映後）。#295/#298とTree公開入口はこのbaseに存在する。 PR #275のhead
+`9cada0b`から`StartupController`と11件の単体テストを再利用した。
+本branchでの適合・検証完了であり、mainへの反映はこのPRのmerge後とする。
+
+- 起動phase/cache active/data loadedは`StartupController`が所有し、Appはderivedで読む。
+  `onMount`は`start`、cleanupは`dispose`、Viewは`retry`/`reloadData`へ委譲する。
+- 起動要求世代をpoll/retry/reload/start/disposeと通常load開始で進める。各await後の公開に
+  `current`を渡し、旧成功・失敗・finally・cache・補助一覧を公開しない。
+  cache読込同士にも世代を設け、dispose/retryで待機timerを解除する。
+- cacheは`OccurrenceSelectionWorkspace.restoreInitial`が受理した場合だけactiveにする。
+  正式snapshot、本文draft、選択、pane、年代フォームは既存ownerに残す。 relation
+  catalogue取得後も有効性を確認し、`TreeController.reconcileRelations`を通す。Tree取得scopeにも起動の公開権限を渡し、
+  旧起動要求の結果・errorをAppへ公開しない。
+- 正式loadと復元した空データの処理が成功してから`markDataLoaded`でinertを解除する。
+  初期load/cleanup失敗はfailedとして再試行可能にする。正式load後の補助一覧失敗は ready
+  shellを保持して既存error表示へ渡す。cache保存入口とtheme/shortcut/flushは移さない。
+- pending empty cleanupはflush後に有効性を再確認する。完了済み削除とpending記録の更新は
+  起動要求の失効で巻き戻さず、旧要求からのreload/error公開だけを止める。
+
+通常loadの開始は旧startupの公開権限を失効させる。通常load同士の逆順応答や
+画面遷移とのsnapshot調停、branch別draft overlayは#294の後続作業として残す。 通常loadの世代やsnapshot
+stateをStartupControllerに移してはいない。
+
+回帰検証は[Startup単体](../../vitest/startup_controller.svelte.test.ts)、
+[pending empty](../../vitest/pending_empty_item_controller.svelte.test.ts)、
+[startup画面](../../tests/ui/startup.spec.ts)へ追加した。
+cache/poll/retry/dispose/再起動の旧応答、通常load失効、poll timer解除、cache受理拒否、
+初期失敗の再試行、cache再読込の逆順応答を確認する。

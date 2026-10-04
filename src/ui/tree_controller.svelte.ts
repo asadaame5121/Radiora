@@ -109,7 +109,7 @@ export class TreeController {
 	 * Reload starts all I/O concurrently, but publishes Tree only after the other
 	 * reads succeed. Both reload and visible-Tree refresh use this request scope.
 	 */
-	prepareRefresh() {
+	prepareRefresh(canPublish = () => true) {
 		if (this.disposed) {
 			return {
 				result: Promise.resolve(),
@@ -121,7 +121,7 @@ export class TreeController {
 		const key = filterKey(filter);
 		const generation = ++this.generation;
 		const current = () =>
-			!this.disposed && generation === this.generation && key === this.filterKey();
+			!this.disposed && generation === this.generation && key === this.filterKey() && canPublish();
 		const owned = () => generation === this.generation && !this.disposed;
 		let pending: GlobalLineageProjection | null = null;
 		this._loading = true;

@@ -62,8 +62,9 @@ class WorkListState {
 		}
 	};
 
-	loadUnplacedWorks = async (): Promise<void> => {
-		(await this.prepareScreen("unplaced"))();
+	loadUnplacedWorks = async (current = () => true): Promise<void> => {
+		const publish = await this.prepareScreen("unplaced");
+		if (current()) publish();
 	};
 	loadStubs = async (): Promise<void> => {
 		(await this.prepareScreen("stubs"))();
