@@ -134,6 +134,13 @@ Workspaceを設けた。snapshot、Editor draft、live filter/Inspector、履歴
 そのdraftから選択IDを復活させない。保存中の追加入力も保持し、新しいdraftが残れば移動承認は保留する。
 画面遷移の最終read中に年代入力が追加された場合も、公開前に改めてguardを通す。
 
+初期復元ではAppが起動sessionとEditor/原稿draftの復元許可を渡し、選択Workspaceが
+自身の要求履歴と調停対象の年代フォームを保護する。各条件のstate ownerは一意であり、
+Workspaceへ全featureのdraftを取り込まない。起動sessionの調停は#300のStartup抽出に引き継ぐ。
+内部commitのモードは`selection` / `correction`で明示し、後者だけdraftを捨てない補正を行う。
+年代draftの等値性は既存のdirty baselineと同じJSON比較を使う。draftは固定キーの
+string/booleanのオブジェクトで、生成後は各fieldを編集するため、この範囲では比較結果が安定する。
+
 Inspector・履歴・backlinks・Treeのread model更新は受理した`selectedItem`から既存effectで行う。
 focus/caret/scrollには選択要求のreceiptと画面遷移のcurrent判定を使い、A→B→Aでも古い復元は行わない。
 既に選択済みの行へのDOM focusは新たなユーザー要求として再送せず、復帰中のscroll復元を失効させない。

@@ -92,14 +92,17 @@ export class OccurrenceSelectionWorkspace {
 		this.commit({ id, item });
 	}
 
-	/** Startup preview may initialize an untouched session, never overwrite accepted user input. */
+	/**
+	 * Caller authorizes its startup session and body drafts. This Workspace additionally protects
+	 * its selection request history and historical form, whose commits it coordinates.
+	 */
 	restoreInitial(
 		snapshot: OutlineSnapshot,
 		location: BrowsingLocation,
-		current: () => boolean,
+		sessionAllowsRestore: () => boolean,
 	): boolean {
 		if (
-			this.disposed || !this.initialRestorationOpen || !current() ||
+			this.disposed || !this.initialRestorationOpen || !sessionAllowsRestore() ||
 			this.ports.form.dirty || this.ports.form.submitting
 		) return false;
 		this.cancelPending();
@@ -129,7 +132,7 @@ export class OccurrenceSelectionWorkspace {
 				snapshot.items.some((value) => value.id === key)
 			)
 			: undefined;
-		this.commit({ id, item, browsing, expanded }, true);
+		this.commit({ id, item, browsing, expanded }, "correction");
 	}
 
 	cancelPending(): void {
@@ -198,14 +201,14 @@ export class OccurrenceSelectionWorkspace {
 		afterSelection?.(current);
 	}
 
-	private commit(next: PreparedSelection, correction = false): void {
-		if (correction || next.paneId || this.ports.current() !== next.id) {
+	private commit(next: PreparedSelection, mode: "selection" | "correction" = "selection"): void {
+		if (mode === "correction" || next.paneId || this.ports.current() !== next.id) {
 			this.ports.clearCompletions();
 		}
 		if (next.browsing) this.ports.outline.publishBrowsing(next.browsing);
 		if (next.expanded) this.ports.outline.publishExpanded(next.expanded);
 		this.ports.publish(next.id);
-		if (correction) this.ports.form.reconcileSelection(next.item);
+		if (mode === "correction") this.ports.form.reconcileSelection(next.item);
 		else this.ports.form.commitSelection(next.item);
 	}
 
