@@ -1,9 +1,9 @@
+import { buildLaneOrder } from "../src/ui/tree_lane_order.ts";
+import { calculateLineageProjection } from "../src/ui/tree_lineage_projection.ts";
 import { assert, assertEquals, assertGreater } from "jsr:@std/assert@1";
 import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
 import {
 	buildDirectNeighborSet,
-	buildLaneOrder,
-	calculateLineageProjection,
 	calculateTreeLayout,
 	labelForItem,
 	lodForScreenCollisions,
