@@ -227,6 +227,36 @@ pollはawait後のcancelled再確認がなく、retryとmonitorの全応答を�
 #300で起動sessionの失効を適合させ、通常reloadとの競合はキャッシュ境界の後続作業で扱う。
 抽出しただけでこれらが解消済みと記録しない。
 
+## #299: Outline編集操作の現行適合
+
+main `5240c44`（PR #304で#298反映済み）をbaseに、 `codex/issue-299-outline-operations`でPR
+#274のControllerと8件の直接テストを再利用した。 PR
+#274のmerge基点は`a4aa5044b57b330a4daadd166c11889f5cbf3a00`。
+このbranch上での実装・検証と、mainへのmergeは区別する。
+
+- `OutlineOperationsController`はindent/outdent、兄弟移動、collapse、行分割、空行削除と
+  構造編集キーを担当する。AppはIME/completionを先に処理し、その後に行keydownを委譲する。
+  root作成、通常Occurrence削除、drag、全件collapseは既存の入口に残す。
+- snapshot/selectedIdはApp、本文draftとautosaveはEditor、空項目記録はpending empty、
+  選択commitは`OccurrenceSelectionWorkspace`のownerを維持する。Controllerに写しを持たない。
+- 分割はautosave完了→応答時のcaret/selection読取→本文更新→Occurrence作成→空ならtrack→reload。
+  空Backspaceはautosave完了→削除→forget→reload。保存・作成・削除失敗では未完了の後続処理を行わない。
+- 操作開始時に選択receiptと画面originを捕捉する。操作中の選択/pane/画面変更で失効した要求は、
+  完了済みDB書込とpending記録を保持し、reload後の選択/focusを戻さない。
+  `load`は選択削除補正の直前に有効性を確認する。自操作による補正で失効するreceiptを、
+  古いユーザー操作と混同しない。受理した選択後のfocusは既存の最新receiptで再確認する。
+- autosave失敗は既存のnull/false契約を保持。構造書込の失敗は元の原因をcallerへ伝え、
+  キーイベントと行clickはrejectionを処理する。旧要求の失敗で新しいerrorを上書きしない。
+  collapseのコマンド経路では従来どおり失敗がコマンド処理へ伝わる。
+
+これは編集操作由来の選択/focusの適合であり、通常reload全体のsnapshot/bookmark/error/finallyの
+要求世代、遷移との公開競合、Work-only draft overlayは未解決。#294のcache後続へ残す。 startup
+sessionの#300も含めない。
+
+回帰: PR #274の8件に、保存順序・失敗時保持・修飾キー/IME・キー委譲・失効した要求のテストを追加。
+`tests/ui/outline-operations.spec.ts`で作成待ち/読込待ちの選択変更、画面変更、
+空Backspaceのpending記録と前行focusを検証する。
+
 ## live state・復帰文脈・pane履歴
 
 決定: Outline filter/一時展開/Inspectorは現状Appのlive owner、原稿はLongForm owner、
