@@ -1,6 +1,6 @@
 # リファクタリング・バックログ
 
-更新日: 2026-10-02。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
+更新日: 2026-10-03。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
 に変更なし）。
 
 責務、state ownership、I/O、transaction の変更理由に沿って、挙動を維持したまま整理する計画。
@@ -72,8 +72,8 @@ checkは通過。
 8. **G、O、C、残る R**: 明確な変更理由が生じるまで後順位。
 
 A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ」依存は撤回する。 R1 と Storage は App
-と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。2026-10-02のP1完了後、次回は
-**P2（Markdown除外領域の走査と意味リンク文法の分離）** を一作業単位にする。
+と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。2026-10-03のP2完了後、次回は
+**P3（endpoint/type/reasonの文法整理）** を一作業単位にする。
 
 ## 運用・難易度
 
@@ -105,7 +105,30 @@ A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
 
-## 今週の実績（2026-10-02、P1完了）
+## 今週の実績（2026-10-03、P2完了）
+
+`markdown_source_scanner.ts` にfence/code/autolink/Markdown link/URLの走査を抽出。
+`MarkdownExclusionScanner` が意味リンク用の除外走査とfence状態を所有し、 `inline_semantic_link.ts`
+は意味リンクの候補・文法・診断を担当する。 `markdown_parser.ts`
+と同じ契約の字句走査だけ共有し、タグ用のラベル内走査と意味リンク用の
+ラベル全体除外、各parserのfence改行処理と走査優先順位は維持した。token列やparser
+frameworkは追加していない。
+
+直接テスト8件で改行3種、fenceのmarker/長さ/未完入力、code span、autolink、入れ子・escape・angle
+付きdestination、UTF-16範囲、URL境界を確認。関連44件成功。変更前HEADとの一時比較では、
+生成した改行なしの入力10,000件について両parserの候補・診断・rangeが一致した。
+実装行数例外を582から452へ縮小し、解消した重複登録6件を削除、移動した既存重複1件の登録先を更新した。
+
+検証: lint、format、型チェック（Svelte 0 errors / 0 warnings）、品質ラチェット、Vitest
+244件、build成功。`deno task verify` はDeno830件成功・3件失敗で停止。
+legacy移行のパスとWindows専用MSIXに関する同じ3件を変更前HEADでも確認した。
+停止後のVitestとbuildは個別に実行した。
+
+別の不具合として、空行を含むfence内でMarkdown metadata parserの走査が停止する既存挙動を
+変更前HEADと変更後の両方でtimeoutにより確認した。P2では改行処理を変更せず、修正は別差分とする。
+次回はP3に着手する。
+
+## 過去の実績（2026-10-02、P1完了）
 
 S4の完了を受け、P1として `inline_semantic_link.ts` と `advanced_link_parser.ts`
 の既存テスト28件を確認した。 未完入力とMarkdown除外領域は既存ケースを維持し、足りなかったUTF-16
@@ -337,8 +360,9 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
 
 - [x] **P1** — 難易度3: escape、未完入力、source range、Markdown
       除外領域の既存テストを確認し不足だけ補強。2026-10-02完了。
-- [ ] **P2** — 難易度3、依存 P1: fence/code/link/URL の走査を意味リンク文法から分離。 Markdown
-      parser と契約が一致する箇所だけ共有する。token 列の新設は必須としない。
+- [x] **P2** — 2026-10-03完了。難易度3、依存 P1: fence/code/link/URL
+      の走査を意味リンク文法から分離。 Markdown parser と契約が一致する箇所だけ共有する。token
+      列の新設は必須としない。
 - [ ] **P3** — 難易度3、依存 P2: endpoint/type/reason の文法を整理。小さな scanner 関数で足りるなら
       parser framework は作らない。
 - [ ] **P4** — 難易度2、依存 P3: diagnostics
