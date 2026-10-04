@@ -409,3 +409,19 @@ stateをStartupControllerに移してはいない。
 [startup画面](../../tests/ui/startup.spec.ts)へ追加した。
 cache/poll/retry/dispose/再起動の旧応答、通常load失効、poll timer解除、cache受理拒否、
 初期失敗の再試行、cache再読込の逆順応答を確認する。
+
+## #308: Outline live owner（積み上げPR）
+
+PR base: main `729a064`（#306反映後）。#307のreload/cache調停は未反映であり、
+本変更の完了とmain反映を区別する。#307は引き続きmerge前提となる。
+
+`OutlineDisplayController` がlive filter・一時展開・visible rows projectionを所有する。
+Viewのfilter入力、選択Workspace、画面Workspaceの復元portは同じ操作に接続する。
+OutlineScreenStateは離脱時の写しだけを持ち、別画面中の選択でlive browsingを変更しない。
+Hoist/paneは既存Navigation/OccurrenceSelectionWorkspaceのcommit契約を維持する。
+root作成・削除はOutlineOperationsControllerが所有し、本文flush、pending empty記録、
+reload後の選択を既存ownerへ委譲する。書込完了後にreceiptが失効してもDBを巻き戻さない。
+
+`OutlineFocusAdapter` のtimerは新focus要求で置換し、receipt・pane・画面originを再確認する。
+unmountでtimerを解除する。画面復帰のfocus→caret→scrollは既存Viewportの順序を維持する。
+直接回帰はlive条件の写し、root/pending記録、保存失敗、pane/receipt/origin/disposeの失効を確認する。

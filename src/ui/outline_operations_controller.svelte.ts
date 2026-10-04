@@ -26,6 +26,7 @@ export interface OutlineOperationsControllerOptions {
 	captureRequest: () => () => boolean;
 	pendingEmpty: { track(id: string): void; forget(id: string): void };
 	clearTemporaryExpansion: (id: string) => void;
+	selection?: { current(): string | null; clear(): void };
 }
 
 type EditingKeyEvent = Pick<
@@ -45,6 +46,35 @@ const IME_PROCESS_KEY_CODE = 229;
 /** Editing order lives here; snapshot, drafts, pending records and selection retain their owners. */
 export class OutlineOperationsController {
 	constructor(private readonly options: OutlineOperationsControllerOptions) {}
+
+	createRoot = async (): Promise<void> => {
+		const current = this.options.captureRequest();
+		const roots = this.options.getItems().filter((item) => item.parentId === null);
+		const item = await this.options.api.createItem({
+			text: "",
+			parentId: null,
+			afterId: roots.sort((a, b) => a.orderKey - b.orderKey).at(-1)?.id ?? null,
+		});
+		this.options.pendingEmpty.track(item.id);
+		await this.options.reload(item.id, current);
+	};
+
+	remove = async (id: string): Promise<void> => {
+		const current = this.options.captureRequest();
+		const item = this.options.getItemById(id);
+		if (item) {
+			try {
+				await this.options.flushAutosave(item.workId);
+			} catch (cause) {
+				if (current()) this.options.reportError(cause);
+				return;
+			}
+		}
+		await this.options.api.deleteItem(id);
+		this.options.pendingEmpty.forget(id);
+		if (current() && this.options.selection?.current() === id) this.options.selection.clear();
+		await this.options.reload();
+	};
 
 	siblingsOf = (item: OutlineItem): OutlineItem[] => {
 		return this.options

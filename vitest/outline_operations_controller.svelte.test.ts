@@ -517,3 +517,22 @@ describe("OutlineOperationsController - current ownership contracts", () => {
 		expect(ports.reload).not.toHaveBeenCalled();
 	});
 });
+
+it("tracks a root and preserves its request receipt across creation", async () => {
+	const { controller, ports, invalidate } = fixture([createItem("last", null, 20)]);
+	await controller.createRoot();
+	expect(ports.api.createItem).toHaveBeenCalledWith({ text: "", parentId: null, afterId: "last" });
+	expect(ports.pendingEmpty.track).toHaveBeenCalledWith("new");
+	const receipt = ports.reload.mock.calls[0][1];
+	expect(receipt?.()).toBe(true);
+	invalidate();
+	expect(receipt?.()).toBe(false);
+});
+it("keeps a row and pending record when draft flush fails", async () => {
+	const { controller, ports } = fixture([createItem("a", null, 10)]);
+	ports.flushAutosave.mockRejectedValueOnce(new Error("save failed"));
+	await controller.remove("a");
+	expect(ports.api.deleteItem).not.toHaveBeenCalled();
+	expect(ports.pendingEmpty.forget).not.toHaveBeenCalled();
+	expect(ports.reportError).toHaveBeenCalled();
+});

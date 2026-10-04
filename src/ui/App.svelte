@@ -101,7 +101,7 @@
 	} from "../services/browsing_navigation_state";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
 	import { navigationUiState } from "./navigation_state";
-	import { buildVisibleRows, type VisibleRow } from "./outline_view_model";
+	import { type VisibleRow } from "./outline_view_model";
 	import {
 		COMMAND_DEFINITIONS,
 		commandAvailability,
@@ -121,10 +121,6 @@
 		comparisonDocumentKey,
 	} from "../services/comparison_service";
 	import {
-		EMPTY_OUTLINE_FILTER,
-		type OutlineFilter,
-	} from "../services/outline_filter";
-	import {
 		parseInlineSemanticLinks,
 		type InlineSemanticLinkCandidate,
 	} from "../services/inline_semantic_link";
@@ -138,6 +134,9 @@
 	import { ScreenDestinationPresenter } from "./screen_destination_presenter.ts";
 	import { ScreenNavigationWorkspace } from "./screen_navigation_workspace.svelte.ts";
 	import { focusTreeSelection } from "./tree_focus_adapter.ts";
+
+	import { OutlineDisplayController } from "./outline_display_controller.svelte.ts";
+	import { OutlineFocusAdapter } from "./outline_focus_adapter.ts";
 
 	const api = createRpcAdapter<RadioraBindings>();
 
@@ -167,7 +166,8 @@
 	const startup = $derived(startupController.status);
 	const startupCacheActive = $derived(startupController.cacheActive);
 	let error = $state("");
-	let outlineFilter = $state<OutlineFilter>({ ...EMPTY_OUTLINE_FILTER });
+	const outlineDisplay = new OutlineDisplayController();
+	const outlineFilter = $derived(outlineDisplay.filter);
 	const longFormController = new LongFormController({
 		flush: () => editorController.flushAutosave(),
 		save: (id, text) => api.updateItemText(id, text),
@@ -181,8 +181,8 @@
 		outline: {
 			captureBrowsing: () => navigationController.captureBrowsing(),
 			commitBrowsing: (state) => navigationController.commitBrowsing(state),
-			filter: () => outlineFilter, setFilter: (next) => outlineFilter = next,
-			expanded: () => transientExpandedIds, setExpanded: (next) => transientExpandedIds = next,
+			filter: () => outlineFilter, setFilter: (next) => outlineDisplay.setFilter(next),
+			expanded: () => transientExpandedIds, setExpanded: (next) => outlineDisplay.setExpanded(next),
 			inspector: () => ({ mode: asideMode, collapsed: inspectorCollapsed }),
 			setInspector: (context) => { asideMode = context.mode; inspectorCollapsed = context.collapsed; },
 			longForm: () => longForm.active,
@@ -231,7 +231,7 @@
 		},
 	});
 	let bookmarks = $state<Bookmark[]>([]);
-	let transientExpandedIds = $state<string[]>([]);
+	const transientExpandedIds = $derived(outlineDisplay.expanded);
 	let asideMode = $state<InspectorAsideMode>("overview");
 	const tagController = new TagController({
 		api: {
@@ -305,7 +305,7 @@
 			browsing: () => navigationController.captureBrowsing(),
 			publishBrowsing: (next) => navigationController.commitBrowsing(next),
 			expanded: () => transientExpandedIds,
-			publishExpanded: (next) => transientExpandedIds = next,
+			publishExpanded: (next) => outlineDisplay.setExpanded(next),
 			capturePanels: () => outlineViewport.capturePanels(),
 			restorePane: (id, current) => outlineViewport.restorePane(id, current),
 		},
@@ -374,8 +374,9 @@
 		flushAutosave: (workId) => editorController.flushAutosave(workId),
 		reportError: (cause) => error = errorMessage(cause),
 		pendingEmpty: pendingEmptyItemController,
-		clearTemporaryExpansion: (id) => transientExpandedIds = transientExpandedIds.filter((key) => key !== id),
+		clearTemporaryExpansion: (id) => outlineDisplay.clearExpansion(id),
 		captureRequest: captureOutlineRequest,
+		selection: { current: () => selectedId, clear: () => selectOccurrence(null) },
 	});
 	const keyboardWorkspace = new KeyboardWorkspaceController({
 		selectedId: () => selectedId,
@@ -388,7 +389,7 @@
 		setHoist: (id) => selectionWorkspace.setHoist(id),
 		projection: () => browsingProjection,
 		items: () => snapshot.items,
-		clearTemporaryExpansion: () => transientExpandedIds = [],
+		clearTemporaryExpansion: () => outlineDisplay.setExpanded([]),
 		setCollapsed: (id, collapsed) => api.setCollapsed(id, collapsed),
 		reload: () => load(),
 	});
@@ -481,10 +482,9 @@
 			] as const),
 		]).values(),
 	]);
-	const visibleRows = $derived.by(() => buildVisibleRows(
+	const visibleRows = $derived.by(() => outlineDisplay.visibleRows(
 		snapshot,
 		browsingProjection,
-		transientExpandedIds,
 		!browsingLocation.hoistOccurrenceId,
 	));
 	const dedicatedView = $derived(
@@ -912,7 +912,7 @@
 	}
 	function hoistSelected(): void {
 		if (!selectedId) return;
-		transientExpandedIds = [...new Set([...transientExpandedIds, selectedId])];
+		outlineDisplay.expand(selectedId);
 		selectionWorkspace.setHoist(selectedId);
 	}
 
@@ -989,16 +989,13 @@
 		void screenNavigation.navigate({ view: "outline", occurrenceId: id, expandedIds });
 	}
 
+	const outlineFocus = new OutlineFocusAdapter({
+		context: () => ({ pane: navigationController.browsing.activePaneId, origin: screenNavigation.origin }),
+		canFocus: (id) => viewMode === "outline" && selectedId === id,
+	});
+	onMount(() => () => outlineFocus.dispose());
 	function requestFocus(id: string, caretOffset?: number, current = selectionWorkspace.currentReceipt()): void {
-		setTimeout(() => {
-			if (!current() || viewMode !== "outline" || selectedId !== id) return;
-			const host = document.querySelector<HTMLElement>(
-				`.markdown-editor-host[data-editor-item-id="${CSS.escape(id)}"]`,
-			);
-			host?.dispatchEvent(new CustomEvent("radiora:focus-editor", {
-				detail: { caretOffset },
-			}));
-		}, 0);
+		outlineFocus.request(id, caretOffset, current);
 	}
 
 	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
@@ -1017,15 +1014,7 @@
 		});
 	}
 
-	async function createRoot(): Promise<void> {
-		const roots = snapshot.items.filter((item) => item.parentId === null);
-		const item = await api.createItem({
-			text: "",
-			parentId: null,
-			afterId: roots.sort((a, b) => a.orderKey - b.orderKey).at(-1)?.id ?? null,
-		});
-		await load(item.id);
-	}
+	const createRoot = (): Promise<void> => outlineOperations.createRoot();
 
 	// Side-effect boundary: view/selected Work/filter changes invalidate the prior Tree request.
 	// Tree owns generations; untrack keeps result/error/loading writes out of the dependencies.
@@ -1253,7 +1242,7 @@
 	}
 
 	function clearOutlineFilter(): void {
-		outlineFilter = { ...EMPTY_OUTLINE_FILTER };
+		outlineDisplay.clearFilter();
 	}
 
 	function captureOutlineRequest(): () => boolean {
@@ -1263,20 +1252,7 @@
 	}
 	const toggle = (row: VisibleRow): Promise<void> => outlineOperations.toggle(row.item);
 
-	async function remove(id: string): Promise<void> {
-		const item = itemById.get(id);
-		if (item) {
-			try {
-				await editorController.flushAutosave(item.workId);
-			} catch (cause) {
-				error = errorMessage(cause);
-				return;
-			}
-		}
-		await api.deleteItem(id);
-		if (selectedId === id) selectOccurrence(null);
-		await load();
-	}
+	const remove = (id: string): Promise<void> => outlineOperations.remove(id);
 
 	function handleSearchKeydown(event: KeyboardEvent): void {
 		if (event.isComposing) return;
@@ -1957,7 +1933,7 @@
 			<TodayView
 				bind:dateStart={dateProjectionController.start}
 				bind:dateEnd={dateProjectionController.end}
-				bind:outlineFilter
+				bind:outlineFilter={() => outlineDisplay.filter, (value) => outlineDisplay.setFilter(value)}
 				projection={dateProjectionController.projection}
 				loading={screenNavigation.pendingView === "today"}
 				onMoveDateRange={moveDateRange}
@@ -1974,7 +1950,7 @@
 				{linkableWorks}
 				{selectedId}
 				relationTypeDefinitions={relationTypes.definitions}
-				bind:outlineFilter
+				bind:outlineFilter={() => outlineDisplay.filter, (value) => outlineDisplay.setFilter(value)}
 				bind:unplacedLinkTargets={workController.unplacedLinkTargets}
 				bind:unplacedLinkDirections={workController.unplacedLinkDirections}
 				bind:unplacedLinkType={workController.unplacedLinkType}
