@@ -72,9 +72,6 @@
 		RelationTypeDirection,
 	} from "../domain/models";
 	import type { RadioraBindings, StartupStatus } from "../shared/bindings";
-	import type {
-		GlobalLineageProjection,
-	} from "../services/branch_service";
 	import type { DateProjection } from "../services/date_projection";
 	import {
 		renderOutlineSnapshotMarkdown,
@@ -95,16 +92,7 @@
 		saveUiLayoutPreference,
 	} from "./ui_layout_preference";
 	import { createThemeController } from "./theme_controller.svelte.ts";
-	import {
-		loadTreeProjectionPreference,
-		saveTreeProjectionPreference,
-	} from "./tree_projection_preference";
-	import {
-		loadTreeFilterPreference,
-		saveTreeFilterPreference,
-	} from "./tree_filter_preference";
-	import type { GlobalLineageFilter } from "../services/global_lineage_filter";
-	import type { TreeProjection } from "./tree_layout";
+	import { TreeController } from "./tree_controller.svelte.ts";
 	import {
 		ancestorBreadcrumb,
 	} from "../services/browsing_navigation_state";
@@ -243,7 +231,6 @@
 		},
 		errorMessage,
 	});
-	let globalLineage = $state<GlobalLineageProjection | null>(null);
 	const confirmationController = createConfirmationController();
 	let confirmationDialog: ConfirmationDialog;
 	let licensesDialogOpen = $state(false);
@@ -264,9 +251,11 @@
 	let inspectorCollapsed = $state(initialUiLayoutPreference.inspectorCollapsed);
 	let navCollapsed = $state(initialUiLayoutPreference.navCollapsed);
 	let occurrenceContextMenu = $state<OccurrenceContextMenuState | null>(null);
-	let treeProjectionPreference = $state<TreeProjection>(loadTreeProjectionPreference());
-	let treeFilter = $state<GlobalLineageFilter>(loadTreeFilterPreference());
-	let globalLineageRequest = 0;
+	const tree = new TreeController({
+		listGlobalLineage: (filter) => api.listGlobalLineage(filter),
+		selectedWorkId: () => selectedItem?.workId ?? null,
+		onError: (cause) => error = errorMessage(cause),
+	});
 	const themeController = createThemeController();
 	const outlineDrag = createOutlineDragController({
 		moveItem: (input) => api.moveItem(input),
@@ -729,6 +718,7 @@
 		void monitorStartup();
 		return () => {
 			cancelled = true;
+			tree.dispose();
 			cleanupTheme();
 			persistStartupSnapshotCache();
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
@@ -760,12 +750,7 @@
 
 	async function loadStartupData(): Promise<void> {
 		await relationTypes.load();
-		const currentTreeFilter = loadTreeFilterPreference(undefined, relationTypes.names);
-		const reconciled = relationTypes.reconcileFilter(currentTreeFilter);
-		if (reconciled !== currentTreeFilter) {
-			saveTreeFilterPreference(reconciled);
-		}
-		treeFilter = reconciled;
+		tree.reconcileRelations(relationTypes.names, true);
 		const loaded = await load();
 		if (!loaded) return;
 		await pendingEmptyItemController.discardRestored();
@@ -776,12 +761,12 @@
 	}
 
 	async function load(focusId?: string): Promise<boolean> {
-		const request = ++globalLineageRequest;
+		const treeRequest = tree.prepareRefresh();
 		try {
 			error = "";
 			const [next, nextGlobalLineage, nextBookmarks] = await Promise.all([
 				api.listOutline(),
-				api.listGlobalLineage(activeGlobalLineageFilter),
+				treeRequest.result,
 				api.listBookmarks(),
 			]);
 			const snapshotForStartupCache: OutlineSnapshot = {
@@ -799,10 +784,7 @@
 			editorController.clearCompletions();
 			if (viewMode === "outline") selectedId = navigationController.reconcileBrowsing(snapshot).selectedOccurrenceId;
 			else if (selectedId && !snapshot.items.some((item) => item.id === selectedId)) selectedId = null;
-			if (request === globalLineageRequest) {
-				globalLineage = nextGlobalLineage;
-				lastLoadedGlobalLineageFilterKey = globalLineageFilterKey();
-			}
+			treeRequest.publish(nextGlobalLineage);
 			bookmarks = nextBookmarks;
 			if (focusId) {
 				selectOccurrence(focusId, () => {
@@ -812,6 +794,7 @@
 			persistStartupSnapshotCache(snapshotForStartupCache, navigationController.browsingLocation);
 			return true;
 		} catch (cause) {
+			treeRequest.cancel();
 			error = errorMessage(cause);
 			return false;
 		} finally {
@@ -849,12 +832,8 @@
 		return true;
 	}
 
-	/** The selected Work joins the filter as a transient, non-persisted exception. */
-	const activeGlobalLineageFilter = $derived<GlobalLineageFilter>({
-		...treeFilter,
-		includeWorkIds: selectedItem ? [selectedItem.workId] : [],
-	});
-	let lastLoadedGlobalLineageFilterKey = "";
+	/** The selected Work joins the filter only as a transient display exception. */
+	const activeGlobalLineageFilter = $derived(tree.activeFilter());
 
 	function releaseEditorFocus(): void {
 		const active = document.activeElement;
@@ -1005,11 +984,6 @@
 		saveUiLayoutPreference({ navCollapsed, inspectorCollapsed, inspectorWidth });
 	}
 
-	function setTreeProjectionPreference(next: TreeProjection): void {
-		treeProjectionPreference = next;
-		saveTreeProjectionPreference(next);
-	}
-
 	function startInspectorResize(event: PointerEvent): void {
 		if (event.button !== 0 || inspectorCollapsed) return;
 		event.preventDefault();
@@ -1081,55 +1055,15 @@
 		await load(item.id);
 	}
 
-	async function loadGlobalLineage(): Promise<void> {
-		const request = ++globalLineageRequest;
-		try {
-			const next = await api.listGlobalLineage(activeGlobalLineageFilter);
-			if (request !== globalLineageRequest) return;
-			globalLineage = next;
-			lastLoadedGlobalLineageFilterKey = globalLineageFilterKey();
-		} catch (cause) {
-			if (request !== globalLineageRequest) return;
-			error = errorMessage(cause);
-		}
-	}
-
-	function globalLineageFilterKey(): string {
-		const filter = activeGlobalLineageFilter;
-		return [
-			filter.includeIsolated,
-			[...filter.linkTypes].sort().join(","),
-			[...filter.includeWorkIds].sort().join(","),
-		].join(":");
-	}
-
-	// Side-effect boundary: refresh global lineage tree when transient selection or filter changes the projection key.
-	// Dependency: viewMode, globalLineageFilterKey() (tracks activeGlobalLineageFilter and selectedItem?.workId).
-	// Cleanup: globalLineageRequest token safely drops in-flight stale responses.
+	// Side-effect boundary: view/selected Work/filter changes invalidate the prior Tree request.
+	// Tree owns generations; untrack keeps result/error/loading writes out of the dependencies.
+	// Cleanup invalidates responses after selection changes or leaving Tree.
 	$effect(() => {
-		// The selected Work is a transient exception to the isolation filter, so
-		// any selection change must refresh the projection while the tree view
-		// is open; otherwise a previously selected Work would stay visible.
-		if (viewMode !== "globalLineage") {
-			globalLineageRequest++;
-			return;
-		}
-		const key = globalLineageFilterKey();
-		if (key === lastLoadedGlobalLineageFilterKey) return;
-		void loadGlobalLineage();
-		return () => {
-			globalLineageRequest++;
-		};
+		if (viewMode !== "globalLineage") { tree.invalidate(); return; }
+		const key = tree.filterKey();
+		untrack(() => { if (tree.needsRefresh(key)) void tree.refresh(); });
+		return () => tree.invalidate();
 	});
-
-	function handleGlobalLineageFilterChange(next: GlobalLineageFilter): void {
-		treeFilter = {
-			includeIsolated: next.includeIsolated,
-			linkTypes: next.linkTypes,
-			includeWorkIds: [],
-		};
-		saveTreeFilterPreference(treeFilter);
-	}
 
 	async function handleKeydown(
 		event: KeyboardEvent,
@@ -1530,11 +1464,7 @@
 		direction: RelationTypeDirection;
 	}): Promise<void> {
 		await relationTypes.create(input);
-		const reconciled = relationTypes.reconcileFilter(treeFilter);
-		if (reconciled !== treeFilter) {
-			treeFilter = reconciled;
-			saveTreeFilterPreference(reconciled);
-		}
+		tree.reconcileRelations(relationTypes.names);
 	}
 
 	async function reverseLink(link: OutlineLink): Promise<void> {
@@ -1844,12 +1774,7 @@
 			await editorController.flushAutosave();
 			const result = await api.restoreJsonBackup(await file.text());
 			await relationTypes.load();
-			const currentTreeFilter = loadTreeFilterPreference(undefined, relationTypes.names);
-			const reconciled = relationTypes.reconcileFilter(currentTreeFilter);
-			if (reconciled !== currentTreeFilter) {
-				saveTreeFilterPreference(reconciled);
-			}
-			treeFilter = reconciled;
+			tree.reconcileRelations(relationTypes.names, true);
 			await load();
 			jsonBackupNotice =
 				`${vocabulary.jsonBackupRestoreSuccess}: ${result.workCount}件の${vocabulary.work}。`;
@@ -2210,7 +2135,7 @@
 				operationLogPort={api}
 				{opmlNotice}
 				{jsonBackupNotice}
-				{treeProjectionPreference}
+				treeProjectionPreference={tree.projectionPreference}
 				{navCollapsed}
 				{inspectorCollapsed}
 				{inspectorWidth}
@@ -2223,7 +2148,7 @@
 				onExportOpml={performOpmlExport}
 				onExportJsonBackup={performJsonBackupExport}
 				onRestoreJsonBackup={restoreJsonBackupFile}
-				onTreeProjectionChange={setTreeProjectionPreference}
+				onTreeProjectionChange={(next) => tree.setProjection(next)}
 				onNavigationCollapsedChange={setNavigationCollapsed}
 				onInspectorCollapsedChange={setInspectorCollapsed}
 				onInspectorWidthChange={setInspectorWidth}
@@ -2314,18 +2239,19 @@
 			{:else}
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.work}を選択してください。</p></section>
 			{/if}
-		{:else if globalLineage}
+		{:else if tree.projection}
 			<GlobalLineage
-				projection={globalLineage}
+				projection={tree.projection}
+				projectionPreference={tree.projectionPreference}
 				filter={activeGlobalLineageFilter}
 				relationTypeDefinitions={relationTypes.definitions}
-				onFilterChange={handleGlobalLineageFilterChange}
+				onFilterChange={(next) => tree.setFilter(next)}
 				{selectedId}
 				selectedWorkId={selectedItem?.workId ?? null}
 				onSelect={(id) => selectOccurrence(id)}
 				onOpen={(id) => void openTreeOccurrence(id)}
 				onContextMenu={(id, event) => openOccurrenceContextMenu(id, "tree", event)}
-				onProjectionChange={setTreeProjectionPreference}
+				onProjectionChange={(next) => tree.setProjection(next)}
 			/>
 		{:else}
 			<section class="tree-panel"><p class="empty">{vocabulary.globalLineage}を読み込んでいます…</p></section>

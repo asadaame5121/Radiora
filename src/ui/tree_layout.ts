@@ -4,7 +4,10 @@ import type {
 	OutlineSnapshot,
 	RelationTypeDefinition,
 } from "../domain/models.ts";
-import { isRelationTypeAdvancesGeneration } from "../domain/relation_type.ts";
+import { calculateLineageProjection } from "./tree_lineage_projection.ts";
+import { buildLaneOrder } from "./tree_lane_order.ts";
+export { calculateLineageProjection, type LineageProjection } from "./tree_lineage_projection.ts";
+export { buildLaneOrder } from "./tree_lane_order.ts";
 
 export type TreeLod = "detail" | "context" | "overview";
 export type TreeLinkType = LinkType;
@@ -22,13 +25,6 @@ export interface TreeCamera {
 }
 
 export const IDENTITY_CAMERA: TreeCamera = { k: 1, x: 0, y: 0 };
-
-export interface LineageProjection {
-	generationByWorkId: Map<string, number>;
-	knotWorkIds: Set<string>;
-	maxGeneration: number;
-	knotGeneration: number | null;
-}
 
 export interface TreeLayoutNode {
 	id: string;
@@ -149,125 +145,6 @@ export function calculateTreeLayout(
 	return aggregateScreenCells(screenNodes, rawEdges(snapshot), lod, laidOut.contentHeight);
 }
 
-export function calculateLineageProjection(
-	snapshot: OutlineSnapshot,
-	relationTypeDefinitions?: readonly RelationTypeDefinition[],
-): LineageProjection {
-	const workIds = [...new Set(snapshot.items.map((item) => item.workId))].sort();
-	const visibleWorkIds = new Set(workIds);
-	const children = new Map(workIds.map((id) => [id, new Set<string>()]));
-	const parents = new Map(workIds.map((id) => [id, new Set<string>()]));
-
-	for (const link of snapshot.links) {
-		if (
-			!isRelationTypeAdvancesGeneration(link.type, relationTypeDefinitions) ||
-			!visibleWorkIds.has(link.fromId) ||
-			!visibleWorkIds.has(link.toId)
-		) continue;
-		// Lineage levels follow the asserted generation-advancing direction so every visible
-		// source starts at G0 and each reachable target advances one generation.
-		children.get(link.fromId)?.add(link.toId);
-		parents.get(link.toId)?.add(link.fromId);
-	}
-
-	const knotWorkIds = findCyclicWorkIds(workIds, children);
-	const generationByWorkId = new Map<string, number>();
-	const indegree = new Map<string, number>();
-	for (const workId of workIds) {
-		if (knotWorkIds.has(workId)) continue;
-		indegree.set(
-			workId,
-			[...(parents.get(workId) ?? [])].filter((parent) => !knotWorkIds.has(parent)).length,
-		);
-		generationByWorkId.set(workId, 0);
-	}
-
-	const ready = [...indegree]
-		.filter(([, degree]) => degree === 0)
-		.map(([id]) => id)
-		.sort();
-	while (ready.length > 0) {
-		const parent = ready.shift()!;
-		const parentGeneration = generationByWorkId.get(parent) ?? 0;
-		for (const child of [...(children.get(parent) ?? [])].sort()) {
-			if (knotWorkIds.has(child)) continue;
-			generationByWorkId.set(
-				child,
-				Math.max(generationByWorkId.get(child) ?? 0, parentGeneration + 1),
-			);
-			const nextDegree = (indegree.get(child) ?? 0) - 1;
-			indegree.set(child, nextDegree);
-			if (nextDegree === 0) {
-				ready.push(child);
-				ready.sort();
-			}
-		}
-	}
-
-	const maxGeneration = Math.max(0, ...generationByWorkId.values());
-	return {
-		generationByWorkId,
-		knotWorkIds,
-		maxGeneration,
-		knotGeneration: knotWorkIds.size > 0 ? maxGeneration + 1 : null,
-	};
-}
-
-function findCyclicWorkIds(
-	workIds: string[],
-	children: Map<string, Set<string>>,
-): Set<string> {
-	let index = 0;
-	const indexById = new Map<string, number>();
-	const lowLinkById = new Map<string, number>();
-	const stack: string[] = [];
-	const onStack = new Set<string>();
-	const cyclic = new Set<string>();
-
-	const visit = (workId: string) => {
-		indexById.set(workId, index);
-		lowLinkById.set(workId, index);
-		index++;
-		stack.push(workId);
-		onStack.add(workId);
-
-		for (const child of [...(children.get(workId) ?? [])].sort()) {
-			if (!indexById.has(child)) {
-				visit(child);
-				lowLinkById.set(
-					workId,
-					Math.min(lowLinkById.get(workId)!, lowLinkById.get(child)!),
-				);
-			} else if (onStack.has(child)) {
-				lowLinkById.set(
-					workId,
-					Math.min(lowLinkById.get(workId)!, indexById.get(child)!),
-				);
-			}
-		}
-
-		if (lowLinkById.get(workId) !== indexById.get(workId)) return;
-		const component: string[] = [];
-		let member: string;
-		do {
-			member = stack.pop()!;
-			onStack.delete(member);
-			component.push(member);
-		} while (member !== workId);
-		if (
-			component.length > 1 ||
-			(children.get(workId)?.has(workId) ?? false)
-		) {
-			for (const id of component) cyclic.add(id);
-		}
-	};
-
-	for (const workId of workIds) {
-		if (!indexById.has(workId)) visit(workId);
-	}
-	return cyclic;
-}
-
 /**
  * Decides the LOD from screen-space collisions instead of a density proxy.
  * A 48x36px spatial hash finds nodes that can collide; their actual screen
@@ -335,108 +212,6 @@ export function buildDirectNeighborSet(snapshot: OutlineSnapshot, id: string): S
 		if (neighborWorkIds.has(item.workId)) result.add(item.id);
 	}
 	return result;
-}
-
-/**
- * Deterministic order for placing same-X items onto Y lanes.
- *
- * The order walks connected components of FROM links, outline parent/child
- * placement, and the other asserted semantic links, then falls back to
- * orderKey and item id. Non-FROM links influence only this proximity order and
- * never change a generation. Items without links still get their own lane.
- */
-export function buildLaneOrder(snapshot: OutlineSnapshot): Map<string, number> {
-	const ids = snapshot.items.map((item) => item.id);
-	const adjacency = new Map(ids.map((id) => [id, new Set<string>()]));
-	const addEdge = (a: string, b: string): void => {
-		if (a === b) return;
-		adjacency.get(a)?.add(b);
-		adjacency.get(b)?.add(a);
-	};
-	const idSet = new Set(ids);
-	const itemById = new Map(snapshot.items.map((item) => [item.id, item]));
-	for (const item of snapshot.items) {
-		if (item.parentId && idSet.has(item.parentId)) addEdge(item.id, item.parentId);
-	}
-	const representativeByWork = new Map<string, string>();
-	for (const item of snapshot.items) {
-		if (!representativeByWork.has(item.workId)) representativeByWork.set(item.workId, item.id);
-	}
-	for (const link of snapshot.links) {
-		if (link.status === "retracted") continue;
-		const fromItemId = representativeByWork.get(link.fromId);
-		const toItemId = representativeByWork.get(link.toId);
-		if (fromItemId && toItemId) addEdge(fromItemId, toItemId);
-	}
-
-	const componentOf = new Map<string, number>();
-	const membersByComponent = new Map<number, string[]>();
-	let componentIndex = 0;
-	for (const id of [...ids].sort()) {
-		if (componentOf.has(id)) continue;
-		const members: string[] = [];
-		const stack = [id];
-		while (stack.length > 0) {
-			const current = stack.pop()!;
-			if (componentOf.has(current)) continue;
-			componentOf.set(current, componentIndex);
-			members.push(current);
-			for (const neighbor of adjacency.get(current) ?? []) {
-				if (!componentOf.has(neighbor)) stack.push(neighbor);
-			}
-		}
-		membersByComponent.set(componentIndex, members.sort());
-		componentIndex++;
-	}
-
-	const componentKey = (members: string[]): [number, string] => {
-		const ordered = [...members].sort(compareByOrderKeyThenId(itemById));
-		const first = ordered[0];
-		return [itemById.get(first)!.orderKey, first];
-	};
-	const orderedComponents = [...membersByComponent.keys()].sort((a, b) => {
-		const [orderKeyA, idA] = componentKey(membersByComponent.get(a)!);
-		const [orderKeyB, idB] = componentKey(membersByComponent.get(b)!);
-		return orderKeyA - orderKeyB || idA.localeCompare(idB);
-	});
-
-	const order = new Map<string, number>();
-	let cursor = 0;
-	for (const index of orderedComponents) {
-		const members = membersByComponent.get(index)!;
-		const start = [...members].sort((a, b) => {
-			const left = itemById.get(a)!;
-			const right = itemById.get(b)!;
-			return left.orderKey - right.orderKey || left.id.localeCompare(right.id);
-		})[0];
-		const visited = new Set<string>();
-		const visit = (id: string) => {
-			if (visited.has(id)) return;
-			visited.add(id);
-			order.set(id, cursor++);
-			const current = itemById.get(id)!;
-			const neighbors = [...(adjacency.get(id) ?? [])];
-			const parentChildren = neighbors.filter((neighbor) =>
-				itemById.get(neighbor)?.parentId === id || current.parentId === neighbor
-			).sort(compareByOrderKeyThenId(itemById));
-			const linked = neighbors.filter((neighbor) => !parentChildren.includes(neighbor))
-				.sort(compareByOrderKeyThenId(itemById));
-			for (const neighbor of [...parentChildren, ...linked]) visit(neighbor);
-		};
-		visit(start);
-		for (const member of members) visit(member);
-	}
-	return order;
-}
-
-function compareByOrderKeyThenId(
-	itemById: Map<string, OutlineItem>,
-): (a: string, b: string) => number {
-	return (a, b) => {
-		const left = itemById.get(a)!;
-		const right = itemById.get(b)!;
-		return left.orderKey - right.orderKey || left.id.localeCompare(right.id);
-	};
 }
 
 function assignLanes(

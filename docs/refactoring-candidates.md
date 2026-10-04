@@ -1,6 +1,6 @@
 # リファクタリング・バックログ
 
-更新日: 2026-10-03。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
+更新日: 2026-10-04。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
 に変更なし）。
 
 責務、state ownership、I/O、transaction の変更理由に沿って、挙動を維持したまま整理する計画。
@@ -72,8 +72,8 @@ checkは通過。
 8. **G、O、C、残る R**: 明確な変更理由が生じるまで後順位。
 
 A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ」依存は撤回する。 R1 と Storage は App
-と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。2026-10-03のP2完了後、次回は
-**P3（endpoint/type/reasonの文法整理）** を一作業単位にする。
+と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。2026-10-04にT1→T2→T3を実施した。
+P3はPR #301で実装済み（取り込み待ち）。今後は#294の残るUI所有契約とmain未反映分を再評価する。
 
 ## 運用・難易度
 
@@ -105,7 +105,37 @@ A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
 
-## 今週の実績（2026-10-03、P2完了）
+## 今週の実績（2026-10-04、T1→T2→T3完了）
+
+T1: `tree_lineage_projection.ts` に世代計算、`tree_lineage_cycles.ts` にSCC循環membership、
+`tree_lane_order.ts` にoutline/semantic近接順を分離した。既存exportは維持し、直接moduleを
+使うlayoutテストと循環テストで契約を固定。変更前HEAD（`085ce1e`）との360生成ケースで
+Chronology/Lineage、camera、順序、座標、clusterとedgeが一致した。
+
+T2: `visibleContextLabels` にscreen空間のラベルhit判定を分離。 `connectTreePointer`
+がDOM座標変換・D3のmouse/touch/wheel gesture・ResizeObserver・listener・
+transitionを接続し、cameraはViewに残した。D3のwindow capture中にunmountしてもlistenerを
+解放し、native drag/selectionを復元する。独自pointer captureへの置換はしていない。
+
+T3: `TreeController` がprojection preference、filter、取得結果、error/loading、要求世代と
+取得時filter keyを所有する。Tree/Optionsは同じ設定ownerを読む。選択Workの表示例外はAppから
+派生させ、保存filterへ混入させない。App reloadは既存の並行取得・draft保持を維持し、成功後の
+Tree公開と失敗時の要求cancelをownerへ委譲する。startup・relation type変更・JSON復元も同じ
+filter補正入口を通る。camera・hover・寸法はTree View、cluster/sidebar tabはGlobalLineageに残す。
+投影変更のfitは更新済みlayoutの描画後に行い、再変更/unmountで古いfitを取り消す。
+
+所有・寿命・失効・reloadの公開手順は[Tree所有契約](design/tree-state-ownership.md)へ記録した。
+#296/#297のTree部分を実装したが、#295の全UI所有表や#294の他featureの完了を意味しない。
+実装行数例外をApp 2431→2172、Tree View 653→593、layout 626→427へ縮小し、解消した対象の
+magic-number登録15件を削除した。新moduleにcomplexity/function-line例外を追加していない。
+
+検証: lint、format、型チェック（Svelte 0 errors / 0 warnings）、品質ラチェット、Vitest
+254件、UI回帰52件、Treeのa11y1件、build成功。Controller直接テスト10件を含み、dispose後の
+要求開始も無視されることを確認した。`deno task verify`はDeno837件成功・既存3件失敗で停止。
+legacy移行パス1件とWindows専用MSIX2件は変更前`085ce1e`でも同じ失敗を確認済み。
+停止後のVitestとbuildは個別に実行した。
+
+## 過去の実績（2026-10-03、P2完了）
 
 `markdown_source_scanner.ts` にfence/code/autolink/Markdown link/URLの走査を抽出。
 `MarkdownExclusionScanner` が意味リンク用の除外走査とfence状態を所有し、 `inline_semantic_link.ts`
@@ -342,19 +372,20 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
 
 ## T: Tree UI / Layout
 
-- [ ] **T1: graph projection の抽出** — 難易度4
-  - `calculateLineageProjection` / cycle 判定と lane ordering を変更理由ごとに分ける。
+- [x] **T1: graph projection の抽出** — 難易度4、2026-10-04完了
+  - `calculateLineageProjection` / SCC cycle判定 / lane orderingをそれぞれのmoduleへ分離。
   - 完了条件: `tree_layout_test.ts` と `tests/high_density_tree_layout_test.ts`
     で循環、順序、座標/集約契約を維持。
-- [ ] **T2: hit testing / pointer interaction** — 難易度3
+- [x] **T2: hit testing / pointer interaction** — 難易度3、2026-10-04完了
   - DOM 座標変換、純粋 hit 判定、drag/pan の状態を区別。すべてを純粋関数にする旧条件は撤回する。
-  - 完了条件: 純粋判定は直接テスト、pointer capture と cleanup は実イベント経路で確認する。
-- [ ] **T3: camera/filter の owner 確認** — 難易度3
+  - 完了条件: 純粋判定は直接テスト、D3のwindow gesture captureとcleanupは実イベント経路で確認。
+- [x] **T3: camera/filter の owner 確認** — 難易度3、2026-10-04完了
   - GlobalLineage の filter は props/callback、cluster と sidebar tab
     はローカル状態という既存構造を起点にする。
-  - 完了条件: camera と選択の所有が重複せず、既存 `tree_camera.ts` を再利用。万能 tree Controller
-    を作らない。
-- [x] **T4: Sidebar/Inspector/legend 周辺 View の抽出** — 描画分離済み。残る操作状態は T2/T3。
+  - `TreeController`は設定/filter/read model/要求だけを所有し、cameraと選択を複製しない。 完了条件:
+    既存`tree_camera.ts`を再利用し、投影更新後にfit。所有契約は
+    [Tree所有契約](design/tree-state-ownership.md)を参照。
+- [x] **T4: Sidebar/Inspector/legend 周辺 View の抽出** — 描画分離済み。操作状態はT2/T3で整理済み。
 
 ## P / G / O: Parser と検証
 

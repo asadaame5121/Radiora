@@ -36,12 +36,18 @@ Deno.test("global tree clears selection, opens real nodes, and restores its proj
 		new URL("../src/ui/PhylogeneticTree.svelte", import.meta.url),
 	);
 
-	assert(tree.includes('addEventListener("click", handleCanvasClick)'));
+	const pointer = await readUi("tree_pointer_adapter.ts");
+	assert(pointer.includes('addEventListener("click", click)'));
 	assert(tree.includes("onSelect(null)"));
 	assert(tree.includes("ondblclick={(event) => handleNodeDoubleClick(event, node)}"));
 	assert(tree.includes("if (node.aggregate) return"));
-	assert(tree.includes("loadTreeProjectionPreference()"));
-	assert(tree.includes("saveTreeProjectionPreference(next)"));
+	const owner = await readUi("tree_controller.svelte.ts");
+	assert(owner.includes("loadTreeProjectionPreference(preferences.projectionStorage)"));
+	assert(owner.includes("saveTreeProjectionPreference(next, this.preferences.projectionStorage)"));
+	assertFalse(tree.includes("loadTreeProjectionPreference"));
+	assertFalse(tree.includes("saveTreeProjectionPreference"));
+	assert(global.includes("projection={projectionPreference}"));
+	assert(app.includes("projectionPreference={tree.projectionPreference}"));
 	assert(global.includes("{onOpen}"));
 	assert(app.includes("function openTreeOccurrence"));
 	assert(app.includes("openOutlineOccurrence(id"));
@@ -114,29 +120,35 @@ Deno.test("filter changes reload the projection and preserve only persisted sett
 	assert(filter.includes("すべて解除"));
 	assert(filter.includes("onFilterChange({ ...filter, includeIsolated:"));
 	assert(filter.includes("onFilterChange({ ...filter, linkTypes })"));
-	assert(app.includes("loadTreeFilterPreference()"));
-	assert(app.includes("saveTreeFilterPreference(treeFilter)"));
-	assert(app.includes("api.listGlobalLineage(activeGlobalLineageFilter)"));
-	assert(app.includes("includeWorkIds: selectedItem ? [selectedItem.workId] : []"));
+	const owner = await readUi("tree_controller.svelte.ts");
+	assertFalse(app.includes("loadTreeFilterPreference"));
+	assertFalse(app.includes("saveTreeFilterPreference"));
+	assert(owner.includes("loadTreeFilterPreference(preferences.filterStorage)"));
+	assert(owner.includes("saveTreeFilterPreference(this._filter, this.preferences.filterStorage)"));
+	assert(owner.includes("includeWorkIds: id ? [id] : []"));
+	assert(app.includes("treeRequest.result"));
 });
 
 Deno.test("selection changes refresh the exception projection while the tree view is open", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 
-	assert(app.includes("lastLoadedGlobalLineageFilterKey"));
-	assert(app.includes("globalLineageFilterKey()"));
+	assert(app.includes("tree.filterKey()"));
+	assert(app.includes("tree.needsRefresh(key)"));
 	assertMatch(
 		app,
-		/viewMode !== "globalLineage"[\s\S]*?globalLineageFilterKey\(\)[\s\S]*?void loadGlobalLineage\(\)/,
+		/viewMode !== "globalLineage"[\s\S]*?tree\.filterKey\(\)[\s\S]*?void tree\.refresh\(\)/,
 	);
 });
 
 Deno.test("global lineage requests are generation-guarded against out-of-order responses", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 
-	assert(app.includes("let globalLineageRequest = 0"));
-	assert(app.includes("const request = ++globalLineageRequest"));
-	assert(app.includes("request !== globalLineageRequest"));
+	const owner = await readUi("tree_controller.svelte.ts");
+	assertFalse(app.includes("globalLineageRequest"));
+	assert(owner.includes("private generation = 0"));
+	assert(owner.includes("generation === this.generation && key === this.filterKey()"));
+	assert(app.includes("treeRequest.publish(nextGlobalLineage)"));
+	assert(app.includes("treeRequest.cancel()"));
 });
 
 Deno.test("filter state closes a vanished cluster and shows the filter tab", async () => {

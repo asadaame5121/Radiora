@@ -44,7 +44,8 @@ Deno.test("Option groups export, exchange, backup, and live display settings", (
 	);
 	assertMatch(view, /bind:this=\{opmlFileInput\}/);
 	assertMatch(view, /bind:this=\{jsonBackupFileInput\}/);
-	assertMatch(app, /setTreeProjectionPreference/);
+	assertMatch(app, /treeProjectionPreference=\{tree\.projectionPreference\}/);
+	assertMatch(app, /onTreeProjectionChange=\{\(next\) => tree\.setProjection\(next\)\}/);
 	assertMatch(app, /setNavigationCollapsed/);
 	assertMatch(app, /setInspectorCollapsed/);
 	assertMatch(app, /setInspectorWidth/);
