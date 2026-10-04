@@ -1,6 +1,9 @@
 import { assert, assertMatch, assertNotMatch } from "jsr:@std/assert@1";
 
 const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+const menu = await Deno.readTextFile(
+	new URL("../src/ui/occurrence_context_menu_controller.svelte.ts", import.meta.url),
+);
 const tree = await Deno.readTextFile(
 	new URL("../src/ui/PhylogeneticTree.svelte", import.meta.url),
 );
@@ -18,7 +21,7 @@ const outlineRowItem = await Deno.readTextFile(
 Deno.test("outline and tree share the occurrence context menu without intercepting editors", () => {
 	assertMatch(app, /<ContextMenu/);
 	assertMatch(outlineRowItem, /openOccurrenceContextMenu\(row\.item\.id, "outline", event\)/);
-	assertMatch(app, /if \(source === "outline" && isEditableTarget\(event\.target\)\) return/);
+	assertMatch(menu, /source === "outline" && isEditableTarget\(event\.target\)/);
 	assertMatch(
 		app,
 		/onContextMenu=\{\(id, event\) => openOccurrenceContextMenu\(id, "tree", event\)\}/,
@@ -45,9 +48,13 @@ Deno.test("context actions reuse commands and confirmation-gated destructive pat
 	) {
 		assert(app.includes(`id: "${id}"`));
 	}
-	assertMatch(app, /case "create-branch":[\s\S]*?executeCommand\("createBranch"\)/);
-	assertMatch(app, /case "trash-work":[\s\S]*?trashSelectedWork\(\)/);
-	assertMatch(app, /case "export-selected":[\s\S]*?performMarkdownExport\(targetId\)/);
+	assertMatch(menu, /"create-branch": "createBranch"/);
+	assertMatch(menu, /this\.ports\.execute\(command\)/);
+	assertMatch(app, /"trash-work": \(\) => commandExecution\.run\(trashSelectedWork\)/);
+	assertMatch(
+		app,
+		/"export-selected": \(id\) => commandExecution\.execute\("exportMarkdown", \{ exportOccurrenceId: id \}\)/,
+	);
 	assertMatch(app, /\(bookmarks \?\? \[\]\)\.some/);
 });
 

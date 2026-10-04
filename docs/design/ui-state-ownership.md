@@ -437,3 +437,18 @@ debounce・要求世代・候補・active indexを管理する。clear/dispose�
 検索はquery sessionとして扱い、選択IDはsearch実行時のranking contextにだけ使う。
 選択変更・画面切替は検索の失効条件に含めず、query変更/clear/disposeを条件とする。
 Enter候補決定はOmni ownerへ置く。PaletteControllerのquery/openは独立し、Omniをclearしない。
+
+## #310: command実行・入力adapter（積み上げPR）
+
+baseは#309のbranchで、#307〜#310のmain反映とは区別する。
+CommandExecutionControllerがcommand_serviceのdispatch、単一in-flight操作、失敗処理を所有する。
+Palette・keyboard/chord・menu・command buttonは同じ入口へ接続し、feature操作へportで委譲する。
+実行中の重複要求は従来どおり棄却する。dispose後は新規実行と遅いerror公開を拒否するが、
+既に完了したDB操作は巻き戻さない。menu固有の作成/一覧/解除も同じ実行lockを使う。
+
+GlobalKeyboardAdapterはIME・repeat・dialog抑止、F1/F6/Ctrl+K/Space/shortcut判定と window listener
+cleanupを持ち、chord自体は既存KeyboardControllerへ委譲する。
+Palette内からのHelp/Ctrl+Kは許可し、他dialog中は抑止する。repeatでは操作を再実行しない。
+OccurrenceContextMenuControllerは短命target/geometryとaction dispatchを所有し、
+選択が変わった古いmenuから選択依存commandを実行しない。
+PaletteFocusAdapterはclose後の描画を待ち、再open・dispose・DOM切断時のfocus復元を棄却する。

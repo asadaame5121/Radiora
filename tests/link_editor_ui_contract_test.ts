@@ -32,7 +32,7 @@ Deno.test("Link Editor exposes GUI search, type selection, and direction selecti
 	assertMatch(editor, /isSymmetricLinkType/);
 	assertMatch(editor, /currentLinks/);
 	assertMatch(app, /executeCommand\("createLink", undefined, input\)/);
-	assertMatch(app, /else await openLinkEditor\(\)/);
+	assertMatch(app, /performAddLink\(payload\.linkInput\) : openLinkEditor\(\)/);
 	assertMatch(app, /async function reverseLink\(link: OutlineLink\)/);
 	assertMatch(app, /fromEndpoint: link\.to/);
 	assertMatch(app, /toEndpoint: link\.from/);
