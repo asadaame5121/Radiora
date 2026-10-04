@@ -1,3 +1,17 @@
+import {
+	findAutolinkEnd,
+	findInlineCodeEnd,
+	findLineEnd,
+	findUrlEnd,
+	isEscaped,
+	isFenceClosing,
+	isLineStart,
+	isUrlStart,
+	type MarkdownFence,
+	parseFence,
+	parseMarkdownLink,
+} from "./markdown_source_scanner.ts";
+
 /** A half-open UTF-16 range in the original Markdown source. */
 export interface MarkdownSourceRange {
 	start: number;
@@ -47,7 +61,7 @@ export interface InternalReferenceRewriteContext {
 export function parseMarkdownCandidates(source: string): MarkdownCandidates {
 	const tags: MarkdownTagCandidate[] = [];
 	const internalReferences: RadioraInternalReferenceCandidate[] = [];
-	let fence: { marker: "`" | "~"; length: number } | null = null;
+	let fence: MarkdownFence | null = null;
 	let index = 0;
 
 	while (index < source.length) {
@@ -142,98 +156,6 @@ export function rewriteCanonicalInternalReferences(
 	return rewritten;
 }
 
-function isLineStart(source: string, index: number): boolean {
-	return index === 0 || source[index - 1] === "\n" || source[index - 1] === "\r";
-}
-
-function findLineEnd(source: string, start: number): number {
-	const lineFeed = source.indexOf("\n", start);
-	const carriageReturn = source.indexOf("\r", start);
-	if (lineFeed < 0) return carriageReturn < 0 ? source.length : carriageReturn;
-	if (carriageReturn < 0) return lineFeed;
-	return Math.min(lineFeed, carriageReturn);
-}
-
-function parseFence(line: string): { marker: "`" | "~"; length: number } | null {
-	const match = /^(?: {0,3})(?:(`{3,})[^`]*|(~{3,})[^~]*)$/.exec(line);
-	if (!match) return null;
-	const run = match[1] ?? match[2];
-	return { marker: run[0] as "`" | "~", length: run.length };
-}
-
-function isFenceClosing(line: string, fence: { marker: "`" | "~"; length: number }): boolean {
-	const match = /^(?: {0,3})(`{3,}|~{3,})[ \t]*$/.exec(line);
-	return match?.[1][0] === fence.marker && match[1].length >= fence.length;
-}
-
-function findInlineCodeEnd(source: string, start: number): number | null {
-	let length = 1;
-	while (source[start + length] === "`") length++;
-	for (let index = start + length; index < source.length; index++) {
-		if (source[index] !== "`") continue;
-		let closingLength = 1;
-		while (source[index + closingLength] === "`") closingLength++;
-		if (closingLength === length) return index + closingLength;
-		index += closingLength - 1;
-	}
-	return null;
-}
-
-function findAutolinkEnd(source: string, start: number): number | null {
-	const end = source.indexOf(">", start + 1);
-	if (end < 0) return null;
-	return /^(?:[a-z][a-z0-9+.-]*:\/\/|mailto:)[^ <>]*$/i.test(source.slice(start + 1, end))
-		? end + 1
-		: null;
-}
-
-function parseMarkdownLink(
-	source: string,
-	start: number,
-): {
-	range: MarkdownSourceRange;
-	labelEnd: number;
-	destinationStart: number;
-	destinationEnd: number;
-} | null {
-	let depth = 1;
-	let labelEnd = start + 1;
-	for (; labelEnd < source.length; labelEnd++) {
-		if (isEscaped(source, labelEnd)) continue;
-		if (source[labelEnd] === "[") depth++;
-		if (source[labelEnd] === "]" && --depth === 0) break;
-	}
-	if (depth !== 0) return null;
-	let destinationStart = labelEnd + 1;
-	while (source[destinationStart] === " " || source[destinationStart] === "\t") destinationStart++;
-	if (source[destinationStart] !== "(") return null;
-	destinationStart++;
-	if (source[destinationStart] === "<") destinationStart++;
-	let destinationEnd = destinationStart;
-	let parentheses = 0;
-	for (; destinationEnd < source.length; destinationEnd++) {
-		if (isEscaped(source, destinationEnd)) continue;
-		const character = source[destinationEnd];
-		if (character === "(") parentheses++;
-		if (character === ")") {
-			if (parentheses === 0) break;
-			parentheses--;
-		}
-	}
-	if (destinationEnd === source.length) return null;
-	const hasAngleDestination = source[destinationStart - 1] === "<";
-	if (hasAngleDestination) {
-		if (source[destinationEnd - 1] !== ">") return null;
-		destinationEnd--;
-	}
-	return {
-		range: { start, end: destinationEnd + (hasAngleDestination ? 2 : 1) },
-		labelEnd,
-		destinationStart,
-		destinationEnd,
-	};
-}
-
 function parseRadioraDestination(
 	source: string,
 	start: number,
@@ -248,21 +170,6 @@ function parseRadioraDestination(
 		...(match[3] === undefined ? {} : { fragment: match[3] }),
 		destinationRange: { start, end },
 	};
-}
-
-function isUrlStart(source: string, index: number): boolean {
-	if (index > 0 && !isUrlBoundary(source[index - 1])) return false;
-	return /^(?:https?|ftp|radiora):\/\//i.test(source.slice(index));
-}
-
-function isUrlBoundary(character: string): boolean {
-	return /[\s\p{P}]/u.test(character);
-}
-
-function findUrlEnd(source: string, start: number): number {
-	let end = start;
-	while (end < source.length && !/[\s<>、。！？「」]/u.test(source[end])) end++;
-	return end;
 }
 
 function isTagBoundary(source: string, index: number): boolean {
@@ -290,10 +197,4 @@ function readCodePoint(source: string, start: number): { value: string; end: num
 	if (value === undefined) return null;
 	const character = String.fromCodePoint(value);
 	return { value: character, end: start + character.length };
-}
-
-function isEscaped(source: string, index: number): boolean {
-	let count = 0;
-	for (let cursor = index - 1; cursor >= 0 && source[cursor] === "\\"; cursor--) count++;
-	return count % 2 === 1;
 }
