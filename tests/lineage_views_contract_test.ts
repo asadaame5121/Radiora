@@ -147,7 +147,7 @@ Deno.test("global lineage requests are generation-guarded against out-of-order r
 	assertFalse(app.includes("globalLineageRequest"));
 	assert(owner.includes("private generation = 0"));
 	assert(owner.includes("generation === this.generation && key === this.filterKey()"));
-	assert(app.includes("treeRequest.publish(nextGlobalLineage)"));
+	assert(app.includes("treeRequest.publish()"));
 	assert(app.includes("treeRequest.cancel()"));
 });
 

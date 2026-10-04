@@ -5,6 +5,7 @@
 	import { onMount, tick, untrack } from "svelte";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
+	import TreeRequestStatus from "./TreeRequestStatus.svelte";
 	import GlobalLineage from "./GlobalLineage.svelte";
 	import RevisionComparison from "./RevisionComparison.svelte";
 	import ComparisonPane from "./ComparisonPane.svelte";
@@ -764,7 +765,7 @@
 		const treeRequest = tree.prepareRefresh();
 		try {
 			error = "";
-			const [next, nextGlobalLineage, nextBookmarks] = await Promise.all([
+			const [next, , nextBookmarks] = await Promise.all([
 				api.listOutline(),
 				treeRequest.result,
 				api.listBookmarks(),
@@ -784,7 +785,7 @@
 			editorController.clearCompletions();
 			if (viewMode === "outline") selectedId = navigationController.reconcileBrowsing(snapshot).selectedOccurrenceId;
 			else if (selectedId && !snapshot.items.some((item) => item.id === selectedId)) selectedId = null;
-			treeRequest.publish(nextGlobalLineage);
+			treeRequest.publish();
 			bookmarks = nextBookmarks;
 			if (focusId) {
 				selectOccurrence(focusId, () => {
@@ -2239,22 +2240,28 @@
 			{:else}
 				<section class="revision-comparison"><p class="comparison-empty">{vocabulary.work}を選択してください。</p></section>
 			{/if}
-		{:else if tree.projection}
-			<GlobalLineage
-				projection={tree.projection}
-				projectionPreference={tree.projectionPreference}
-				filter={activeGlobalLineageFilter}
-				relationTypeDefinitions={relationTypes.definitions}
-				onFilterChange={(next) => tree.setFilter(next)}
-				{selectedId}
-				selectedWorkId={selectedItem?.workId ?? null}
-				onSelect={(id) => selectOccurrence(id)}
-				onOpen={(id) => void openTreeOccurrence(id)}
-				onContextMenu={(id, event) => openOccurrenceContextMenu(id, "tree", event)}
-				onProjectionChange={(next) => tree.setProjection(next)}
-			/>
 		{:else}
-			<section class="tree-panel"><p class="empty">{vocabulary.globalLineage}を読み込んでいます…</p></section>
+			<TreeRequestStatus
+				loading={tree.loading}
+				error={tree.error === null ? "" : errorMessage(tree.error)}
+				onRetry={() => void tree.refresh()}
+			>
+				{#if tree.projection}
+					<GlobalLineage
+						projection={tree.projection}
+						projectionPreference={tree.projectionPreference}
+						filter={activeGlobalLineageFilter}
+						relationTypeDefinitions={relationTypes.definitions}
+						onFilterChange={(next) => tree.setFilter(next)}
+						{selectedId}
+						selectedWorkId={selectedItem?.workId ?? null}
+						onSelect={(id) => selectOccurrence(id)}
+						onOpen={(id) => void openTreeOccurrence(id)}
+						onContextMenu={(id, event) => openOccurrenceContextMenu(id, "tree", event)}
+						onProjectionChange={(next) => tree.setProjection(next)}
+					/>
+				{/if}
+			</TreeRequestStatus>
 		{/if}
 
 		{#if !dedicatedView}

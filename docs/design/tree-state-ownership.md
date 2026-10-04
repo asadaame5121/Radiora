@@ -2,6 +2,8 @@
 
 2026-10-04。#204 の T1→T2→T3 および #296/#297 の実装契約。 #295
 の全UI所有表は別作業とし、この文書はTreeの境界だけを確定する。
+ユーザー指定のT1→T2→T3を一括PRで実装するため、#296の前提となるTreeの所有契約を
+先にこの範囲で確定した。#295全体の完了や、他featureの実装完了は意味しない。
 
 | 状態                            | owner / writer                                    | 読み手・寿命・失効                                                                                              |
 | ------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
@@ -17,7 +19,10 @@
 ## 取得と公開
 
 Appのreloadは`prepareRefresh`で要求を作り、outline・Tree・bookmarkの取得を並行する。
-すべて成功した後に`publish`を呼び、どれか失敗すればその要求だけを`cancel`する。
+取得結果は要求scope内部に保留し、Appへは完了Promiseだけを渡す。
+すべて成功した後に引数なしの`publish`を呼び、どれか失敗すればその要求だけを`cancel`する。
+loadingはTree APIの完了時ではなく公開・中止・失敗時に解除する。
+Viewはloading/errorを表示し、初回失敗と既存結果を保持した更新失敗の両方で再試行できる。
 公開時には取得時の世代とfilter keyを照合するため、取得中に変わった選択/filterの結果を
 現在の結果として扱わない。別の最新要求を古いreloadのcancelで失効させない。
 Outlineのdraft保持と選択補正は既存のApp/workspaceが担当する。
@@ -26,6 +31,9 @@ Tree表示中のeffectはview・filter・選択Workだけを追跡し、`untrack
 result/error/loadingへの書込でeffectを再発火させない。cleanupはControllerの要求を失効させる。
 投影方式の変更はpropsでViewへ届き、`tick`後の更新済みlayoutをfitする。
 投影が再変更された場合やunmount時は予約したfitを取り消す。
+fitの失敗は原因付きでconsoleへ報告する。前回投影の非Rune値は初回mountのcameraを
+変更しないためのeffect履歴で、永続設定のownerではない。 GlobalLineageはTree feature内のcomposition
+Viewとして投影props/callbackを配線する。 この短い親子経路に別のcontext ownerは追加しない。
 
 ## pointer / layout
 

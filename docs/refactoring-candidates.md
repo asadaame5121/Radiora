@@ -126,14 +126,23 @@ filter補正入口を通る。camera・hover・寸法はTree View、cluster/side
 
 所有・寿命・失効・reloadの公開手順は[Tree所有契約](design/tree-state-ownership.md)へ記録した。
 #296/#297のTree部分を実装したが、#295の全UI所有表や#294の他featureの完了を意味しない。
-実装行数例外をApp 2431→2172、Tree View 653→593、layout 626→427へ縮小し、解消した対象の
-magic-number登録15件を削除した。新moduleにcomplexity/function-line例外を追加していない。
+実装行数例外をApp 2431→2179、Tree View 653→595、layout 626→427へ縮小し、解消した対象の
+magic-number登録9件を削除した。新moduleにcomplexity/function-line例外を追加していない。
 
 検証: lint、format、型チェック（Svelte 0 errors / 0 warnings）、品質ラチェット、Vitest
 254件、UI回帰52件、Treeのa11y1件、build成功。Controller直接テスト10件を含み、dispose後の
 要求開始も無視されることを確認した。`deno task verify`はDeno837件成功・既存3件失敗で停止。
 legacy移行パス1件とWindows専用MSIX2件は変更前`085ce1e`でも同じ失敗を確認済み。
 停止後のVitestとbuildは個別に実行した。
+
+PR #302のレビュー修正: 未処理fit Promiseへ原因付き報告を追加し、Tree結果は要求scope内で
+保留して引数なしpublishで公開する。loadingは公開/中止/失敗まで保持する。Treeの
+loading/error表示と再試行を接続し、更新失敗では前のTreeを保持する。無関係なAppの
+magic-number登録6件を復元した。投影設定の保存失敗テスト、公開待ちloadingテスト、
+初回/更新失敗からのブラウザ再試行テストを追加した。 再検証:
+Vitest255件（Controller11件）、UI54件（レイアウト修正後に失敗ケース再実行）、 Tree
+a11y1件成功。Deno全体は並行実行時に性能2件も失敗したが、負荷を除いた再実行では
+838件成功・既知の3件だけ失敗となった。
 
 ## 過去の実績（2026-10-03、P2完了）
 

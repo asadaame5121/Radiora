@@ -98,3 +98,16 @@ function memoryStorage(): TreeProjectionStorage & { values: Map<string, string> 
 		setItem: (key, value) => values.set(key, value),
 	};
 }
+
+Deno.test("failed projection persistence retains the last saved value for restart", () => {
+	const storage = memoryStorage();
+	saveTreeProjectionPreference("lineage", storage);
+	const readOnly: TreeProjectionStorage = {
+		getItem: storage.getItem,
+		setItem: () => {
+			throw new Error("storage is read-only");
+		},
+	};
+	saveTreeProjectionPreference("chronology", readOnly);
+	assertEquals(loadTreeProjectionPreference(readOnly), "lineage");
+});

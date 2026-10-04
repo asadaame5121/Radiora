@@ -114,3 +114,40 @@ test("Tree and Options share projection with one writer through remount and rest
 		"true",
 	);
 });
+
+test("initial Tree failure exposes retry and successful retry clears the error", async ({ page }) => {
+	await page.route(
+		"**/api/rpc/listGlobalLineage",
+		(route) => route.fulfill({ status: 503, json: { error: "Tree offline" } }),
+	);
+	await page.reload();
+	await page.getByRole("button", { name: "ツリー", exact: true }).click();
+	await expect(page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }))
+		.toBeVisible();
+	await expect(page.getByRole("status").filter({ hasText: "ツリーを読み込んでいます" }))
+		.toHaveCount(0);
+	await page.unroute("**/api/rpc/listGlobalLineage");
+	await page.getByRole("button", { name: "ツリーを再試行" }).click();
+	await expect(page.getByRole("group", { name: "思索の系統樹" })).toBeVisible();
+	await expect(page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }))
+		.toHaveCount(0);
+});
+
+test("failed filter refresh retains the Tree and permits retry", async ({ page }) => {
+	const svg = await openTree(page);
+	await page.route(
+		"**/api/rpc/listGlobalLineage",
+		(route) => route.fulfill({ status: 503, json: { error: "Tree offline" } }),
+	);
+	await page.getByRole("tab", { name: "フィルター" }).click();
+	await page.getByRole("checkbox", { name: /孤立/ }).uncheck();
+	await expect(page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }))
+		.toBeVisible();
+	await expect(svg).toBeVisible();
+	await expect(svg.locator(".tree-node").first()).toBeVisible();
+	await page.unroute("**/api/rpc/listGlobalLineage");
+	await page.getByRole("button", { name: "ツリーを再試行" }).click();
+	await expect(page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }))
+		.toHaveCount(0);
+	await expect(svg).toBeVisible();
+});

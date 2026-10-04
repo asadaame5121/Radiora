@@ -112,8 +112,8 @@ export class TreeController {
 	prepareRefresh() {
 		if (this.disposed) {
 			return {
-				result: Promise.resolve<GlobalLineageProjection | null>(null),
-				publish: (_projection: GlobalLineageProjection | null) => undefined,
+				result: Promise.resolve(),
+				publish: () => undefined,
 				cancel: () => undefined,
 			};
 		}
@@ -122,21 +122,25 @@ export class TreeController {
 		const generation = ++this.generation;
 		const current = () =>
 			!this.disposed && generation === this.generation && key === this.filterKey();
+		const owned = () => generation === this.generation && !this.disposed;
+		let pending: GlobalLineageProjection | null = null;
 		this._loading = true;
 		this._error = null;
 		return {
-			result: this.readProjection(
-				filter,
-				current,
-				() => generation === this.generation && !this.disposed,
-			),
-			publish: (projection: GlobalLineageProjection | null) => {
-				if (!projection || !current()) return;
-				this._projection = projection;
-				this.loadedKey = key;
+			result: this.readProjection(filter, current, owned).then((projection) => {
+				pending = projection;
+			}),
+			publish: () => {
+				if (pending && current()) {
+					this._projection = pending;
+					this.loadedKey = key;
+				}
+				pending = null;
+				if (owned()) this._loading = false;
 			},
 			cancel: () => {
-				if (current()) this.invalidate();
+				pending = null;
+				if (owned()) this.invalidate();
 			},
 		};
 	}
@@ -145,7 +149,8 @@ export class TreeController {
 		if (this.disposed) return;
 		const request = this.prepareRefresh();
 		try {
-			request.publish(await request.result);
+			await request.result;
+			request.publish();
 		} catch {
 			request.cancel(); /* readProjection recorded and reported the current failure. */
 		}
@@ -168,20 +173,19 @@ export class TreeController {
 		try {
 			return await this.ports.listGlobalLineage(filter);
 		} catch (cause) {
+			if (owned()) this._loading = false;
 			if (!current()) return null;
 			this._error = cause;
 			this.ports.onError(cause);
 			throw cause;
-		} finally {
-			if (owned()) this._loading = false;
 		}
 	}
 }
 
 function filterKey(filter: GlobalLineageFilter): string {
-	return [
+	return JSON.stringify([
 		filter.includeIsolated,
-		[...filter.linkTypes].sort().join(","),
-		[...filter.includeWorkIds].sort().join(","),
-	].join(":");
+		[...filter.linkTypes].sort(),
+		[...filter.includeWorkIds].sort(),
+	]);
 }

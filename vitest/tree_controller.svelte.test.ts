@@ -110,13 +110,15 @@ test("stale failure does not replace current data/error or report to App", async
 test("staging reload delays publication and cancelling it cannot invalidate a newer request", async () => {
 	const s = setup();
 	const reload = s.tree.prepareRefresh();
-	const loaded = await reload.result;
+	await reload.result;
+	expect(s.tree.loading).toBe(true);
 	expect(s.tree.projection).toBeNull();
 	const newer = s.tree.prepareRefresh();
 	reload.cancel();
-	reload.publish(loaded);
+	reload.publish();
 	expect(s.tree.projection).toBeNull();
-	newer.publish(await newer.result);
+	await newer.result;
+	newer.publish();
 	expect(s.tree.projection?.totalWorkCount).toBe(1);
 });
 
@@ -124,7 +126,8 @@ test("selection changes invalidate staged results even without another fetch", a
 	const s = setup();
 	const request = s.tree.prepareRefresh();
 	s.select("different-work");
-	request.publish(await request.result);
+	await request.result;
+	request.publish();
 	expect(s.tree.projection).toBeNull();
 	expect(s.tree.loading).toBe(false);
 	expect(s.tree.needsRefresh(s.tree.filterKey())).toBe(true);
@@ -148,10 +151,12 @@ test("leaving Tree and dispose discard old requests; re-entry and retry remain u
 	expect(s.tree.projection?.totalWorkCount).toBe(1);
 	const last = s.tree.prepareRefresh();
 	s.tree.dispose();
-	last.publish(await last.result);
+	await last.result;
+	last.publish();
 	await s.tree.refresh();
 	const ignored = s.tree.prepareRefresh();
-	ignored.publish(await ignored.result);
+	await ignored.result;
+	ignored.publish();
 	expect(s.tree.loading).toBe(false);
 	expect(s.listGlobalLineage).toHaveBeenCalledTimes(4);
 });
@@ -208,4 +213,22 @@ test("latest failure retains previous data and cannot be cleared by a stale succ
 	expect(s.tree.projection?.totalWorkCount).toBe(1);
 	expect(s.tree.loading).toBe(false);
 	expect(s.onError).toHaveBeenCalledOnce();
+});
+
+test("staged reload keeps loading until publication or cancellation after Tree I/O completes", async () => {
+	const s = setup();
+	await s.tree.refresh();
+	const reload = s.tree.prepareRefresh();
+	await reload.result;
+	expect(s.tree.loading).toBe(true);
+	expect(s.tree.projection?.totalWorkCount).toBe(1);
+	reload.cancel();
+	expect(s.tree.loading).toBe(false);
+	reload.publish();
+	expect(s.tree.projection?.totalWorkCount).toBe(1);
+	const next = s.tree.prepareRefresh();
+	await next.result;
+	expect(s.tree.loading).toBe(true);
+	next.publish();
+	expect(s.tree.loading).toBe(false);
 });

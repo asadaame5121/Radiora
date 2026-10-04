@@ -139,6 +139,7 @@
 		pointer.setMinimumZoom(minZoom);
 	});
 
+	// Effect-local history avoids refitting on initial mount; it is not shared preference state.
 	let fittedProjection = untrack(() => projection);
 	$effect(() => {
 		const next = projection;
@@ -146,7 +147,9 @@
 		fittedProjection = next;
 		let cancelled = false;
 		// Wait for the controlled projection's layout; superseded/unmounted fits are cancelled.
-		void tick().then(() => { if (!cancelled) untrack(fitView); });
+		void tick().then(() => { if (!cancelled) untrack(fitView); }).catch((cause) => {
+			if (!cancelled) console.error("Treeの投影変更後にカメラを合わせられませんでした", cause);
+		});
 		return () => { cancelled = true; };
 	});
 
