@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { nodeTitle } from "./tree_node_title.ts";
 	import { moveTreeFocus } from "./keyboard_controller.svelte.ts";
-	import { onMount } from "svelte";
+	import { onMount, tick, untrack } from "svelte";
 	import HistoricalTimeline from "./HistoricalTimeline.svelte";
 	import * as d3 from "d3";
 	import type { OutlineSnapshot, RelationTypeDefinition } from "../domain/models";
@@ -13,19 +13,13 @@
 		type TreeLayoutNode,
 		type TreeProjection,
 	} from "./tree_layout";
-	import {
-		loadTreeProjectionPreference,
-		saveTreeProjectionPreference,
-	} from "./tree_projection_preference";
 	import { fitTreeBounds, fitTreeNodes, type TreeBounds } from "./tree_camera";
-	import {
-		buildTreeSpatialIndex,
-		nodesNearRectangle,
-		screenRectanglesOverlap,
-	} from "./tree_spatial_index";
+	import { connectTreePointer } from "./tree_pointer_adapter.ts";
+	import { visibleContextLabels } from "./tree_label_visibility.ts";
 
 	let {
 		snapshot,
+		projection,
 		selectedId = null,
 		selectedWorkId = null,
 		relationTypeDefinitions,
@@ -36,13 +30,14 @@
 		onInspectCluster,
 	}: {
 		snapshot: OutlineSnapshot;
+		projection: TreeProjection;
 		selectedId?: string | null;
 		selectedWorkId?: string | null;
 		relationTypeDefinitions?: readonly RelationTypeDefinition[];
 		onSelect: (id: string | null) => void;
 		onOpen: (id: string) => void;
 		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
-		onProjectionChange?: (projection: TreeProjection) => void;
+		onProjectionChange: (projection: TreeProjection) => void;
 		onInspectCluster?: (cluster: TreeLayoutNode) => void;
 	} = $props();
 
@@ -51,10 +46,9 @@
 	let height = $state(700);
 	let transform = $state<d3.ZoomTransform>(d3.zoomIdentity);
 	let hoveredId = $state<string | null>(null);
-	let projection = $state<TreeProjection>("chronology");
 	let chronologyMode = $state<"created" | "historical">("created");
 	const historical = $derived(projection === "chronology" && chronologyMode === "historical");
-	let zoomBehavior: d3.ZoomBehavior<SVGSVGElement, unknown> | null = null;
+	let pointer: ReturnType<typeof connectTreePointer> | null = null;
 
 	const timeDomain = $derived.by((): [Date, Date] => {
 		const timestamps = snapshot.items
@@ -126,74 +120,37 @@
 	const selectionId = $derived(resolveTreeSelectionId(snapshot, selectedId, selectedWorkId));
 	const focusId = $derived(hoveredId ?? selectionId);
 	const highlightedIds = $derived(buildTreeHighlightSet(snapshot, selectionId, hoveredId));
-	const nodeGrid = $derived.by(() => {
-		// Spatial index over screen positions so label collision checks stay
-		// local instead of scanning every node.
-		return buildTreeSpatialIndex(layout.nodes);
-	});
-	const contextLabelIds = $derived.by(() => {
-		const visible = new Set<string>();
-		const accepted: Array<{ x1: number; x2: number; y1: number; y2: number }> = [];
-		const candidates = [...layout.nodes].sort((a, b) => {
-			const aEmphasized = a.itemIds.some((id) => highlightedIds.has(id)) ? 0 : 1;
-			const bEmphasized = b.itemIds.some((id) => highlightedIds.has(id)) ? 0 : 1;
-			return aEmphasized - bEmphasized || a.x - b.x;
-		});
-		for (const node of candidates) {
-			const rect = {
-				x1: node.x + node.radius + 8,
-				x2: node.x + node.radius + 12 + node.labelWidth,
-				y1: node.y - 10,
-				y2: node.y + 10 + Math.max(0, node.labelLines.length - 1) * 14,
-			};
-			if (rect.x1 < 4 || rect.x2 > width - 8 || rect.y1 < 4 || rect.y2 > height - 44) continue;
-			const hitsNode = nodesNearRectangle(nodeGrid, rect).some((other) => {
-				if (other.id === node.id) return false;
-				const padding = other.radius + 6;
-				return screenRectanglesOverlap(rect, {
-					x1: other.x - padding,
-					x2: other.x + padding,
-					y1: other.y - padding,
-					y2: other.y + padding,
-				});
-			});
-			if (hitsNode || accepted.some((other) => screenRectanglesOverlap(rect, other))) continue;
-			visible.add(node.id);
-			accepted.push(rect);
-		}
-		return visible;
-	});
+	const contextLabelIds = $derived(visibleContextLabels(layout.nodes, highlightedIds, { width, height }));
 	const minZoom = $derived(Math.min(1, fitCamera().k));
 
 	onMount(() => {
-		projection = loadTreeProjectionPreference();
-		const resizeObserver = new ResizeObserver(([entry]) => {
-			if (!entry) return;
-			width = entry.contentRect.width;
-			height = entry.contentRect.height;
-		});
-		if (svgElement.parentElement) resizeObserver.observe(svgElement.parentElement);
-		svgElement.addEventListener("click", handleCanvasClick);
-
-		zoomBehavior = d3.zoom<SVGSVGElement, unknown>()
-			.scaleExtent([minZoom, 24])
-			.filter((event) => event.type !== "dblclick")
-			.on("zoom", (event) => {
-				transform = event.transform;
-			});
-		d3.select(svgElement).call(zoomBehavior).on("dblclick.zoom", null);
-
-		return () => {
-			resizeObserver.disconnect();
-			svgElement.removeEventListener("click", handleCanvasClick);
-		};
+		pointer = connectTreePointer(svgElement, {
+			onTransform: (next) => transform = next,
+			onResize: (viewport) => { width = viewport.width; height = viewport.height; },
+			onBackgroundClick: () => { hoveredId = null; onSelect(null); },
+		}, minZoom);
+		return () => { pointer?.dispose(); pointer = null; };
 	});
 
 	$effect(() => {
-		if (!zoomBehavior) return;
+		if (!pointer) return;
 		// The minimum zoom must reach the whole-content fit view, so it follows
 		// the content bounds dynamically. d3 clamps gestures to this range.
-		zoomBehavior.scaleExtent([minZoom, 24]);
+		pointer.setMinimumZoom(minZoom);
+	});
+
+	// Effect-local history avoids refitting on initial mount; it is not shared preference state.
+	let fittedProjection = untrack(() => projection);
+	$effect(() => {
+		const next = projection;
+		if (next === fittedProjection) return;
+		fittedProjection = next;
+		let cancelled = false;
+		// Wait for the controlled projection's layout; superseded/unmounted fits are cancelled.
+		void tick().then(() => { if (!cancelled) untrack(fitView); }).catch((cause) => {
+			if (!cancelled) console.error("Treeの投影変更後にカメラを合わせられませんでした", cause);
+		});
+		return () => { cancelled = true; };
 	});
 
 	function edgePath(edge: TreeLayoutEdge): string {
@@ -272,14 +229,6 @@
 		onSelect(node.id);
 	}
 
-	function handleCanvasClick(event: MouseEvent): void {
-		const target = event.target;
-		if (target instanceof Element && target.closest(".tree-node")) return;
-		hoveredId = null;
-		onSelect(null);
-		svgElement.focus({ preventScroll: true });
-	}
-
 	function handleNodeDoubleClick(event: MouseEvent, node: TreeLayoutNode): void {
 		event.stopPropagation();
 		if (node.aggregate) return;
@@ -330,21 +279,12 @@
 
 	function selectProjection(next: TreeProjection): void {
 		if (projection === next) return;
-		projection = next;
-		saveTreeProjectionPreference(next);
-		onProjectionChange?.(next);
-		fitView();
+		onProjectionChange(next);
 	}
 
 	function applyTransform(next: d3.ZoomTransform): void {
-		if (!zoomBehavior) {
-			transform = next;
-			return;
-		}
-		d3.select(svgElement)
-			.transition()
-			.duration(260)
-			.call(zoomBehavior.transform, next);
+		if (!pointer) { transform = next; return; }
+		pointer.applyTransform(next);
 	}
 
 	function formatTick(tick: Date): string {

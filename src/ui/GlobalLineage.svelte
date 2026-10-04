@@ -11,6 +11,7 @@
 
 	let {
 		projection,
+		projectionPreference,
 		selectedId = null,
 		selectedWorkId = null,
 		filter,
@@ -22,6 +23,7 @@
 		onProjectionChange,
 	}: {
 		projection: GlobalLineageProjection;
+		projectionPreference: import("./tree_layout").TreeProjection;
 		selectedId?: string | null;
 		selectedWorkId?: string | null;
 		filter: GlobalLineageFilter;
@@ -30,7 +32,7 @@
 		onSelect: (id: string | null) => void;
 		onOpen: (id: string) => void;
 		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
-		onProjectionChange?: (projection: import("./tree_layout").TreeProjection) => void;
+		onProjectionChange: (projection: import("./tree_layout").TreeProjection) => void;
 	} = $props();
 
 	const vocabulary = useUiVocabulary();
@@ -90,6 +92,7 @@
 		<PhylogeneticTree
 			bind:this={treeElement}
 			snapshot={projection.snapshot}
+			projection={projectionPreference}
 			relationTypeDefinitions={definitions}
 			{selectedId}
 			{selectedWorkId}
