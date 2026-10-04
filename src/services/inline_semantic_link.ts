@@ -1,8 +1,5 @@
 import { LINK_TYPES, type LinkType } from "../domain/models.ts";
-import {
-	type InlineSemanticLinkBodyResult,
-	parseInlineSemanticLinkBody,
-} from "./inline_semantic_link_grammar.ts";
+import { parseInlineSemanticLinkBody } from "./inline_semantic_link_grammar.ts";
 import { isEscaped, MarkdownExclusionScanner } from "./markdown_source_scanner.ts";
 
 /** A half-open UTF-16 range in the original outline body. */
@@ -88,9 +85,14 @@ export function parseInlineSemanticLinks(
 				break;
 			}
 
-			let parsed: InlineSemanticLinkBodyResult | null = null;
 			let closing = closings[0];
-			for (const possibleClosing of closings) {
+			let parsed = parseInlineSemanticLinkBody(
+				source.slice(index + 2, closing),
+				index + 2,
+				allowedTypes,
+			);
+			for (const possibleClosing of closings.slice(1)) {
+				if (parsed.kind === "success") break;
 				const attempt = parseInlineSemanticLinkBody(
 					source.slice(index + 2, possibleClosing),
 					index + 2,
@@ -101,10 +103,9 @@ export function parseInlineSemanticLinks(
 					closing = possibleClosing;
 					break;
 				}
-				if (parsed === null) parsed = attempt;
 			}
 
-			if (parsed?.kind === "success") {
+			if (parsed.kind === "success") {
 				const end = closing + 2;
 				const candidate: InlineSemanticLinkCandidate = {
 					start: index,
@@ -121,13 +122,7 @@ export function parseInlineSemanticLinks(
 				continue;
 			}
 
-			const failure = parsed?.kind === "failure" ? parsed.failure : {
-				code: "SYNTAX_ERROR" as const,
-				field: "link" as const,
-				start: index,
-				end: closing + 2,
-				message: "Invalid inline semantic link syntax",
-			};
+			const failure = parsed.failure;
 			diagnostics.push({
 				code: failure.code,
 				field: failure.field,

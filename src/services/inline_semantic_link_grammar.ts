@@ -44,10 +44,20 @@ export function parseInlineSemanticLinkBody(
 ): InlineSemanticLinkBodyResult {
 	const source = readEndpoint(body, 0, offset, "source");
 	if (source.kind === "failure") return source;
-	const type = readType(body, source.value.next, offset, allowedTypes);
+	const delimiter = readDelimiter(body, source.value.next, offset, "source");
+	if (delimiter.kind === "failure") return delimiter;
+	const type = readType(body, delimiter.value, offset, allowedTypes);
 	if (type.kind === "failure") return type;
 	const target = readEndpoint(body, type.value.next, offset, "target");
 	if (target.kind === "failure") return target;
+	if (target.value.next !== body.length) {
+		return syntaxFailure(
+			"target",
+			offset + target.value.next,
+			offset + Math.min(target.value.next + 2, body.length),
+			"Target must be the final field of an inline semantic link",
+		);
+	}
 	return {
 		kind: "success",
 		source: source.value.value,
@@ -69,19 +79,6 @@ function readEndpoint(
 		: readEndpointToken(input, cursor, offset, field);
 	if (token.kind === "failure") return token;
 	cursor = skipHorizontalWhitespace(input, token.value.next);
-	if (field === "source") {
-		const delimiter = readDelimiter(input, cursor, offset, field);
-		if (delimiter.kind === "failure") return delimiter;
-		return { kind: "success", value: { value: token.value.value, next: delimiter.value } };
-	}
-	if (cursor !== input.length) {
-		return syntaxFailure(
-			field,
-			offset + cursor,
-			offset + Math.min(cursor + 2, input.length),
-			"Target must be the final field of an inline semantic link",
-		);
-	}
 	return { kind: "success", value: { value: token.value.value, next: cursor } };
 }
 
