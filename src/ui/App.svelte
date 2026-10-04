@@ -59,6 +59,8 @@
 	import { HistoryController } from "./history_controller.svelte.ts";
 	import { BranchRewriteController } from "./branch_rewrite_controller.ts";
 	import { ComparisonController } from "./comparison_controller.svelte.ts";
+	import { createOmniSearchController } from "./omni_search_controller.svelte.ts";
+	import { createCommandPaletteController } from "./command_palette_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { RelationTypeController } from "./relation_type_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
@@ -101,7 +103,7 @@
 	} from "../services/browsing_navigation_state";
 	import { useUiVocabulary } from "./ui_vocabulary_context";
 	import { navigationUiState } from "./navigation_state";
-	import { type VisibleRow } from "./outline_view_model";
+	import type { VisibleRow } from "./outline_view_model";
 	import {
 		COMMAND_DEFINITIONS,
 		commandAvailability,
@@ -219,7 +221,9 @@
 		navigation: screenNavigation,
 	});
 	let selectedId = $state<string | null>(null);
-	const navigationController = createNavigationController({
+	const navigationController = createNavigationController();
+	const paletteController = createCommandPaletteController();
+	const omniController = createOmniSearchController({
 		recordSearch: (outcome, durationMs) => {
 			void api.recordClientOperation("search.execute", outcome, durationMs).catch(() => console.warn("Could not record search."));
 		},
@@ -282,7 +286,10 @@
 		selectOccurrence,
 		requestConfirmation,
 		reportError: (cause) => error = errorMessage(cause),
-		clearQuickCaptureInput: () => navigationController.clearOmniwindow(),
+		captureQuickCaptureInput: () => {
+			const current = omniController.captureInput();
+			return () => omniController.clearAccepted(current);
+		},
 		reloadBookmarks: async () => {
 			bookmarks = await api.listBookmarks();
 		},
@@ -421,14 +428,14 @@
 	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
 	const browsingPane = $derived(navigationController.browsingPane);
 	const browsingProjection = $derived(navigationController.projectBrowsing(snapshot));
-	const commandPaletteOpen = $derived(navigationController.commandPaletteOpen);
-	const quickCaptureText = $derived(navigationController.quickCaptureText);
-	const suggestions = $derived(navigationController.suggestions);
-	const searchResults = $derived(navigationController.searchResults);
-	const searchActiveIndex = $derived(navigationController.searchActiveIndex);
-	const searchEntries = $derived(navigationController.searchEntries);
+	const commandPaletteOpen = $derived(paletteController.commandPaletteOpen);
+	const quickCaptureText = $derived(omniController.quickCaptureText);
+	const suggestions = $derived(omniController.suggestions);
+	const searchResults = $derived(omniController.searchResults);
+	const searchActiveIndex = $derived(omniController.searchActiveIndex);
+
 	// biome-ignore lint/correctness/noUnusedVariables: Retained for omniwindow contract test compliance
-	const omniEntryCount = $derived(navigationController.omniEntryCount);
+	const omniEntryCount = $derived(omniController.omniEntryCount);
 	const selectedBreadcrumb = $derived(ancestorBreadcrumb(snapshot, selectedId));
 	const outlineContextBreadcrumbItems = $derived(
 		browsingLocation.hoistOccurrenceId ? browsingProjection.breadcrumb : selectedBreadcrumb,
@@ -583,7 +590,7 @@
 		];
 	});
 	const commandPaletteCommands = $derived(commandPaletteItems(
-		navigationController.commandPaletteQuery,
+		paletteController.commandPaletteQuery,
 		commandContext,
 		vocabulary,
 	));
@@ -717,6 +724,7 @@
 		void startupController.start();
 		return () => {
 			startupController.dispose();
+			omniController.dispose();
 			screenNavigation.invalidate();
 			selectionWorkspace.dispose();
 			tree.dispose();
@@ -1257,13 +1265,13 @@
 	function handleSearchKeydown(event: KeyboardEvent): void {
 		if (event.isComposing) return;
 		if (event.key === "Escape") {
-			navigationController.clearOmniwindow();
+			omniController.clearOmniwindow();
 			return;
 		}
 		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 			event.preventDefault();
 			const delta = event.key === "ArrowDown" ? 1 : -1;
-			navigationController.moveSearchActiveIndex(delta);
+			omniController.moveSearchActiveIndex(delta);
 			return;
 		}
 		if (event.key === "Enter" && event.shiftKey && quickCaptureText.trim()) {
@@ -1273,23 +1281,15 @@
 		}
 		if (event.key === "Enter") {
 			event.preventDefault();
-			const exactMatchIndex = searchEntries.findIndex((entry) =>
-				titleFor(entry.value.item).trim() === quickCaptureText.trim()
-			);
-			const index = searchActiveIndex >= 0
-				? searchActiveIndex
-				: exactMatchIndex >= 0 ? exactMatchIndex : searchEntries.length > 0 ? 0 : -1;
-			if (index === searchEntries.length && quickCaptureText.trim()) {
-				void executeCommand("quickCapture");
-				return;
-			}
-			const entry = searchEntries[index];
+			const entry = omniController.enterEntry((entry) => titleFor(entry.value.item));
+			if (entry === "capture") { void executeCommand("quickCapture"); return; }
 			if (entry) void selectItem(entry.value.item, entry.value.ancestorIds);
 		}
 	}
 
 	async function selectItem(item: OutlineItem, ancestorIds: string[]): Promise<void> {
-		if (await screenNavigation.navigate({ view: "outline", occurrenceId: item.id, expandedIds: ancestorIds })) navigationController.clearOmniwindow();
+		const input = omniController.captureInput();
+		if (await screenNavigation.navigate({ view: "outline", occurrenceId: item.id, expandedIds: ancestorIds })) omniController.clearAccepted(input);
 	}
 
 	function openRecentItem(item: OutlineItem): void {
@@ -1482,11 +1482,11 @@
 		commandPaletteRestoreFocus = document.activeElement instanceof HTMLElement
 			? document.activeElement
 			: null;
-		navigationController.openCommandPalette();
+		paletteController.openCommandPalette();
 	}
 
 	async function closeCommandPalette(): Promise<void> {
-		navigationController.closeCommandPalette();
+		paletteController.closeCommandPalette();
 		await tick();
 		commandPaletteRestoreFocus?.focus();
 		commandPaletteRestoreFocus = null;
@@ -1795,7 +1795,7 @@
 	open={commandPaletteOpen}
 	commands={commandPaletteCommands}
 	{vocabulary}
-	bind:query={navigationController.commandPaletteQuery}
+	bind:query={() => paletteController.commandPaletteQuery, (value) => paletteController.setQuery(value)}
 	onClose={closeCommandPalette}
 	onExecute={executeCommandPaletteItem}
 />
@@ -1840,14 +1840,14 @@
 		{viewModeLabel}
 		canGoBack={commands.goBack.enabled}
 		onGoBack={() => void executeCommand("goBack")}
-		quickCaptureText={navigationController.quickCaptureText}
+		quickCaptureText={omniController.quickCaptureText}
 		{quickCaptureDestinationLabel}
 		{quickCaptureSubmitting}
 		startupPhase={startup.phase}
 		{searchActiveIndex}
 		{suggestions}
 		{searchResults}
-		searchEntriesLength={searchEntries.length}
+		searchEntriesLength={omniController.searchEntries.length}
 		{commands}
 		{vocabulary}
 		{bookmarks}
@@ -1856,8 +1856,7 @@
 		themePreference={themeController.preference}
 		onSetViewMode={(mode) => void executeCommand(mode === "outline" ? "showOutline" : "showTree")}
 		onQuickCaptureInput={(val) => {
-			navigationController.quickCaptureText = val;
-			navigationController.queueSearch();
+			omniController.input(val);
 		}}
 		onQuickCaptureKeydown={handleSearchKeydown}
 		onSelectSuggestion={(item, ancestorIds) => selectItem(item, ancestorIds ?? [])}

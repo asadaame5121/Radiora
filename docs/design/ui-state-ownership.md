@@ -425,3 +425,15 @@ reload後の選択を既存ownerへ委譲する。書込完了後にreceiptが�
 `OutlineFocusAdapter` のtimerは新focus要求で置換し、receipt・pane・画面originを再確認する。
 unmountでtimerを解除する。画面復帰のfocus→caret→scrollは既存Viewportの順序を維持する。
 直接回帰はlive条件の写し、root/pending記録、保存失敗、pane/receipt/origin/disposeの失効を確認する。
+
+## #309: browsing・Omni・Paletteの分離（積み上げPR）
+
+baseは#308のbranch。mainには#308/#309とも未反映。NavigationControllerはpane/hoistだけを持つ。
+OmniSearchControllerのinputは検索とquick captureで共有する唯一の文字列を更新し、
+debounce・要求世代・候補・active indexを管理する。clear/disposeはtimerと公開権限を失効させる。
+検索選択の受理、quick captureの成功は開始時の入力receiptが有効な場合だけclearする。
+待機中の追加入力を遅い成功で消さない。WorkControllerは作成・submittingのみ所有する。
+
+検索はquery sessionとして扱い、選択IDはsearch実行時のranking contextにだけ使う。
+選択変更・画面切替は検索の失効条件に含めず、query変更/clear/disposeを条件とする。
+Enter候補決定はOmni ownerへ置く。PaletteControllerのquery/openは独立し、Omniをclearしない。
