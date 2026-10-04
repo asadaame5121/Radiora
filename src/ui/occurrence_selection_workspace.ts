@@ -17,7 +17,7 @@ interface SelectionPorts {
 	/** Internal App publication port; never passed to Views or domain operations. */
 	publish(id: string | null): void;
 	snapshot(): OutlineSnapshot;
-	publishStartupSnapshot(snapshot: OutlineSnapshot): void;
+	publishStartupSnapshot(snapshot: OutlineSnapshot): boolean;
 	interruptNavigation(): void;
 	clearCompletions(): void;
 	form: Pick<
@@ -105,13 +105,13 @@ export class OccurrenceSelectionWorkspace {
 			this.disposed || !this.initialRestorationOpen || !sessionAllowsRestore() ||
 			this.ports.form.dirty || this.ports.form.submitting
 		) return false;
-		this.cancelPending();
 		const browsing = reconcileBrowsingState(
 			createBrowsingNavigationState("pane-1", location),
 			snapshot,
 		);
 		const id = currentBrowsingLocation(browsing).selectedOccurrenceId;
-		this.ports.publishStartupSnapshot(snapshot);
+		if (!this.ports.publishStartupSnapshot(snapshot)) return false;
+		this.cancelPending();
 		this.commit({ id, item: findItem(snapshot, id), browsing });
 		return true;
 	}
