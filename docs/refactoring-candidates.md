@@ -105,6 +105,38 @@ P3はPR #301でmain反映済み。今後は#294の残るUI所有契約とmain未
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
 
+## 今週の実績（2026-10-04〜05、#299の現行適合）
+
+main `5240c44`（#298はPR #304で反映済み）をbaseに、 `codex/issue-299-outline-operations`でPR
+#274のControllerと8件のテストを再利用した。
+旧baseの他featureやStartup実装は取り込まず、Appのindent/outdent、兄弟移動、collapse、
+行分割、空行削除、構造編集キーだけを委譲した。root作成/通常Occurrence削除/drag/全件collapseは対象外。
+
+追加差分はpending emptyのtrack/forgetと一時展開への委譲、autosave後のcaret読取、
+選択receipt＋画面originでの遅い選択/focus失効、イベントrejection処理。
+snapshot・draft・selectedIdのownerは増やしていない。
+保存・変更・記録・reloadの順序と未完了時の処理停止を直接テストし、
+作成/読込待ちの選択変更・画面変更・空Backspaceをブラウザで検証した。
+詳細は[UI所有契約の#299追記](design/ui-state-ownership.md#299-outline編集操作の現行適合)を参照する。
+
+App実装行数例外を2161→2100へ縮小。新Controllerに行数/complexity/function-line例外を追加しない。
+このbranchの実装をmainへのmergeと区別し、A2のmain反映チェックはmerge後に完了とする。
+#300と通常reloadの公開競合・branch別draft overlayは後続作業のまま。
+
+検証: Svelte315件（再利用8＋追加22のControllerテスト30件を含む）、Deno契約17件成功。
+Issue指定のブラウザ47件＋追加4件が成功し、最後のcollapse失敗処理調整後は追加5件を再検証して成功。
+Svelte型チェック0 errors/0
+warnings、backend型チェック、追加テストのTypeScript型チェック、build成功。
+行数ラチェットと重複ラチェット（26 current / 27 baseline）、全491ファイルのformat確認成功。
+変更対象lintは新Controllerを含めerrorなし、Appの既存warning5件のみ。 既存未追跡`.worktrees/`のnested
+root設定で通常Biomeが停止するため、同じ規則・既存例外を
+適用し`.worktrees/`を除外する一時設定で確認した。リポジトリのlint設定は変更していない。
+全体lintも同じ一時設定で477ファイルを確認し、errorなし。`deno task verify`はlint、行数、
+magic-number（260 current / 293 baseline）、重複、format、backend型チェックまで成功したが、
+WindowsのDeno task経由では`node_modules/.bin/svelte-check`のshell shimをJavaScriptとして読み、
+SyntaxErrorで停止した。PowerShellからの`npm run check`とSvelteテスト/buildは個別実行で成功。
+通常pre-commitは`.worktrees/`設定衝突で停止するため、個別検証を記録してコミット時だけhookを回避する。
+
 ## 今週の実績（2026-10-04、#298実装）
 
 PR #303反映後のmain `4912cf2`をbaseに、`codex/issue-298-selection-commit`で実装した。

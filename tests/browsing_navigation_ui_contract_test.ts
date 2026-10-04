@@ -91,6 +91,6 @@ Deno.test("loading a focus target commits accepted navigation before restoring e
 
 	assertMatch(
 		load,
-		/if \(focusId\) \{\s*selectOccurrence\(focusId, \(current\) => requestFocus\(focusId, undefined, current\)\);/,
+		/if \(focusId && focusCurrent\) \{\s*selectOccurrence\(focusId, \(current\) => requestFocus\(focusId, undefined, current\)\);/,
 	);
 });

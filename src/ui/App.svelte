@@ -5,6 +5,7 @@
 	import { onMount, tick, untrack } from "svelte";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
 	import { OccurrenceSelectionWorkspace } from "./occurrence_selection_workspace.ts";
+	import { OutlineOperationsController } from "./outline_operations_controller.svelte.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
 	import TreeRequestStatus from "./TreeRequestStatus.svelte";
 	import GlobalLineage from "./GlobalLineage.svelte";
@@ -352,6 +353,17 @@
 		deleteItem: (id) => api.deleteItem(id),
 		reload: () => load(),
 		reportError: (cause) => error = errorMessage(cause),
+	});
+	const outlineOperations = new OutlineOperationsController({
+		api,
+		getItems: () => snapshot.items,
+		getItemById: (id) => itemById.get(id),
+		reload: load,
+		flushAutosave: (workId) => editorController.flushAutosave(workId),
+		reportError: (cause) => error = errorMessage(cause),
+		pendingEmpty: pendingEmptyItemController,
+		clearTemporaryExpansion: (id) => transientExpandedIds = transientExpandedIds.filter((key) => key !== id),
+		captureRequest: captureOutlineRequest,
 	});
 	const keyboardWorkspace = new KeyboardWorkspaceController({
 		selectedId: () => selectedId,
@@ -766,7 +778,7 @@
 		await loadTags();
 	}
 
-	async function load(focusId?: string): Promise<boolean> {
+	async function load(focusId?: string, canFocus = () => true): Promise<boolean> {
 		const treeRequest = tree.prepareRefresh();
 		try {
 			error = "";
@@ -786,11 +798,13 @@
 				const draft = drafts.get(item.workId);
 				return draft === undefined ? item : { ...item, text: draft };
 			});
+			// Capture before deletion reconciliation invalidates the old selection receipt.
+			const focusCurrent = canFocus();
 			snapshot = next;
 			selectionWorkspace.reconcile();
 			treeRequest.publish();
 			bookmarks = nextBookmarks;
-			if (focusId) {
+			if (focusId && focusCurrent) {
 				selectOccurrence(focusId, (current) => requestFocus(focusId, undefined, current));
 			}
 			persistStartupSnapshotCache(snapshotForStartupCache, navigationController.browsingLocation);
@@ -1088,58 +1102,10 @@
 				return;
 			}
 		}
-		if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
-			if (!row.item.text.trim()) {
-				event.preventDefault();
-				return;
-			}
-			event.preventDefault();
-			try {
-				await editorController.flushAutosave(row.item.workId);
-			} catch (cause) {
-				error = errorMessage(cause);
-				return;
-			}
-			const cursor = textarea.selectionStart;
-			const left = row.item.text.slice(0, cursor);
-			const right = row.item.text.slice(textarea.selectionEnd);
-			await api.updateItemText(row.item.id, left);
-			const created = await api.createItem({
-				text: right,
-				parentId: row.item.parentId,
-				afterId: row.item.id,
-			});
-			if (!right.trim()) pendingEmptyItemController.track(created.id);
-			await load(created.id);
-			return;
-		}
-		if (event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
-			event.preventDefault();
-			if (event.shiftKey) await outdent(row.item);
-			else await indent(row.item);
-			return;
-		}
-		if (event.key === "Backspace" && !event.ctrlKey && !event.altKey && !event.metaKey && !row.item.text.trim()) {
-			const siblings = siblingsOf(row.item).filter((item) => item.orderKey < row.item.orderKey);
-			const previous = siblings.at(-1);
-			if (previous) {
-				event.preventDefault();
-				try {
-					await editorController.flushAutosave(row.item.workId);
-				} catch (cause) {
-					error = errorMessage(cause);
-					return;
-				}
-				await api.deleteItem(row.item.id);
-				pendingEmptyItemController.forget(row.item.id);
-				await load(previous.id);
-			}
-			return;
-		}
-		if (event.altKey && !event.ctrlKey && !event.metaKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
-			event.preventDefault();
-			await moveSibling(row.item, event.key === "ArrowUp" ? -1 : 1);
-		}
+		await outlineOperations.handleKeydown(event, row.item, () => ({
+			start: textarea.selectionStart,
+			end: textarea.selectionEnd,
+		}));
 	}
 
 	function updateLocalText(id: string, textarea: HTMLTextAreaElement): void {
@@ -1310,45 +1276,12 @@
 		outlineFilter = { ...EMPTY_OUTLINE_FILTER };
 	}
 
-	async function indent(item: OutlineItem): Promise<void> {
-		const siblings = siblingsOf(item);
-		const index = siblings.findIndex((candidate) => candidate.id === item.id);
-		if (index <= 0) return;
-		const parent = siblings[index - 1];
-		const children = snapshot.items.filter((candidate) => candidate.parentId === parent.id)
-			.sort((a, b) => a.orderKey - b.orderKey);
-		await api.moveItem({ id: item.id, parentId: parent.id, afterId: children.at(-1)?.id ?? null });
-		await load(item.id);
+	function captureOutlineRequest(): () => boolean {
+		const selected = selectionWorkspace.currentReceipt();
+		const origin = screenNavigation.origin;
+		return () => selected() && origin === screenNavigation.origin;
 	}
-
-	async function outdent(item: OutlineItem): Promise<void> {
-		if (!item.parentId) return;
-		const parent = itemById.get(item.parentId);
-		if (!parent) return;
-		await api.moveItem({ id: item.id, parentId: parent.parentId, afterId: parent.id });
-		await load(item.id);
-	}
-
-	async function moveSibling(item: OutlineItem, direction: -1 | 1): Promise<void> {
-		const siblings = siblingsOf(item);
-		const index = siblings.findIndex((candidate) => candidate.id === item.id);
-		const targetIndex = index + direction;
-		if (targetIndex < 0 || targetIndex >= siblings.length) return;
-		const afterId = direction < 0 ? (siblings[targetIndex - 1]?.id ?? null) : siblings[targetIndex].id;
-		await api.moveItem({ id: item.id, parentId: item.parentId, afterId });
-		await load(item.id);
-	}
-
-	function siblingsOf(item: OutlineItem): OutlineItem[] {
-		return snapshot.items.filter((candidate) => candidate.parentId === item.parentId)
-			.sort((a, b) => a.orderKey - b.orderKey);
-	}
-
-	async function toggle(row: VisibleRow): Promise<void> {
-		transientExpandedIds = transientExpandedIds.filter((id) => id !== row.item.id);
-		await api.setCollapsed(row.item.id, !row.item.collapsed);
-		await load();
-	}
+	const toggle = (row: VisibleRow): Promise<void> => outlineOperations.toggle(row.item);
 
 	async function remove(id: string): Promise<void> {
 		const item = itemById.get(id);
@@ -1870,7 +1803,10 @@
 		handleOccurrenceContextMenuKeydown,
 		deselectFromBlank,
 		dropOn: outlineDrag.dropOn,
-		toggle,
+		toggle: (row) => {
+			const current = captureOutlineRequest();
+			void toggle(row).catch((cause) => { if (current()) error = errorMessage(cause); });
+		},
 		selectOccurrence,
 		hoistOccurrence,
 		updateLocalText,
