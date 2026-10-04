@@ -403,8 +403,9 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
 - [x] **P2** — 2026-10-03完了。難易度3、依存 P1: fence/code/link/URL
       の走査を意味リンク文法から分離。 Markdown parser と契約が一致する箇所だけ共有する。token
       列の新設は必須としない。
-- [ ] **P3** — 難易度3、依存 P2: endpoint/type/reason の文法を整理。小さな scanner 関数で足りるなら
-      parser framework は作らない。
+- [x] **P3** — 2026-10-04完了。難易度3、依存 P2: endpoint/type/reason の本文文法を
+      `inline_semantic_link_grammar.ts` に分離し、小さなscanner関数で整理。診断と公開範囲を維持し、
+      parser frameworkは追加していない。
 - [ ] **P4** — 難易度2、依存 P3: diagnostics
       の独立した変更理由が残る場合だけ抽出。公開位置・診断文言を維持。
 - [ ] **G1** — 難易度2: 既存 snapshot 検証テストに、複数不正時のエラー順・既定 relation
