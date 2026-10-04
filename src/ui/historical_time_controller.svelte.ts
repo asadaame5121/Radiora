@@ -58,9 +58,13 @@ export class HistoricalTimeController {
 	}
 
 	/** Ask permission without changing the destination form or selection. */
+	canSelectImmediately(next: OutlineItem | null): boolean {
+		return next?.workId === this.item?.workId || (!this.dirty && !this.submitting);
+	}
+
 	canSelect(next: OutlineItem | null, current: () => boolean): Promise<boolean> {
 		if (!current()) return Promise.resolve(false);
-		if (next?.workId === this.item?.workId || (!this.dirty && !this.submitting)) {
+		if (this.canSelectImmediately(next)) {
 			return Promise.resolve(true);
 		}
 		this.cancelPending();
@@ -87,6 +91,14 @@ export class HistoricalTimeController {
 		} else this.reset(next);
 	}
 
+	/** Data correction cannot discard a draft or resurrect its deleted Occurrence. */
+	reconcileSelection(next: OutlineItem | null): void {
+		if (!this.dirty && !this.submitting) this.reset(next);
+		else if (this.item && next?.workId === this.item.workId) {
+			this.item = { ...this.item, id: next.id };
+		}
+	}
+
 	/** Keep navigation pending until the user accepts or cancels the selection guard. */
 	async selectWhenReady(next: OutlineItem | null, commit: () => void): Promise<boolean> {
 		const accepted = await new Promise<boolean>((resolve) => {
@@ -98,13 +110,18 @@ export class HistoricalTimeController {
 
 	async save(remove = false): Promise<boolean> {
 		if (!this.item || this.submitting) return false;
+		const workId = this.item.workId;
+		const savedDraft = JSON.stringify(this.draft);
 		this.submitting = true;
 		this.error = "";
 		try {
 			const value = remove ? null : parseHistoricalTimeDraft(this.draft);
-			await this.ports.save(this.item.workId, value);
-			this.item = { ...this.item, historicalTime: value ?? undefined };
-			this.reset(this.item);
+			await this.ports.save(workId, value);
+			if (this.item?.workId === workId) {
+				this.item = { ...this.item, historicalTime: value ?? undefined };
+				if (JSON.stringify(this.draft) === savedDraft) this.reset(this.item);
+				else this.baseline = JSON.stringify(historicalTimeDraft(value ?? undefined));
+			}
 			await this.ports.reload();
 			return true;
 		} catch (cause) {
@@ -126,7 +143,7 @@ export class HistoricalTimeController {
 		}
 		const pending = this.pending;
 		const next = pending.item;
-		if (choice === "save" && !(await this.save())) return;
+		if (choice === "save" && (!await this.save() || this.dirty)) return;
 		if (this.pending !== pending) return;
 		const guarded = this.pendingGuard;
 		const pendingSelectionAction = this.pendingSelectionAction;

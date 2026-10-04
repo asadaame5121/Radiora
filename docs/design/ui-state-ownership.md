@@ -38,7 +38,7 @@ state自体を永続化しないという意味で、元データのDB保存と�
 | 保存済みWork/Branch/Revision/Occurrence/Link / backend              | service/storage、UIは`api`経由                                   | 既存mutation API、transaction/rollbackはstorage                                                                                    | 各featureのread model                                    | 保存データの寿命                   | 選択したstorage backend                                     | mutation、削除、backup復元後に再取得                               |
 | `snapshot` / API結果にEditor draftを重ねた描画キャッシュ            | `App.svelte`                                                     | `load`、startup cache復元、Workspaceの`publishOutline`、Editorの本文更新                                                           | Outline、Inspector、選択派生値、各Controllerのgetter     | App                                | 自身は保存なし。保存済みの写しだけstartup cacheへ           | reload、navigationの最新読込、起動cacheから正式データへの切替      |
 | inline本文draft・save status・`editVersion` / 未保存入力            | `createEditorController`、内部`WorkingCopyAutosaveCoordinator`   | `updateLocalText`、`flushAutosave`、`flushForNavigation`、`retryAutosave`                                                          | MarkdownEditor、WorkingCopySaveStatus、reload、Workspace | App。保存成功までdraft保持         | `updateItemText`経由のbranch working copy                   | 同branchの新入力でversion更新。失敗・選択変更・reloadで捨てない    |
-| 全画面の`selectedId` / 受理された現在選択                           | `App.svelte`                                                     | 現状6系統。下のwriter表と#298のcommit契約に限定                                                                                    | selectedItem、Inspector、Tree、Editor、commands          | App                                | 直接保存なし。Outline位置のみstartup cache/resume API       | 受理した選択変更、削除補正、初期復元                               |
+| 全画面の`selectedId` / 受理された現在選択                           | `App.svelte`                                                     | 内部publish一箇所。下の旧writer表と#298のcommit契約を参照                                                                          | selectedItem、Inspector、Tree、Editor、commands          | App                                | 直接保存なし。Outline位置のみstartup cache/resume API       | 受理した選択変更、削除補正、初期復元                               |
 | paneごとの選択・Hoist・history/index・active pane / Outline閲覧位置 | `createNavigationController`の`browsing`                         | `browseToOccurrence`、`setHoist`、`clearHoist`、`activateBrowsingPane`、`resetBrowsing`、`reconcileBrowsing`、内部`commitBrowsing` | Outline projection、breadcrumb、Viewport、復帰捕捉       | App                                | startup cacheには現在の選択/Hoistのみ。pane全体の保存なし   | 削除時に各paneの現在位置を補正。画面外選択では更新しない           |
 | Outline filter / live表示条件                                       | Appの`outlineFilter`                                             | 現状View bind、`clearOutlineFilter`、復帰時の内部port                                                                              | Outline、Todayの共有filter UI、visible rows              | App                                | 保存なし                                                    | 明示filter変更/clear、Outline復帰apply                             |
 | 一時展開 / live表示例外                                             | Appの`transientExpandedIds`                                      | hoist、pane切替、collapse操作、keyboardのclear、Outline復帰apply                                                                   | visible rows                                             | App                                | 保存なし。保存済み`collapsed`は別途API                      | 明示clear/collapse、対象削除の復帰補正                             |
@@ -87,8 +87,9 @@ state自体を永続化しないという意味で、元データのDB保存と�
 
 ## 選択writerとcommitの権限
 
-決定: `selectedId`の格納は一箇所に維持し、#298ではAppの既存commit境界をまず整理する。
-独立SelectionControllerの新設は必須にしない。Viewやdomain操作へ無条件のsetterを公開しない。
+決定: `selectedId`の格納はAppの一箇所に維持する。#298では既存commit境界を
+`OccurrenceSelectionWorkspace`へ集約した。独立SelectionControllerや選択stateの写しは追加しない。
+Viewやdomain操作へ無条件のsetterを公開しない。
 ユーザー要求、Workspace内部commit、初期復元、データ補正は権限を分ける。
 
 Outline表示中、受理したcommitの完了時には
@@ -97,7 +98,7 @@ HoistはOutlineの閲覧範囲であり、現在のWorkから勝手に導出し�
 別画面では`selectedId`だけ変更でき、paneの閲覧位置と`suspended`は独立して保持する。
 Inspector/Tree/履歴/backlinksは受理した全画面選択から派生・取得し、選択のwriterにはしない。
 
-| 現状の直接writer（すべて`App.svelte`）                | 種類・guard                                                                    | 決定した更新権限 / #298の整理                                                                                                     |
+| #295基点の直接writer（すべて`App.svelte`）            | 種類・guard                                                                    | 決定した更新権限 / #298の整理                                                                                                     |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `commitOccurrenceSelection`（`selectOccurrence`経由） | Outline/Treeの直接選択、空白クリック。`HistoricalTimeController.select`でguard | 受理後だけcompletion取消→選択＋Outline active pane更新。別画面ではpaneを書かない。afterSelection/focusは受理後                    |
 | ScreenNavigationの`selection.commit` port             | `navigate`の保存・guard・最新要求確認済み内部commit                            | フォームと全画面選択を同期確定。Outlineでは先に`OutlineScreenState.apply`が準備済みpaneを適用。二度browseして履歴を追加しない     |
@@ -110,7 +111,46 @@ Inspector/Tree/履歴/backlinksは受理した全画面選択から派生・取�
 未保存入力を破棄する許可ではない。dirtyな年代フォームがある場合、別Workへのユーザー選択は Save /
 Discard / Cancelで調停する。削除補正では存在しないIDを旧フォームから復活させず、
 フォームdraftはHistoricalTime ownerに残し、保存先の不存在による失敗を表示できる状態にする。
-この補正と現状の同期effectの衝突は#298で回帰テストを追加する。
+この補正と従来の同期effectの衝突は#298の回帰テストで固定し、effectを削除した。
+
+### #298で適用した選択境界
+
+実装基点: main `4912cf2`（PR #303反映後）。Appの`selectedId`は引き続き唯一のRuneであり、
+代入は`OccurrenceSelectionWorkspace`の内部`publish` port一箇所だけに限定する。
+選択・フォーム・paneという複数ownerの同期commitと要求の失効を、Viewから独立して検証するため
+Workspaceを設けた。snapshot、Editor draft、live filter/Inspector、履歴の取得は移さない。
+
+| 入口             | 権限・順序                                                                                                                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `select`         | Outline/Tree/空白のユーザー要求。画面遷移と旧guardを失効させ、年代guard後に最新snapshotで対象を再確認。completion取消→pane/全画面選択→フォームを同期commitし、受理後だけcallbackを呼ぶ                      |
+| `switchPane`     | 存在するpaneへのユーザー要求。guard後に最新snapshotでpane位置を補正し、pane・選択・一時展開・フォームを同時commit。completion取消後に有効な要求だけcaret/scrollを復元                                       |
+| `commitPrepared` | `ScreenNavigationWorkspace`の内部権限。保存・guard・最新要求確認済みの結果を同期commitする。先に適用済みのOutline文脈を再browseせず、historyを二重追加しない                                                |
+| `restoreInitial` | 未操作かつ未破棄の起動sessionだけが持つ復元権限。Appのcancelled/正式load/Editor・原稿draft条件と、Workspaceの要求履歴・年代draft条件を確認。snapshot・pane位置・選択・フォームをまとめて初期化              |
+| `reconcile`      | reloadが公開したsnapshotに対する内部補正。ユーザーguardを開かず不存在のID/Hoist/一時展開を除去し、任意の別項目は選ばない。dirty/submittingの年代フォームはそのownerへ残す。別画面では休止中paneを変更しない |
+| `setHoist`       | Outlineの範囲変更。全画面選択を動かさずactive paneの選択を維持し、準備中の旧遷移/guardを失効させる                                                                                                          |
+
+年代フォームを追いかけて選択を戻す`$effect`は削除した。削除補正で選択をnullにしても、
+未保存の年代draftと元Workへの保存先はフォームに残す。保存先が消えている場合は通常の保存失敗を表示し、
+そのdraftから選択IDを復活させない。保存中の追加入力も保持し、新しいdraftが残れば移動承認は保留する。
+画面遷移の最終read中に年代入力が追加された場合も、公開前に改めてguardを通す。
+
+初期復元ではAppが起動sessionとEditor/原稿draftの復元許可を渡し、選択Workspaceが
+自身の要求履歴と調停対象の年代フォームを保護する。各条件のstate ownerは一意であり、
+Workspaceへ全featureのdraftを取り込まない。起動sessionの調停は#300のStartup抽出に引き継ぐ。
+内部commitのモードは`selection` / `correction`で明示し、後者だけdraftを捨てない補正を行う。
+年代draftの等値性は既存のdirty baselineと同じJSON比較を使う。draftは固定キーの
+string/booleanのオブジェクトで、生成後は各fieldを編集するため、この範囲では比較結果が安定する。
+
+Inspector・履歴・backlinks・Treeのread model更新は受理した`selectedItem`から既存effectで行う。
+focus/caret/scrollには選択要求のreceiptと画面遷移のcurrent判定を使い、A→B→Aでも古い復元は行わない。
+既に選択済みの行へのDOM focusは新たなユーザー要求として再送せず、復帰中のscroll復元を失効させない。
+App破棄時は両Workspaceの要求と年代guardを失効させる。
+
+回帰テスト: [選択Workspace](../../vitest/occurrence_selection_workspace.test.ts)、
+[選択と画面遷移の競合](../../vitest/selection_navigation.svelte.test.ts)、
+[年代フォーム](../../vitest/historical_time_controller.svelte.test.ts)、
+[画面UI](../../tests/ui/screen-navigation.spec.ts)。 通常reload全体の要求世代・branch別draft
+overlayとstartup pollingの失効は、引き続き後続作業とする。
 
 ```mermaid
 flowchart TD
@@ -269,15 +309,15 @@ effortとし、通常操作の保存失敗を成功扱いにしない。
 
 以下のテストは既存契約の根拠。未実装のシナリオは「追加」と記し、既に検証済みと扱わない。
 
-| 作業                          | 参照する契約・回帰シナリオ                                                                                                                                                                          | 対象テスト                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #296（PR #302でmain反映済み） | projection唯一writer、Tree↔Options、remount/再起動、保存失敗、更新layoutへのfit                                                                                                                     | [Tree Controller](../../vitest/tree_controller.svelte.test.ts)、[preference](../../tests/tree_projection_preference_test.ts)、[Tree UI](../../tests/ui/tree-interaction.spec.ts)、[Options契約](../../tests/options_ui_contract_test.ts)                                                                                                                                                                                                                                                                                    |
-| #297（PR #302でmain反映済み） | filter A→B逆順、古い失敗、選択例外非永続化、退出/dispose、reload保留公開/取消、startup/catalogue/backup補正、retry                                                                                  | [Tree Controller](../../vitest/tree_controller.svelte.test.ts)、[Tree UI](../../tests/ui/tree-interaction.spec.ts)、[lineage契約](../../tests/lineage_views_contract_test.ts)                                                                                                                                                                                                                                                                                                                                               |
-| #298                          | 6writer収束、直接選択/Tree/空白/pane/Recent/検索/栞/参照/作成後移動、Save/Discard/Cancel、guard中入力、失敗/旧応答、復帰の独立性。追加: dirtyフォーム対象削除、pane切替completion取消、初期復元権限 | [Workspace](../../vitest/screen_navigation_workspace.svelte.test.ts)、[regression](../../vitest/screen_navigation_regression.svelte.test.ts)、[PBT](../../vitest/screen_navigation_pbt.svelte.test.ts)、[年代フォーム](../../vitest/historical_time_controller.svelte.test.ts)、[Editor](../../vitest/editor_controller.svelte.test.ts)、[Navigation](../../vitest/navigation_controller.svelte.test.ts)、[空白契約](../../tests/blank_click_deselect_contract_test.ts)、[画面UI](../../tests/ui/screen-navigation.spec.ts) |
-| #299                          | PR #274再利用、Enter/空Backspace/indent/outdent/兄弟移動/collapse、保存失敗、操作中の選択変更、Editor/pending empty/選択commitへ委譲                                                                | PR #274のControllerテストを移植、[Enter UI](../../tests/ui/outline-enter.spec.ts)、[placeholder UI](../../tests/ui/outline-placeholder.spec.ts)、[drag UI](../../tests/ui/outline-drag.spec.ts)、[pending empty](../../vitest/pending_empty_item_controller.svelte.test.ts)、[画面UI](../../tests/ui/screen-navigation.spec.ts)                                                                                                                                                                                             |
-| #300                          | PR #275再利用、cache/poll/retry/dispose、onReady失敗。追加: 遅いcacheと正式load競合、旧retry/破棄後の応答、復元で未保存入力を失わない、通常loadのowner維持                                          | PR #275のStartupテストを移植、[cache](../../tests/startup_snapshot_cache_test.ts)、[pending empty](../../vitest/pending_empty_item_controller.svelte.test.ts)、[startup UI契約](../../tests/options_ui_contract_test.ts)                                                                                                                                                                                                                                                                                                    |
-| #294の描画cache後続           | 追加: Outline/bookmarkの逆順reload、遷移とreloadの公開競合、同Work別branch/pinnedのdraft隔離、応答待ち中入力、失敗保持                                                                              | [working copy](../../tests/editor_working_copy_test.ts)、[autosave](../../src/services/working_copy_autosave_test.ts)、[Editor](../../vitest/editor_controller.svelte.test.ts)、Workspace regression。cache境界へ直接テスト追加                                                                                                                                                                                                                                                                                             |
-| #294のNavigation/Layout後続   | 共有入力の単一owner、検索clearの遅い成功/失敗、Paletteと検索の独立性。追加: dispose、復帰collapsed後のwidth保存で設定非混入、resize途中unmount                                                      | [Navigation](../../vitest/navigation_controller.svelte.test.ts)、[layout preference](../../tests/ui_layout_preference_test.ts)、[Inspector契約](../../tests/inspector_tabs_ui_contract_test.ts)、画面UIへ設定とcleanup回帰を追加                                                                                                                                                                                                                                                                                            |
+| 作業                               | 参照する契約・回帰シナリオ                                                                                                                                                                          | 対象テスト                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #296（PR #302でmain反映済み）      | projection唯一writer、Tree↔Options、remount/再起動、保存失敗、更新layoutへのfit                                                                                                                     | [Tree Controller](../../vitest/tree_controller.svelte.test.ts)、[preference](../../tests/tree_projection_preference_test.ts)、[Tree UI](../../tests/ui/tree-interaction.spec.ts)、[Options契約](../../tests/options_ui_contract_test.ts)                                                                                                                                                                                                                                                                                    |
+| #297（PR #302でmain反映済み）      | filter A→B逆順、古い失敗、選択例外非永続化、退出/dispose、reload保留公開/取消、startup/catalogue/backup補正、retry                                                                                  | [Tree Controller](../../vitest/tree_controller.svelte.test.ts)、[Tree UI](../../tests/ui/tree-interaction.spec.ts)、[lineage契約](../../tests/lineage_views_contract_test.ts)                                                                                                                                                                                                                                                                                                                                               |
+| #298（本branchで実装、main未反映） | 6writer収束、直接選択/Tree/空白/pane/Recent/検索/栞/参照/作成後移動、Save/Discard/Cancel、guard中入力、失敗/旧応答、復帰の独立性。dirtyフォーム対象削除、pane切替completion取消、初期復元権限も検証 | [Workspace](../../vitest/screen_navigation_workspace.svelte.test.ts)、[regression](../../vitest/screen_navigation_regression.svelte.test.ts)、[PBT](../../vitest/screen_navigation_pbt.svelte.test.ts)、[年代フォーム](../../vitest/historical_time_controller.svelte.test.ts)、[Editor](../../vitest/editor_controller.svelte.test.ts)、[Navigation](../../vitest/navigation_controller.svelte.test.ts)、[空白契約](../../tests/blank_click_deselect_contract_test.ts)、[画面UI](../../tests/ui/screen-navigation.spec.ts) |
+| #299                               | PR #274再利用、Enter/空Backspace/indent/outdent/兄弟移動/collapse、保存失敗、操作中の選択変更、Editor/pending empty/選択commitへ委譲                                                                | PR #274のControllerテストを移植、[Enter UI](../../tests/ui/outline-enter.spec.ts)、[placeholder UI](../../tests/ui/outline-placeholder.spec.ts)、[drag UI](../../tests/ui/outline-drag.spec.ts)、[pending empty](../../vitest/pending_empty_item_controller.svelte.test.ts)、[画面UI](../../tests/ui/screen-navigation.spec.ts)                                                                                                                                                                                             |
+| #300                               | PR #275再利用、cache/poll/retry/dispose、onReady失敗。追加: 遅いcacheと正式load競合、旧retry/破棄後の応答、復元で未保存入力を失わない、通常loadのowner維持                                          | PR #275のStartupテストを移植、[cache](../../tests/startup_snapshot_cache_test.ts)、[pending empty](../../vitest/pending_empty_item_controller.svelte.test.ts)、[startup UI契約](../../tests/options_ui_contract_test.ts)                                                                                                                                                                                                                                                                                                    |
+| #294の描画cache後続                | 追加: Outline/bookmarkの逆順reload、遷移とreloadの公開競合、同Work別branch/pinnedのdraft隔離、応答待ち中入力、失敗保持                                                                              | [working copy](../../tests/editor_working_copy_test.ts)、[autosave](../../src/services/working_copy_autosave_test.ts)、[Editor](../../vitest/editor_controller.svelte.test.ts)、Workspace regression。cache境界へ直接テスト追加                                                                                                                                                                                                                                                                                             |
+| #294のNavigation/Layout後続        | 共有入力の単一owner、検索clearの遅い成功/失敗、Paletteと検索の独立性。追加: dispose、復帰collapsed後のwidth保存で設定非混入、resize途中unmount                                                      | [Navigation](../../vitest/navigation_controller.svelte.test.ts)、[layout preference](../../tests/ui_layout_preference_test.ts)、[Inspector契約](../../tests/inspector_tabs_ui_contract_test.ts)、画面UIへ設定とcleanup回帰を追加                                                                                                                                                                                                                                                                                            |
 
 EditorのI/O順序は[working copy autosave](../../src/services/working_copy_autosave_test.ts)と
 [resume autosave](../../src/services/resume_position_autosave_test.ts)、原稿の追加入力保持は
@@ -296,12 +336,13 @@ Issueのopen/closedやバックログのチェックだけでmainへの反映を
 | A5等 / PR #277                | `main`。merge `91f40f9c510c1278e351a2495bcb700cda8b180a`                                   | main反映済み。Editor completion分離を維持してbacklink失効等を移植。#274/#275のController移植完了やApp全体のcomposition完了を意味しない          |
 | T1→T2→T3 / PR #302、#296/#297 | `main`。merge `b208ea0a495ac39c62c78fb833bc6c141a2155cb`                                   | main反映済み。TreeController、layout/pointer分離、設定/世代/保留公開とテストを確認。再抽出しない                                                |
 | #295                          | この文書・AGENTS規約・既存設計への参照・バックログ記録の訂正                               | 文書による契約確定。#298/#299/#300や上記後続候補の実装完了を意味しない                                                                          |
+| #298                          | base `main` / `4912cf2`。`codex/issue-298-selection-commit`上で実装・検証                  | main未反映。選択Workspace・年代補正・非同期失効を集約。#299/#300と通常reload全体の世代・draft overlayは後続                                     |
 
 未決定の仕様はpane履歴UI/Browser History、検索の選択文脈変更時の再実行方針。
 通常reloadの競合調停とLayout/Navigationの分離は実装待ちであり、ownerの責務を曖昧にする理由にはしない。
 後続PRはこの基点から増えた変更と既存stackの成果を再照合し、対象テストと残作業を記録する。
 
-本Issueの検証: 変更した5文書の相対リンク46件とcode fenceを確認し、`git diff --check`成功。
+#295の検証: 変更した5文書の相対リンク46件とcode fenceを確認し、`git diff --check`成功。
 既存のScreenNavigation Controller/Workspace/regression/PBT、Navigation、Editor、HistoricalTime、
 LongForm、Tree ControllerのVitestを実行し、9ファイル112件成功。
 文書の照合を目的とした検証であり、実装待ちのシナリオが通ったことや全UI/browser検証を意味しない。

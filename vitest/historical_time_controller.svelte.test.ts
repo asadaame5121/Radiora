@@ -290,3 +290,36 @@ test("invalidated navigation permission cannot apply a stale destination form", 
 	expect(await permission).toBe(false);
 	expect(controller.item?.id).toBe("first");
 });
+
+test("save preserves newer input and keeps its selection guard pending until the new draft is resolved", async () => {
+	const saved = Promise.withResolvers<void>();
+	const api = ports(() => saved.promise);
+	const controller = new HistoricalTimeController(api);
+	controller.reset(item("source", "source", POINT));
+	controller.draft.original = "saving";
+	const permission = controller.canSelect(item("target"), () => true);
+	const resolving = controller.resolvePending("save");
+	controller.draft.original = "new input";
+	saved.resolve();
+	await resolving;
+	expect(controller.draft.original).toBe("new input");
+	expect(controller.dirty).toBe(true);
+	expect(controller.pending?.item?.id).toBe("target");
+	expect(controller.item?.id).toBe("source");
+	await controller.resolvePending("cancel");
+	expect(await permission).toBe(false);
+});
+
+test("data correction retains an orphaned dirty form and reports missing Work save failures", async () => {
+	const controller = new HistoricalTimeController(ports(async () => {
+		throw new Error("missing Work");
+	}));
+	controller.reset(item("deleted"));
+	controller.draft.start.year = "2026";
+	controller.reconcileSelection(null);
+	expect(controller.item?.id).toBe("deleted");
+	expect(controller.dirty).toBe(true);
+	expect(await controller.save()).toBe(false);
+	expect(controller.error).toBe("missing Work");
+	expect(controller.draft.start.year).toBe("2026");
+});

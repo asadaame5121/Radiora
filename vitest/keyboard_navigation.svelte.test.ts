@@ -17,6 +17,7 @@ test("Outline shortcut uses suspended Outline instead of the Tree selection", as
 		leaveLongForm: vi.fn(),
 		startLongForm: vi.fn(),
 		select: vi.fn(),
+		focus: vi.fn(),
 		setHoist: vi.fn(),
 		reveal: vi.fn(),
 		projection: vi.fn(),

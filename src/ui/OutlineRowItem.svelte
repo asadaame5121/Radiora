@@ -89,7 +89,7 @@
 		<MarkdownEditor
 			value={row.item.text}
 			itemId={row.item.id}
-			onFocus={() => handlers.selectOccurrence(row.item.id)}
+			onFocus={() => { if (selectedId !== row.item.id) handlers.selectOccurrence(row.item.id); }}
 			onChange={(_value, textarea) => handlers.updateLocalText(row.item.id, textarea)}
 			onSelectionChange={(textarea) => handlers.updateEditorSelection(row.item.id, textarea)}
 			onKeydown={(event, textarea, compositionGuard) =>

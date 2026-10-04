@@ -143,3 +143,21 @@ test("save or guard failure clears pending state for the current request", async
 	await expect(s.navigation.navigate({ view: "today" })).rejects.toThrow("save failed");
 	expect(s.navigation.pendingView).toBeNull();
 });
+
+test("same-screen selection invalidates pending navigation, focus and domain receipts", async () => {
+	const s = setup();
+	const prepared = Promise.withResolvers<{ view: ViewMode; selected?: string }>();
+	s.prepare.mockReturnValueOnce(prepared.promise);
+	const pending = s.navigation.navigate({ view: "comparison", selected: "obsolete" });
+	const origin = s.navigation.origin;
+	s.navigation.invalidate();
+	expect(s.navigation.pendingView).toBeNull();
+	prepared.resolve({ view: "comparison", selected: "obsolete" });
+	expect(await pending).toBe(false);
+	expect(s.commit).not.toHaveBeenCalled();
+	expect(await s.navigation.navigate({ view: "outline", selected: "created" }, origin)).toBe(false);
+	await s.navigation.navigate({ view: "today" });
+	const current = s.afterCommit.mock.calls[0][1];
+	s.navigation.invalidate();
+	expect(current()).toBe(false);
+});

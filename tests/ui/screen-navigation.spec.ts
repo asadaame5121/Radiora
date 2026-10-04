@@ -775,3 +775,68 @@ for (const completion of ["reference", "link"] as const) {
 		await expect(popup).toHaveCount(0);
 	});
 }
+
+for (const choice of ["保存して移動", "破棄して移動", "キャンセル"]) {
+	test(`direct Outline selection commits its pane and historical form only after ${choice}`, async ({ page }) => {
+		await page.route(
+			"**/api/rpc/setWorkHistoricalTime",
+			(route) => route.fulfill({ json: { result: null } }),
+		);
+		await page.goto("/");
+		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
+		await page.getByRole("textbox", { name: "年", exact: true }).fill("2026");
+		const source = page.getByRole("treeitem").filter({
+			has: page.locator('[data-editor-item-id="mock-1"]'),
+		});
+		const target = page.getByRole("treeitem").filter({
+			has: page.locator('[data-editor-item-id="mock-7"]'),
+		});
+		await target.locator(".bullet").click();
+		const dialog = page.getByRole("dialog", { name: "年代の変更を保存しますか？" });
+		await expect(dialog).toBeVisible();
+		await expect(source).toHaveAttribute("aria-selected", "true");
+		await expect(target).toHaveAttribute("aria-selected", "false");
+		await dialog.getByRole("button", { name: choice, exact: true }).click();
+		await expect(dialog).toHaveCount(0);
+		await expect(choice === "キャンセル" ? source : target).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue(
+			choice === "キャンセル" ? "2026" : "",
+		);
+		await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+		await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+		await expect(choice === "キャンセル" ? source : target).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+	});
+}
+
+test("a direct selection save failure keeps the draft and allows guarded retry", async ({ page }) => {
+	await page.route(
+		"**/api/rpc/setWorkHistoricalTime",
+		(route) => route.fulfill({ status: 503, json: { message: "年代の保存失敗" } }),
+	);
+	await page.goto("/");
+	await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
+	await page.getByRole("textbox", { name: "年", exact: true }).fill("2026");
+	const target = page.getByRole("treeitem").filter({
+		has: page.locator('[data-editor-item-id="mock-7"]'),
+	});
+	await target.locator(".bullet").click();
+	const dialog = page.getByRole("dialog", { name: "年代の変更を保存しますか？" });
+	await dialog.getByRole("button", { name: "保存して移動", exact: true }).click();
+	await expect(dialog.getByRole("alert")).toHaveText("年代の保存失敗");
+	await expect(target).toHaveAttribute("aria-selected", "false");
+	await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue("2026");
+	await page.unroute("**/api/rpc/setWorkHistoricalTime");
+	await page.route(
+		"**/api/rpc/setWorkHistoricalTime",
+		(route) => route.fulfill({ json: { result: null } }),
+	);
+	await dialog.getByRole("button", { name: "保存して移動", exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect(target).toHaveAttribute("aria-selected", "true");
+});

@@ -4,6 +4,7 @@
 	import { TagController } from "./tag_controller.svelte.ts";
 	import { onMount, tick, untrack } from "svelte";
 	import { HistoricalTimeController } from "./historical_time_controller.svelte.ts";
+	import { OccurrenceSelectionWorkspace } from "./occurrence_selection_workspace.ts";
 	import HistoricalTimeSelectionDialog from "./HistoricalTimeSelectionDialog.svelte";
 	import TreeRequestStatus from "./TreeRequestStatus.svelte";
 	import GlobalLineage from "./GlobalLineage.svelte";
@@ -182,12 +183,8 @@
 		selection: {
 			current: () => selectedId,
 			guard: (item, current) => historicalTimeController.canSelect(item, current),
-			commit: (id, item) => {
-				if (selectedId !== id) editorController.clearCompletions();
-				selectedId = id;
-				historicalTimeController.commitSelection(item);
-			},
-			cancelPending: () => historicalTimeController.cancelPending(),
+			commit: (id, item) => selectionWorkspace.commitPrepared(id, item),
+			cancelPending: () => selectionWorkspace.cancelPending(),
 		},
 		editor: {
 			save: () => longFormController.save(false),
@@ -282,17 +279,24 @@
 		reload: load,
 		select: selectOccurrence,
 	});
-	// Side-effect boundary: reconcile snapshot refreshes and selection paths that bypass selectOccurrence.
-	// Dependency: selectedItem (derived from snapshot and selectedId).
-	// untrack: prevents cascading updates during selection reassignment. Cleanup: not needed.
-	$effect(() => {
-		const next = selectedItem;
-		untrack(() => {
-			if (!historicalTimeController.select(next)) {
-				selectedId = historicalTimeController.item?.id ?? null;
-				if (viewMode === "outline") navigationController.browseToOccurrence(snapshot, selectedId);
-			}
-		});
+	const selectionWorkspace = new OccurrenceSelectionWorkspace({
+		current: () => selectedId,
+		publish: (id) => selectedId = id,
+		snapshot: () => snapshot,
+		publishStartupSnapshot: (next) => snapshot = next,
+		interruptNavigation: () => screenNavigation.invalidate(),
+		clearCompletions: () => editorController.clearCompletions(),
+		form: historicalTimeController,
+		outline: {
+			visible: () => viewMode === "outline",
+			browsing: () => navigationController.captureBrowsing(),
+			publishBrowsing: (next) => navigationController.commitBrowsing(next),
+			expanded: () => transientExpandedIds,
+			publishExpanded: (next) => transientExpandedIds = next,
+			capturePanels: () => outlineViewport.capturePanels(),
+			restorePane: (id, current) => outlineViewport.restorePane(id, current),
+		},
+		reportError: (cause) => error = errorMessage(cause),
 	});
 	const emergenceController = createEmergenceController({
 		api,
@@ -356,7 +360,8 @@
 		navigation: screenNavigation,
 		longFormActive: () => longForm.active,
 		select: selectOccurrence,
-		setHoist: (id) => { if (id) navigationController.setHoist(id); else navigationController.clearHoist(); },
+		focus: requestFocus,
+		setHoist: (id) => selectionWorkspace.setHoist(id),
 		projection: () => browsingProjection,
 		items: () => snapshot.items,
 		clearTemporaryExpansion: () => transientExpandedIds = [],
@@ -603,10 +608,8 @@
 		async function restoreStartupSnapshotCache(): Promise<void> {
 			try {
 				const cache = await api.loadStartupSnapshotCache();
-				if (cancelled || startupDataLoaded || !cache) return;
-				snapshot = cache.snapshot;
-				selectedId = navigationController.resetBrowsing("pane-1", cache.location)
-					.selectedOccurrenceId;
+				if (!cache || !selectionWorkspace.restoreInitial(cache.snapshot, cache.location,
+					() => !cancelled && !startupDataLoaded && !editorController.hasUnsavedChanges() && !longForm.dirty)) return;
 				loading = false;
 				startupCacheActive = true;
 			// biome-ignore lint/plugin/noSwallowedRejection: The startup cache is optional and normal startup remains available.
@@ -719,6 +722,8 @@
 		void monitorStartup();
 		return () => {
 			cancelled = true;
+			screenNavigation.invalidate();
+			selectionWorkspace.dispose();
 			tree.dispose();
 			cleanupTheme();
 			persistStartupSnapshotCache();
@@ -782,15 +787,11 @@
 				return draft === undefined ? item : { ...item, text: draft };
 			});
 			snapshot = next;
-			editorController.clearCompletions();
-			if (viewMode === "outline") selectedId = navigationController.reconcileBrowsing(snapshot).selectedOccurrenceId;
-			else if (selectedId && !snapshot.items.some((item) => item.id === selectedId)) selectedId = null;
+			selectionWorkspace.reconcile();
 			treeRequest.publish();
 			bookmarks = nextBookmarks;
 			if (focusId) {
-				selectOccurrence(focusId, () => {
-					void tick().then(() => requestFocus(focusId));
-				});
+				selectOccurrence(focusId, (current) => requestFocus(focusId, undefined, current));
 			}
 			persistStartupSnapshotCache(snapshotForStartupCache, navigationController.browsingLocation);
 			return true;
@@ -814,23 +815,8 @@
 		});
 	}
 
-	function commitOccurrenceSelection(id: string | null): void {
-		if (selectedId !== id) editorController.clearCompletions();
-		selectedId = id;
-		if (viewMode === "outline") navigationController.browseToOccurrence(snapshot, id);
-	}
-
-
-	function selectOccurrence(id: string | null, afterSelection?: () => void): boolean {
-		const commit = () => {
-			commitOccurrenceSelection(id);
-			afterSelection?.();
-		};
-		if (!historicalTimeController.select(snapshot.items.find((item) => item.id === id) ?? null, commit)) {
-			return false;
-		}
-		commit();
-		return true;
+	function selectOccurrence(id: string | null, afterSelection?: (current: () => boolean) => void): boolean {
+		return selectionWorkspace.select(id, afterSelection);
 	}
 
 	/** The selected Work joins the filter only as a transient display exception. */
@@ -933,7 +919,7 @@
 	function hoistSelected(): void {
 		if (!selectedId) return;
 		transientExpandedIds = [...new Set([...transientExpandedIds, selectedId])];
-		navigationController.setHoist(selectedId);
+		selectionWorkspace.setHoist(selectedId);
 	}
 
 	function hoistOccurrence(id: string): void {
@@ -941,7 +927,7 @@
 	}
 
 	function clearHoist(): void {
-		navigationController.clearHoist();
+		selectionWorkspace.setHoist(null);
 	}
 
 	async function revealInspector(): Promise<void> {
@@ -1009,9 +995,9 @@
 		void screenNavigation.navigate({ view: "outline", occurrenceId: id, expandedIds });
 	}
 
-	function requestFocus(id: string, caretOffset?: number): void {
+	function requestFocus(id: string, caretOffset?: number, current = selectionWorkspace.currentReceipt()): void {
 		setTimeout(() => {
-			if (selectedId !== id) return;
+			if (!current() || viewMode !== "outline" || selectedId !== id) return;
 			const host = document.querySelector<HTMLElement>(
 				`.markdown-editor-host[data-editor-item-id="${CSS.escape(id)}"]`,
 			);
@@ -1028,21 +1014,12 @@
 
 	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
 	function switchBrowsingPane(paneId: string): void {
-		const pane = navigationController.browsing.panes.find((candidate) => candidate.id === paneId);
-		const nextId = pane?.history[pane.historyIndex]?.selectedOccurrenceId ?? null;
-		const activate = () => {
-			outlineViewport.capturePanels();
-			selectedId = navigationController.activateBrowsingPane(paneId, snapshot).selectedOccurrenceId;
-			transientExpandedIds = ancestorBreadcrumb(snapshot, selectedId).map((item) => item.id);
-			void outlineViewport.restorePane(selectedId, () => viewMode === "outline" && navigationController.browsing.activePaneId === paneId).catch((cause) => { error = errorMessage(cause); });
-		};
-		if (!historicalTimeController.select(itemById.get(nextId ?? "") ?? null, activate)) return;
-		activate();
+		selectionWorkspace.switchPane(paneId);
 	}
 
 	function openBreadcrumb(id: string): void {
 		selectOccurrence(id, () => {
-			if (browsingLocation.hoistOccurrenceId) navigationController.clearHoist();
+			if (browsingLocation.hoistOccurrenceId) selectionWorkspace.setHoist(null);
 		});
 	}
 

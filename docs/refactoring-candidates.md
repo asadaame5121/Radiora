@@ -105,6 +105,22 @@ P3はPR #301でmain反映済み。今後は#294の残るUI所有契約とmain未
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
 
+## 今週の実績（2026-10-04、#298実装）
+
+PR #303反映後のmain `4912cf2`をbaseに、`codex/issue-298-selection-commit`で実装した。
+mainへの反映はPRのmerge後と区別する。Appを唯一の`selectedId` ownerに保ち、
+直接選択・pane切替・画面遷移commit・初期復元・reload補正を
+`OccurrenceSelectionWorkspace`へ集約した。年代フォームから旧選択を戻すeffectを削除し、
+削除済み選択の補正でも未保存draftを保持する。guard中の追加入力・保存失敗・旧応答・
+A→B→Aのfocus失効と、Zoom Outの受理後だけ行うHoist変更を回帰テストで固定した。
+選択・pane・フォームの同期commit順は[UI所有契約](design/ui-state-ownership.md)に記録する。
+App実装行数例外は2179→2161へ縮小し、新moduleの例外は追加しない。
+#299/#300、通常reload全体の世代・branch別draft overlay、pane履歴UIは後続作業に残す。
+
+検証: Svelteテスト285件、ブラウザUI58件、型チェック・build成功。
+`deno task verify`はlint・品質・format・型チェック成功、Deno846件成功・既知の3件失敗で停止。
+legacy移行1件・Windows専用MSIX2件は本Issueの対象外とし、後段のSvelteテスト・buildは個別実行した。
+
 ## 今週の実績（2026-10-04、T1→T2→T3完了）
 
 #295で全UIの[所有契約](design/ui-state-ownership.md)を文書化した。

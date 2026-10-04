@@ -90,6 +90,10 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 	goBack = (): Promise<boolean> =>
 		this.canGoBack ? this.navigate({ view: "outline" }) : Promise.resolve(false);
 
+	invalidate(): void {
+		this.navigation.invalidate();
+	}
+
 	private async prepare(
 		destination: ScreenDestination,
 		current: () => boolean,
@@ -159,7 +163,6 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 	): Promise<boolean> {
 		const { destination } = prepared;
 		if (destination.view !== "outline" && destination.occurrenceId === undefined) return current();
-		const item = prepared.snapshot.items.find((value) => value.id === prepared.selectedId) ?? null;
 		// Saving a guard may refresh source data. Publish a fresh snapshot, never the pre-guard one.
 		const snapshot = await this.ports.readOutline();
 		if (!current()) return false;
@@ -174,10 +177,8 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 			? currentBrowsingLocation(outline.browsing).selectedOccurrenceId
 			: prepared.selectedId;
 		const next = snapshot.items.find((value) => value.id === selectedId) ?? null;
-		if (
-			next?.workId !== item?.workId &&
-			(!await this.ports.selection.guard(next, current) || !current())
-		) return false;
+		// Input may arrive after the first guard, including during the final read.
+		if (!await this.ports.selection.guard(next, current) || !current()) return false;
 		prepared.snapshot = snapshot;
 		prepared.outline = outline;
 		prepared.selectedId = selectedId;
