@@ -434,7 +434,9 @@ main反映済みとは区別する。上の基点/旧writer表と#300の後続�
 - 本文overlayはWork IDとbranch selectorの両方を照合する。同Workの別branch、pinned Revision、
   別Workには混入させない。公開時のdraftを使い、read開始時draftやread中の入力がautosave済みに
   なった場合も、古いbackend応答で新本文を消さない。ownerはread中に編集したbranchの識別子だけを
-  記録し、本文draft自体を二重所有しない。cacheにはoverlay前の保存済みAPI snapshotだけを渡す。
+  記録し、本文draft自体を二重所有しない。reload/画面遷移の公開時はcacheへoverlay前の保存済みAPI
+  snapshotを渡す。
+  autosave成功後と通常のcache保存は、未保存draftがないことを確認して現在の描画snapshotを使う。
 - Editorの描画本文更新も`updateText` portを通す。bookmark更新後の取得も通常reloadへ統一する。
   disposeは公開権限と保留Treeを解放する。完了済みDB書込はUI失効で巻き戻さない。
 
@@ -451,3 +453,11 @@ UI全体実行中に空行作成1件が一度失敗したため、該当ケー�
 storage移行のWindowsパス依存1件、Windows専用MSIX2件）で停止する。
 後段のSvelte単体とbuildは個別実行した。App実装行数baselineは2084→2067へ縮小し、
 新ownerの例外は追加していない。
+
+PR #315レビュー対応: autosave成功後にreloadせず終了すると編集前のcacheが残る回帰を修正。
+通常のcache保存は既存の未保存draft guard通過後の現在snapshotを使い、reload/画面遷移の
+公開時だけ保存済みAPI snapshotを明示する。起動cacheのブラウザ回帰で、save待機中は旧本文を
+保ち、成功後は新本文を保存し、次の正式取得が失敗しても新本文を表示することを確認する。
+レビュー修正後の検証: 起動ブラウザ4件（新規回帰を含む）、Svelte単体372件、関連Deno19件、
+型チェック、build、変更ファイルのlint、実装行数gate、format、`git diff --check`が成功。
+新規回帰は修正前の編集前cache保存で失敗することを確認した。

@@ -132,3 +132,60 @@ test("without a cache, a core load failure exposes a working retry", async ({ pa
 		.toContainText("recovered");
 	await expect(page.locator(".startup-card")).toHaveCount(0);
 });
+
+test("autosaved inline text survives cache startup when the next formal load fails", async ({ page }) => {
+	let cached: OutlineSnapshot | null = null;
+	const cachedText = () => cached?.items[0].text;
+	let restarting = false;
+	let reads = 0;
+	let saving = false;
+	const save = gate();
+	await page.route(
+		"**/api/rpc/loadStartupSnapshotCache",
+		(route) =>
+			route.fulfill({
+				json: {
+					result: cached
+						? {
+							version: 1,
+							savedAt: "now",
+							snapshot: cached,
+							location: { selectedOccurrenceId: "startup-item", hoistOccurrenceId: null },
+						}
+						: null,
+				},
+			}),
+	);
+	await page.route("**/api/rpc/listOutline", (route) => {
+		reads++;
+		return route.fulfill({
+			json: restarting ? { error: "outline offline" } : { result: outline("before edit") },
+		});
+	});
+	await page.route("**/api/rpc/saveStartupSnapshotCache", (route) => {
+		cached = route.request().postDataJSON().args[0];
+		return route.fulfill({ json: { result: null } });
+	});
+	await page.route("**/api/rpc/updateItemText", async (route) => {
+		saving = true;
+		await save.promise;
+		await route.fulfill({ json: { result: null } });
+	});
+	await page.goto("/", { waitUntil: "domcontentloaded" });
+	await expect.poll(cachedText).toBe("before edit");
+	await page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]').click();
+	await page.locator('textarea[data-item-id="startup-item"]').fill("autosaved text");
+	await expect.poll(() => saving).toBe(true);
+	// Pending input must not become the persisted startup cache.
+	expect(cachedText()).toBe("before edit");
+	save.release();
+	await expect.poll(cachedText).toBe("autosaved text");
+	expect(reads).toBe(1);
+	restarting = true;
+	await page.reload({ waitUntil: "domcontentloaded" });
+	await expect(page.locator(".startup-cache-status")).toContainText(
+		"前回の内容を表示しています。起動に失敗しました。",
+	);
+	await expect(page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]'))
+		.toContainText("autosaved text");
+});

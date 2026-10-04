@@ -203,7 +203,7 @@
 		},
 		snapshot: () => snapshot,
 		readOutline: () => api.listOutline(),
-		onOutlinePublished: () => persistStartupSnapshotCache(),
+		onOutlinePublished: () => persistStartupSnapshotCache(outlineController.cacheSnapshot),
 		outlinePublication: {
 			begin: () => outlineController.begin(),
 			invalidate: () => { startupController.invalidateDataLoad(); outlineController.invalidate(); },
@@ -781,7 +781,7 @@
 	}
 
 	function persistStartupSnapshotCache(
-		snapshotToCache: OutlineSnapshot = outlineController.cacheSnapshot,
+		snapshotToCache: OutlineSnapshot = snapshot,
 		location = navigationController.browsingLocation,
 	): void {
 		if (startupCacheActive || startup.phase !== "ready" || editorController.hasUnsavedChanges()) return;
