@@ -153,6 +153,25 @@ App実装行数例外は2179→2161へ縮小し、新moduleの例外は追加し
 `deno task verify`はlint・品質・format・型チェック成功、Deno846件成功・既知の3件失敗で停止。
 legacy移行1件・Windows専用MSIX2件は本Issueの対象外とし、後段のSvelteテスト・buildは個別実行した。
 
+## #300: A4のmain向け適合（2026-10-04）
+
+base `main` / `c4a1557`、branch `codex/issue-300-startup-controller`で実装。 PR #275 head
+`9cada0b`のStartupControllerと11件のテストを再利用し、AppのonMount/cache/poll/retryを委譲した。
+追加差分は要求世代、timer cleanup、cache受理結果、#298の初期復元入口、Tree公開操作、
+初期取得とpending empty処理の遅延応答失効・失敗保持。
+補助一覧もstartupの公開権限を確認し、通常loadやdraft/theme/shortcut/flushのownerは維持する。
+詳細は[UI所有契約の#300記録](design/ui-state-ownership.md#300-startupcontrollerの現行mainへの適合)。
+
+このbranchで適合・検証済み。A4のmain反映チェックはmerge後に確定する。
+baseには#298（#304）と#299（#305）のsymbol/テストが存在する。
+App実装行数例外を2100→2084へ縮小し、新module例外は追加しない。
+通常reload全体の世代・画面遷移との公開調停・branch別draft overlayは後続作業に残す。
+
+検証: Svelte単体347件、startup/cache・語彙・UI契約のDeno11件、
+startup・画面遷移・Outline操作のブラウザ48件とbuild成功。
+`deno task verify`のlint/品質/format/型チェックは成功。Deno全体はLinuxで既知の legacy
+storage移行1件・Windows MSIX専用2件が失敗するため、後段のSvelte/buildを個別に実行した。
+
 ## 今週の実績（2026-10-04、T1→T2→T3完了）
 
 #295で全UIの[所有契約](design/ui-state-ownership.md)を文書化した。

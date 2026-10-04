@@ -108,8 +108,9 @@ export class TreeController {
 	/**
 	 * Reload starts all I/O concurrently, but publishes Tree only after the other
 	 * reads succeed. Both reload and visible-Tree refresh use this request scope.
+	 * Startup can make Tree optional: report its error/retry state while keeping Outline usable.
 	 */
-	prepareRefresh() {
+	prepareRefresh(canPublish = () => true, required = true) {
 		if (this.disposed) {
 			return {
 				result: Promise.resolve(),
@@ -121,13 +122,13 @@ export class TreeController {
 		const key = filterKey(filter);
 		const generation = ++this.generation;
 		const current = () =>
-			!this.disposed && generation === this.generation && key === this.filterKey();
+			!this.disposed && generation === this.generation && key === this.filterKey() && canPublish();
 		const owned = () => generation === this.generation && !this.disposed;
 		let pending: GlobalLineageProjection | null = null;
 		this._loading = true;
 		this._error = null;
 		return {
-			result: this.readProjection(filter, current, owned).then((projection) => {
+			result: this.readProjection(filter, current, owned, required).then((projection) => {
 				pending = projection;
 			}),
 			publish: () => {
@@ -169,6 +170,7 @@ export class TreeController {
 		filter: GlobalLineageFilter,
 		current: () => boolean,
 		owned: () => boolean,
+		required: boolean,
 	): Promise<GlobalLineageProjection | null> {
 		try {
 			return await this.ports.listGlobalLineage(filter);
@@ -177,7 +179,8 @@ export class TreeController {
 			if (!current()) return null;
 			this._error = cause;
 			this.ports.onError(cause);
-			throw cause;
+			if (required) throw cause;
+			return null;
 		}
 	}
 }

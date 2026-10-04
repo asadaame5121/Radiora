@@ -44,7 +44,8 @@ export class TagController {
 		};
 	}
 
-	load = async (): Promise<void> => {
+	load = async (current = () => true): Promise<void> => {
+		if (!current()) return;
 		this.error = "";
 		try {
 			const [scopes, aliases] = await Promise.all([
@@ -52,6 +53,7 @@ export class TagController {
 				this.options.api.listTagAliases(),
 				this.options.loadUnplacedWorks ? this.options.loadUnplacedWorks() : Promise.resolve([]),
 			]);
+			if (!current()) return;
 			this.scopes = scopes;
 			this.aliases = aliases;
 			const currentSelected = this.selectedTag;
@@ -62,7 +64,7 @@ export class TagController {
 				this.selectedTag = null;
 			}
 		} catch (cause) {
-			this.error = this.options.errorMessage(cause);
+			if (current()) this.error = this.options.errorMessage(cause);
 		}
 	};
 

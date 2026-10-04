@@ -232,3 +232,37 @@ test("staged reload keeps loading until publication or cancellation after Tree I
 	next.publish();
 	expect(s.tree.loading).toBe(false);
 });
+
+for (const failed of [false, true]) {
+	test(`revoked startup authority suppresses Tree ${failed ? "error" : "result"} publication`, async () => {
+		const s = setup();
+		const pending = Promise.withResolvers<GlobalLineageProjection>();
+		s.listGlobalLineage.mockReturnValueOnce(pending.promise);
+		let current = true;
+		const request = s.tree.prepareRefresh(() => current);
+		current = false;
+		if (failed) pending.reject(new Error("old startup Tree"));
+		else pending.resolve(projection(2));
+		await request.result;
+		request.publish();
+		expect(s.tree.projection).toBeNull();
+		expect(s.tree.error).toBeNull();
+		expect(s.onError).not.toHaveBeenCalled();
+	});
+}
+
+test("an optional startup Tree read reports its failure without rejecting Outline readiness", async () => {
+	const s = setup();
+	const cause = new Error("initial Tree offline");
+	s.listGlobalLineage.mockRejectedValueOnce(cause);
+	const request = s.tree.prepareRefresh(() => true, false);
+	await request.result;
+	request.publish();
+	expect(s.tree.projection).toBeNull();
+	expect(s.tree.error).toBe(cause);
+	expect(s.tree.loading).toBe(false);
+	expect(s.onError).toHaveBeenCalledWith(cause);
+	await s.tree.refresh();
+	expect(s.tree.error).toBeNull();
+	expect(s.tree.projection?.totalWorkCount).toBe(1);
+});

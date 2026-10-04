@@ -38,9 +38,9 @@ export class RelationTypeController {
 		return def?.direction === "symmetric";
 	}
 
-	async load(): Promise<void> {
+	async load(current = () => true): Promise<void> {
 		const result = await this.ports.listRelationTypeDefinitions();
-		this._definitions = validateRelationTypeDefinitions(result);
+		if (current()) this._definitions = validateRelationTypeDefinitions(result);
 	}
 
 	async create(input: {
