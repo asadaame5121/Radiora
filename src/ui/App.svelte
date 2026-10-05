@@ -270,7 +270,7 @@
 		}),
 		run: (action) => commandExecution.run(action),
 		actions: {
-			bookmark: async (id) => { const bookmark = bookmarks.find((entry) => entry.occurrenceId === id); if (bookmark) await commandExecution.run(() => removeBookmark(bookmark.id)); else await executeCommand("addBookmark"); },
+			bookmark: async (id) => { const bookmark = bookmarks.find((entry) => entry.occurrenceId === id); if (bookmark) await removeBookmark(bookmark.id); else await executeCommand("addBookmark"); },
 			duplicate: () => commandExecution.run(duplicateSelectedOccurrence),
 			"revision-comparison": () => commandExecution.run(openSelectedRevisionComparison),
 			"export-selected": (id) => commandExecution.execute("exportMarkdown", { exportOccurrenceId: id }),
@@ -1024,8 +1024,10 @@
 	}
 
 	async function removeBookmark(id: string): Promise<void> {
-		await api.deleteBookmark(id);
-		bookmarks = await api.listBookmarks();
+		await commandExecution.run(async () => {
+			await api.deleteBookmark(id);
+			bookmarks = await api.listBookmarks();
+		});
 	}
 
 	async function openBookmark(id: string): Promise<void> {
