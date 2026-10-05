@@ -5,7 +5,7 @@
 	"src/services/discovery_operations.ts": 518,
 	"src/storage/graph_state_validation.ts": 433,
 	"src/storage/memory_store.ts": 777,
-	"src/ui/App.svelte": 2084,
+	"src/ui/App.svelte": 2067,
 	"src/ui/GlobalLineage.svelte": 624,
 	"src/ui/PhylogeneticTree.svelte": 595,
 	"src/ui/editor_controller.svelte.ts": 560,

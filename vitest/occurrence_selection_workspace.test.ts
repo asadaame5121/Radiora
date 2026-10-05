@@ -19,7 +19,7 @@ function item(id: string, workId = id, parentId: string | null = null): OutlineI
 	};
 }
 
-function setup() {
+function setup(allowCache = () => true) {
 	let selectedId: string | null = "a";
 	let visible = true;
 	let expanded = ["a"];
@@ -48,7 +48,11 @@ function setup() {
 		current: () => selectedId,
 		publish: (id) => selectedId = id,
 		snapshot: () => snapshot,
-		publishStartupSnapshot: (next) => snapshot = next,
+		publishStartupSnapshot: (next) => {
+			if (!allowCache()) return false;
+			snapshot = next;
+			return true;
+		},
 		clearCompletions,
 		interruptNavigation,
 		form,
@@ -389,4 +393,19 @@ test("startup cache cannot replace an existing historical draft even before a se
 	).toBe(false);
 	expect(s.selected()).toBe("a");
 	expect(s.form.draft.original).toBe("unsaved");
+});
+
+test("a rejected cache publication preserves the selection receipt and allows a later restoration", () => {
+	let allowed = false;
+	const s = setup(() => allowed);
+	const receipt = s.selection.currentReceipt();
+	const cache = { ...s.snapshot(), items: [item("cached")] };
+	const location = { selectedOccurrenceId: "cached", hoistOccurrenceId: null };
+	expect(s.selection.restoreInitial(cache, location, () => true)).toBe(false);
+	expect(receipt()).toBe(true);
+	expect(s.selected()).toBe("a");
+	allowed = true;
+	expect(s.selection.restoreInitial(cache, location, () => true)).toBe(true);
+	expect(receipt()).toBe(false);
+	expect(s.selected()).toBe("cached");
 });

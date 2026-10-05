@@ -1,4 +1,5 @@
 import { tick } from "svelte";
+import type { OutlinePublication } from "./outline_controller.svelte.ts";
 import type { OutlineItem, OutlineSnapshot } from "../domain/models.ts";
 import { currentBrowsingLocation } from "../services/browsing_navigation_state.ts";
 import {
@@ -17,7 +18,11 @@ export interface ScreenNavigationWorkspacePorts {
 	outline: OutlineScreenPorts;
 	snapshot(): OutlineSnapshot;
 	readOutline(): Promise<OutlineSnapshot>;
-	publishOutline(snapshot: OutlineSnapshot): void;
+	outlinePublication: {
+		begin(): OutlinePublication;
+		invalidate(): void;
+	};
+	onOutlinePublished?(): void;
 	selection: {
 		current(): string | null;
 		guard(item: OutlineItem | null, current: () => boolean): Promise<boolean>;
@@ -46,6 +51,7 @@ interface PreparedDestination {
 	selectedId: string | null;
 	originSelectedId: string | null;
 	publishScreen(): void;
+	publication?: OutlinePublication;
 }
 
 /** All cross-screen requests pass this boundary; callers never receive a commit callback. */
@@ -61,7 +67,10 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 			prepare: (destination, current) => this.prepare(destination, current),
 			guard: (prepared, current) => this.guard(prepared, current),
 			valid: (prepared) =>
-				Boolean(prepared && prepared.originSelectedId === ports.selection.current()),
+				Boolean(
+					prepared && prepared.originSelectedId === ports.selection.current() &&
+						(prepared.publication?.current() ?? true),
+				),
 			commit: (prepared) => {
 				if (prepared) this.commit(prepared);
 			},
@@ -84,8 +93,11 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 		return this.navigation.origin;
 	}
 
-	navigate = (destination: ScreenDestination, origin = this.origin): Promise<boolean> =>
-		this.navigation.navigate(destination, origin);
+	navigate = (destination: ScreenDestination, origin = this.origin): Promise<boolean> => {
+		if (origin !== this.origin) return Promise.resolve(false);
+		this.ports.outlinePublication.invalidate();
+		return this.navigation.navigate(destination, origin);
+	};
 
 	goBack = (): Promise<boolean> =>
 		this.canGoBack ? this.navigate({ view: "outline" }) : Promise.resolve(false);
@@ -107,7 +119,11 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 		if (
 			destination.occurrenceId &&
 			!snapshot.items.some((item) => item.id === destination.occurrenceId)
-		) snapshot = await this.ports.readOutline();
+		) {
+			const candidate = await this.readCandidate(current);
+			if (!candidate) return null;
+			snapshot = candidate;
+		}
 		if (!current()) return null;
 		const outline = destination.view === "outline"
 			? this.outline.prepare(destination, snapshot, departure)
@@ -135,7 +151,7 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 		const item = prepared.snapshot.items.find((value) => value.id === prepared.selectedId) ?? null;
 		if (!await this.ports.selection.guard(item, current) || !current()) return false;
 		if (!await this.ports.editor.save() || !current()) return false;
-		if (!await this.refreshGuardedDestination(prepared, current)) return false;
+		if (!await this.refreshWithPublication(prepared, current)) return false;
 		prepared.publishScreen = await this.ports.screens.prepare(prepared.destination);
 		if (!current()) return false;
 		return this.finishPreparation(prepared, current);
@@ -150,11 +166,37 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 			if (!await this.ports.editor.save() || !current()) return false;
 			await this.ports.editor.flush();
 			if (!current()) return false;
-			if (!await this.refreshGuardedDestination(prepared, current)) return false;
+			if (!await this.refreshWithPublication(prepared, current)) return false;
 			// A read or renewed selection guard may itself admit input. Save and read again in that case.
 			if (version === this.ports.editor.version()) return current();
 		}
 		return false;
+	}
+
+	private async readCandidate(current: () => boolean): Promise<OutlineSnapshot | null> {
+		const publication = this.ports.outlinePublication.begin();
+		try {
+			const snapshot = await this.ports.readOutline();
+			return current() && publication.current() ? snapshot : null;
+		} catch (cause) {
+			if (!current() || !publication.current()) return null;
+			throw cause;
+		}
+	}
+
+	private async refreshWithPublication(
+		prepared: PreparedDestination,
+		current: () => boolean,
+	): Promise<boolean> {
+		// Saves may legitimately reload. Reserve publication after each save/flush boundary.
+		prepared.publication = this.ports.outlinePublication.begin();
+		const canPublish = () => current() && Boolean(prepared.publication?.current());
+		try {
+			return await this.refreshGuardedDestination(prepared, canPublish);
+		} catch (cause) {
+			if (!canPublish()) return false;
+			throw cause;
+		}
 	}
 
 	private async refreshGuardedDestination(
@@ -188,22 +230,26 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 	private commit(prepared: PreparedDestination): void {
 		const { outline, departure, destination, snapshot, selectedId } = prepared;
 		if (departure && destination.view !== "outline") this.outline.remember(departure);
-		if (outline || destination.occurrenceId !== undefined) this.ports.publishOutline(snapshot);
+		if (outline || destination.occurrenceId !== undefined) {
+			prepared.publication?.publish(snapshot);
+		}
 		if (outline) this.outline.apply(outline);
 		this.ports.selection.commit(
 			selectedId,
 			snapshot.items.find((item) => item.id === selectedId) ?? null,
 		);
 		prepared.publishScreen();
+		if (outline || destination.occurrenceId !== undefined) this.ports.onOutlinePublished?.();
 	}
 
 	private async afterCommit(prepared: PreparedDestination, current: () => boolean): Promise<void> {
 		await tick();
-		if (!current()) return;
+		const canRestore = () => current() && (prepared.publication?.current() ?? true);
+		if (!canRestore()) return;
 		if (prepared.outline) {
 			await this.outline.restoreViewport(
 				prepared.outline,
-				() => current() && prepared.selectedId === this.ports.selection.current(),
+				() => canRestore() && prepared.selectedId === this.ports.selection.current(),
 			);
 		} else if (prepared.destination.view === "globalLineage") this.ports.screens.focusTree();
 	}

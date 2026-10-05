@@ -1,3 +1,4 @@
+import { outlinePublicationFixture } from "./outline_publication_fixture.ts";
 import { vi } from "vitest";
 import type { ScreenDestination } from "../src/ui/screen_navigation_destination.ts";
 import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
@@ -75,7 +76,7 @@ export function navigationFixture() {
 		},
 		snapshot: () => snapshot,
 		readOutline: async () => snapshot,
-		publishOutline: (next) => snapshot = next,
+		outlinePublication: outlinePublicationFixture((next) => snapshot = next),
 		selection: {
 			current: () => selected,
 			guard: (next, current) => guard.canSelect(next, current),
@@ -90,7 +91,10 @@ export function navigationFixture() {
 		current: () => selected,
 		publish: (id) => selected = id,
 		snapshot: () => snapshot,
-		publishStartupSnapshot: (next) => snapshot = next,
+		publishStartupSnapshot: (next) => {
+			snapshot = next;
+			return true;
+		},
 		interruptNavigation: () => navigation.invalidate(),
 		clearCompletions: vi.fn(),
 		form: guard,
