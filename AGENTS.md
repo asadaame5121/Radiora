@@ -85,18 +85,39 @@ Cloudではセットアップ中にhashline・ffs・ast-grepを導入し、agent
 WindowsでffsがPATH上に見つからない場合は `where.exe ffs` と `$env:LOCALAPPDATA\ffs\bin\ffs.exe`
 を確認する。
 
-- **[ffs](https://github.com/quangdang46/fast_file_search)** — ファイル探索、内容検索、symbol探索、
-  コード構造の把握、読取りに推奨する。読取りは `ffs read <path> --budget 5000` のように token
-  budgetを指定し、省略された範囲が必要なら追加で読む。構造化出力が必要なら `--format json` を使う。
-- **[hashline](https://github.com/quangdang46/hashline)** — 既存ファイルの局所編集に推奨する。
-  `hashline read <path>` で得たhash anchorを使ってpatchし、stale readで拒否されたら
-  再読取りしてanchorと変更内容を確認し直す。適用前は `--dry-run`、適用後はdiffで変更範囲を確認する。
+- **[ffs](https://github.com/quangdang46/fast_file_search)** — 手元のコードベース内のファイル探索、内容検索、
+  symbol探索、コード構造の把握、読取りでは、`rg`、`cat`、`Get-Content`より優先する。
+  読取りは `ffs read <path> --budget 5000` のようにtoken budgetを指定し、省略された範囲が必要なら
+  追加で読む。構造化出力が必要なら `--format json` を使う。
+- **rg** — `git log`や`git diff`の出力に対する検索に使う（例: `git diff | rg <pattern>`）。
+- **[hashline](https://github.com/quangdang46/hashline)** — 既存ファイルの局所編集に優先する。
+  編集前は`hashline read <path>`で対象を確認し、得たhash anchorを使ってpatchする。
+  stale readで拒否されたら再読取りしてanchorと変更内容を確認し直す。
+  適用前は `--dry-run`、適用後はdiffで変更範囲を確認する。
 - **ax** — ネット接続が許可されたローカル環境で、HTTP/APIの取得やWebページの内容抽出に推奨する。
   文書は `ax <url> --md --budget 2000`、要素抽出はCSS selectorを使い、
   status・失敗・出力の省略を確認する。
 - **[ast-grep](https://github.com/ast-grep/ast-grep)** — 構文に基づくコード検索・書換えに推奨する。
   関数呼出しや構文パターンを探す場合に使い、書換えは対象言語とmatchを確認してから適用する。
   適用後はdiffと変更に応じた検証で意図した範囲を確認する。
+
+### PowerShellコマンドとの読み替え
+
+コードベース内のファイル操作は、次の用途別対応を優先する。編集前の読取りはhashline、調査の読取りはffsを使う。
+
+| 用途 | PowerShellでの操作 | 優先する道具 |
+| --- | --- | --- |
+| ファイル探索・一覧 | `Get-ChildItem`（`gci`、`ls`、`dir`）、`Where-Object`でパスを絞る | `ffs find` / `ffs glob` |
+| コードベース内の内容検索 | `Select-String`（`sls`）、`Get-Content`と`Where-Object`で行を絞る | `ffs grep` / `ffs multi-grep` |
+| 調査のための内容読取り・抜粋 | `Get-Content`（`gc`、`cat`、`type`）、`Select-Object -First/-Skip` | `ffs read <path> --budget 5000` |
+| 編集対象の確認・読取り | `Get-Item`（`gi`）で対象を確認し、`Get-Content`で読む | `hashline read <path>` |
+| 既存ファイルの局所編集 | `-replace`と`Set-Content`、`Add-Content` | `hashline patch` |
+| 新規テキストファイル作成 | `New-Item`、`Set-Content`、`Out-File`、`>` | `hashline write` |
+| ファイル名変更・削除 | `Rename-Item`、`Remove-Item` | `hashline rename` / `hashline remove` |
+| `git log` / `git diff`の出力検索 | `Select-String`、`Where-Object` | `rg`（例: `git log | rg <pattern>`） |
+
+存在・属性の確認（`Test-Path`、`Get-Item`）、ディレクトリ作成、プロセス・環境変数など、
+ffs/hashlineが扱わない用途はPowerShellを使う。属性取得を`hashline read`で代用しない。
 
 実行環境で利用できない場合や対象形式に対応しない場合は、`rg`、通常のreader/editor、
 curlなど利用可能な手段へ切り替えて作業を続ける。
