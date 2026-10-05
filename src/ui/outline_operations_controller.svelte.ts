@@ -50,13 +50,17 @@ export class OutlineOperationsController {
 	createRoot = async (): Promise<void> => {
 		const current = this.options.captureRequest();
 		const roots = this.options.getItems().filter((item) => item.parentId === null);
-		const item = await this.options.api.createItem({
-			text: "",
-			parentId: null,
-			afterId: roots.sort((a, b) => a.orderKey - b.orderKey).at(-1)?.id ?? null,
-		});
-		this.options.pendingEmpty.track(item.id);
-		await this.options.reload(item.id, current);
+		try {
+			const item = await this.options.api.createItem({
+				text: "",
+				parentId: null,
+				afterId: roots.sort((a, b) => a.orderKey - b.orderKey).at(-1)?.id ?? null,
+			});
+			this.options.pendingEmpty.track(item.id);
+			await this.options.reload(item.id, current);
+		} catch (cause) {
+			if (current()) this.options.reportError(cause);
+		}
 	};
 
 	remove = async (id: string): Promise<void> => {

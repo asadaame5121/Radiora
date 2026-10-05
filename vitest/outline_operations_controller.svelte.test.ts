@@ -600,3 +600,23 @@ it("keeps a row and pending record when draft flush fails", async () => {
 	expect(ports.pendingEmpty.forget).not.toHaveBeenCalled();
 	expect(ports.reportError).toHaveBeenCalled();
 });
+
+it("reports error when root creation fails while request is current", async () => {
+	const { controller, ports } = fixture([createItem("last", null, 20)]);
+	ports.api.createItem.mockRejectedValueOnce(new Error("create failed"));
+	await controller.createRoot();
+	expect(ports.reportError).toHaveBeenCalledWith(
+		expect.objectContaining({ message: "create failed" }),
+	);
+	expect(ports.pendingEmpty.track).not.toHaveBeenCalled();
+});
+
+it("does not report error when root creation fails after request expired", async () => {
+	const { controller, ports, invalidate } = fixture([createItem("last", null, 20)]);
+	ports.api.createItem.mockImplementationOnce(async () => {
+		invalidate();
+		throw new Error("create failed");
+	});
+	await controller.createRoot();
+	expect(ports.reportError).not.toHaveBeenCalled();
+});
