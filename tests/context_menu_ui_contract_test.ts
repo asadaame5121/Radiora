@@ -55,7 +55,7 @@ Deno.test("context actions reuse commands and confirmation-gated destructive pat
 		app,
 		/"export-selected": \(id\) => commandExecution\.execute\("exportMarkdown", \{ exportOccurrenceId: id \}\)/,
 	);
-	assertMatch(app, /\(bookmarks \?\? \[\]\)\.some/);
+	assertMatch(app, /bookmarkController\.bookmarks\.some/);
 });
 
 Deno.test("persistent row and inspector destructive buttons moved into the context menu", () => {

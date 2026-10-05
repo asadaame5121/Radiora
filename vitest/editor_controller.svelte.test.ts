@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import type { InternalReferenceBacklink, LinkType, OutlineSnapshot } from "../src/domain/models.ts";
+import { applyBranchWorkingCopyText } from "../src/ui/editor_working_copy.ts";
 import { createEditorController } from "../src/ui/editor_controller.svelte.ts";
 
 function createController(overrides?: {
@@ -51,6 +52,8 @@ function createController(overrides?: {
 		api,
 		getSnapshot: () => overrides?.snapshot ?? { items: [], links: [], knots: [], stashItemIds: [] },
 		getSelectedId: () => overrides?.selectedId ?? null,
+		updateWorkingCopy: (item, text, updatedAt) =>
+			applyBranchWorkingCopyText(overrides?.snapshot?.items ?? [], item, text, updatedAt),
 		reload: vi.fn().mockResolvedValue(true),
 		loadUnplacedWorks: vi.fn().mockResolvedValue(undefined),
 		navigation: { origin: 0, navigate: vi.fn(async () => true) },

@@ -27,6 +27,7 @@
 		visibleRows,
 		vocabulary,
 		loading,
+		hasSnapshot = false,
 		snapshotItemsLength,
 		selectedId,
 		internalReferenceCompletion,
@@ -52,6 +53,7 @@
 		visibleRows: readonly VisibleRow[];
 		vocabulary: UiVocabulary;
 		loading: boolean;
+		hasSnapshot?: boolean;
 		snapshotItemsLength: number;
 		selectedId: string | null;
 		internalReferenceCompletion: InternalReferenceCompletionState | null;
@@ -92,51 +94,56 @@
 </div>
 
 {#if loading}
-	<p class="empty">Loading…</p>
-{:else if snapshotItemsLength === 0}
-	<button type="button" class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
-{:else}
-	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div
-		class="rows"
-		role="tree"
-		aria-label={`${vocabulary.work}のアウトライン`}
-		tabindex="0"
-		onmousedown={(event) => {
-			if (event.target === event.currentTarget) handlers.deselectFromBlank(event);
-		}}
-	>
-		{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
-			<OutlineRowItem
-				{row}
-				{selectedId}
-				{draggedId}
-				{vocabulary}
-				{internalReferenceCompletion}
-				{inlineLinkCompletion}
-				{relationTypeDefinitions}
-				{handlers}
-				{helpers}
-				{onDragStart}
-				{onDragEnd}
-			/>
-		{/each}
-	</div>
+	<p role="status">{hasSnapshot ? "更新中…" : "Loading…"}</p>
 {/if}
 
-{#if stashItemIdsLength}
-	<div class="section-title stash-title"><span>Stash / Knots</span><small>{knotsLength} knot</small></div>
-	<div class="stash-list">
-		{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
-			<button
-				type="button"
-				class:selected={selectedId === row.item.id}
-				onclick={() => handlers.selectOccurrence(row.item.id)}
-			>
-				<span>∞</span>{row.item.text || `(空の${vocabulary.work})`}
-			</button>
-		{/each}
-	</div>
+{#if !loading || hasSnapshot}
+	{#if snapshotItemsLength === 0}
+		<button type="button" class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
+	{:else}
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="rows"
+			role="tree"
+			aria-busy={loading}
+			aria-label={`${vocabulary.work}のアウトライン`}
+			tabindex="0"
+			onmousedown={(event) => {
+				if (event.target === event.currentTarget) handlers.deselectFromBlank(event);
+			}}
+		>
+			{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
+				<OutlineRowItem
+					{row}
+					{selectedId}
+					{draggedId}
+					{vocabulary}
+					{internalReferenceCompletion}
+					{inlineLinkCompletion}
+					{relationTypeDefinitions}
+					{handlers}
+					{helpers}
+					{onDragStart}
+					{onDragEnd}
+				/>
+			{/each}
+		</div>
+	{/if}
+
+	{#if stashItemIdsLength}
+		<div class="section-title stash-title"><span>Stash / Knots</span><small>{knotsLength} knot</small></div>
+		<div class="stash-list">
+			{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
+				<button
+					type="button"
+					class:selected={selectedId === row.item.id}
+					onclick={() => handlers.selectOccurrence(row.item.id)}
+				>
+					<span>∞</span>{row.item.text || `(空の${vocabulary.work})`}
+				</button>
+			{/each}
+		</div>
+	{/if}
 {/if}
 
 <style>

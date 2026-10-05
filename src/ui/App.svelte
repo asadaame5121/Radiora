@@ -67,7 +67,6 @@
 	import type { ContextMenuItem } from "./context_menu";
 	import { createRpcAdapter } from "./rpc_adapter";
 	import type {
-		Bookmark,
 		CreateLinkInput,
 		EmergenceSuggestion,
 		OutlineItem,
@@ -128,6 +127,8 @@
 		type SemanticLinkAnnotation,
 	} from "../services/semantic_link_annotations";
 	import type { ViewMode } from "./app_view_mode.ts";
+	import { BookmarkController } from "./bookmark_controller.svelte.ts";
+	import { OutlineController } from "./outline_controller.svelte.ts";
 	import { StartupController } from "./startup_controller.svelte.ts";
 	import { OutlineViewportAdapter } from "./outline_viewport_adapter.ts";
 	import { ScreenDestinationPresenter } from "./screen_destination_presenter.ts";
@@ -146,15 +147,26 @@
 
 
 	const vocabulary = useUiVocabulary();
-	let snapshot = $state<OutlineSnapshot>({ items: [], links: [], knots: [], stashItemIds: [] });
-	let loading = $state(true);
+	const bookmarkController = new BookmarkController({ read: () => api.listBookmarks(), reportError: (cause) => error = errorMessage(cause) });
+	const outlineController: OutlineController = new OutlineController({
+		readOutline: () => api.listOutline(),
+		prepareBookmarks: (current) => bookmarkController.prepareRefresh(current),
+		drafts: () => editorController.drafts(),
+		prepareTree: (current, required) => tree.prepareRefresh(current, required),
+		reconcileSelection: () => selectionWorkspace.reconcile(),
+		selectionReceipt: () => selectionWorkspace.currentReceipt(),
+		focus: (id, reloadCurrent) => selectOccurrence(id, (selectionCurrent) => requestFocus(id, undefined, () => reloadCurrent() && selectionCurrent())),
+		persist: (saved) => persistStartupSnapshotCache(saved),
+		reportError: (cause) => error = errorMessage(cause),
+		clearError: () => error = "",
+	});
+	const snapshot = $derived(outlineController.snapshot);
 	const startupController = new StartupController({
 		api,
 		errorMessage,
 		onCacheRestored: (cache) => {
 			const restored = selectionWorkspace.restoreInitial(cache.snapshot, cache.location,
 				() => !startupController.cancelled && !startupController.dataLoaded && !editorController.hasUnsavedChanges() && !longForm.dirty);
-			if (restored) loading = false;
 			return restored;
 		},
 		onReady: loadStartupData,
@@ -189,7 +201,11 @@
 		},
 		snapshot: () => snapshot,
 		readOutline: () => api.listOutline(),
-		publishOutline: (next) => snapshot = next,
+		onOutlinePublished: () => persistStartupSnapshotCache(outlineController.cacheSnapshot),
+		outlinePublication: {
+			begin: () => outlineController.begin(),
+			invalidate: () => { startupController.invalidateDataLoad(); outlineController.invalidate(); },
+		},
 		selection: {
 			current: () => selectedId,
 			guard: (item, current) => historicalTimeController.canSelect(item, current),
@@ -229,7 +245,6 @@
 			reportError: (cause) => error = errorMessage(cause),
 		},
 	});
-	let bookmarks = $state<Bookmark[]>([]);
 	const transientExpandedIds = $derived(outlineDisplay.expanded);
 	let asideMode = $state<InspectorAsideMode>("overview");
 	const tagController = new TagController({
@@ -270,7 +285,7 @@
 		}),
 		run: (action) => commandExecution.run(action),
 		actions: {
-			bookmark: async (id) => { const bookmark = bookmarks.find((entry) => entry.occurrenceId === id); if (bookmark) await removeBookmark(bookmark.id); else await executeCommand("addBookmark"); },
+			bookmark: async (id) => { const bookmark = bookmarkController.bookmarks.find((entry) => entry.occurrenceId === id); if (bookmark) await removeBookmark(bookmark.id); else await executeCommand("addBookmark"); },
 			duplicate: () => commandExecution.run(duplicateSelectedOccurrence),
 			"revision-comparison": () => commandExecution.run(openSelectedRevisionComparison),
 			"export-selected": (id) => commandExecution.execute("exportMarkdown", { exportOccurrenceId: id }),
@@ -302,9 +317,7 @@
 			const current = omniController.captureInput();
 			return () => omniController.clearAccepted(current);
 		},
-		reloadBookmarks: async () => {
-			bookmarks = await api.listBookmarks();
-		},
+		reloadBookmarks: () => bookmarkController.reload(),
 	});
 	const historicalTimeController = new HistoricalTimeController({
 		save: (workId, value) => api.setWorkHistoricalTime(workId, value),
@@ -315,7 +328,7 @@
 		current: () => selectedId,
 		publish: (id) => selectedId = id,
 		snapshot: () => snapshot,
-		publishStartupSnapshot: (next) => snapshot = next,
+		publishStartupSnapshot: (next) => outlineController.restoreCache(next),
 		interruptNavigation: () => screenNavigation.invalidate(),
 		clearCompletions: () => editorController.clearCompletions(),
 		form: historicalTimeController,
@@ -364,6 +377,7 @@
 		api,
 		getSnapshot: () => snapshot,
 		getSelectedId: () => selectedId,
+		updateWorkingCopy: (item, text, updatedAt) => outlineController.updateText(item, text, updatedAt),
 		reload: load,
 		loadUnplacedWorks: () => workController.loadUnplacedWorks(),
 		navigation: screenNavigation,
@@ -562,7 +576,7 @@
 	const commands = $derived(commandAvailability(commandContext));
 	const occurrenceContextMenuItems = $derived.by((): readonly ContextMenuItem[] => {
 		const bookmarked = Boolean(
-			selectedId && (bookmarks ?? []).some((bookmark) => bookmark.occurrenceId === selectedId),
+			selectedId && bookmarkController.bookmarks.some((bookmark) => bookmark.occurrenceId === selectedId),
 		);
 		return [
 			{ id: "open-outline", label: "アウトラインで開く" },
@@ -675,6 +689,8 @@
 		return () => {
 			startupController.dispose();
 			omniController.dispose();
+			outlineController.dispose();
+			bookmarkController.dispose();
 			screenNavigation.invalidate();
 			selectionWorkspace.dispose();
 			tree.dispose();
@@ -714,55 +730,21 @@
 
 	async function load(focusId?: string, canFocus = () => true, startupCurrent?: () => boolean): Promise<boolean> {
 		if (!startupCurrent) startupController.invalidateDataLoad();
-		const current = startupCurrent ?? (() => !startupController.cancelled);
-		if (!current()) return false;
-		const treeRequest = tree.prepareRefresh(current, !startupCurrent);
-		try {
-			error = "";
-			const [next, , nextBookmarks] = await Promise.all([
-				api.listOutline(),
-				treeRequest.result,
-				api.listBookmarks(),
-			]);
-			if (!current()) { treeRequest.cancel(); return false; }
-			const snapshotForStartupCache: OutlineSnapshot = {
-				items: next.items,
-				links: next.links,
-				knots: next.knots,
-				stashItemIds: next.stashItemIds,
-			};
-			const drafts = new Map(editorController.drafts().map((draft) => [draft.workId, draft.text]));
-			next.items = next.items.map((item) => {
-				const draft = drafts.get(item.workId);
-				return draft === undefined ? item : { ...item, text: draft };
-			});
-			// Capture before deletion reconciliation invalidates the old selection receipt.
-			const focusCurrent = canFocus();
-			snapshot = next;
-			selectionWorkspace.reconcile();
-			treeRequest.publish();
-			bookmarks = nextBookmarks;
-			if (focusId && focusCurrent) {
-				selectOccurrence(focusId, (current) => requestFocus(focusId, undefined, current));
-			}
-			persistStartupSnapshotCache(snapshotForStartupCache, navigationController.browsingLocation);
-			return true;
-		} catch (cause) {
-			treeRequest.cancel();
-			if (current()) error = errorMessage(cause);
-			return false;
-		} finally {
-			if (current()) loading = false;
-		}
+		return outlineController.reload({
+			focusId, canFocus,
+			current: startupCurrent ?? (() => !startupController.cancelled),
+			treeRequired: !startupCurrent,
+		});
 	}
 
 	function persistStartupSnapshotCache(
-		snapshotToCache: OutlineSnapshot = snapshot,
+		snapshotToCache?: OutlineSnapshot,
 		location = navigationController.browsingLocation,
 	): void {
-		if (startupCacheActive || startup.phase !== "ready" || editorController.hasUnsavedChanges()) return;
+		// Explicit snapshots are saved API data; only the drawing snapshot may contain unsaved input.
+		if (startupCacheActive || startup.phase !== "ready" || (!snapshotToCache && editorController.hasUnsavedChanges())) return;
 		// biome-ignore lint/plugin/noSwallowedRejection: Startup acceleration is optional and must not interrupt editing.
-		void api.saveStartupSnapshotCache(snapshotToCache, location).catch(() => {
+		void api.saveStartupSnapshotCache(snapshotToCache ?? snapshot, location).catch(() => {
 			// Startup acceleration must not interrupt editing when the cache cannot be written.
 		});
 	}
@@ -898,8 +880,6 @@
 		});
 	}
 
-	const createRoot = (): Promise<void> => outlineOperations.createRoot();
-
 	// Side-effect boundary: view/selected Work/filter changes invalidate the prior Tree request.
 	// Tree owns generations; untrack keeps result/error/loading writes out of the dependencies.
 	// Cleanup invalidates responses after selection changes or leaving Tree.
@@ -1020,13 +1000,13 @@
 	async function performAddBookmark(): Promise<void> {
 		if (!selectedId) return;
 		await api.createBookmark(selectedId);
-		bookmarks = await api.listBookmarks();
+		await bookmarkController.reload();
 	}
 
 	async function removeBookmark(id: string): Promise<void> {
 		await commandExecution.run(async () => {
 			await api.deleteBookmark(id);
-			bookmarks = await api.listBookmarks();
+			await bookmarkController.reload();
 		});
 	}
 
@@ -1137,8 +1117,6 @@
 		return () => selected() && origin === screenNavigation.origin;
 	}
 	const toggle = (row: VisibleRow): Promise<void> => outlineOperations.toggle(row.item);
-
-	const remove = (id: string): Promise<void> => outlineOperations.remove(id);
 
 	function handleSearchKeydown(event: KeyboardEvent): void {
 		if (event.isComposing) return;
@@ -1319,7 +1297,7 @@
 			focusSearch: () => keyboardWorkspace.focusSearch(), focusQuickCapture: () => keyboardWorkspace.focusSearch(),
 			toggleSidebar: toggleNavigation, collapseAll: () => keyboardWorkspace.setAllCollapsed(true), expandAll: () => keyboardWorkspace.setAllCollapsed(false),
 			toggleCollapsed: async () => { const row = visibleRows.find((entry) => entry.item.id === selectedId); if (row) await toggle(row); },
-			zoomOut: () => keyboardWorkspace.zoomOut(), removeOccurrence: async () => { if (selectedId) await remove(selectedId); },
+			zoomOut: () => keyboardWorkspace.zoomOut(), removeOccurrence: async () => { if (selectedId) await outlineOperations.remove(selectedId); },
 		},
 	});
 	function executeCommand(id: CommandId, snapshotId?: string, linkInput?: CreateLinkInput): Promise<void> {
@@ -1706,7 +1684,7 @@
 		searchEntriesLength={omniController.searchEntries.length}
 		{commands}
 		{vocabulary}
-		{bookmarks}
+		bookmarks={bookmarkController.bookmarks}
 		{inspectorCollapsed}
 		{workingCopySaveStatus}
 		themePreference={themeController.preference}
@@ -1769,7 +1747,8 @@
 						onClearHoist={requestClearHoist}
 						{visibleRows}
 						{vocabulary}
-						{loading}
+						loading={outlineController.loading}
+						hasSnapshot={outlineController.hasSnapshot}
 						snapshotItemsLength={snapshot.items.length}
 						{selectedId}
 						{internalReferenceCompletion}
@@ -1778,7 +1757,7 @@
 						stashItemIdsLength={snapshot.stashItemIds.length}
 						knotsLength={snapshot.knots.length}
 						{openBreadcrumb}
-						{createRoot}
+						createRoot={outlineOperations.createRoot}
 						handlers={outlineHandlers}
 						helpers={outlineHelpers}
 					/>

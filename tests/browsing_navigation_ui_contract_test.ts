@@ -48,7 +48,7 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 	);
 	const browsingControls = app.slice(
 		app.indexOf("function selectOccurrence"),
-		app.indexOf("const createRoot"),
+		app.indexOf("// Side-effect boundary: view/selected Work/filter changes"),
 	);
 
 	assert(selectItem.includes("expandedIds: ancestorIds"));
@@ -82,15 +82,12 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 	assertFalse(controller.includes("api."));
 });
 
-Deno.test("loading a focus target commits accepted navigation before restoring editor focus", async () => {
+Deno.test("reload delegates focus publication to the Outline owner with both receipts", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
-	const load = app.slice(
-		app.indexOf("async function load"),
-		app.indexOf("function selectOccurrence"),
-	);
-
+	assertMatch(app, /return outlineController\.reload\(\{/);
+	assertMatch(app, /selectionReceipt: \(\) => selectionWorkspace\.currentReceipt\(\)/);
 	assertMatch(
-		load,
-		/if \(focusId && focusCurrent\) \{\s*selectOccurrence\(focusId, \(current\) => requestFocus\(focusId, undefined, current\)\);/,
+		app,
+		/focus: \(id, reloadCurrent\) => selectOccurrence\(id, \(selectionCurrent\) => requestFocus\(id, undefined, \(\) => reloadCurrent\(\) && selectionCurrent\(\)\)\)/,
 	);
 });

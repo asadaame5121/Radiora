@@ -1,7 +1,6 @@
 interface FocusPorts {
 	context(): { pane: string; origin: unknown };
 	canFocus(id: string): boolean;
-	focus?(id: string, caretOffset?: number): void;
 }
 
 /** One scheduled DOM request, invalidated by selection receipt, pane, navigation or disposal. */
@@ -20,10 +19,6 @@ export class OutlineFocusAdapter {
 				this.disposed || !current() || context.pane !== next.pane ||
 				context.origin !== next.origin || !this.ports.canFocus(id)
 			) return;
-			if (this.ports.focus) {
-				this.ports.focus(id, caretOffset);
-				return;
-			}
 			document.querySelector<HTMLElement>(
 				`.markdown-editor-host[data-editor-item-id="${CSS.escape(id)}"]`,
 			)

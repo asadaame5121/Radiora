@@ -51,7 +51,6 @@ export interface WorkControllerPorts {
 	selectOccurrence(id: string | null): void;
 	requestConfirmation(confirmation: PendingConfirmation): Promise<void>;
 	reportError(cause: unknown): void;
-	clearQuickCaptureInput?(): void;
 	captureQuickCaptureInput?(): () => void;
 	reloadBookmarks?(): Promise<void>;
 }
@@ -80,7 +79,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 		destination: QuickCaptureDestination,
 	): Promise<void> {
 		quickCaptureSubmitting = true;
-		const clearInput = ports.captureQuickCaptureInput?.() ?? ports.clearQuickCaptureInput;
+		const clearInput = ports.captureQuickCaptureInput?.();
 		try {
 			if (destination === "root") {
 				const origin = ports.navigation.origin;

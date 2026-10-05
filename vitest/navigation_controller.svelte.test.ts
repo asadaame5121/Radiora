@@ -207,7 +207,7 @@ describe("navigation controller", () => {
 
 	test("requires a search port only for non-empty queries", () => {
 		const controller = createOmniSearchController();
-		expect(() => controller.input("needle")).toThrow("Navigation search port is not configured");
+		expect(() => controller.input("needle")).toThrow("Omni search port is not configured");
 	});
 
 	test("clamps search movement to the available entry range", async () => {
@@ -287,6 +287,54 @@ describe("navigation controller", () => {
 
 		expect(reportError).toHaveBeenCalledOnce();
 		expect(reportError).toHaveBeenCalledWith(failure);
+	});
+
+	test("preserves previous suggestions and search results during debounce without flickering", async () => {
+		vi.useFakeTimers();
+		const suggestion1 = suggestionFor("first-suggestion");
+		const suggestion2 = suggestionFor("second-suggestion");
+		const result1 = resultFor("first-result");
+		const result2 = resultFor("second-result");
+
+		const controller = createOmniSearchController({
+			searchPort: {
+				suggestItems: vi.fn()
+					.mockResolvedValueOnce([suggestion1])
+					.mockResolvedValueOnce([suggestion2]),
+				searchItems: vi.fn()
+					.mockResolvedValueOnce([result1])
+					.mockResolvedValueOnce([result2]),
+				getSelectedId: () => null,
+				reportError: vi.fn(),
+			},
+		});
+
+		// 最初の検索完了
+		controller.input("foo");
+		await vi.advanceTimersByTimeAsync(250);
+		expect(controller.suggestions).toEqual([suggestion1]);
+		expect(controller.searchResults).toEqual([result1]);
+
+		// 次の文字を入力（debounce 待機中）
+		controller.input("foob");
+		// 即時クリアされず、直前の結果が維持されていること（フリッカー防止）
+		expect(controller.suggestions).toEqual([suggestion1]);
+		expect(controller.searchResults).toEqual([result1]);
+
+		// suggestion の debounce（100ms）完了後、suggestions のみ更新され、searchResults はまだ維持
+		await vi.advanceTimersByTimeAsync(100);
+		expect(controller.suggestions).toEqual([suggestion2]);
+		expect(controller.searchResults).toEqual([result1]);
+
+		// search の debounce（さらに150ms）完了後、searchResults も更新
+		await vi.advanceTimersByTimeAsync(150);
+		expect(controller.suggestions).toEqual([suggestion2]);
+		expect(controller.searchResults).toEqual([result2]);
+
+		// 空文字を入力した場合は即時クリアされること
+		controller.input("");
+		expect(controller.suggestions).toEqual([]);
+		expect(controller.searchResults).toEqual([]);
 	});
 });
 

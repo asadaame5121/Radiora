@@ -126,7 +126,9 @@ Deno.test("filter changes reload the projection and preserve only persisted sett
 	assert(owner.includes("loadTreeFilterPreference(preferences.filterStorage)"));
 	assert(owner.includes("saveTreeFilterPreference(this._filter, this.preferences.filterStorage)"));
 	assert(owner.includes("includeWorkIds: id ? [id] : []"));
-	assert(app.includes("treeRequest.result"));
+	assert(app.includes("tree.prepareRefresh(current, required)"));
+	const outline = await readUi("outline_controller.svelte.ts");
+	assert(outline.includes("tree.result"));
 });
 
 Deno.test("selection changes refresh the exception projection while the tree view is open", async () => {
@@ -147,8 +149,10 @@ Deno.test("global lineage requests are generation-guarded against out-of-order r
 	assertFalse(app.includes("globalLineageRequest"));
 	assert(owner.includes("private generation = 0"));
 	assert(owner.includes("generation === this.generation && key === this.filterKey()"));
-	assert(app.includes("treeRequest.publish()"));
-	assert(app.includes("treeRequest.cancel()"));
+	assert(app.includes("tree.prepareRefresh(current, required)"));
+	const outline = await readUi("outline_controller.svelte.ts");
+	assert(outline.includes("tree.publish()"));
+	assert(outline.includes("tree.cancel()"));
 });
 
 Deno.test("filter state closes a vanished cluster and shows the filter tab", async () => {

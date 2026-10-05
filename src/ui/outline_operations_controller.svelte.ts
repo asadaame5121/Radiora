@@ -26,7 +26,7 @@ export interface OutlineOperationsControllerOptions {
 	captureRequest: () => () => boolean;
 	pendingEmpty: { track(id: string): void; forget(id: string): void };
 	clearTemporaryExpansion: (id: string) => void;
-	selection?: { current(): string | null; clear(): void };
+	selection: { current(): string | null; clear(): void };
 }
 
 type EditingKeyEvent = Pick<
@@ -50,13 +50,17 @@ export class OutlineOperationsController {
 	createRoot = async (): Promise<void> => {
 		const current = this.options.captureRequest();
 		const roots = this.options.getItems().filter((item) => item.parentId === null);
-		const item = await this.options.api.createItem({
-			text: "",
-			parentId: null,
-			afterId: roots.sort((a, b) => a.orderKey - b.orderKey).at(-1)?.id ?? null,
-		});
-		this.options.pendingEmpty.track(item.id);
-		await this.options.reload(item.id, current);
+		try {
+			const item = await this.options.api.createItem({
+				text: "",
+				parentId: null,
+				afterId: roots.sort((a, b) => a.orderKey - b.orderKey).at(-1)?.id ?? null,
+			});
+			this.options.pendingEmpty.track(item.id);
+			await this.options.reload(item.id, current);
+		} catch (cause) {
+			if (current()) this.options.reportError(cause);
+		}
 	};
 
 	remove = async (id: string): Promise<void> => {
@@ -72,7 +76,8 @@ export class OutlineOperationsController {
 		}
 		await this.options.api.deleteItem(id);
 		this.options.pendingEmpty.forget(id);
-		if (current() && this.options.selection?.current() === id) this.options.selection.clear();
+		// A completed deletion corrects only its still-selected target, even after receipt expiry.
+		if (this.options.selection.current() === id) this.options.selection.clear();
 		await this.options.reload();
 	};
 
