@@ -1,4 +1,4 @@
-import type { OutlineSnapshot, SearchRequest, SearchResult, Suggestion } from "../domain/models.ts";
+import type { OutlineSnapshot } from "../domain/models.ts";
 import {
 	activateBrowsingPane,
 	activeBrowsingPane,
@@ -14,23 +14,10 @@ import {
 } from "../services/browsing_navigation_state.ts";
 
 export interface NavigationControllerOptions {
-	recordSearch?: (outcome: "ok" | "error", durationMs: number) => void;
 	initialPaneId?: string;
 	initialLocation?: BrowsingLocation;
 	nextPaneNumber?: number;
-	searchPort?: NavigationSearchPort;
 }
-
-export interface NavigationSearchPort {
-	suggestItems(prefix: string, limit?: number): Promise<Suggestion[]>;
-	searchItems(request: SearchRequest | string): Promise<SearchResult[]>;
-	getSelectedId(): string | null;
-	reportError(cause: unknown): void;
-}
-
-export type OmniwindowEntry =
-	| { kind: "suggestion"; value: Suggestion }
-	| { kind: "result"; value: SearchResult };
 
 export function createNavigationController(options: NavigationControllerOptions = {}) {
 	const initialPaneId = options.initialPaneId ?? "pane-1";
@@ -38,36 +25,6 @@ export function createNavigationController(options: NavigationControllerOptions 
 		createBrowsingNavigationState(initialPaneId, options.initialLocation),
 	);
 	let nextPaneNumber = options.nextPaneNumber ?? nextPaneNumberAfter(initialPaneId);
-	let commandPaletteOpen = $state(false);
-	let commandPaletteQuery = $state("");
-	let quickCaptureText = $state("");
-	let suggestions = $state<Suggestion[]>([]);
-	let searchResults = $state<SearchResult[]>([]);
-	let searchActiveIndex = $state(-1);
-	let suggestTimer = $state<ReturnType<typeof setTimeout> | undefined>();
-	let searchTimer = $state<ReturnType<typeof setTimeout> | undefined>();
-	let searchRequestId = $state(0);
-	let searchRecorded = false;
-
-	function clearSearchTimers(): void {
-		if (suggestTimer !== undefined) clearTimeout(suggestTimer);
-		if (searchTimer !== undefined) clearTimeout(searchTimer);
-		suggestTimer = undefined;
-		searchTimer = undefined;
-	}
-
-	function searchPort(): NavigationSearchPort {
-		if (!options.searchPort) {
-			throw new Error("Navigation search port is not configured");
-		}
-		return options.searchPort;
-	}
-
-	function recordSearch(outcome: "ok" | "error", started: number): void {
-		if (searchRecorded) return;
-		searchRecorded = true;
-		options.recordSearch?.(outcome, performance.now() - started);
-	}
 
 	return {
 		get browsing() {
@@ -78,42 +35,6 @@ export function createNavigationController(options: NavigationControllerOptions 
 		},
 		get browsingPane() {
 			return activeBrowsingPane(browsing);
-		},
-		get commandPaletteOpen() {
-			return commandPaletteOpen;
-		},
-		get commandPaletteQuery() {
-			return commandPaletteQuery;
-		},
-		set commandPaletteQuery(value: string) {
-			commandPaletteQuery = value;
-		},
-		get quickCaptureText() {
-			return quickCaptureText;
-		},
-		set quickCaptureText(value: string) {
-			quickCaptureText = value;
-		},
-		get suggestions() {
-			return suggestions;
-		},
-		get searchResults() {
-			return searchResults;
-		},
-		get searchActiveIndex() {
-			return searchActiveIndex;
-		},
-		set searchActiveIndex(value: number) {
-			searchActiveIndex = value;
-		},
-		get searchEntries(): readonly OmniwindowEntry[] {
-			return [
-				...suggestions.map((suggestion) => ({ kind: "suggestion" as const, value: suggestion })),
-				...searchResults.map((result) => ({ kind: "result" as const, value: result })),
-			];
-		},
-		get omniEntryCount() {
-			return suggestions.length + searchResults.length + (quickCaptureText.trim() ? 1 : 0);
 		},
 		captureBrowsing(): BrowsingNavigationState {
 			return $state.snapshot(browsing);
@@ -160,75 +81,6 @@ export function createNavigationController(options: NavigationControllerOptions 
 		},
 		projectBrowsing(snapshot: OutlineSnapshot) {
 			return projectBrowsingOutline(snapshot, currentBrowsingLocation(browsing).hoistOccurrenceId);
-		},
-		openCommandPalette(): void {
-			commandPaletteQuery = "";
-			commandPaletteOpen = true;
-		},
-		closeCommandPalette(): void {
-			commandPaletteOpen = false;
-		},
-		queueSearch(): void {
-			clearSearchTimers();
-			const requestId = ++searchRequestId;
-			const query = quickCaptureText;
-			searchActiveIndex = -1;
-			if (!query.trim()) {
-				searchRecorded = false;
-				suggestions = [];
-				searchResults = [];
-				return;
-			}
-
-			const port = searchPort();
-			suggestTimer = setTimeout(async () => {
-				suggestTimer = undefined;
-				try {
-					const next = await port.suggestItems(query, 8);
-					if (requestId === searchRequestId) suggestions = next;
-				} catch (cause) {
-					if (requestId === searchRequestId) port.reportError(cause);
-				}
-			}, 100);
-			searchTimer = setTimeout(async () => {
-				searchTimer = undefined;
-				const started = performance.now();
-				try {
-					const next = await port.searchItems({
-						query,
-						contextItemId: port.getSelectedId(),
-						limit: 20,
-					});
-					if (requestId === searchRequestId) {
-						searchResults = next;
-						recordSearch("ok", started);
-					}
-				} catch (cause) {
-					if (requestId === searchRequestId) {
-						recordSearch("error", started);
-						port.reportError(cause);
-					}
-				}
-			}, 250);
-		},
-		clearOmniwindow(): void {
-			searchRecorded = false;
-			quickCaptureText = "";
-			searchRequestId++;
-			clearSearchTimers();
-			suggestions = [];
-			searchResults = [];
-			searchActiveIndex = -1;
-		},
-		moveSearchActiveIndex(delta: -1 | 1): number {
-			searchActiveIndex = Math.max(
-				-1,
-				Math.min(
-					suggestions.length + searchResults.length + (quickCaptureText.trim() ? 1 : 0) - 1,
-					searchActiveIndex + delta,
-				),
-			);
-			return searchActiveIndex;
 		},
 	};
 }

@@ -5,6 +5,8 @@ import type {
 	SearchResult,
 	Suggestion,
 } from "../src/domain/models.ts";
+import { createOmniSearchController } from "../src/ui/omni_search_controller.svelte.ts";
+import { createCommandPaletteController } from "../src/ui/command_palette_controller.svelte.ts";
 import { createNavigationController } from "../src/ui/navigation_controller.svelte.ts";
 
 describe("navigation controller", () => {
@@ -14,17 +16,6 @@ describe("navigation controller", () => {
 		const controller = createNavigationController();
 
 		expect(controller.browsing.activePaneId).toBe("pane-1");
-		expect(controller.commandPaletteOpen).toBe(false);
-		expect(controller.commandPaletteQuery).toBe("");
-		expect(controller.quickCaptureText).toBe("");
-		expect(controller.suggestions).toEqual([]);
-		expect(controller.searchResults).toEqual([]);
-		expect(controller.searchActiveIndex).toBe(-1);
-
-		controller.quickCaptureText = "capture";
-		controller.searchActiveIndex = 2;
-		expect(controller.quickCaptureText).toBe("capture");
-		expect(controller.searchActiveIndex).toBe(2);
 	});
 
 	test("owns browsing selection, hoist, panes, and snapshot reconciliation", () => {
@@ -118,7 +109,7 @@ describe("navigation controller", () => {
 	});
 
 	test("owns reactive command palette open and query state", () => {
-		const controller = createNavigationController();
+		const controller = createCommandPaletteController();
 		const paletteState = $derived({
 			open: controller.commandPaletteOpen,
 			query: controller.commandPaletteQuery,
@@ -126,7 +117,7 @@ describe("navigation controller", () => {
 		const currentPaletteState = () => paletteState;
 
 		expect(currentPaletteState().open).toBe(false);
-		controller.commandPaletteQuery = "stale";
+		controller.setQuery("stale");
 		controller.openCommandPalette();
 
 		expect(currentPaletteState()).toEqual({ open: true, query: "" });
@@ -143,11 +134,11 @@ describe("navigation controller", () => {
 		const searchItems = vi.fn(async () => [result]);
 		const getSelectedId = vi.fn(() => "selected");
 		const reportError = vi.fn();
-		const controller = createNavigationController({
+		const controller = createOmniSearchController({
 			searchPort: { suggestItems, searchItems, getSelectedId, reportError },
 		});
 
-		controller.quickCaptureText = "needle";
+		controller.input("needle");
 		controller.queueSearch();
 		expect(controller.searchActiveIndex).toBe(-1);
 		expect(suggestItems).not.toHaveBeenCalled();
@@ -177,7 +168,7 @@ describe("navigation controller", () => {
 	test("records one search result per search session", async () => {
 		vi.useFakeTimers();
 		const recordSearch = vi.fn();
-		const controller = createNavigationController({
+		const controller = createOmniSearchController({
 			recordSearch,
 			searchPort: {
 				suggestItems: async () => [],
@@ -186,25 +177,25 @@ describe("navigation controller", () => {
 				reportError: vi.fn(),
 			},
 		});
-		controller.quickCaptureText = "first";
+		controller.input("first");
 		controller.queueSearch();
 		await vi.advanceTimersByTimeAsync(250);
-		controller.quickCaptureText = "second";
+		controller.input("second");
 		controller.queueSearch();
 		await vi.advanceTimersByTimeAsync(250);
 		expect(recordSearch).toHaveBeenCalledTimes(1);
 		expect(recordSearch).toHaveBeenCalledWith("ok", expect.any(Number));
 		controller.clearOmniwindow();
-		controller.quickCaptureText = "third";
+		controller.input("third");
 		controller.queueSearch();
 		await vi.advanceTimersByTimeAsync(250);
 		expect(recordSearch).toHaveBeenCalledTimes(2);
 	});
 
 	test("clears results immediately for a whitespace-only query", () => {
-		const controller = createNavigationController();
-		controller.quickCaptureText = "   ";
-		controller.searchActiveIndex = 4;
+		const controller = createOmniSearchController();
+		controller.input("   ");
+		controller.moveSearchActiveIndex(1);
 
 		controller.queueSearch();
 
@@ -215,15 +206,13 @@ describe("navigation controller", () => {
 	});
 
 	test("requires a search port only for non-empty queries", () => {
-		const controller = createNavigationController();
-		controller.quickCaptureText = "needle";
-
-		expect(() => controller.queueSearch()).toThrow("Navigation search port is not configured");
+		const controller = createOmniSearchController();
+		expect(() => controller.input("needle")).toThrow("Omni search port is not configured");
 	});
 
 	test("clamps search movement to the available entry range", async () => {
 		vi.useFakeTimers();
-		const controller = createNavigationController({
+		const controller = createOmniSearchController({
 			searchPort: {
 				suggestItems: vi.fn(async () => [suggestionFor("one")]),
 				searchItems: vi.fn(async () => [resultFor("two")]),
@@ -231,7 +220,7 @@ describe("navigation controller", () => {
 				reportError: vi.fn(),
 			},
 		});
-		controller.quickCaptureText = "capture";
+		controller.input("capture");
 		controller.queueSearch();
 		await vi.advanceTimersByTimeAsync(250);
 
@@ -249,7 +238,7 @@ describe("navigation controller", () => {
 		const suggestItems = vi.fn(() => pendingSuggestion.promise);
 		const searchItems = vi.fn(async () => [resultFor("stale-result")]);
 		const reportError = vi.fn();
-		const controller = createNavigationController({
+		const controller = createOmniSearchController({
 			searchPort: {
 				suggestItems,
 				searchItems,
@@ -258,7 +247,7 @@ describe("navigation controller", () => {
 			},
 		});
 
-		controller.quickCaptureText = "stale";
+		controller.input("stale");
 		controller.queueSearch();
 		await vi.advanceTimersByTimeAsync(100);
 		expect(suggestItems).toHaveBeenCalledOnce();
@@ -281,7 +270,7 @@ describe("navigation controller", () => {
 		vi.useFakeTimers();
 		const failure = new Error("search failed");
 		const reportError = vi.fn();
-		const controller = createNavigationController({
+		const controller = createOmniSearchController({
 			searchPort: {
 				suggestItems: vi.fn(async () => []),
 				searchItems: vi.fn(async () => {
@@ -292,12 +281,60 @@ describe("navigation controller", () => {
 			},
 		});
 
-		controller.quickCaptureText = "failure";
+		controller.input("failure");
 		controller.queueSearch();
 		await vi.advanceTimersByTimeAsync(250);
 
 		expect(reportError).toHaveBeenCalledOnce();
 		expect(reportError).toHaveBeenCalledWith(failure);
+	});
+
+	test("preserves previous suggestions and search results during debounce without flickering", async () => {
+		vi.useFakeTimers();
+		const suggestion1 = suggestionFor("first-suggestion");
+		const suggestion2 = suggestionFor("second-suggestion");
+		const result1 = resultFor("first-result");
+		const result2 = resultFor("second-result");
+
+		const controller = createOmniSearchController({
+			searchPort: {
+				suggestItems: vi.fn()
+					.mockResolvedValueOnce([suggestion1])
+					.mockResolvedValueOnce([suggestion2]),
+				searchItems: vi.fn()
+					.mockResolvedValueOnce([result1])
+					.mockResolvedValueOnce([result2]),
+				getSelectedId: () => null,
+				reportError: vi.fn(),
+			},
+		});
+
+		// 最初の検索完了
+		controller.input("foo");
+		await vi.advanceTimersByTimeAsync(250);
+		expect(controller.suggestions).toEqual([suggestion1]);
+		expect(controller.searchResults).toEqual([result1]);
+
+		// 次の文字を入力（debounce 待機中）
+		controller.input("foob");
+		// 即時クリアされず、直前の結果が維持されていること（フリッカー防止）
+		expect(controller.suggestions).toEqual([suggestion1]);
+		expect(controller.searchResults).toEqual([result1]);
+
+		// suggestion の debounce（100ms）完了後、suggestions のみ更新され、searchResults はまだ維持
+		await vi.advanceTimersByTimeAsync(100);
+		expect(controller.suggestions).toEqual([suggestion2]);
+		expect(controller.searchResults).toEqual([result1]);
+
+		// search の debounce（さらに150ms）完了後、searchResults も更新
+		await vi.advanceTimersByTimeAsync(150);
+		expect(controller.suggestions).toEqual([suggestion2]);
+		expect(controller.searchResults).toEqual([result2]);
+
+		// 空文字を入力した場合は即時クリアされること
+		controller.input("");
+		expect(controller.suggestions).toEqual([]);
+		expect(controller.searchResults).toEqual([]);
 	});
 });
 

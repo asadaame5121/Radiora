@@ -51,7 +51,7 @@ export interface WorkControllerPorts {
 	selectOccurrence(id: string | null): void;
 	requestConfirmation(confirmation: PendingConfirmation): Promise<void>;
 	reportError(cause: unknown): void;
-	clearQuickCaptureInput?(): void;
+	captureQuickCaptureInput?(): () => void;
 	reloadBookmarks?(): Promise<void>;
 }
 
@@ -79,6 +79,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 		destination: QuickCaptureDestination,
 	): Promise<void> {
 		quickCaptureSubmitting = true;
+		const clearInput = ports.captureQuickCaptureInput?.();
 		try {
 			if (destination === "root") {
 				const origin = ports.navigation.origin;
@@ -90,12 +91,12 @@ export function createWorkController(ports: WorkControllerPorts) {
 					parentId: null,
 					afterId: roots.at(-1)?.id ?? null,
 				});
-				ports.clearQuickCaptureInput?.();
+				clearInput?.();
 				if (await ports.reload() === false) return;
 				await ports.navigation.navigate({ view: "outline", occurrenceId: created.id }, origin);
 			} else {
 				await ports.api.quickCapture(text);
-				ports.clearQuickCaptureInput?.();
+				clearInput?.();
 				await Promise.all([ports.reload(), loadUnplacedWorks()]);
 			}
 		} catch (cause) {

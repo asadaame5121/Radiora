@@ -9,7 +9,7 @@ const inspector = await Deno.readTextFile(
 	new URL("../src/ui/InspectorView.svelte", import.meta.url),
 );
 const navigationController = await Deno.readTextFile(
-	new URL("../src/ui/navigation_controller.svelte.ts", import.meta.url),
+	new URL("../src/ui/omni_search_controller.svelte.ts", import.meta.url),
 );
 const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
 const markdownEditor = await Deno.readTextFile(
@@ -34,12 +34,12 @@ Deno.test("Omniwindow shares the quick-capture command value with search", () =>
 	assertMatch(app, /searchItems: \(request\) => api\.searchItems\(request\)/);
 	assertMatch(app, /getSelectedId: \(\) => selectedId/);
 	assertMatch(app, /reportError: \(cause\) => error = errorMessage\(cause\)/);
-	assertMatch(app, /const searchEntries = \$derived\(navigationController\.searchEntries\)/);
-	assertMatch(app, /const omniEntryCount = \$derived\(navigationController\.omniEntryCount\)/);
+	assertMatch(app, /searchEntriesLength=\{omniController\.searchEntries.length\}/);
+	assertMatch(app, /const omniEntryCount = \$derived\(omniController\.omniEntryCount\)/);
 	assertMatch(app, /event\.key === "Enter" && event\.shiftKey/);
 	assertMatch(app, /event\.isComposing/);
-	assertMatch(app, /const exactMatchIndex = searchEntries\.findIndex/);
-	assertMatch(app, /navigationController\.moveSearchActiveIndex\(delta\)/);
+	assertMatch(app, /omniController\.enterEntry/);
+	assertMatch(app, /omniController\.moveSearchActiveIndex\(delta\)/);
 	assertMatch(topBar, /searchActiveIndex === searchEntriesLength/);
 	assertMatch(app, /executeCommand\("quickCapture"\)/);
 	assertMatch(app, /quickCaptureDestinationLabel/);
@@ -49,14 +49,17 @@ Deno.test("Omniwindow shares the quick-capture command value with search", () =>
 	assertNotMatch(app, /let searchTimer/);
 	assertNotMatch(app, /let searchRequestId/);
 
-	assertMatch(navigationController, /let quickCaptureText = \$state\(""\)/);
-	assertMatch(navigationController, /let suggestions = \$state<Suggestion\[\]>\(\[\]\)/);
-	assertMatch(navigationController, /let searchResults = \$state<SearchResult\[\]>\(\[\]\)/);
-	assertMatch(navigationController, /let searchActiveIndex = \$state\(-1\)/);
+	assertMatch(navigationController, /private liveQuickCaptureText = \$state\(""\)/);
+	assertMatch(navigationController, /private liveSuggestions = \$state<Suggestion\[\]>\(\[\]\)/);
+	assertMatch(
+		navigationController,
+		/private liveSearchResults = \$state<SearchResult\[\]>\(\[\]\)/,
+	);
+	assertMatch(navigationController, /private liveSearchActiveIndex = \$state\(-1\)/);
 	assertMatch(navigationController, /queueSearch\(\): void/);
-	assertMatch(navigationController, /port\.suggestItems\(query, 8\)/);
+	assertMatch(navigationController, /port\.suggestItems\(query, SUGGESTION_LIMIT\)/);
 	assertMatch(navigationController, /port\.searchItems\(\{/);
-	assertMatch(navigationController, /const requestId = \+\+searchRequestId/);
+	assertMatch(navigationController, /const requestId = \+\+this\.searchRequestId/);
 	assertMatch(navigationController, /clearOmniwindow\(\): void/);
 	assertMatch(navigationController, /get searchEntries\(\)/);
 	assertMatch(navigationController, /get omniEntryCount\(\)/);

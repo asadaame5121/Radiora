@@ -534,3 +534,29 @@ PR #315の追加レビュー対応（2026-10-05）:
 `deno task verify`はlint・品質・format・型チェック成功後、Deno846件成功と既知の
 Linux環境依存3件失敗で停止。同じverifyを実行するpre-commit hookは省略し、
 後段の関連Svelte単体とbuildは個別実行した。
+
+## #309: browsing・Omni・Paletteの分離（積み上げPR）
+
+PR base: main `dc43dba`（#316経由で#308反映済み）。#309はPR #317上の変更で、main未反映。
+NavigationControllerはpane/hoistだけを持つ。
+OmniSearchControllerのinputは検索とquick captureで共有する唯一の文字列を更新し、
+debounce・要求世代・候補・active indexを管理する。clear/disposeはtimerと公開権限を失効させる。
+検索選択の受理、quick captureの成功は開始時の入力receiptが有効な場合だけclearする。
+待機中の追加入力を遅い成功で消さない。WorkControllerは作成・submittingのみ所有する。
+
+検索はquery sessionとして扱い、選択IDはsearch実行時のranking contextにだけ使う。
+選択変更・画面切替は検索の失効条件に含めず、query変更/clear/disposeを条件とする。
+Enter候補決定はOmni ownerへ置く。PaletteControllerのquery/openは独立し、Omniをclearしない。
+
+PR #317のレビュー修正では入力receiptを`InputReceipt`型として公開し、WorkControllerの
+旧`clearQuickCaptureInput` portを削除した。入力を持つ呼び出し側は
+`captureQuickCaptureInput`で開始時のreceiptを捕捉し、その入力だけをclearする。
+root/unplaced両方の遅い保存成功で追加入力を保持する直接回帰は
+[WorkControllerテスト](../../vitest/work_controller.svelte.test.ts)に置く。 この修正もPR
+#317上の変更であり、main反映済みとは扱わない。
+
+レビュー修正の検証: Svelte全356件、Omni契約4件、Omni lifetimeブラウザ1件、型チェック、
+build、lint/品質/重複/formatを通過。Deno全体は848件通過・Biome依存参照の1件失敗で、
+worktreeに既存依存への参照を補い、その1件も単独再実行で通過した。 `deno task verify`はWindows上のnpm
+shim読込で停止したため、後段の型チェック・build・
+Svelteテストはnpmから直接実行し、Denoテストも個別実行した。
