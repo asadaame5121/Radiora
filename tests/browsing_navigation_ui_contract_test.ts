@@ -48,7 +48,7 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 	);
 	const browsingControls = app.slice(
 		app.indexOf("function selectOccurrence"),
-		app.indexOf("const createRoot"),
+		app.indexOf("// Side-effect boundary: view/selected Work/filter changes"),
 	);
 
 	assert(selectItem.includes("expandedIds: ancestorIds"));

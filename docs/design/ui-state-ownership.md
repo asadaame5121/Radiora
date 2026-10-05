@@ -423,7 +423,13 @@ OutlineScreenStateは離脱時の写しだけを持ち、別画面中の選択�
 Hoist/paneは既存Navigation/OccurrenceSelectionWorkspaceのcommit契約を維持する。
 root作成・削除はOutlineOperationsControllerが所有し、本文flush、pending empty記録、
 reload後の選択を既存ownerへ委譲する。書込完了後にreceiptが失効してもDBを巻き戻さない。
+削除成功後はreceiptにかかわらず、その時点の選択が削除対象と一致する場合だけ解除する。
+待機中に選んだ別項目は保持し、削除失敗時は選択とpending empty記録を維持する。
 
 `OutlineFocusAdapter` のtimerは新focus要求で置換し、receipt・pane・画面originを再確認する。
 unmountでtimerを解除する。画面復帰のfocus→caret→scrollは既存Viewportの順序を維持する。
-直接回帰はlive条件の写し、root/pending記録、保存失敗、pane/receipt/origin/disposeの失効を確認する。
+直接回帰はlive条件の写し、表示行の順序・一時展開・Hoist・stash、root/pending記録、
+削除正常系・失敗系・receipt失効後の選択補正を確認する。
+focusの直接テストは独立したoutline_focus_adapter.test.tsでpane/receipt/origin/disposeの失効を確認し、
+ブラウザでは本番DOMイベント経路によるeditor focus・caretとCSS.escapeを確認する。 PR
+#315（#307）は未マージのため、main反映後のrebaseとreload/cache公開契約の統合確認は残る。

@@ -898,7 +898,7 @@
 				await performMarkdownExport(targetId);
 				break;
 			case "remove-occurrence":
-				await remove(targetId);
+				await outlineOperations.remove(targetId);
 				break;
 			case "trash-work":
 				await trashSelectedWork();
@@ -1013,8 +1013,6 @@
 			if (browsingLocation.hoistOccurrenceId) selectionWorkspace.setHoist(null);
 		});
 	}
-
-	const createRoot = (): Promise<void> => outlineOperations.createRoot();
 
 	// Side-effect boundary: view/selected Work/filter changes invalidate the prior Tree request.
 	// Tree owns generations; untrack keeps result/error/loading writes out of the dependencies.
@@ -1252,8 +1250,6 @@
 	}
 	const toggle = (row: VisibleRow): Promise<void> => outlineOperations.toggle(row.item);
 
-	const remove = (id: string): Promise<void> => outlineOperations.remove(id);
-
 	function handleSearchKeydown(event: KeyboardEvent): void {
 		if (event.isComposing) return;
 		if (event.key === "Escape") {
@@ -1468,7 +1464,7 @@
 					break;
 				}
 				case "zoomOut": await keyboardWorkspace.zoomOut(); break;
-				case "removeOccurrence": if (selectedId) await remove(selectedId); break;
+				case "removeOccurrence": if (selectedId) await outlineOperations.remove(selectedId); break;
 			}
 		});
 		if (!result.executed && result.reason) error = result.reason;
@@ -1923,7 +1919,7 @@
 						stashItemIdsLength={snapshot.stashItemIds.length}
 						knotsLength={snapshot.knots.length}
 						{openBreadcrumb}
-						{createRoot}
+						createRoot={outlineOperations.createRoot}
 						handlers={outlineHandlers}
 						helpers={outlineHelpers}
 					/>
