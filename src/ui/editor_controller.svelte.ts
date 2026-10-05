@@ -1,4 +1,4 @@
-import type { LinkType, OutlineSnapshot } from "../domain/models.ts";
+import type { LinkType, OutlineItem, OutlineSnapshot } from "../domain/models.ts";
 import type { RadioraBindings } from "../shared/bindings.ts";
 import { ResumePositionAutosaveCoordinator } from "../services/resume_position_autosave.ts";
 import {
@@ -10,7 +10,6 @@ import { parseMarkdownCandidates } from "../services/markdown_parser.ts";
 import type { ScreenNavigator } from "./screen_navigation_destination.ts";
 import { navigationUiState } from "./navigation_state.ts";
 import { createEditorCompletionController } from "./editor_completion_controller.svelte.ts";
-import { applyBranchWorkingCopyText } from "./editor_working_copy.ts";
 
 type EditorApi = Pick<
 	RadioraBindings,
@@ -27,6 +26,7 @@ export type EditorControllerPorts = {
 	api: EditorApi;
 	getSnapshot(): OutlineSnapshot;
 	getSelectedId(): string | null;
+	updateWorkingCopy(item: OutlineItem, text: string, updatedAt: string): void;
 	reload(focusId?: string): Promise<unknown>;
 	loadUnplacedWorks(): Promise<void>;
 	navigation: ScreenNavigator;
@@ -73,7 +73,7 @@ export function createEditorController(ports: EditorControllerPorts) {
 		if (!item || item.revisionSelector.mode !== "branch") return;
 		editVersion++;
 		const updatedAt = new Date().toISOString();
-		applyBranchWorkingCopyText(snapshot.items, item, text, updatedAt);
+		ports.updateWorkingCopy(item, text, updatedAt);
 		autosave.queue(item.workId, item.revisionSelector.branchId, id, text);
 		resumeAutosave.queue(id, textarea.selectionStart);
 		void completion.updateInternalReferenceCompletion(id, textarea);

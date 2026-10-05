@@ -26,6 +26,7 @@ function adaptedPorts() {
 		captureRequest: () => () => true,
 		pendingEmpty: { track: vi.fn(), forget: vi.fn() },
 		clearTemporaryExpansion: vi.fn(),
+		selection: { current: (): string | null => null, clear: vi.fn() },
 	};
 }
 
@@ -67,6 +68,10 @@ function fixture(items: OutlineItem[]) {
 			forget: vi.fn((_id: string) => events.push("forget")),
 		},
 		clearTemporaryExpansion: vi.fn((_id: string) => events.push("clear-expansion")),
+		selection: {
+			current: vi.fn((): string | null => null),
+			clear: vi.fn(() => events.push("clear-selection")),
+		},
 		captureRequest: () => {
 			const request = generation;
 			return () => generation === request;
@@ -353,6 +358,65 @@ describe("OutlineOperationsController - structure operations", () => {
 });
 
 describe("OutlineOperationsController - current ownership contracts", () => {
+	it.each(["row", "other", null])(
+		"deletes and clears only the deleted selection (selected: %s)",
+		async (selected) => {
+			const item = createItem("row", null, 10);
+			const { controller, ports, events } = fixture([item]);
+			ports.selection.current.mockReturnValue(selected);
+			await controller.remove(item.id);
+			expect(ports.flushAutosave).toHaveBeenCalledWith(item.workId);
+			expect(ports.api.deleteItem).toHaveBeenCalledWith(item.id);
+			expect(ports.pendingEmpty.forget).toHaveBeenCalledWith(item.id);
+			expect(ports.reload).toHaveBeenCalledWith();
+			expect(ports.selection.clear).toHaveBeenCalledTimes(selected === item.id ? 1 : 0);
+			expect(events).toEqual(
+				selected === item.id
+					? ["flush", "delete", "forget", "clear-selection", "reload"]
+					: ["flush", "delete", "forget", "reload"],
+			);
+		},
+	);
+
+	it.each(["row", "other"])(
+		"corrects persisted deletion after receipt expiry without clearing a new selection (%s)",
+		async (selectedAfterDelete) => {
+			const item = createItem("row", null, 10);
+			const { controller, ports, invalidate, events } = fixture([item]);
+			ports.selection.current.mockReturnValue(item.id);
+			let release: () => void = () => {
+				throw new Error("Delete has not started");
+			};
+			ports.api.deleteItem.mockImplementation(() =>
+				new Promise<void>((resolve) => {
+					events.push("delete");
+					release = resolve;
+				})
+			);
+			const removal = controller.remove(item.id);
+			await vi.waitFor(() => expect(ports.api.deleteItem).toHaveBeenCalled());
+			invalidate();
+			ports.selection.current.mockReturnValue(selectedAfterDelete);
+			release();
+			await removal;
+			expect(ports.pendingEmpty.forget).toHaveBeenCalledWith(item.id);
+			expect(ports.selection.clear).toHaveBeenCalledTimes(selectedAfterDelete === item.id ? 1 : 0);
+			expect(ports.reload).toHaveBeenCalledWith();
+		},
+	);
+
+	it("preserves selection and pending records when remove persistence fails", async () => {
+		const item = createItem("row", null, 10);
+		const { controller, ports } = fixture([item]);
+		ports.selection.current.mockReturnValue(item.id);
+		const cause = new Error("Delete failed");
+		ports.api.deleteItem.mockRejectedValue(cause);
+		await expect(controller.remove(item.id)).rejects.toBe(cause);
+		expect(ports.selection.clear).not.toHaveBeenCalled();
+		expect(ports.pendingEmpty.forget).not.toHaveBeenCalled();
+		expect(ports.reload).not.toHaveBeenCalled();
+	});
+
 	it("records an empty split after persistence and before reload", async () => {
 		const item = createItem("row", null, 10, "body");
 		const { controller, ports, events } = fixture([item]);
@@ -535,4 +599,24 @@ it("keeps a row and pending record when draft flush fails", async () => {
 	expect(ports.api.deleteItem).not.toHaveBeenCalled();
 	expect(ports.pendingEmpty.forget).not.toHaveBeenCalled();
 	expect(ports.reportError).toHaveBeenCalled();
+});
+
+it("reports error when root creation fails while request is current", async () => {
+	const { controller, ports } = fixture([createItem("last", null, 20)]);
+	ports.api.createItem.mockRejectedValueOnce(new Error("create failed"));
+	await controller.createRoot();
+	expect(ports.reportError).toHaveBeenCalledWith(
+		expect.objectContaining({ message: "create failed" }),
+	);
+	expect(ports.pendingEmpty.track).not.toHaveBeenCalled();
+});
+
+it("does not report error when root creation fails after request expired", async () => {
+	const { controller, ports, invalidate } = fixture([createItem("last", null, 20)]);
+	ports.api.createItem.mockImplementationOnce(async () => {
+		invalidate();
+		throw new Error("create failed");
+	});
+	await controller.createRoot();
+	expect(ports.reportError).not.toHaveBeenCalled();
 });

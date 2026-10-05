@@ -37,7 +37,7 @@ state自体を永続化しないという意味で、元データのDB保存と�
 | 状態 / 正本                                                         | owner                                                            | writer・公開操作                                                                                                                   | 読み手                                                          | 寿命                               | 永続化先                                                    | 失効条件                                                           |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
 | 保存済みWork/Branch/Revision/Occurrence/Link / backend              | service/storage、UIは`api`経由                                   | 既存mutation API、transaction/rollbackはstorage                                                                                    | 各featureのread model                                           | 保存データの寿命                   | 選択したstorage backend                                     | mutation、削除、backup復元後に再取得                               |
-| `snapshot` / API結果にEditor draftを重ねた描画キャッシュ            | `App.svelte`                                                     | `load`、startup cache復元、Workspaceの`publishOutline`、Editorの本文更新                                                           | Outline、Inspector、選択派生値、各Controllerのgetter            | App                                | 自身は保存なし。保存済みの写しだけstartup cacheへ           | reload、navigationの最新読込、起動cacheから正式データへの切替      |
+| `snapshot` / API結果にEditor draftを重ねた描画キャッシュ            | `OutlineController`（#307）                                      | `reload`、`begin`の要求内`publish`、`restoreCache`、Editorからの`updateText`                                                       | Outline、Inspector、選択派生値、各Controllerのgetter            | App                                | 自身は保存なし。保存済みの写しだけstartup cacheへ           | reload、navigationの最新読込、起動cacheから正式データへの切替      |
 | inline本文draft・save status・`editVersion` / 未保存入力            | `createEditorController`、内部`WorkingCopyAutosaveCoordinator`   | `updateLocalText`、`flushAutosave`、`flushForNavigation`、`retryAutosave`                                                          | MarkdownEditor、WorkingCopySaveStatus、reload、Workspace        | App。保存成功までdraft保持         | `updateItemText`経由のbranch working copy                   | 同branchの新入力でversion更新。失敗・選択変更・reloadで捨てない    |
 | 全画面の`selectedId` / 受理された現在選択                           | `App.svelte`                                                     | 内部publish一箇所。下の旧writer表と#298のcommit契約を参照                                                                          | selectedItem、Inspector、Tree、Editor、commands                 | App                                | 直接保存なし。Outline位置のみstartup cache/resume API       | 受理した選択変更、削除補正、初期復元                               |
 | paneごとの選択・Hoist・history/index・active pane / Outline閲覧位置 | `createNavigationController`の`browsing`                         | `browseToOccurrence`、`setHoist`、`clearHoist`、`activateBrowsingPane`、`resetBrowsing`、`reconcileBrowsing`、内部`commitBrowsing` | Outline projection、breadcrumb、Viewport、復帰捕捉              | App                                | startup cacheには現在の選択/Hoistのみ。pane全体の保存なし   | 削除時に各paneの現在位置を補正。画面外選択では更新しない           |
@@ -329,7 +329,7 @@ mode互換値は残るが、現行Inspectorは`query`をoverviewへ表示補正�
 | Backlinks / History / emergence | 各要求世代、HistoryはWork/Branch、emergenceは選択ID                     | 選択effectからload/clear。backlinksはclearで世代更新、別Work loadで新要求。現状これらにApp dispose一括接続はない                                                                                                                            |
 | OmniWindow search               | query要求世代（選択文脈は現状失効条件に含まない）                       | 新query/clearでtimer解除と世代更新。unmount disposeは分離時の残作業                                                                                                                                                                         |
 | Startup                         | 起動session世代、未dispose、正式load未完了、復元権限                    | #300でpoll/retry/cacheの各await後に再確認。timer解除・応答失効。現状cancelledはloop入口/cache応答のみで全await後を覆わない                                                                                                                  |
-| 通常reload                      | 描画cache要求の有効性、応答時の最新draft、現在画面/選択                 | Tree以外の世代制御は未実装。選択commitやstartupと競合する公開順はcache後続作業で固定                                                                                                                                                        |
+| 通常reload                      | 描画cache要求の有効性、応答時の最新draft、現在画面/選択                 | `OutlineController`の世代＋要求内current。開始/遷移で旧Tree scopeをcancelし、受理時だけsnapshot→選択補正→Tree→bookmarks→cache→focusを公開（#307）                                                                                           |
 | DOM adapters / resize / focus   | mount状態、対象ID、pane、navigationのcurrent                            | View/adapterがobserver/listener/gestureを解放。OutlineViewport.connectはfocusin cleanup、Theme.initはmedia listener cleanup。AppのInspector resizeはpointerup cleanupのみ、requestFocusはIDのみ確認でtimer未取消。後続Layout/選択作業で補う |
 
 Appのvisibility hidden/unloadは本文とresumeのflushを呼ぶ副作用境界。 teardownはawaitできないためbest
@@ -371,7 +371,7 @@ Issueのopen/closedやバックログのチェックだけでmainへの反映を
 | #298                          | base `main` / `4912cf2`。`codex/issue-298-selection-commit`上で実装・検証                  | main未反映。選択Workspace・年代補正・非同期失効を集約。#299/#300と通常reload全体の世代・draft overlayは後続                                     |
 
 未決定の仕様はpane履歴UI/Browser History、検索の選択文脈変更時の再実行方針。
-通常reloadの競合調停とLayout/Navigationの分離は実装待ちであり、ownerの責務を曖昧にする理由にはしない。
+通常reloadの競合調停は#307で実装（下記）。Layout/Navigationの分離は後続作業であり、ownerの責務を曖昧にする理由にはしない。
 後続PRはこの基点から増えた変更と既存stackの成果を再照合し、対象テストと残作業を記録する。
 
 #295の検証: 変更した5文書の相対リンク46件とcode fenceを確認し、`git diff --check`成功。
@@ -414,8 +414,8 @@ cache/poll/retry/dispose/再起動の旧応答、通常load失効、poll timer�
 
 ## #308: Outline live owner（積み上げPR）
 
-PR base: main `729a064`（#306反映後）。#307のreload/cache調停は未反映であり、
-本変更の完了とmain反映を区別する。#307は引き続きmerge前提となる。
+PR base: main `729a064`（#306反映後）。#315（#307）はmain `ad337dd`で反映済み。
+本branchへ同mainを統合し、reload/cache公開契約とlive表示ownerを接続する。#308自体はmain未反映。
 
 `OutlineDisplayController` がlive filter・一時展開・visible rows projectionを所有する。
 Viewのfilter入力、選択Workspace、画面Workspaceの復元portは同じ操作に接続する。
@@ -423,14 +423,122 @@ OutlineScreenStateは離脱時の写しだけを持ち、別画面中の選択�
 Hoist/paneは既存Navigation/OccurrenceSelectionWorkspaceのcommit契約を維持する。
 root作成・削除はOutlineOperationsControllerが所有し、本文flush、pending empty記録、
 reload後の選択を既存ownerへ委譲する。書込完了後にreceiptが失効してもDBを巻き戻さない。
+削除成功後はreceiptにかかわらず、その時点の選択が削除対象と一致する場合だけ解除する。
+待機中に選んだ別項目は保持し、削除失敗時は選択とpending empty記録を維持する。
 
 `OutlineFocusAdapter` のtimerは新focus要求で置換し、receipt・pane・画面originを再確認する。
 unmountでtimerを解除する。画面復帰のfocus→caret→scrollは既存Viewportの順序を維持する。
-直接回帰はlive条件の写し、root/pending記録、保存失敗、pane/receipt/origin/disposeの失効を確認する。
+直接回帰はlive条件の写し、表示行の順序・一時展開・Hoist・stash、root/pending記録、
+削除正常系・失敗系・receipt失効後の選択補正を確認する。
+focusの直接テストは独立したoutline_focus_adapter.test.tsでpane/receipt/origin/disposeの失効を確認し、
+ブラウザでは本番DOMイベント経路によるeditor focus・caretとCSS.escapeを確認する。
+今回の統合ではBookmarkControllerの正本を維持し、一時展開はOutlineDisplayControllerから読む。
+
+統合検証（main `ad337dd` ＋ #316 head `08cf9ef`、filter入力修正を含む）:
+Deno849件、Svelte401件、UIブラウザ72件、型チェック、build、 lint・実装行数・magic number・duplicate
+ratchet・formatが成功。 pre-commitは既知のDeno/npm
+shim実行エラーを避けて省略し、同等の検証を個別実行した。
+
+## #307: 通常reloadとsnapshot公開の調停
+
+実装baseはmain `729a064`（PR #306 merge後）。この作業branchでの実装・検証であり、
+main反映済みとは区別する。上の基点/旧writer表と#300の後続記録は各段階の履歴。
+
+- `OutlineController`がApp寿命のsnapshot描画cache、取得中状態、公開世代を所有する。 bookmarksのread
+  modelと取得世代は`BookmarkController`が所有し、通常reloadはその保留公開portを調停する。
+  保存済み本文の正本はbackend、未保存本文の正本はEditorのautosave coordinatorに残す。
+  Appの`load`はstartup失効とownerへの委譲だけを行う。通常reloadをStartupへ移さない。
+- `begin`で旧reloadのTree保留scopeを直ちにcancelし、要求内`current`/`publish`を返す。
+  reload、画面遷移の最終取得は同じ世代を使い、受理していない成功・失敗・finallyは
+  snapshot、bookmarks、error、loading、選択補正、cache、focusを更新しない。
+  focusはreload開始時の選択receiptと呼出元権限も確認し、描画後はreload/選択の双方を再確認する。
+- 通常reloadはOutline/Tree/bookmarksを並行取得し、全必須取得の成功後に
+  snapshot→選択補正→Tree保留publish→bookmarks→保存済みcache→focusの順に同期公開する。
+  起動Treeは引き続き任意取得。cache復元は正式公開前だけ受理し、起動要求と初期選択の
+  有効性も必要とする。失敗時は既存snapshotとEditor draftを維持し、次のreloadで再試行する。
+  取得中も既存snapshotのViewを維持して、編集中のDOM/focusを失わない。
+- 画面遷移開始で旧reload/起動要求を失効する。guard/save/flushはreloadを呼べるので、
+  最終save/flushの**後**に公開scopeを取得し、最終read/再guard/同期commit/描画後復元まで検証する。
+  そのread中に通常reloadが始まれば遷移を受理せず、旧read失敗のerrorも表示しない。
+  待機中に入力が増えた場合は従来どおりsave/readを繰り返す。
+- 本文overlayはWork IDとbranch selectorの両方を照合する。同Workの別branch、pinned Revision、
+  別Workには混入させない。公開時のdraftを使い、read開始時draftやread中の入力がautosave済みに
+  なった場合も、古いbackend応答で新本文を消さない。ownerはread中に編集したbranchの識別子だけを
+  記録し、本文draft自体を二重所有しない。reload/画面遷移の公開時はcacheへoverlay前の保存済みAPI
+  snapshotを渡す。
+  autosave成功後と通常のcache保存は、未保存draftがないことを確認して現在の描画snapshotを使う。
+- Editorの描画本文更新も`updateText` portを通す。bookmarkのadd/remove/Work操作後は
+  `BookmarkController.reload`だけを呼び、Outline/Treeを再取得しない。bookmark単体更新は
+  旧reload内のbookmark公開だけを失効し、Outlineの公開を止めない。
+  disposeは公開権限と保留Tree/bookmark scopeを解放する。完了済みDB書込はUI失効で巻き戻さない。
+
+直接テスト: [Outline Controller](../../vitest/outline_controller.svelte.test.ts)。
+画面遷移との競合/保存内reload/描画後失効は
+[ScreenNavigation Workspace](../../vitest/screen_navigation_workspace.svelte.test.ts)でproduction
+ownerと接続して確認する。 既存Editor、Startup、Tree、選択Workspace、ScreenNavigation
+regression/PBTも同じ公開portへ適合する。
+
+検証: Svelte単体37ファイル372件、UIブラウザ全66件、WCAG検査全6件、型チェック、build、
+lint、実装行数・magic number・duplicate ratchet、format、`git diff --check`が成功。
+UI全体実行中に空行作成1件が一度失敗したため、該当ケースを連続5回、続いて全66件を単独で再実行し成功を確認した。
+`deno task verify`はDeno846件成功後、PR #306でも記録されたLinux環境依存3件 （legacy
+storage移行のWindowsパス依存1件、Windows専用MSIX2件）で停止する。
+後段のSvelte単体とbuildは個別実行した。App実装行数baselineは2084→2067へ縮小し、
+新ownerの例外は追加していない。
+
+PR #315レビュー対応: autosave成功後にreloadせず終了すると編集前のcacheが残る回帰を修正。
+通常のcache保存は既存の未保存draft guard通過後の現在snapshotを使い、reload/画面遷移の
+公開時だけ保存済みAPI snapshotを明示する。起動cacheのブラウザ回帰で、save待機中は旧本文を
+保ち、成功後は新本文を保存し、次の正式取得が失敗しても新本文を表示することを確認する。
+レビュー修正後の検証: 起動ブラウザ4件（新規回帰を含む）、Svelte単体372件、関連Deno19件、
+型チェック、build、変更ファイルのlint、実装行数gate、format、`git diff --check`が成功。
+新規回帰は修正前の編集前cache保存で失敗することを確認した。
+
+PR #315の規約・要件レビュー対応（2026-10-05）:
+
+- 純粋なdraft overlayとread中のbranch識別を`outline_draft_overlay.ts`へ分離し、直接テストを追加。
+  overlayはWork→branchのMapを使う。read中の編集識別だけは衝突しないtuple serializationを使い、
+  delimiterを含むIDと同branchの別配置を直接テストする。
+- bookmarksは専用ownerへ移す。通常reloadの保留取得と単体更新は同じbookmark世代を使い、
+  旧成功・失敗・cancelは新しい一覧やerrorを変更しない。選択やfocusには触れない。
+- OutlineViewへ実際のloadingとhasSnapshotを別々に渡す。再取得中は「更新中…」と
+  aria-busyを表示し、初回取得だけ行を隠す。空の取得済みsnapshotも初回と区別する。
+- cacheの「draft前」は未保存本文を永続化しない意味。reload/画面遷移ではoverlay前のAPI結果、
+  autosave後は未保存draft guard通過後の現在snapshotを保存する。既存起動回帰で確認する。
+- `navigate`のorigin事前照合は既存の遅いdomain操作の移動抑止契約。失効済み操作が
+  現在のOutline公開権限まで取り消さないために必要であり、対応する回帰を追加した。
+
+この対応はPR #315のbase main `729a064`、PR head `d5eff4b`上の変更で、main反映は未完了。
+
+検証: Svelte単体39ファイル380件、UI69ケース（全体実行68件成功、新規bookmarkケースは
+誤ったボタン名を「栞」へ修正後に単独再実行で成功）、アクセシビリティ6件、型チェック、build、
+lint、実装行数・magic number・duplicate ratchet、format、`git diff --check`が成功。
+`deno task verify`はDeno846件成功後、既知のLinux環境依存3件で停止。
+後段のSvelte単体とbuildは個別実行済みで、同じverifyを呼ぶpre-commit hookは省略した。
+Appの既存2067行baselineを維持し、新moduleの例外は追加していない。
+
+PR #315の追加レビュー対応（2026-10-05）:
+
+- cache保存では明示された保存済みAPI snapshotと引数なしの描画snapshotを区別する。 startup/cache
+  previewのguardは両方に適用し、未保存draftのguardは描画snapshotだけに適用する。
+  通常reloadは未保存入力を保持したまま、overlay前のAPI結果を永続化できる。
+- BookmarkControllerに失効・取消・dispose後のrejectionを破棄する理由を
+  `biome-ignore-all lint/plugin/noSwallowedRejection`として記録。現行要求の失敗は従来どおり
+  throwまたはreportErrorへ渡し、古い要求が最新errorを上書きしない。
+- 新規起動UI回帰は修正前に保存済みcacheが更新されず失敗することを確認。修正後は
+  autosave失敗のdraftを画面へ残し、reloadの新保存済み本文だけをcacheへ保存する。
+  引数なしのunload保存は引き続き未保存入力を保存しない。
+
+検証: 関連ブラウザ12件、Bookmark/Outline単体20件、型チェック、build、変更ファイルlint、
+実装行数gate、format、`git diff --check`が成功。既存2067行baselineを維持。
+`deno task verify`はlint・品質・format・型チェック成功後、Deno846件成功と既知の
+Linux環境依存3件失敗で停止。同じverifyを実行するpre-commit hookは省略し、
+後段の関連Svelte単体とbuildは個別実行した。
 
 ## #309: browsing・Omni・Paletteの分離（積み上げPR）
 
-baseは#308のbranch。mainには#308/#309とも未反映。NavigationControllerはpane/hoistだけを持つ。
+PR base: main `dc43dba`（#316経由で#308反映済み）。#309はPR #317上の変更で、main未反映。
+NavigationControllerはpane/hoistだけを持つ。
 OmniSearchControllerのinputは検索とquick captureで共有する唯一の文字列を更新し、
 debounce・要求世代・候補・active indexを管理する。clear/disposeはtimerと公開権限を失効させる。
 検索選択の受理、quick captureの成功は開始時の入力receiptが有効な場合だけclearする。
