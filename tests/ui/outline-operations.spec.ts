@@ -25,6 +25,88 @@ function deferred() {
 	return { promise, release };
 }
 
+test("reload shows progress while preserving the editor and focus", async ({ page }) => {
+	const gate = deferred();
+	let reads = 0;
+	await page.route("**/api/rpc/listOutline", async (route) => {
+		if (++reads > 1) await gate.promise;
+		await route.fulfill({
+			json: {
+				result: {
+					items: [item("A", 10)],
+					links: [],
+					knots: [],
+					stashItemIds: [],
+				},
+			},
+		});
+	});
+	await page.route(
+		"**/api/rpc/createItem",
+		(route) => route.fulfill({ json: { result: item("new", 20, "") } }),
+	);
+	await page.goto("/", { waitUntil: "domcontentloaded" });
+	await page.getByRole("button", { name: "＋ ルートに追加", exact: true }).click();
+	await expect(page.getByRole("status").filter({ hasText: "更新中…" })).toBeVisible();
+	const editor = page.locator('textarea[data-item-id="A"]');
+	await page.locator('.markdown-editor-host[data-editor-item-id="A"]').click();
+	await expect(editor).toBeFocused();
+	const original = await editor.elementHandle();
+	gate.release();
+	await expect(page.getByRole("status").filter({ hasText: "更新中…" })).toHaveCount(0);
+	await expect(editor).toBeFocused();
+	expect(await original?.evaluate((element) => element.isConnected)).toBe(true);
+});
+
+test("adding and removing a bookmark reads only bookmarks", async ({ page }) => {
+	let outlineReads = 0;
+	let treeReads = 0;
+	let bookmarkReads = 0;
+	let bookmarked = false;
+	const bookmark = { id: "bookmark", workId: "A", occurrenceId: "A", createdAt: "now" };
+	await page.route("**/api/rpc/listOutline", (route) => {
+		outlineReads++;
+		return route.fulfill({
+			json: {
+				result: {
+					items: [item("A", 10)],
+					links: [],
+					knots: [],
+					stashItemIds: [],
+				},
+			},
+		});
+	});
+	await page.route("**/api/rpc/listGlobalLineage", (route) => {
+		treeReads++;
+		return route.continue();
+	});
+	await page.route("**/api/rpc/listBookmarks", (route) => {
+		bookmarkReads++;
+		return route.fulfill({ json: { result: bookmarked ? [bookmark] : [] } });
+	});
+	await page.route("**/api/rpc/createBookmark", (route) => {
+		bookmarked = true;
+		return route.fulfill({ json: { result: bookmark } });
+	});
+	await page.route("**/api/rpc/deleteBookmark", (route) => {
+		bookmarked = false;
+		return route.fulfill({ json: { result: null } });
+	});
+	await page.goto("/", { waitUntil: "domcontentloaded" });
+	await page.locator('.markdown-editor-host[data-editor-item-id="A"]').click();
+	const initial = { outlineReads, treeReads, bookmarkReads };
+	await page.getByRole("button", { name: "☆ 栞", exact: true }).click();
+	await expect(page.getByRole("button", { name: "栞を削除", exact: true })).toBeVisible();
+	await page.getByRole("button", { name: "栞を削除", exact: true }).click();
+	await expect(page.getByRole("button", { name: "栞を削除", exact: true })).toHaveCount(
+		0,
+	);
+	expect(bookmarkReads).toBe(initial.bookmarkReads + 2);
+	expect(outlineReads).toBe(initial.outlineReads);
+	expect(treeReads).toBe(initial.treeReads);
+});
+
 for (const departure of ["selection", "screen", "reload-selection"] as const) {
 	test(`a persisted Enter does not reclaim selection or focus after ${departure}`, async ({ page }) => {
 		const items = [item("A", 10), item("B", 20)];

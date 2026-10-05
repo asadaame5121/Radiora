@@ -1,3 +1,4 @@
+import { outlinePublicationFixture } from "./outline_publication_fixture.ts";
 import { expect, test, vi } from "vitest";
 import {
 	createBrowsingNavigationState,
@@ -5,15 +6,35 @@ import {
 	openBrowsingPane,
 } from "../src/services/browsing_navigation_state.ts";
 import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
+import type { ScreenNavigationWorkspacePorts } from "../src/ui/screen_navigation_workspace.svelte.ts";
+import { OutlineController } from "../src/ui/outline_controller.svelte.ts";
 import { ScreenNavigationWorkspace } from "../src/ui/screen_navigation_workspace.svelte.ts";
 
 vi.mock("svelte", () => ({ tick: async () => undefined }));
 
-function setup() {
+function setup(publication?: ScreenNavigationWorkspacePorts["outlinePublication"]) {
 	const items = [
-		{ id: "root", parentId: null, workId: "root-work", text: "root" },
-		{ id: "last", parentId: "root", workId: "last-work", text: "last text" },
-		{ id: "other", parentId: null, workId: "other-work", text: "other" },
+		{
+			id: "root",
+			parentId: null,
+			workId: "root-work",
+			text: "root",
+			revisionSelector: { mode: "branch", branchId: "root" },
+		},
+		{
+			id: "last",
+			parentId: "root",
+			workId: "last-work",
+			text: "last text",
+			revisionSelector: { mode: "branch", branchId: "last" },
+		},
+		{
+			id: "other",
+			parentId: null,
+			workId: "other-work",
+			text: "other",
+			revisionSelector: { mode: "branch", branchId: "other" },
+		},
 	] as OutlineItem[];
 	let snapshot: OutlineSnapshot = { items, links: [], knots: [], stashItemIds: [] };
 	let browsing = openBrowsingPane(
@@ -69,7 +90,22 @@ function setup() {
 		},
 		snapshot: () => snapshot,
 		readOutline,
-		publishOutline: (next) => snapshot = next,
+		outlinePublication: publication
+			? {
+				invalidate: () => publication.invalidate(),
+				begin: () => {
+					const request = publication.begin();
+					return {
+						current: request.current,
+						publish: (next) => {
+							if (!request.publish(next)) return false;
+							snapshot = next;
+							return true;
+						},
+					};
+				},
+			}
+			: outlinePublicationFixture((next) => snapshot = next),
 		selection: {
 			current: () => selected,
 			guard,
@@ -418,3 +454,85 @@ test.each(["outline", "help"] as const)(
 		);
 	},
 );
+
+function publicationOwner() {
+	return new OutlineController({
+		readOutline: async () => ({ items: [], links: [], knots: [], stashItemIds: [] }),
+		prepareBookmarks: () => ({
+			result: Promise.resolve(),
+			publish: () => undefined,
+			cancel: () => undefined,
+		}),
+		drafts: () => [],
+		prepareTree: () => ({ result: Promise.resolve(), publish: vi.fn(), cancel: vi.fn() }),
+		reconcileSelection: vi.fn(),
+		selectionReceipt: () => () => true,
+		focus: vi.fn(),
+		persist: vi.fn(),
+		reportError: vi.fn(),
+		clearError: vi.fn(),
+	});
+}
+
+test("stale domain origin cannot invalidate a live Outline publication", async () => {
+	const owner = publicationOwner();
+	const s = setup(owner);
+	const oldOrigin = s.workspace.origin;
+	expect(await s.workspace.navigate({ view: "help" })).toBe(true);
+	const active = owner.begin();
+	expect(await s.workspace.navigate({ view: "outline" }, oldOrigin)).toBe(false);
+	expect(active.current()).toBe(true);
+	expect(s.workspace.view).toBe("help");
+});
+
+for (const stage of ["guard", "final", "missing target"] as const) {
+	for (const failed of [false, true]) {
+		test(`reload revokes ${stage} navigation read ${failed ? "failure" : "success"}`, async () => {
+			const owner = publicationOwner();
+			const s = setup(owner);
+			const pending = Promise.withResolvers<OutlineSnapshot>();
+			if (stage === "final") s.readOutline.mockResolvedValueOnce(s.snapshot());
+			s.readOutline.mockReturnValueOnce(pending.promise);
+			const navigating = s.workspace.navigate({
+				view: "outline",
+				occurrenceId: stage === "missing target" ? "missing" : "other",
+			});
+			await vi.waitFor(() =>
+				expect(s.readOutline).toHaveBeenCalledTimes(stage === "final" ? 2 : 1)
+			);
+			await owner.reload();
+			if (failed) pending.reject(new Error("old navigation"));
+			else pending.resolve(s.snapshot());
+			expect(await navigating).toBe(false);
+			expect(s.selected()).toBe("last");
+			expect(s.restorePosition).not.toHaveBeenCalled();
+			expect(s.reportError).not.toHaveBeenCalled();
+		});
+	}
+}
+
+test("navigation start retires a reload and permits a legitimate save-triggered reload", async () => {
+	const owner = publicationOwner();
+	const pendingPublication = owner.begin();
+	const s = setup(owner);
+	s.save.mockImplementationOnce(async () => {
+		await owner.reload();
+		return true;
+	});
+	expect(await s.workspace.navigate({ view: "outline", occurrenceId: "other" })).toBe(true);
+	expect(pendingPublication.current()).toBe(false);
+	expect(owner.snapshot.items.some((item) => item.id === "other")).toBe(true);
+	expect(s.selected()).toBe("other");
+});
+
+test("reload after navigation commit prevents delayed viewport restoration", async () => {
+	const owner = publicationOwner();
+	const s = setup(owner);
+	let canRestore: (() => boolean) | undefined;
+	s.restorePosition.mockImplementationOnce(async (_position, current) => {
+		canRestore = current;
+		await owner.reload();
+	});
+	expect(await s.workspace.navigate({ view: "outline", occurrenceId: "other" })).toBe(true);
+	expect(canRestore?.()).toBe(false);
+});

@@ -1,3 +1,4 @@
+import { outlinePublicationFixture } from "./outline_publication_fixture.ts";
 import { describe, expect, it, vi } from "vitest";
 import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
 import { createBrowsingNavigationState } from "../src/services/browsing_navigation_state.ts";
@@ -101,9 +102,9 @@ describe("P1: LongForm navigation race reproduction", () => {
 			},
 			snapshot: () => snapshot,
 			readOutline: async () => snapshot,
-			publishOutline: (next) => {
+			outlinePublication: outlinePublicationFixture((next) => {
 				snapshot = next;
-			},
+			}),
 			selection: {
 				current: () => selectedId,
 				guard: async () => true,

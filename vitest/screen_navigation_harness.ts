@@ -1,3 +1,4 @@
+import { outlinePublicationFixture } from "./outline_publication_fixture.ts";
 import { vi } from "vitest";
 import type { HistoricalTime } from "../src/domain/historical_time.ts";
 import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
@@ -212,11 +213,11 @@ export function createNavigationHarness(options: NavigationHarnessOptions = {}) 
 			const snap = await task.promise;
 			return snap ?? getSnapshot();
 		},
-		publishOutline: (next) => {
+		outlinePublication: outlinePublicationFixture((next) => {
 			for (const item of next.items) {
 				store.items.set(item.id, { ...item });
 			}
-		},
+		}),
 		selection: {
 			current: () => selectedId,
 			guard: (item, current) => historicalTime.canSelect(item, current),

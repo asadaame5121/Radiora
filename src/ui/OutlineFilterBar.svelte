@@ -20,19 +20,19 @@
 		class="filter-input"
 		aria-label="テキストで絞り込み"
 		placeholder="テキストで絞り込み…"
-		bind:value={outlineFilter.freeText}
+		bind:value={() => outlineFilter.freeText, (value) => outlineFilter = { ...outlineFilter, freeText: value }}
 	/>
 	<input
 		class="filter-input"
 		aria-label="タグ AND"
 		placeholder="#タグ AND"
-		bind:value={outlineFilter.tagsAll}
+		bind:value={() => outlineFilter.tagsAll, (value) => outlineFilter = { ...outlineFilter, tagsAll: value }}
 	/>
 	<input
 		class="filter-input"
 		aria-label="タグ NOT"
 		placeholder="#除外 NOT"
-		bind:value={outlineFilter.tagsNone}
+		bind:value={() => outlineFilter.tagsNone, (value) => outlineFilter = { ...outlineFilter, tagsNone: value }}
 	/>
 	<button type="button" onclick={onClear} disabled={!filterActive}>解除</button>
 </div>

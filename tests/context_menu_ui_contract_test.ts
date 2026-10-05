@@ -48,7 +48,7 @@ Deno.test("context actions reuse commands and confirmation-gated destructive pat
 	assertMatch(app, /case "create-branch":[\s\S]*?executeCommand\("createBranch"\)/);
 	assertMatch(app, /case "trash-work":[\s\S]*?trashSelectedWork\(\)/);
 	assertMatch(app, /case "export-selected":[\s\S]*?performMarkdownExport\(targetId\)/);
-	assertMatch(app, /\(bookmarks \?\? \[\]\)\.some/);
+	assertMatch(app, /bookmarkController\.bookmarks\.some/);
 });
 
 Deno.test("persistent row and inspector destructive buttons moved into the context menu", () => {
