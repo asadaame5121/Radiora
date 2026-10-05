@@ -1,6 +1,7 @@
-import type { Bookmark, OutlineItem, OutlineSnapshot } from "../domain/models.ts";
+import type { OutlineItem, OutlineSnapshot } from "../domain/models.ts";
 import type { WorkingCopyDraft } from "../services/working_copy_autosave.ts";
 import { applyBranchWorkingCopyText } from "./editor_working_copy.ts";
+import { branchKey, overlayDrafts } from "./outline_draft_overlay.ts";
 
 export interface OutlinePublication {
 	current(): boolean;
@@ -9,7 +10,11 @@ export interface OutlinePublication {
 
 interface OutlinePorts {
 	readOutline(): Promise<OutlineSnapshot>;
-	readBookmarks(): Promise<Bookmark[]>;
+	prepareBookmarks(current: () => boolean): {
+		result: Promise<void>;
+		publish(): void;
+		cancel(): void;
+	};
 	drafts(): readonly WorkingCopyDraft[];
 	prepareTree(current: () => boolean, required: boolean): {
 		result: Promise<void>;
@@ -32,7 +37,6 @@ export class OutlineController {
 		knots: [],
 		stashItemIds: [],
 	});
-	private _bookmarks = $state<Bookmark[]>([]);
 	private _loading = $state(true);
 	private _hasSnapshot = $state(false);
 	private savedSnapshot: OutlineSnapshot = this._snapshot;
@@ -45,9 +49,6 @@ export class OutlineController {
 	constructor(private readonly ports: OutlinePorts) {}
 	get snapshot() {
 		return this._snapshot;
-	}
-	get bookmarks() {
-		return this._bookmarks;
 	}
 	get loading() {
 		return this._loading;
@@ -126,16 +127,22 @@ export class OutlineController {
 		this._loading = true;
 		this.ports.clearError();
 		let tree: ReturnType<OutlinePorts["prepareTree"]> | undefined;
+		let bookmarks: ReturnType<OutlinePorts["prepareBookmarks"]> | undefined;
 		try {
 			tree = this.ports.prepareTree(current, options.treeRequired ?? true);
-			this.cancelPending = tree.cancel;
-			const [snapshot, bookmarks] = await Promise.all([
+			bookmarks = this.ports.prepareBookmarks(current);
+			this.cancelPending = () => {
+				tree?.cancel();
+				bookmarks?.cancel();
+			};
+			const [snapshot] = await Promise.all([
 				this.ports.readOutline(),
-				this.ports.readBookmarks(),
+				bookmarks.result,
 				tree.result,
 			]);
 			if (!current()) {
 				tree.cancel();
+				bookmarks.cancel();
 				return false;
 			}
 			// Deletion reconciliation can itself retire the selection receipt.
@@ -143,12 +150,13 @@ export class OutlineController {
 			publication.publish(snapshot);
 			this.ports.reconcileSelection();
 			tree.publish();
-			this._bookmarks = bookmarks;
+			bookmarks.publish();
 			this.ports.persist(snapshot);
 			if (options.focusId && focusAllowed) this.ports.focus(options.focusId, current);
 			return true;
 		} catch (cause) {
 			tree?.cancel();
+			bookmarks?.cancel();
 			if (current()) this.ports.reportError(cause);
 			return false;
 		} finally {
@@ -163,27 +171,4 @@ export class OutlineController {
 		this.disposed = true;
 		this.invalidate();
 	}
-}
-
-/** Saved data stays untouched; only the matching Work and branch may display a draft. */
-function overlayDrafts(
-	snapshot: OutlineSnapshot,
-	drafts: readonly WorkingCopyDraft[],
-): OutlineSnapshot {
-	const byBranch = new Map(
-		drafts.map((draft) => [JSON.stringify([draft.workId, draft.branchId]), draft.text]),
-	);
-	return {
-		...snapshot,
-		items: snapshot.items.map((item) => {
-			const selector = item.revisionSelector;
-			if (selector.mode !== "branch") return { ...item };
-			const text = byBranch.get(JSON.stringify([item.workId, selector.branchId]));
-			return { ...item, text: text ?? item.text };
-		}),
-	};
-}
-
-function branchKey(item: OutlineItem): string {
-	return JSON.stringify([item.workId, item.revisionSelector]);
 }

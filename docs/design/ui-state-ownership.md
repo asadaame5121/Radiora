@@ -415,7 +415,8 @@ cache/poll/retry/dispose/再起動の旧応答、通常load失効、poll timer�
 実装baseはmain `729a064`（PR #306 merge後）。この作業branchでの実装・検証であり、
 main反映済みとは区別する。上の基点/旧writer表と#300の後続記録は各段階の履歴。
 
-- `OutlineController`がApp寿命のsnapshot描画cache、bookmarks、取得中状態、公開世代を所有する。
+- `OutlineController`がApp寿命のsnapshot描画cache、取得中状態、公開世代を所有する。 bookmarksのread
+  modelと取得世代は`BookmarkController`が所有し、通常reloadはその保留公開portを調停する。
   保存済み本文の正本はbackend、未保存本文の正本はEditorのautosave coordinatorに残す。
   Appの`load`はstartup失効とownerへの委譲だけを行う。通常reloadをStartupへ移さない。
 - `begin`で旧reloadのTree保留scopeを直ちにcancelし、要求内`current`/`publish`を返す。
@@ -437,8 +438,10 @@ main反映済みとは区別する。上の基点/旧writer表と#300の後続�
   記録し、本文draft自体を二重所有しない。reload/画面遷移の公開時はcacheへoverlay前の保存済みAPI
   snapshotを渡す。
   autosave成功後と通常のcache保存は、未保存draftがないことを確認して現在の描画snapshotを使う。
-- Editorの描画本文更新も`updateText` portを通す。bookmark更新後の取得も通常reloadへ統一する。
-  disposeは公開権限と保留Treeを解放する。完了済みDB書込はUI失効で巻き戻さない。
+- Editorの描画本文更新も`updateText` portを通す。bookmarkのadd/remove/Work操作後は
+  `BookmarkController.reload`だけを呼び、Outline/Treeを再取得しない。bookmark単体更新は
+  旧reload内のbookmark公開だけを失効し、Outlineの公開を止めない。
+  disposeは公開権限と保留Tree/bookmark scopeを解放する。完了済みDB書込はUI失効で巻き戻さない。
 
 直接テスト: [Outline Controller](../../vitest/outline_controller.svelte.test.ts)。
 画面遷移との競合/保存内reload/描画後失効は
@@ -461,3 +464,26 @@ PR #315レビュー対応: autosave成功後にreloadせず終了すると編集
 レビュー修正後の検証: 起動ブラウザ4件（新規回帰を含む）、Svelte単体372件、関連Deno19件、
 型チェック、build、変更ファイルのlint、実装行数gate、format、`git diff --check`が成功。
 新規回帰は修正前の編集前cache保存で失敗することを確認した。
+
+PR #315の規約・要件レビュー対応（2026-10-05）:
+
+- 純粋なdraft overlayとread中のbranch識別を`outline_draft_overlay.ts`へ分離し、直接テストを追加。
+  overlayはWork→branchのMapを使う。read中の編集識別だけは衝突しないtuple serializationを使い、
+  delimiterを含むIDと同branchの別配置を直接テストする。
+- bookmarksは専用ownerへ移す。通常reloadの保留取得と単体更新は同じbookmark世代を使い、
+  旧成功・失敗・cancelは新しい一覧やerrorを変更しない。選択やfocusには触れない。
+- OutlineViewへ実際のloadingとhasSnapshotを別々に渡す。再取得中は「更新中…」と
+  aria-busyを表示し、初回取得だけ行を隠す。空の取得済みsnapshotも初回と区別する。
+- cacheの「draft前」は未保存本文を永続化しない意味。reload/画面遷移ではoverlay前のAPI結果、
+  autosave後は未保存draft guard通過後の現在snapshotを保存する。既存起動回帰で確認する。
+- `navigate`のorigin事前照合は既存の遅いdomain操作の移動抑止契約。失効済み操作が
+  現在のOutline公開権限まで取り消さないために必要であり、対応する回帰を追加した。
+
+この対応はPR #315のbase main `729a064`、PR head `d5eff4b`上の変更で、main反映は未完了。
+
+検証: Svelte単体39ファイル380件、UI69ケース（全体実行68件成功、新規bookmarkケースは
+誤ったボタン名を「栞」へ修正後に単独再実行で成功）、アクセシビリティ6件、型チェック、build、
+lint、実装行数・magic number・duplicate ratchet、format、`git diff --check`が成功。
+`deno task verify`はDeno846件成功後、既知のLinux環境依存3件で停止。
+後段のSvelte単体とbuildは個別実行済みで、同じverifyを呼ぶpre-commit hookは省略した。
+Appの既存2067行baselineを維持し、新moduleの例外は追加していない。

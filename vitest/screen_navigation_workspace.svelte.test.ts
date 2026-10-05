@@ -458,7 +458,11 @@ test.each(["outline", "help"] as const)(
 function publicationOwner() {
 	return new OutlineController({
 		readOutline: async () => ({ items: [], links: [], knots: [], stashItemIds: [] }),
-		readBookmarks: async () => [],
+		prepareBookmarks: () => ({
+			result: Promise.resolve(),
+			publish: () => undefined,
+			cancel: () => undefined,
+		}),
 		drafts: () => [],
 		prepareTree: () => ({ result: Promise.resolve(), publish: vi.fn(), cancel: vi.fn() }),
 		reconcileSelection: vi.fn(),
@@ -469,6 +473,17 @@ function publicationOwner() {
 		clearError: vi.fn(),
 	});
 }
+
+test("stale domain origin cannot invalidate a live Outline publication", async () => {
+	const owner = publicationOwner();
+	const s = setup(owner);
+	const oldOrigin = s.workspace.origin;
+	expect(await s.workspace.navigate({ view: "help" })).toBe(true);
+	const active = owner.begin();
+	expect(await s.workspace.navigate({ view: "outline" }, oldOrigin)).toBe(false);
+	expect(active.current()).toBe(true);
+	expect(s.workspace.view).toBe("help");
+});
 
 for (const stage of ["guard", "final", "missing target"] as const) {
 	for (const failed of [false, true]) {

@@ -5,7 +5,11 @@ import { OutlineController } from "../src/ui/outline_controller.svelte.ts";
 export function outlinePublicationFixture(publish: (snapshot: OutlineSnapshot) => void) {
 	const owner = new OutlineController({
 		readOutline: async () => ({ items: [], links: [], knots: [], stashItemIds: [] }),
-		readBookmarks: async () => [],
+		prepareBookmarks: () => ({
+			result: Promise.resolve(),
+			publish: () => undefined,
+			cancel: () => undefined,
+		}),
 		drafts: () => [],
 		prepareTree: () => ({
 			result: Promise.resolve(),

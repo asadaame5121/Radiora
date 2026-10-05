@@ -132,6 +132,7 @@
 		type SemanticLinkAnnotation,
 	} from "../services/semantic_link_annotations";
 	import type { ViewMode } from "./app_view_mode.ts";
+	import { BookmarkController } from "./bookmark_controller.svelte.ts";
 	import { OutlineController } from "./outline_controller.svelte.ts";
 	import { StartupController } from "./startup_controller.svelte.ts";
 	import { OutlineViewportAdapter } from "./outline_viewport_adapter.ts";
@@ -150,9 +151,10 @@
 	};
 
 	const vocabulary = useUiVocabulary();
+	const bookmarkController = new BookmarkController({ read: () => api.listBookmarks(), reportError: (cause) => error = errorMessage(cause) });
 	const outlineController: OutlineController = new OutlineController({
 		readOutline: () => api.listOutline(),
-		readBookmarks: () => api.listBookmarks(),
+		prepareBookmarks: (current) => bookmarkController.prepareRefresh(current),
 		drafts: () => editorController.drafts(),
 		prepareTree: (current, required) => tree.prepareRefresh(current, required),
 		reconcileSelection: () => selectionWorkspace.reconcile(),
@@ -163,7 +165,6 @@
 		clearError: () => error = "",
 	});
 	const snapshot = $derived(outlineController.snapshot);
-	const loading = $derived(outlineController.loading && !outlineController.hasSnapshot);
 	const startupController = new StartupController({
 		api,
 		errorMessage,
@@ -245,7 +246,6 @@
 			reportError: (cause) => error = errorMessage(cause),
 		},
 	});
-	const bookmarks = $derived(outlineController.bookmarks);
 	let transientExpandedIds = $state<string[]>([]);
 	let asideMode = $state<InspectorAsideMode>("overview");
 	const tagController = new TagController({
@@ -298,9 +298,7 @@
 		requestConfirmation,
 		reportError: (cause) => error = errorMessage(cause),
 		clearQuickCaptureInput: () => navigationController.clearOmniwindow(),
-		reloadBookmarks: async () => {
-			await load();
-		},
+		reloadBookmarks: () => bookmarkController.reload(),
 	});
 	const historicalTimeController = new HistoricalTimeController({
 		save: (workId, value) => api.setWorkHistoricalTime(workId, value),
@@ -559,7 +557,7 @@
 	const commands = $derived(commandAvailability(commandContext));
 	const occurrenceContextMenuItems = $derived.by((): readonly ContextMenuItem[] => {
 		const bookmarked = Boolean(
-			selectedId && (bookmarks ?? []).some((bookmark) => bookmark.occurrenceId === selectedId),
+			selectedId && bookmarkController.bookmarks.some((bookmark) => bookmark.occurrenceId === selectedId),
 		);
 		return [
 			{ id: "open-outline", label: "アウトラインで開く" },
@@ -734,6 +732,7 @@
 		return () => {
 			startupController.dispose();
 			outlineController.dispose();
+			bookmarkController.dispose();
 			screenNavigation.invalidate();
 			selectionWorkspace.dispose();
 			tree.dispose();
@@ -859,7 +858,7 @@
 				await executeCommand("startLongFormEditing");
 				break;
 			case "bookmark": {
-				const bookmark = (bookmarks ?? []).find((candidate) => candidate.occurrenceId === targetId);
+				const bookmark = bookmarkController.bookmarks.find((candidate) => candidate.occurrenceId === targetId);
 				if (bookmark) await removeBookmark(bookmark.id);
 				else await executeCommand("addBookmark");
 				break;
@@ -1129,12 +1128,12 @@
 	async function performAddBookmark(): Promise<void> {
 		if (!selectedId) return;
 		await api.createBookmark(selectedId);
-		await load();
+		await bookmarkController.reload();
 	}
 
 	async function removeBookmark(id: string): Promise<void> {
 		await api.deleteBookmark(id);
-		await load();
+		await bookmarkController.reload();
 	}
 
 	async function openBookmark(id: string): Promise<void> {
@@ -1856,7 +1855,7 @@
 		searchEntriesLength={searchEntries.length}
 		{commands}
 		{vocabulary}
-		{bookmarks}
+		bookmarks={bookmarkController.bookmarks}
 		{inspectorCollapsed}
 		{workingCopySaveStatus}
 		themePreference={themeController.preference}
@@ -1920,7 +1919,8 @@
 						onClearHoist={requestClearHoist}
 						{visibleRows}
 						{vocabulary}
-						{loading}
+						loading={outlineController.loading}
+						hasSnapshot={outlineController.hasSnapshot}
 						snapshotItemsLength={snapshot.items.length}
 						{selectedId}
 						{internalReferenceCompletion}

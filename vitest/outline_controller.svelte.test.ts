@@ -1,6 +1,7 @@
 import { expect, test, vi } from "vitest";
 import type { Bookmark, OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
 import type { WorkingCopyDraft } from "../src/services/working_copy_autosave.ts";
+import { BookmarkController } from "../src/ui/bookmark_controller.svelte.ts";
 import { OutlineController } from "../src/ui/outline_controller.svelte.ts";
 
 function snapshot(text = "saved"): OutlineSnapshot {
@@ -74,9 +75,17 @@ function setup() {
 		reportError: vi.fn(),
 		clearError: vi.fn(),
 	};
-	const controller = new OutlineController(ports);
+	const bookmarks = new BookmarkController({
+		read: ports.readBookmarks,
+		reportError: ports.reportError,
+	});
+	const controller = new OutlineController({
+		...ports,
+		prepareBookmarks: (current) => bookmarks.prepareRefresh(current),
+	});
 	return {
 		controller,
+		bookmarks,
 		ports,
 		treeRequests,
 		setDrafts: (next: WorkingCopyDraft[]) => drafts = next,
@@ -98,7 +107,7 @@ for (const failed of [false, true]) {
 		else old.resolve(snapshot("old"));
 		expect(await first).toBe(false);
 		expect(s.controller.snapshot.items[0].text).toBe("latest");
-		expect(s.controller.bookmarks[0].id).toBe("latest");
+		expect(s.bookmarks.bookmarks[0].id).toBe("latest");
 		expect(s.ports.reportError).not.toHaveBeenCalled();
 		expect(s.ports.focus).not.toHaveBeenCalled();
 		expect(s.treeRequests[0].publish).not.toHaveBeenCalled();
@@ -256,7 +265,7 @@ test("an older bookmark response cannot publish after a newer complete reload", 
 	await s.controller.reload();
 	pending.resolve([{ id: "old" } as Bookmark]);
 	expect(await first).toBe(false);
-	expect(s.controller.bookmarks[0].id).toBe("new");
+	expect(s.bookmarks.bookmarks[0].id).toBe("new");
 	expect(s.controller.snapshot.items[0].text).toBe("new");
 });
 
@@ -288,4 +297,21 @@ test("a retired startup reload cannot revoke the current normal reload", async (
 	pending.resolve(snapshot("latest"));
 	expect(await latest).toBe(true);
 	expect(s.controller.snapshot.items[0].text).toBe("latest");
+});
+
+test("bookmark-only refresh during Outline reload preserves the newer bookmark list", async () => {
+	const s = setup();
+	const pending = Promise.withResolvers<OutlineSnapshot>();
+	s.ports.readOutline.mockReturnValueOnce(pending.promise);
+	s.ports.readBookmarks.mockResolvedValueOnce([{ id: "old" } as Bookmark])
+		.mockResolvedValueOnce([{ id: "new" } as Bookmark]);
+	const reload = s.controller.reload();
+	await Promise.resolve();
+	await s.bookmarks.reload();
+	expect(s.ports.readOutline).toHaveBeenCalledTimes(1);
+	expect(s.ports.prepareTree).toHaveBeenCalledTimes(1);
+	pending.resolve(snapshot("fresh"));
+	expect(await reload).toBe(true);
+	expect(s.controller.snapshot.items[0].text).toBe("fresh");
+	expect(s.bookmarks.bookmarks[0].id).toBe("new");
 });
