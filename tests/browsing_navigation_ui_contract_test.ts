@@ -48,7 +48,7 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 	);
 	const browsingControls = app.slice(
 		app.indexOf("function selectOccurrence"),
-		app.indexOf("async function createRoot"),
+		app.indexOf("// Side-effect boundary: view/selected Work/filter changes"),
 	);
 
 	assert(selectItem.includes("expandedIds: ancestorIds"));
@@ -65,7 +65,7 @@ Deno.test("App delegates browsing transitions without persisting expansion or pl
 		browsingControls.indexOf("function hoistSelected"),
 		browsingControls.indexOf("function clearHoist"),
 	);
-	assert(hoistSelected.includes("transientExpandedIds"));
+	assert(hoistSelected.includes("outlineDisplay.expand(selectedId)"));
 	assert(hoistSelected.includes("selectedId"));
 	assert(hoistSelected.includes("selectionWorkspace.setHoist(selectedId)"));
 	assertFalse(hoistSelected.includes("setCollapsed"));

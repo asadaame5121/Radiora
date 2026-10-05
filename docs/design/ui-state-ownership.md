@@ -28,25 +28,26 @@ Treeの詳細は既存の[Tree所有契約](tree-state-ownership.md)、画面復
 
 ## 状態所有表
 
-表のownerは基点の現状を記す。移行先や権限の制約は後述する。 「保存なし」はそのUI
+表のownerは基点の現状を記し、実装済みの移行は当該PR headのowner・操作へ更新する。
+mainへの反映状況と照合baseは末尾のIssue別記録で区別する。 「保存なし」はそのUI
 state自体を永続化しないという意味で、元データのDB保存とは区別する。
 
 ### 保存データ・選択・Outline
 
-| 状態 / 正本                                                         | owner                                                            | writer・公開操作                                                                                                                   | 読み手                                                   | 寿命                               | 永続化先                                                    | 失効条件                                                           |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| 保存済みWork/Branch/Revision/Occurrence/Link / backend              | service/storage、UIは`api`経由                                   | 既存mutation API、transaction/rollbackはstorage                                                                                    | 各featureのread model                                    | 保存データの寿命                   | 選択したstorage backend                                     | mutation、削除、backup復元後に再取得                               |
-| `snapshot` / API結果にEditor draftを重ねた描画キャッシュ            | `OutlineController`（#307）                                      | `reload`、`begin`の要求内`publish`、`restoreCache`、Editorからの`updateText`                                                       | Outline、Inspector、選択派生値、各Controllerのgetter     | App                                | 自身は保存なし。保存済みの写しだけstartup cacheへ           | reload、navigationの最新読込、起動cacheから正式データへの切替      |
-| inline本文draft・save status・`editVersion` / 未保存入力            | `createEditorController`、内部`WorkingCopyAutosaveCoordinator`   | `updateLocalText`、`flushAutosave`、`flushForNavigation`、`retryAutosave`                                                          | MarkdownEditor、WorkingCopySaveStatus、reload、Workspace | App。保存成功までdraft保持         | `updateItemText`経由のbranch working copy                   | 同branchの新入力でversion更新。失敗・選択変更・reloadで捨てない    |
-| 全画面の`selectedId` / 受理された現在選択                           | `App.svelte`                                                     | 内部publish一箇所。下の旧writer表と#298のcommit契約を参照                                                                          | selectedItem、Inspector、Tree、Editor、commands          | App                                | 直接保存なし。Outline位置のみstartup cache/resume API       | 受理した選択変更、削除補正、初期復元                               |
-| paneごとの選択・Hoist・history/index・active pane / Outline閲覧位置 | `createNavigationController`の`browsing`                         | `browseToOccurrence`、`setHoist`、`clearHoist`、`activateBrowsingPane`、`resetBrowsing`、`reconcileBrowsing`、内部`commitBrowsing` | Outline projection、breadcrumb、Viewport、復帰捕捉       | App                                | startup cacheには現在の選択/Hoistのみ。pane全体の保存なし   | 削除時に各paneの現在位置を補正。画面外選択では更新しない           |
-| Outline filter / live表示条件                                       | Appの`outlineFilter`                                             | 現状View bind、`clearOutlineFilter`、復帰時の内部port                                                                              | Outline、Todayの共有filter UI、visible rows              | App                                | 保存なし                                                    | 明示filter変更/clear、Outline復帰apply                             |
-| 一時展開 / live表示例外                                             | Appの`transientExpandedIds`                                      | hoist、pane切替、collapse操作、keyboardのclear、Outline復帰apply                                                                   | visible rows                                             | App                                | 保存なし。保存済み`collapsed`は別途API                      | 明示clear/collapse、対象削除の復帰補正                             |
-| Inspector表示・tab / live表示状態                                   | Appの`inspectorCollapsed` / `asideMode`                          | ユーザー操作、関係編集表示、Outline復帰apply                                                                                       | Inspector、shell、復帰捕捉                               | App                                | collapsedのユーザー設定だけlayout preference。tabは保存なし | 明示操作、復帰時の文脈適用                                         |
-| 原稿本文・dirty・preview・mode / 原稿入力                           | `LongFormController.state`                                       | `input`、`save`、`reset`、内部`setMode`                                                                                            | LongFormEditor、Workspace、復帰捕捉                      | App。画面移動前に保存              | `updateItemText`。mode/previewは保存なし                    | 明示破棄、保存後close。保存中の追加入力は保持                      |
-| Outline復帰文脈 / 離脱時のUI位置の写し                              | Workspace内部`OutlineScreenState.suspended`                      | `capture`→受理した離脱で`remember`、`prepare`→commitで`apply`                                                                      | Workspaceだけ                                            | App。次の受理したOutline離脱で置換 | 保存なし                                                    | 最新snapshotで選択/Hoist/展開IDを補正。本文・DBを巻き戻さない      |
-| caret・selection方向・pane/editor scroll・focus / DOM位置           | `OutlineViewportAdapter`、明示編集復帰は`EditorReturnController` | `track`、`capture`、`restore`、`remember` / `restore`                                                                              | Outline復帰、keyboard workspace                          | adapterはApp、実DOMはView          | resume APIはoccurrence/caretのみ。scroll等の保存なし        | 対象削除、本文短縮、新要求。DOM参照を復帰文脈に保持しない          |
-| pending empty occurrence IDs / 作成後の仮置き記録                   | `createPendingEmptyItemController`                               | `track`、`noteTextChange`、`forget`、`discard` / `discardRestored`                                                                 | Outline操作、startup                                     | App＋次の起動までの記録            | `radiora.pendingEmptyItemIds`                               | flush後に空/子なしを再確認。本文入力でforget。削除失敗で記録を残す |
+| 状態 / 正本                                                         | owner                                                            | writer・公開操作                                                                                                                   | 読み手                                                          | 寿命                               | 永続化先                                                    | 失効条件                                                           |
+| ------------------------------------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| 保存済みWork/Branch/Revision/Occurrence/Link / backend              | service/storage、UIは`api`経由                                   | 既存mutation API、transaction/rollbackはstorage                                                                                    | 各featureのread model                                           | 保存データの寿命                   | 選択したstorage backend                                     | mutation、削除、backup復元後に再取得                               |
+| `snapshot` / API結果にEditor draftを重ねた描画キャッシュ            | `OutlineController`（#307）                                      | `reload`、`begin`の要求内`publish`、`restoreCache`、Editorからの`updateText`                                                       | Outline、Inspector、選択派生値、各Controllerのgetter            | App                                | 自身は保存なし。保存済みの写しだけstartup cacheへ           | reload、navigationの最新読込、起動cacheから正式データへの切替      |
+| inline本文draft・save status・`editVersion` / 未保存入力            | `createEditorController`、内部`WorkingCopyAutosaveCoordinator`   | `updateLocalText`、`flushAutosave`、`flushForNavigation`、`retryAutosave`                                                          | MarkdownEditor、WorkingCopySaveStatus、reload、Workspace        | App。保存成功までdraft保持         | `updateItemText`経由のbranch working copy                   | 同branchの新入力でversion更新。失敗・選択変更・reloadで捨てない    |
+| 全画面の`selectedId` / 受理された現在選択                           | `App.svelte`                                                     | 内部publish一箇所。下の旧writer表と#298のcommit契約を参照                                                                          | selectedItem、Inspector、Tree、Editor、commands                 | App                                | 直接保存なし。Outline位置のみstartup cache/resume API       | 受理した選択変更、削除補正、初期復元                               |
+| paneごとの選択・Hoist・history/index・active pane / Outline閲覧位置 | `createNavigationController`の`browsing`                         | `browseToOccurrence`、`setHoist`、`clearHoist`、`activateBrowsingPane`、`resetBrowsing`、`reconcileBrowsing`、内部`commitBrowsing` | Outline projection、breadcrumb、Viewport、復帰捕捉              | App                                | startup cacheには現在の選択/Hoistのみ。pane全体の保存なし   | 削除時に各paneの現在位置を補正。画面外選択では更新しない           |
+| Outline filter / live表示条件                                       | `OutlineDisplayController.liveFilter`（読み取りは`filter`）      | View入力・Workspace復元から`setFilter`、明示解除から`clearFilter`                                                                  | Today・Unplacedの共有filter UI、復帰捕捉                        | App                                | 保存なし                                                    | 明示filter変更/clear、Outline復帰apply                             |
+| 一時展開 / live表示例外                                             | `OutlineDisplayController.liveExpanded`（読み取りは`expanded`）  | hoistから`expand`、選択/pane/復帰から`setExpanded`、collapseから`clearExpansion`、keyboardのclearから`setExpanded([])`             | `OutlineDisplayController.visibleRows`、選択Workspace、復帰捕捉 | App                                | 保存なし。保存済み`collapsed`は別途API                      | 明示clear/collapse、対象削除の復帰補正                             |
+| Inspector表示・tab / live表示状態                                   | Appの`inspectorCollapsed` / `asideMode`                          | ユーザー操作、関係編集表示、Outline復帰apply                                                                                       | Inspector、shell、復帰捕捉                                      | App                                | collapsedのユーザー設定だけlayout preference。tabは保存なし | 明示操作、復帰時の文脈適用                                         |
+| 原稿本文・dirty・preview・mode / 原稿入力                           | `LongFormController.state`                                       | `input`、`save`、`reset`、内部`setMode`                                                                                            | LongFormEditor、Workspace、復帰捕捉                             | App。画面移動前に保存              | `updateItemText`。mode/previewは保存なし                    | 明示破棄、保存後close。保存中の追加入力は保持                      |
+| Outline復帰文脈 / 離脱時のUI位置の写し                              | Workspace内部`OutlineScreenState.suspended`                      | `capture`→受理した離脱で`remember`、`prepare`→commitで`apply`                                                                      | Workspaceだけ                                                   | App。次の受理したOutline離脱で置換 | 保存なし                                                    | 最新snapshotで選択/Hoist/展開IDを補正。本文・DBを巻き戻さない      |
+| caret・selection方向・pane/editor scroll・focus / DOM位置           | `OutlineViewportAdapter`、明示編集復帰は`EditorReturnController` | `track`、`capture`、`restore`、`remember` / `restore`                                                                              | Outline復帰、keyboard workspace                                 | adapterはApp、実DOMはView          | resume APIはoccurrence/caretのみ。scroll等の保存なし        | 対象削除、本文短縮、新要求。DOM参照を復帰文脈に保持しない          |
+| pending empty occurrence IDs / 作成後の仮置き記録                   | `createPendingEmptyItemController`                               | `track`、`noteTextChange`、`forget`、`discard` / `discardRestored`                                                                 | Outline操作、startup                                            | App＋次の起動までの記録            | `radiora.pendingEmptyItemIds`                               | flush後に空/子なしを再確認。本文入力でforget。削除失敗で記録を残す |
 
 ### 画面遷移・Tree・閲覧入力
 
@@ -259,8 +260,9 @@ sessionの#300も含めない。
 
 ## live state・復帰文脈・pane履歴
 
-決定: Outline filter/一時展開/Inspectorは現状Appのlive owner、原稿はLongForm owner、
-pane閲覧位置はNavigation owner。将来切り出す際もこの変更理由ごとに分ける。
+決定: Outline filter/一時展開は`OutlineDisplayController`のlive state、InspectorはApp、
+原稿はLongForm、pane閲覧位置はNavigationが所有する（#308 head）。
+今後もこの変更理由ごとにownerを分ける。
 `OutlineScreenState`は捕捉・保持・補正・復元する**文脈のowner**であり、 live
 state全体を常時集約するstoreにはしない。復帰文脈には保存済み本文やinline draftを入れない。
 
@@ -409,6 +411,33 @@ stateをStartupControllerに移してはいない。
 [startup画面](../../tests/ui/startup.spec.ts)へ追加した。
 cache/poll/retry/dispose/再起動の旧応答、通常load失効、poll timer解除、cache受理拒否、
 初期失敗の再試行、cache再読込の逆順応答を確認する。
+
+## #308: Outline live owner（積み上げPR）
+
+PR base: main `729a064`（#306反映後）。#315（#307）はmain `ad337dd`で反映済み。
+本branchへ同mainを統合し、reload/cache公開契約とlive表示ownerを接続する。#308自体はmain未反映。
+
+`OutlineDisplayController` がlive filter・一時展開・visible rows projectionを所有する。
+Viewのfilter入力、選択Workspace、画面Workspaceの復元portは同じ操作に接続する。
+OutlineScreenStateは離脱時の写しだけを持ち、別画面中の選択でlive browsingを変更しない。
+Hoist/paneは既存Navigation/OccurrenceSelectionWorkspaceのcommit契約を維持する。
+root作成・削除はOutlineOperationsControllerが所有し、本文flush、pending empty記録、
+reload後の選択を既存ownerへ委譲する。書込完了後にreceiptが失効してもDBを巻き戻さない。
+削除成功後はreceiptにかかわらず、その時点の選択が削除対象と一致する場合だけ解除する。
+待機中に選んだ別項目は保持し、削除失敗時は選択とpending empty記録を維持する。
+
+`OutlineFocusAdapter` のtimerは新focus要求で置換し、receipt・pane・画面originを再確認する。
+unmountでtimerを解除する。画面復帰のfocus→caret→scrollは既存Viewportの順序を維持する。
+直接回帰はlive条件の写し、表示行の順序・一時展開・Hoist・stash、root/pending記録、
+削除正常系・失敗系・receipt失効後の選択補正を確認する。
+focusの直接テストは独立したoutline_focus_adapter.test.tsでpane/receipt/origin/disposeの失効を確認し、
+ブラウザでは本番DOMイベント経路によるeditor focus・caretとCSS.escapeを確認する。
+今回の統合ではBookmarkControllerの正本を維持し、一時展開はOutlineDisplayControllerから読む。
+
+統合検証（main `ad337dd` ＋ #316 head `08cf9ef`、filter入力修正を含む）:
+Deno849件、Svelte401件、UIブラウザ72件、型チェック、build、 lint・実装行数・magic number・duplicate
+ratchet・formatが成功。 pre-commitは既知のDeno/npm
+shim実行エラーを避けて省略し、同等の検証を個別実行した。
 
 ## #307: 通常reloadとsnapshot公開の調停
 
