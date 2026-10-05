@@ -88,8 +88,6 @@ export class OmniSearchController {
 		const requestId = ++this.searchRequestId;
 		const query = this.liveQuickCaptureText;
 		this.liveSearchActiveIndex = -1;
-		this.liveSuggestions = [];
-		this.liveSearchResults = [];
 		if (!query.trim()) {
 			this.searchRecorded = false;
 			this.liveSuggestions = [];
