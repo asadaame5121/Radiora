@@ -75,6 +75,32 @@
   `{ cause }` で元の原因を保持する。
 - PostToolUseの自動修正ではBiomeのunsafe fixを適用しない。
 
+## Agent tools
+
+ローカルに導入済みの以下の道具を、用途に応じて積極的に利用する。利用可能なMCP toolまたはCLIを使い、
+初回はCLIの `--help` やMCPのschemaで現在の引数・出力形式を確認する。
+
+Codex Cloud向けの導入・確認は [Cloudセットアップ](docs/agents/codex-cloud-setup.md) を参照する。
+Cloudではセットアップ中にhashline・ffs・ast-grepを導入し、agent実行中はオフラインでCLIを使う。
+WindowsでffsがPATH上に見つからない場合は `where.exe ffs` と `$env:LOCALAPPDATA\ffs\bin\ffs.exe`
+を確認する。
+
+- **[ffs](https://github.com/quangdang46/fast_file_search)** — ファイル探索、内容検索、symbol探索、
+  コード構造の把握、読取りに推奨する。読取りは `ffs read <path> --budget 5000` のように token
+  budgetを指定し、省略された範囲が必要なら追加で読む。構造化出力が必要なら `--format json` を使う。
+- **[hashline](https://github.com/quangdang46/hashline)** — 既存ファイルの局所編集に推奨する。
+  `hashline read <path>` で得たhash anchorを使ってpatchし、stale readで拒否されたら
+  再読取りしてanchorと変更内容を確認し直す。適用前は `--dry-run`、適用後はdiffで変更範囲を確認する。
+- **ax** — ネット接続が許可されたローカル環境で、HTTP/APIの取得やWebページの内容抽出に推奨する。
+  文書は `ax <url> --md --budget 2000`、要素抽出はCSS selectorを使い、
+  status・失敗・出力の省略を確認する。
+- **[ast-grep](https://github.com/ast-grep/ast-grep)** — 構文に基づくコード検索・書換えに推奨する。
+  関数呼出しや構文パターンを探す場合に使い、書換えは対象言語とmatchを確認してから適用する。
+  適用後はdiffと変更に応じた検証で意図した範囲を確認する。
+
+実行環境で利用できない場合や対象形式に対応しない場合は、`rg`、通常のreader/editor、
+curlなど利用可能な手段へ切り替えて作業を続ける。
+
 ## Agent skills
 
 ### Issue tracker
