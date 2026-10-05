@@ -1,4 +1,6 @@
 import type { SearchRequest, SearchResult, Suggestion } from "../domain/models.ts";
+export type InputReceipt = () => boolean;
+
 export interface OmniSearchPort {
 	suggestItems(prefix: string, limit?: number): Promise<Suggestion[]>;
 	searchItems(request: SearchRequest | string): Promise<SearchResult[]>;
@@ -43,7 +45,7 @@ export class OmniSearchController {
 
 	private searchPort(): OmniSearchPort {
 		if (!this.options.searchPort) {
-			throw new Error("Navigation search port is not configured");
+			throw new Error("Omni search port is not configured");
 		}
 		return this.options.searchPort;
 	}
@@ -139,8 +141,7 @@ export class OmniSearchController {
 		this.liveSearchActiveIndex = Math.max(
 			-1,
 			Math.min(
-				this.liveSuggestions.length + this.liveSearchResults.length +
-					(this.liveQuickCaptureText.trim() ? 1 : 0) - 1,
+				this.omniEntryCount - 1,
 				this.liveSearchActiveIndex + delta,
 			),
 		);
@@ -151,11 +152,11 @@ export class OmniSearchController {
 		this.liveQuickCaptureText = value;
 		this.queueSearch();
 	}
-	captureInput(): () => boolean {
+	captureInput(): InputReceipt {
 		const generation = this.searchRequestId;
 		return () => !this.disposed && generation === this.searchRequestId;
 	}
-	clearAccepted(current: () => boolean): void {
+	clearAccepted(current: InputReceipt): void {
 		if (current()) this.clearOmniwindow();
 	}
 	dispose(): void {

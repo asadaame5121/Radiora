@@ -207,7 +207,7 @@ describe("navigation controller", () => {
 
 	test("requires a search port only for non-empty queries", () => {
 		const controller = createOmniSearchController();
-		expect(() => controller.input("needle")).toThrow("Navigation search port is not configured");
+		expect(() => controller.input("needle")).toThrow("Omni search port is not configured");
 	});
 
 	test("clamps search movement to the available entry range", async () => {

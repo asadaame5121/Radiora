@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import type { OutlineSnapshot, UnplacedWork } from "../src/domain/models.ts";
 import type { DuplicateCandidate } from "../src/services/duplicate_candidates.ts";
+import { createOmniSearchController } from "../src/ui/omni_search_controller.svelte.ts";
 import {
 	createWorkController,
 	duplicateCandidateKey,
@@ -111,6 +112,51 @@ describe("work controller", () => {
 	});
 
 	describe("quick capture", () => {
+		test.each(["root", "unplaced"] as const)(
+			"preserves newer Omni input after a delayed %s capture succeeds",
+			async (destination) => {
+				let complete!: () => void;
+				const saved = new Promise<void>((resolve) => complete = resolve);
+				const omni = createOmniSearchController({
+					searchPort: {
+						suggestItems: async () => [],
+						searchItems: async () => [],
+						getSelectedId: () => null,
+						reportError: vi.fn(),
+					},
+				});
+				const ports = createPorts({
+					createItem: vi.fn(async () => {
+						await saved;
+						return { id: "created" } as OutlineSnapshot["items"][number];
+					}),
+					quickCapture: vi.fn(async () => {
+						await saved;
+						return { workId: "created" } as UnplacedWork;
+					}),
+					listUnplacedWorks: vi.fn().mockResolvedValue([]),
+				});
+				ports.captureQuickCaptureInput = () => {
+					const receipt = omni.captureInput();
+					return () => omni.clearAccepted(receipt);
+				};
+				try {
+					omni.input("Saved memo");
+					const controller = createWorkController(ports);
+					const capture = controller.performQuickCapture(omni.quickCaptureText, destination);
+					expect(controller.quickCaptureSubmitting).toBe(true);
+					omni.input("New draft");
+					complete();
+					await capture;
+					expect(omni.quickCaptureText).toBe("New draft");
+					expect(ports.reportError).not.toHaveBeenCalled();
+					expect(controller.quickCaptureSubmitting).toBe(false);
+				} finally {
+					omni.dispose();
+				}
+			},
+		);
+
 		test("captures to root with afterId from existing roots", async () => {
 			const createItem = vi.fn().mockResolvedValue({ id: "item-new", workId: "work-new" });
 			const reload = vi.fn(async (_focusId?: string, afterSelection?: () => void) => {
@@ -157,7 +203,7 @@ describe("work controller", () => {
 			ports.getSnapshot = () => snapshot;
 			ports.reload = reload;
 			ports.navigation.navigate = openView.mockResolvedValue(true);
-			ports.clearQuickCaptureInput = clearQuickCaptureInput;
+			ports.captureQuickCaptureInput = () => clearQuickCaptureInput;
 
 			const controller = createWorkController(ports);
 			await controller.performQuickCapture("New root item", "root");
@@ -185,11 +231,12 @@ describe("work controller", () => {
 				ports.reload = failure === "false"
 					? vi.fn().mockResolvedValue(false)
 					: vi.fn().mockRejectedValue(error);
-				ports.clearQuickCaptureInput = vi.fn();
+				const clearQuickCaptureInput = vi.fn();
+				ports.captureQuickCaptureInput = () => clearQuickCaptureInput;
 				const controller = createWorkController(ports);
 				await controller.performQuickCapture("Created memo", "root");
 				expect(createItem).toHaveBeenCalledTimes(1);
-				expect(ports.clearQuickCaptureInput).toHaveBeenCalledTimes(1);
+				expect(clearQuickCaptureInput).toHaveBeenCalledTimes(1);
 				expect(ports.navigation.navigate).not.toHaveBeenCalled();
 				expect(controller.quickCaptureSubmitting).toBe(false);
 				if (failure === "throw") expect(ports.reportError).toHaveBeenCalledWith(error);
@@ -199,10 +246,11 @@ describe("work controller", () => {
 		test("retains root capture input when creation fails", async () => {
 			const error = new Error("create failed");
 			const ports = createPorts({ createItem: vi.fn().mockRejectedValue(error) });
-			ports.clearQuickCaptureInput = vi.fn();
+			const clearQuickCaptureInput = vi.fn();
+			ports.captureQuickCaptureInput = () => clearQuickCaptureInput;
 			const controller = createWorkController(ports);
 			await controller.performQuickCapture("Unsaved memo", "root");
-			expect(ports.clearQuickCaptureInput).not.toHaveBeenCalled();
+			expect(clearQuickCaptureInput).not.toHaveBeenCalled();
 			expect(ports.reload).not.toHaveBeenCalled();
 			expect(ports.reportError).toHaveBeenCalledWith(error);
 			expect(controller.quickCaptureSubmitting).toBe(false);
@@ -214,10 +262,11 @@ describe("work controller", () => {
 				quickCapture: vi.fn().mockResolvedValue({ workId: "created" }),
 				listUnplacedWorks: vi.fn().mockRejectedValue(error),
 			});
-			ports.clearQuickCaptureInput = vi.fn();
+			const clearQuickCaptureInput = vi.fn();
+			ports.captureQuickCaptureInput = () => clearQuickCaptureInput;
 			const controller = createWorkController(ports);
 			await controller.performQuickCapture("Created memo", "unplaced");
-			expect(ports.clearQuickCaptureInput).toHaveBeenCalledTimes(1);
+			expect(clearQuickCaptureInput).toHaveBeenCalledTimes(1);
 			expect(ports.reportError).toHaveBeenCalledWith(error);
 			expect(controller.quickCaptureSubmitting).toBe(false);
 		});
@@ -243,7 +292,7 @@ describe("work controller", () => {
 			const clearQuickCaptureInput = vi.fn();
 			const ports = createPorts({ quickCapture, listUnplacedWorks });
 			ports.reload = reload;
-			ports.clearQuickCaptureInput = clearQuickCaptureInput;
+			ports.captureQuickCaptureInput = () => clearQuickCaptureInput;
 
 			const controller = createWorkController(ports);
 			await controller.performQuickCapture("Unplaced memo", "unplaced");
