@@ -1,3 +1,4 @@
+// biome-ignore-all lint/plugin/noSwallowedRejection: Only superseded, cancelled or disposed bookmark failures are discarded; active failures are rethrown or reported.
 import type { Bookmark } from "../domain/models.ts";
 
 interface BookmarkPorts {
@@ -25,6 +26,7 @@ export class BookmarkController {
 			(value) => {
 				next = value;
 			},
+			// Retired reads must not publish errors into the latest request.
 			(cause) => {
 				if (current()) throw cause;
 			},

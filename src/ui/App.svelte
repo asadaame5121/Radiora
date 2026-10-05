@@ -780,12 +780,13 @@
 	}
 
 	function persistStartupSnapshotCache(
-		snapshotToCache: OutlineSnapshot = snapshot,
+		snapshotToCache?: OutlineSnapshot,
 		location = navigationController.browsingLocation,
 	): void {
-		if (startupCacheActive || startup.phase !== "ready" || editorController.hasUnsavedChanges()) return;
+		// Explicit snapshots are saved API data; only the drawing snapshot may contain unsaved input.
+		if (startupCacheActive || startup.phase !== "ready" || (!snapshotToCache && editorController.hasUnsavedChanges())) return;
 		// biome-ignore lint/plugin/noSwallowedRejection: Startup acceleration is optional and must not interrupt editing.
-		void api.saveStartupSnapshotCache(snapshotToCache, location).catch(() => {
+		void api.saveStartupSnapshotCache(snapshotToCache ?? snapshot, location).catch(() => {
 			// Startup acceleration must not interrupt editing when the cache cannot be written.
 		});
 	}

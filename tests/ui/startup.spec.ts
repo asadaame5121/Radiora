@@ -24,6 +24,54 @@ function gate() {
 	return { promise, release };
 }
 
+test("reload caches saved API text while an unsaved draft stays visible", async ({ page }) => {
+	let cached: OutlineSnapshot | null = null;
+	const cachedItem = () => cached?.items[0];
+	let collapsed = false;
+	let writes = 0;
+	await page.route("**/api/rpc/listOutline", (route) => {
+		const snapshot = outline(collapsed ? "new saved text" : "saved text");
+		snapshot.items[0].collapsed = collapsed;
+		snapshot.items.push({
+			...snapshot.items[0],
+			id: "child",
+			workId: "child-work",
+			parentId: "startup-item",
+			text: "child",
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "child-branch" },
+		});
+		return route.fulfill({ json: { result: snapshot } });
+	});
+	await page.route("**/api/rpc/saveStartupSnapshotCache", (route) => {
+		cached = route.request().postDataJSON().args[0];
+		writes++;
+		return route.fulfill({ json: { result: null } });
+	});
+	await page.route(
+		"**/api/rpc/updateItemText",
+		(route) => route.fulfill({ status: 500, json: { message: "save offline" } }),
+	);
+	await page.route("**/api/rpc/setCollapsed", (route) => {
+		collapsed = true;
+		return route.fulfill({ json: { result: null } });
+	});
+	await page.goto("/", { waitUntil: "domcontentloaded" });
+	await expect.poll(() => cached?.items[0].text).toBe("saved text");
+	await page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]').click();
+	const editor = page.locator('textarea[data-item-id="startup-item"]');
+	await editor.fill("unsaved draft");
+	await expect(page.locator(".working-copy-save-status.failed")).toBeVisible();
+	await page.getByRole("button", { name: /を折りたたむ$/ }).click();
+	await expect.poll(() => cached?.items[0].text).toBe("new saved text");
+	await expect(editor).toHaveValue("unsaved draft");
+	expect(cachedItem()?.collapsed).toBe(true);
+	const savedWrites = writes;
+	await page.evaluate(() => window.dispatchEvent(new Event("beforeunload")));
+	await expect(editor).toHaveValue("unsaved draft");
+	expect(writes).toBe(savedWrites);
+});
+
 test("accepted cache remains inert through a core load failure and retry", async ({ page }) => {
 	let ready = false;
 	let retry = false;

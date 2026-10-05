@@ -487,3 +487,21 @@ lint、実装行数・magic number・duplicate ratchet、format、`git diff --ch
 `deno task verify`はDeno846件成功後、既知のLinux環境依存3件で停止。
 後段のSvelte単体とbuildは個別実行済みで、同じverifyを呼ぶpre-commit hookは省略した。
 Appの既存2067行baselineを維持し、新moduleの例外は追加していない。
+
+PR #315の追加レビュー対応（2026-10-05）:
+
+- cache保存では明示された保存済みAPI snapshotと引数なしの描画snapshotを区別する。 startup/cache
+  previewのguardは両方に適用し、未保存draftのguardは描画snapshotだけに適用する。
+  通常reloadは未保存入力を保持したまま、overlay前のAPI結果を永続化できる。
+- BookmarkControllerに失効・取消・dispose後のrejectionを破棄する理由を
+  `biome-ignore-all lint/plugin/noSwallowedRejection`として記録。現行要求の失敗は従来どおり
+  throwまたはreportErrorへ渡し、古い要求が最新errorを上書きしない。
+- 新規起動UI回帰は修正前に保存済みcacheが更新されず失敗することを確認。修正後は
+  autosave失敗のdraftを画面へ残し、reloadの新保存済み本文だけをcacheへ保存する。
+  引数なしのunload保存は引き続き未保存入力を保存しない。
+
+検証: 関連ブラウザ12件、Bookmark/Outline単体20件、型チェック、build、変更ファイルlint、
+実装行数gate、format、`git diff --check`が成功。既存2067行baselineを維持。
+`deno task verify`はlint・品質・format・型チェック成功後、Deno846件成功と既知の
+Linux環境依存3件失敗で停止。同じverifyを実行するpre-commit hookは省略し、
+後段の関連Svelte単体とbuildは個別実行した。
