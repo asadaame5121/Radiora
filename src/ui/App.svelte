@@ -263,6 +263,7 @@
 	const contextMenuController = new OccurrenceContextMenuController({
 		exists: (id) => itemById.has(id), select: (id) => selectOccurrence(id), selected: () => selectedId,
 		execute: (id) => executeCommand(id),
+		remove: (id) => outlineOperations.remove(id),
 		navigate: (id, kind) => screenNavigation.navigate({
 			view: kind === "work-lineage" ? "workLineage" : "outline", occurrenceId: id,
 			...(kind === "zoom" ? { hoistId: id } : kind === "open-outline" ? { expandedIds: ancestorBreadcrumb(snapshot, id).map((item) => item.id) } : {}),

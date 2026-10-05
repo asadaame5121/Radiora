@@ -453,4 +453,6 @@ cleanupを持ち、chord自体は既存KeyboardControllerへ委譲する。
 Palette内からのHelp/Ctrl+Kは許可し、他dialog中は抑止する。repeatでは操作を再実行しない。
 OccurrenceContextMenuControllerは短命target/geometryとaction dispatchを所有し、
 選択が変わった古いmenuから選択依存commandを実行しない。
+menuのoccurrence削除はTree/Outlineの有効な選択に対して共通lockからOutlineOperationsへ委譲する。
+keyboard/Paletteの`removeOccurrence`にあるOutline-onlyの可用性は維持し、menu削除には適用しない。
 PaletteFocusAdapterはclose後の描画を待ち、再open・dispose・DOM切断時のfocus復元を棄却する。

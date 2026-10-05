@@ -11,6 +11,7 @@ interface ContextMenuPorts {
 	select(id: string): boolean;
 	selected(): string | null;
 	execute(id: CommandId): Promise<void>;
+	remove(id: string): Promise<void>;
 	navigate(id: string, kind: "open-outline" | "zoom" | "work-lineage"): Promise<unknown>;
 	actions: Record<string, (targetId: string) => Promise<unknown>>;
 	run(action: () => Promise<unknown>): Promise<void>;
@@ -19,7 +20,6 @@ const COMMAND_ACTIONS: Record<string, CommandId> = {
 	"long-form": "startLongFormEditing",
 	"create-link": "createLink",
 	"create-branch": "createBranch",
-	"remove-occurrence": "removeOccurrence",
 };
 const MENU_FALLBACK_POSITION = 8;
 
@@ -62,6 +62,11 @@ export class OccurrenceContextMenuController {
 			return;
 		}
 		if (this.ports.selected() !== targetId) return;
+		// Menu removal is available in Tree too; keyboard removal keeps its Outline-only guard.
+		if (action === "remove-occurrence") {
+			await this.ports.run(() => this.ports.remove(targetId));
+			return;
+		}
 		const command = COMMAND_ACTIONS[action];
 		if (command) await this.ports.execute(command);
 		else if (this.ports.actions[action]) await this.ports.actions[action](targetId);

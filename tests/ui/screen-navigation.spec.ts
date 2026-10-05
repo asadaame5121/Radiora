@@ -840,3 +840,57 @@ test("a direct selection save failure keeps the draft and allows guarded retry",
 	await expect(dialog).toHaveCount(0);
 	await expect(target).toHaveAttribute("aria-selected", "true");
 });
+
+for (const source of ["outline", "tree"] as const) {
+	test(`${source} context menu removes its occurrence and refreshes the current screen`, async ({ page }) => {
+		let remaining = [...items];
+		const deleted: string[] = [];
+		await page.route("**/api/rpc/listOutline", (route) =>
+			route.fulfill({
+				json: { result: { items: remaining, links: [], knots: [], stashItemIds: [] } },
+			}));
+		await page.route("**/api/rpc/listGlobalLineage", (route) =>
+			route.fulfill({
+				json: {
+					result: {
+						snapshot: { items: remaining, links: [], knots: [], stashItemIds: [] },
+						promotedBranches: [],
+						totalWorkCount: remaining.length,
+						filteredWorkCount: remaining.length,
+					},
+				},
+			}));
+		await page.route("**/api/rpc/deleteItem", (route) => {
+			const id: string = route.request().postDataJSON().args[0];
+			deleted.push(id);
+			remaining = remaining.filter((item) => item.id !== id);
+			return route.fulfill({ json: { result: null } });
+		});
+		await page.goto("/");
+		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
+		if (source === "tree") {
+			await page.getByRole("button", { name: "ツリー", exact: true }).click();
+			const node = page.locator(".tree-node").nth(1);
+			await node.focus();
+			await node.press("Enter");
+			await node.press("Shift+F10");
+		} else {
+			const row = page.getByRole("treeitem").filter({ hasText: "mock-7 editable text" });
+			await row.focus();
+			await row.press("Shift+F10");
+		}
+		const remove = page.getByRole("menuitem", { name: /この.*を外す/ });
+		await expect(remove).toBeEnabled();
+		await remove.click();
+		await expect.poll(() => deleted).toEqual(["mock-7"]);
+		if (source === "tree") {
+			await expect(page.getByRole("group", { name: "思索の系統樹" })).toBeVisible();
+			await expect(page.locator(".tree-node")).toHaveCount(1);
+			await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+		}
+		await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]')).toHaveCount(
+			0,
+		);
+		await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]')).toBeVisible();
+	});
+}
