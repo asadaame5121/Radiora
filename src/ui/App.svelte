@@ -265,7 +265,8 @@
 		errorMessage, reportError: (message) => error = message,
 	});
 	const opml = new OpmlController({
-		api, vocabulary, flush: () => editorController.flushAutosave(), reload: load,
+		api, vocabulary, flush: () => editorController.flushAutosave(),
+		reload: (current) => load(undefined, current, undefined, current),
 		errorMessage, reportError: (message) => error = message,
 	});
 	let quickCapturePreference = $state(loadQuickCapturePreference());
@@ -304,7 +305,8 @@
 	});
 	const relationTypes = new RelationTypeController(api);
 	const jsonBackup = new JsonBackupController({
-		api, vocabulary, flush: () => editorController.flushAutosave(), reload: load,
+		api, vocabulary, flush: () => editorController.flushAutosave(),
+		reload: (current) => load(undefined, current, undefined, current),
 		relations: relationTypes, tree,
 		errorMessage, reportError: (message) => error = message,
 	});
@@ -734,11 +736,11 @@
 		await loadTags(current);
 	}
 
-	async function load(focusId?: string, canFocus = () => true, startupCurrent?: () => boolean): Promise<boolean> {
+	async function load(focusId?: string, canFocus = () => true, startupCurrent?: () => boolean, reloadCurrent?: () => boolean): Promise<boolean> {
 		if (!startupCurrent) startupController.invalidateDataLoad();
 		return outlineController.reload({
 			focusId, canFocus,
-			current: startupCurrent ?? (() => !startupController.cancelled),
+			current: startupCurrent ?? reloadCurrent ?? (() => !startupController.cancelled),
 			treeRequired: !startupCurrent,
 		});
 	}

@@ -613,3 +613,10 @@ Optionsの操作・設定のremount・download・restore/reload失敗は
 検証: `deno task verify`成功（Deno849件、Svelte436件、lint・型・build・format・各ratchet）。
 追加ブラウザ回帰3件と入出力テストの独立TypeScriptチェックも成功。
 最後のテスト型注釈修正後は対象Controller24件を再実行し成功。main反映はこの作業branchのPR統合後とする。
+
+PR #320レビュー対応（head `4316084`を基点とするローカル修正、main未反映）: OPML import・JSON
+restoreのreload portにFileOperationStateのcurrent receiptを渡す。
+Appは通常reloadのstartup失効・必須Tree取得を維持したままOutlineController.reloadへ接続する。
+同featureの新exportまたはdisposeがreload待機中に旧操作を失効させた場合、旧成功のsnapshot・
+選択補正・Tree/bookmark公開・cache保存と旧失敗のerror公開を抑止する。DB書込は巻き戻さない。
+入出力Controllerの8ケースは修正前に失敗し、修正後に関連48件が成功することを確認した。

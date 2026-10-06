@@ -8,7 +8,7 @@ interface OpmlPorts {
 	api: Pick<RadioraBindings, "exportOpml" | "importOpml">;
 	vocabulary: UiVocabulary;
 	flush(): Promise<void>;
-	reload(): Promise<boolean>;
+	reload(current: () => boolean): Promise<boolean>;
 	errorMessage(cause: unknown): string;
 	reportError(message: string): void;
 }
@@ -43,7 +43,7 @@ export class OpmlController {
 			async (source, current) => {
 				const result = await this.ports.api.importOpml(source);
 				if (!current()) return;
-				if (!await this.ports.reload() || !current()) return;
+				if (!await this.ports.reload(current) || !current()) return;
 				return `${this.ports.vocabulary.opmlImportSuccess}: ${result.importedCount}件。`;
 			},
 			(cause) =>

@@ -12,7 +12,7 @@ interface JsonBackupPorts {
 	flush(): Promise<void>;
 	relations: Pick<RelationTypeController, "load" | "names">;
 	tree: Pick<TreeController, "reconcileRelations">;
-	reload(): Promise<boolean>;
+	reload(current: () => boolean): Promise<boolean>;
 	errorMessage(cause: unknown): string;
 	reportError(message: string): void;
 }
@@ -50,7 +50,7 @@ export class JsonBackupController {
 				await this.ports.relations.load(current);
 				if (!current()) return;
 				this.ports.tree.reconcileRelations(this.ports.relations.names, true);
-				if (!await this.ports.reload() || !current()) return;
+				if (!await this.ports.reload(current) || !current()) return;
 				return `${this.ports.vocabulary.jsonBackupRestoreSuccess}: ${result.workCount}件の${this.ports.vocabulary.work}。`;
 			},
 			(cause) =>

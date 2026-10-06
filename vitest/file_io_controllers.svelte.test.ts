@@ -6,6 +6,7 @@ import { MarkdownExportController } from "../src/ui/markdown_export_controller.s
 import { OpmlController } from "../src/ui/opml_controller.svelte.ts";
 import { JsonBackupController } from "../src/ui/json_backup_controller.svelte.ts";
 import { DEFAULT_MARKDOWN_EXPORT_PREFERENCE } from "../src/ui/markdown_export_preference.ts";
+import { OutlineController } from "../src/ui/outline_controller.svelte.ts";
 
 vi.mock("../src/ui/download_text_file.ts", () => ({ downloadTextFile: vi.fn() }));
 
@@ -31,7 +32,7 @@ function fixture() {
 	const flush = vi.fn(async () => {
 		steps.push("flush");
 	});
-	const reload = vi.fn(async () => {
+	const reload = vi.fn(async (_current?: () => boolean) => {
 		steps.push("reload");
 		return true;
 	});
@@ -249,6 +250,52 @@ describe.each(["opml", "json"] as const)("%s import/restore failures", (kind) =>
 		await run(f);
 		expect(f[kind].notice).toBe("");
 		expect(f.reportError).not.toHaveBeenCalled();
+	});
+	it.each(
+		[
+			["export", false],
+			["export", true],
+			["dispose", false],
+			["dispose", true],
+		] as const,
+	)("retired reload after %s suppresses late publication (failure=%s)", async (action, failed) => {
+		const f = fixture();
+		const old = Promise.withResolvers<OutlineSnapshot>();
+		const treeScope = { result: Promise.resolve(), publish: vi.fn(), cancel: vi.fn() };
+		const bookmarkScope = { result: Promise.resolve(), publish: vi.fn(), cancel: vi.fn() };
+		const ports = {
+			readOutline: vi.fn(() => old.promise),
+			prepareTree: () => treeScope,
+			prepareBookmarks: () => bookmarkScope,
+			drafts: () => [],
+			reconcileSelection: vi.fn(),
+			selectionReceipt: () => () => true,
+			focus: vi.fn(),
+			persist: vi.fn(),
+			reportError: f.reportError,
+			clearError: vi.fn(),
+		};
+		const outline = new OutlineController(ports);
+		outline.restoreCache(snapshot);
+		f.reload.mockImplementation((current) => outline.reload({ current }));
+		const pending = run(f);
+		await vi.waitFor(() => expect(ports.readOutline).toHaveBeenCalledOnce());
+		if (action === "export") await f[kind].export();
+		else f[kind].dispose();
+		const notice = f[kind].notice;
+		if (failed) old.reject(new Error("obsolete reload"));
+		else old.resolve({ ...snapshot, items: [] });
+		await pending;
+		expect(outline.snapshot.items.map((item) => item.id)).toEqual(["A", "B"]);
+		expect(f.reportError).not.toHaveBeenCalled();
+		expect(ports.reconcileSelection).not.toHaveBeenCalled();
+		expect(ports.persist).not.toHaveBeenCalled();
+		expect(treeScope.publish).not.toHaveBeenCalled();
+		expect(bookmarkScope.publish).not.toHaveBeenCalled();
+		expect(treeScope.cancel).toHaveBeenCalled();
+		expect(bookmarkScope.cancel).toHaveBeenCalled();
+		expect(f[kind].notice).toBe(notice);
+		outline.dispose();
 	});
 	it("a late completed write cannot reload or replace a newer notice", async () => {
 		const f = fixture();
