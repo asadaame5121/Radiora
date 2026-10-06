@@ -75,6 +75,17 @@ A1a は Discovery に依存しない。旧「D6 完了まで App 全体を待つ
 と別ファイルで進められるが、同じファイルを触るタスクは同時に開始しない。2026-10-04にT1→T2→T3を実施した。
 P3はPR #301でmain反映済み。今後は#294の残るUI所有契約とmain未反映分を再評価する。
 
+### #311とOシリーズ・P4の優先順位（2026-10-06）
+
+#311を先に実施する。O1はOPML parserのnamespace/属性/空要素等の入力契約、O2は走査とimport
+model変換の条件付き抽出であり、flush・RPC・download・reloadのUI手順を移す#311の前提ではない。
+既存OPML/Markdown/JSON serviceと形式を維持し、前提#307の公開操作を再利用する。
+O1はparserに手を入れる前、O2はO1の後に独立した変更理由が確認できた場合に進める。
+
+P4は意味リンクdiagnosticsの条件付き抽出。現在の小さなparserで診断文言・位置が文法に付随しており、
+#311のMarkdown書き出しは既存の出力serviceを使うため、先行実施の必要はない。
+独立した診断処理の変更が必要になるまで後順位を維持する。
+
 ## 運用・難易度
 
 週に1日を目安に専用 branch/worktree（Jujutsu では workspace/change）で進める。

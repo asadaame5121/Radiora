@@ -1,6 +1,6 @@
 import {
-	DEFAULT_UI_LAYOUT_PREFERENCE,
 	clampInspectorWidth,
+	DEFAULT_UI_LAYOUT_PREFERENCE,
 	loadUiLayoutPreference,
 	saveUiLayoutPreference,
 	type UiLayoutPreference,
@@ -23,12 +23,24 @@ export class LayoutController {
 		this.liveInspectorWidth = this.saved.inspectorWidth;
 	}
 
-	get preference() { return this.saved; }
-	get navCollapsed() { return this.saved.navCollapsed; }
-	get inspectorCollapsed() { return this.liveInspectorCollapsed; }
-	get inspectorWidth() { return this.liveInspectorWidth; }
-	get asideMode() { return this.liveAsideMode; }
-	get inspectorRevision() { return this.revision; }
+	get preference() {
+		return this.saved;
+	}
+	get navCollapsed() {
+		return this.saved.navCollapsed;
+	}
+	get inspectorCollapsed() {
+		return this.liveInspectorCollapsed;
+	}
+	get inspectorWidth() {
+		return this.liveInspectorWidth;
+	}
+	get asideMode() {
+		return this.liveAsideMode;
+	}
+	get inspectorRevision() {
+		return this.revision;
+	}
 
 	captureInspector() {
 		return { mode: this.liveAsideMode, collapsed: this.liveInspectorCollapsed };

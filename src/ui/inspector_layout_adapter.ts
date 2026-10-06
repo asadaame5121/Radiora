@@ -33,7 +33,9 @@ export class InspectorLayoutAdapter {
 		this.stopResize?.(false);
 		const initialWidth = this.layout.inspectorWidth;
 		const move = (next: PointerEvent) => {
-			if (next.pointerId === event.pointerId) this.layout.previewInspectorWidth(win.innerWidth - next.clientX);
+			if (next.pointerId === event.pointerId) {
+				this.layout.previewInspectorWidth(win.innerWidth - next.clientX);
+			}
 		};
 		const stop = (next: PointerEvent) => {
 			if (next.pointerId === event.pointerId) this.stopResize?.(true);
@@ -77,7 +79,9 @@ export class InspectorLayoutAdapter {
 			!current() || this.layout.inspectorCollapsed || !element?.isConnected
 		) return;
 		element.scrollIntoView({ behavior: "smooth", block: "start" });
-		if (focusRelation) element.querySelector<HTMLInputElement>(".link-editor input[type=search]")?.focus();
+		if (focusRelation) {
+			element.querySelector<HTMLInputElement>(".link-editor input[type=search]")?.focus();
+		}
 	}
 
 	dispose(): void {

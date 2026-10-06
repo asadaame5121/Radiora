@@ -13,7 +13,7 @@
 	import { isThemePreference, type ThemePreference } from "./theme_preference.ts";
 
 	let {
-		markdownExportPreference = $bindable<MarkdownExportPreference>(),
+		markdownExportPreference,
 		quickCapturePreference = $bindable<QuickCapturePreference>(),
 		markdownExportEnabled,
 		markdownExportReason,
@@ -30,7 +30,7 @@
 		themePreference = "auto",
 		relationTypeDefinitions,
 		onCreateRelationTypeDefinition,
-		onPersistMarkdownExportPreference,
+		onMarkdownExportPreferenceChange,
 		onExportMarkdown,
 		onImportOpml,
 		onExportOpml,
@@ -66,7 +66,7 @@
 			direction: RelationTypeDirection;
 			advancesGeneration?: boolean;
 		}) => Promise<void>;
-		onPersistMarkdownExportPreference: () => void;
+		onMarkdownExportPreferenceChange: (preference: MarkdownExportPreference) => void;
 		onExportMarkdown: () => void | Promise<void>;
 		onImportOpml: (file: File) => void | Promise<void>;
 		onExportOpml: () => void | Promise<void>;
@@ -101,36 +101,31 @@
 	}
 
 	function updateMarkdownExportScope(event: Event & { currentTarget: HTMLSelectElement }): void {
-		markdownExportPreference = {
+		onMarkdownExportPreferenceChange({
 			...markdownExportPreference,
 			scope: event.currentTarget.value === "selected" ? "selected" : "all",
-		};
-		onPersistMarkdownExportPreference();
+		});
 	}
 
 	function updateMarkdownExportReferenceMode(event: Event & { currentTarget: HTMLSelectElement }): void {
 		const referenceMode = event.currentTarget.value;
 		if (referenceMode !== "radiora" && referenceMode !== "portable" && referenceMode !== "obsidian") return;
-		markdownExportPreference = { ...markdownExportPreference, referenceMode };
-		onPersistMarkdownExportPreference();
+		onMarkdownExportPreferenceChange({ ...markdownExportPreference, referenceMode });
 	}
 
 	function updateMarkdownExportIncludeAncestors(event: Event & { currentTarget: HTMLInputElement }): void {
-		markdownExportPreference = { ...markdownExportPreference, includeAncestors: event.currentTarget.checked };
-		onPersistMarkdownExportPreference();
+		onMarkdownExportPreferenceChange({ ...markdownExportPreference, includeAncestors: event.currentTarget.checked });
 	}
 
 	function updateMarkdownExportIncludeDescendants(event: Event & { currentTarget: HTMLInputElement }): void {
-		markdownExportPreference = { ...markdownExportPreference, includeDescendants: event.currentTarget.checked };
-		onPersistMarkdownExportPreference();
+		onMarkdownExportPreferenceChange({ ...markdownExportPreference, includeDescendants: event.currentTarget.checked });
 	}
 
 	function updateMarkdownExportIncludeSemanticNeighbors(event: Event & { currentTarget: HTMLInputElement }): void {
-		markdownExportPreference = {
+		onMarkdownExportPreferenceChange({
 			...markdownExportPreference,
 			includeSemanticNeighbors: event.currentTarget.checked,
-		};
-		onPersistMarkdownExportPreference();
+		});
 	}
 
 	function updateQuickCaptureDestination(event: Event & { currentTarget: HTMLSelectElement }): void {

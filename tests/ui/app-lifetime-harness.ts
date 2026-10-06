@@ -7,7 +7,10 @@ import "../../src/ui/styles.css";
 const target = document.getElementById("app");
 const mountButton = document.getElementById("mount");
 const unmountButton = document.getElementById("unmount");
-if (!target || !(mountButton instanceof HTMLButtonElement) || !(unmountButton instanceof HTMLButtonElement)) {
+if (
+	!target || !(mountButton instanceof HTMLButtonElement) ||
+	!(unmountButton instanceof HTMLButtonElement)
+) {
 	throw new Error("App lifetime harness requires its mount target and buttons");
 }
 

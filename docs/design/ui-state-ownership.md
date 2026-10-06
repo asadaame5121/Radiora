@@ -602,3 +602,42 @@ pre-commitのDeno/npm shim問題を避け、同等の検証を個別実行して
 - 回帰は復帰値の保存混入、関係編集の非永続化、pointerup/cancel・異なるpointer、
   resize中unmount、狭幅のscroll/focus、旧DOM要求の失効を確認する。
 - #313/#314、#292のOptions情報配置・文言、#294の残責務は今回の完了に含めない。
+
+PR #321の競合・CI修正ではmain `59166f4`（PR #320反映済み）を統合し、Layoutのownerと file I/O
+Controller・reload receiptの配線を保持した。#312自体はこのPRのmain統合前である。
+未実装の#313/#314向け先行TDD受入テストはassertionを保持し、既知の失敗ケースだけを
+通常CIではfixme/ignoreにする。`RADIORA_RUN_TDD_ACCEPTANCE=1`で元のredテストを実行できる。
+対象Issueの実装時にこの保留を解除する。#312と既存の正常系・画面復帰回帰は通常CIで検証する。
+
+## #311: Markdown・OPML・JSONの入出力owner
+
+実装baseはmain `2994dec`（#307/#308/#309/#310を含む）。この作業branchでの実装とmain反映を区別する。
+
+- MarkdownExportControllerが設定の唯一writer、scope・参照解決・download・notice・操作ログを所有する。
+  flush後のOutline描画snapshotを既存serviceへ渡し、保存済み値とdraftの扱いを変えない。
+  Optionsは読み取り値とsetPreferenceを受け取り、設定を直接bindしない。
+- OpmlControllerとJsonBackupControllerは形式別のRPC・ファイル読込・download・失敗文言を所有する。
+  共通のFileOperationStateは各feature専用instanceとしてflush・要求世代・notice公開・disposeだけを担当する。
+  parser、ファイル形式、storage atomicityは変更しない。
+- import/restore後はAppのload portから#307のOutlineController.reloadへ接続する。
+  falseは失敗または要求失効であり、成功noticeを出さず、reload
+  ownerのerror表示とsnapshot/draft保持を維持する。
+  JSON復元はRelationTypeController.load、TreeController.reconcileRelations、reloadの順序を保つ。
+- 新操作とdisposeで旧notice/error/downloadの公開権限を失効させる。
+  失効したflush・ファイル読込の後にRPCを始めない。完了したDB書込は巻き戻さない。
+  Markdownの操作ログは従来どおりfinallyで記録し、記録失敗はwarningとして処理する。
+
+直接回帰は[入出力Controller](../../vitest/file_io_controllers.svelte.test.ts)、
+Optionsの操作・設定のremount・download・restore/reload失敗は
+[ブラウザ回帰](../../tests/ui/file-io.spec.ts)に置く。
+
+検証: `deno task verify`成功（Deno849件、Svelte436件、lint・型・build・format・各ratchet）。
+追加ブラウザ回帰3件と入出力テストの独立TypeScriptチェックも成功。
+最後のテスト型注釈修正後は対象Controller24件を再実行し成功。main反映はこの作業branchのPR統合後とする。
+
+PR #320レビュー対応（head `4316084`を基点とするローカル修正、main未反映）: OPML import・JSON
+restoreのreload portにFileOperationStateのcurrent receiptを渡す。
+Appは通常reloadのstartup失効・必須Tree取得を維持したままOutlineController.reloadへ接続する。
+同featureの新exportまたはdisposeがreload待機中に旧操作を失効させた場合、旧成功のsnapshot・
+選択補正・Tree/bookmark公開・cache保存と旧失敗のerror公開を抑止する。DB書込は巻き戻さない。
+入出力Controllerの8ケースは修正前に失敗し、修正後に関連48件が成功することを確認した。

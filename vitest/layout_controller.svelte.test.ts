@@ -1,13 +1,18 @@
 import { expect, test, vi } from "vitest";
 import { LayoutController } from "../src/ui/layout_controller.svelte.ts";
 import { InspectorLayoutAdapter } from "../src/ui/inspector_layout_adapter.ts";
-import { loadUiLayoutPreference, UI_LAYOUT_PREFERENCE_STORAGE_KEY } from "../src/ui/ui_layout_preference.ts";
+import {
+	loadUiLayoutPreference,
+	UI_LAYOUT_PREFERENCE_STORAGE_KEY,
+} from "../src/ui/ui_layout_preference.ts";
 
 function fixture(afterRender: () => Promise<void> = async () => undefined) {
 	const values = new Map<string, string>();
 	const storage = {
 		getItem: (key: string) => values.get(key) ?? null,
-		setItem: vi.fn((key: string, value: string) => { values.set(key, value); }),
+		setItem: vi.fn((key: string, value: string) => {
+			values.set(key, value);
+		}),
 	};
 	const layout = new LayoutController(storage);
 	const win = Object.assign(new EventTarget(), { innerWidth: 1280 });
@@ -22,11 +27,27 @@ function fixture(afterRender: () => Promise<void> = async () => undefined) {
 	let current = true;
 	const adapter = new InspectorLayoutAdapter(layout, () => () => current, afterRender);
 	const disconnect = adapter.connect(element);
-	return { layout, adapter, storage, win, element, focus, scrollIntoView, disconnect, invalidate: () => { current = false; } };
+	return {
+		layout,
+		adapter,
+		storage,
+		win,
+		element,
+		focus,
+		scrollIntoView,
+		disconnect,
+		invalidate: () => {
+			current = false;
+		},
+	};
 }
 
 function pointer(type: string, clientX = 960, pointerId = 1, button = 0): PointerEvent {
-	return Object.assign(new Event(type, { cancelable: true }), { clientX, pointerId, button }) as PointerEvent;
+	return Object.assign(new Event(type, { cancelable: true }), {
+		clientX,
+		pointerId,
+		button,
+	}) as PointerEvent;
 }
 
 for (const setting of ["width", "navigation"] as const) {
@@ -134,7 +155,9 @@ test("resize ignores other pointer IDs, non-primary buttons and collapsed Inspec
 for (const invalidation of ["context", "restore", "unmount", "dispose"] as const) {
 	test(`late relation focus and scroll are invalidated by ${invalidation}`, async () => {
 		let release!: () => void;
-		const pending = new Promise<void>((resolve) => { release = resolve; });
+		const pending = new Promise<void>((resolve) => {
+			release = resolve;
+		});
 		const s = fixture(() => pending);
 		const opening = s.adapter.openRelationEditor();
 		if (invalidation === "context") s.invalidate();
@@ -153,7 +176,9 @@ for (const invalidation of ["context", "restore", "unmount", "dispose"] as const
 
 test("a new reveal invalidates an older pending focus request", async () => {
 	let release!: () => void;
-	const pending = new Promise<void>((resolve) => { release = resolve; });
+	const pending = new Promise<void>((resolve) => {
+		release = resolve;
+	});
 	const s = fixture(vi.fn().mockReturnValueOnce(pending).mockResolvedValue(undefined));
 	const old = s.adapter.openRelationEditor();
 	s.layout.setInspectorCollapsed(true);

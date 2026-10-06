@@ -27,7 +27,6 @@
 	import TagBrowserView from "./TagBrowserView.svelte";
 	import TrashView from "./TrashView.svelte";
 	import OptionsView from "./OptionsView.svelte";
-	import { downloadTextFile } from "./download_text_file.ts";
 	import StartupCacheStatus from "./StartupCacheStatus.svelte";
 	import StartupView from "./StartupView.svelte";
 	import PrimaryNavigation, {
@@ -77,15 +76,9 @@
 	} from "../domain/models";
 	import type { RadioraBindings } from "../shared/bindings";
 	import type { DateProjection } from "../services/date_projection";
-	import {
-		renderOutlineSnapshotMarkdown,
-		rewriteMarkdownExportReferences,
-		selectMarkdownExportSnapshot,
-	} from "../services/markdown_export";
-	import {
-		loadMarkdownExportPreference,
-		saveMarkdownExportPreference,
-	} from "./markdown_export_preference";
+	import { MarkdownExportController } from "./markdown_export_controller.svelte.ts";
+	import { OpmlController } from "./opml_controller.svelte.ts";
+	import { JsonBackupController } from "./json_backup_controller.svelte.ts";
 	import {
 		loadQuickCapturePreference,
 		saveQuickCapturePreference,
@@ -262,11 +255,17 @@
 	let licenseError = $state("");
 	let licenseLoading = $state(false);
 	let inlineSemanticLinkNotice = $state("");
-	let markdownExportNotice = $state("");
-	let markdownExportPreference = $state(loadMarkdownExportPreference());
+	const markdownExport = new MarkdownExportController({
+		api, flush: () => editorController.flushAutosave(),
+		snapshot: () => snapshot, selectedId: () => selectedId,
+		errorMessage, reportError: (message) => error = message,
+	});
+	const opml = new OpmlController({
+		api, vocabulary, flush: () => editorController.flushAutosave(),
+		reload: (current) => load(undefined, current, undefined, current),
+		errorMessage, reportError: (message) => error = message,
+	});
 	let quickCapturePreference = $state(loadQuickCapturePreference());
-	let opmlNotice = $state("");
-	let jsonBackupNotice = $state("");
 	const inspectorLayout = new InspectorLayoutAdapter(layout, () => {
 		const origin = screenNavigation.origin;
 		const current = selectionWorkspace.currentReceipt();
@@ -306,6 +305,12 @@
 		reportError: (cause) => error = errorMessage(cause),
 	});
 	const relationTypes = new RelationTypeController(api);
+	const jsonBackup = new JsonBackupController({
+		api, vocabulary, flush: () => editorController.flushAutosave(),
+		reload: (current) => load(undefined, current, undefined, current),
+		relations: relationTypes, tree,
+		errorMessage, reportError: (message) => error = message,
+	});
 	const workController = createWorkController({
 		api,
 		getSnapshot: () => snapshot,
@@ -449,7 +454,7 @@
 	const emergenceToast = $derived(emergenceController.toast);
 	const selectedItem = $derived(selectedId ? itemById.get(selectedId) ?? null : null);
 	const markdownExportSelectionRequired = $derived(
-		markdownExportPreference.scope === "selected" && !selectedItem,
+		markdownExport.preference.scope === "selected" && !selectedItem,
 	);
 	const browsingLocation = $derived(navigationController.browsingLocation);
 	// biome-ignore lint/correctness/noUnusedVariables: Retained for browsing navigation contract test compliance
@@ -701,6 +706,9 @@
 			document.removeEventListener("visibilitychange", flushWhenHidden);
 			cleanupKeyboard();
 			commandExecution.dispose();
+			markdownExport.dispose();
+			opml.dispose();
+			jsonBackup.dispose();
 			paletteFocus.dispose();
 			contextMenuController.close();
 			// biome-ignore lint/plugin/noSwallowedRejection: Teardown cannot await; the retained draft and unload warning preserve recovery.
@@ -729,11 +737,11 @@
 		await loadTags(current);
 	}
 
-	async function load(focusId?: string, canFocus = () => true, startupCurrent?: () => boolean): Promise<boolean> {
+	async function load(focusId?: string, canFocus = () => true, startupCurrent?: () => boolean, reloadCurrent?: () => boolean): Promise<boolean> {
 		if (!startupCurrent) startupController.invalidateDataLoad();
 		return outlineController.reload({
 			focusId, canFocus,
-			current: startupCurrent ?? (() => !startupController.cancelled),
+			current: startupCurrent ?? reloadCurrent ?? (() => !startupController.cancelled),
 			treeRequired: !startupCurrent,
 		});
 	}
@@ -1232,7 +1240,7 @@
 		reportUnavailable: (reason) => error = reason,
 		operations: {
 			quickCapture: performQuickCapture, hoist: hoistSelected, clearHoist,
-			exportMarkdown: (payload) => performMarkdownExport(payload.exportOccurrenceId), addBookmark: performAddBookmark,
+			exportMarkdown: (payload) => markdownExport.export(payload.exportOccurrenceId), addBookmark: performAddBookmark,
 			createLink: (payload) => payload.linkInput ? performAddLink(payload.linkInput) : openLinkEditor(),
 			saveRevision: async (payload) => { if (payload.snapshotId) await performPromoteRecoverySnapshot(payload.snapshotId); },
 			createBranch: requestRewriteAsNewBranch,
@@ -1333,96 +1341,11 @@
 
 	const purgeTrash = workController.purgeTrash;
 
-	async function performMarkdownExport(selectedOccurrenceId?: string): Promise<void> {
-		markdownExportNotice = "";
-		const started = performance.now();
-		let outcome: "ok" | "error" = "ok";
-		try {
-			await editorController.flushAutosave();
-			const exportSnapshot = selectMarkdownExportSnapshot(snapshot, {
-				...markdownExportPreference,
-				scope: selectedOccurrenceId ? "selected" : markdownExportPreference.scope,
-				selectedOccurrenceId: selectedOccurrenceId ?? selectedId,
-			});
-			const rendered = renderOutlineSnapshotMarkdown(exportSnapshot);
-			const resolutions = markdownExportPreference.referenceMode === "obsidian"
-				? await api.resolveInternalReferences(rendered)
-				: [];
-			const markdown = rewriteMarkdownExportReferences(
-				rendered,
-				markdownExportPreference.referenceMode,
-				resolutions,
-			);
-			downloadTextFile(markdown, "text/markdown;charset=utf-8", `radiora-${localDateValue(new Date())}.md`);
-			markdownExportNotice = "Markdownをエクスポートしました。";
-		} catch (cause) {
-			outcome = "error";
-			error = `Markdownをエクスポートできませんでした: ${errorMessage(cause)}`;
-		} finally {
-			void api.recordClientOperation("export.markdown", outcome, performance.now() - started)
-				.catch(() => console.warn("Could not record Markdown export."));
-		}
-	}
-
-	function persistMarkdownExportPreference(): void {
-		saveMarkdownExportPreference({ ...markdownExportPreference });
-	}
 
 	function persistQuickCapturePreference(): void {
 		saveQuickCapturePreference({ ...quickCapturePreference });
 	}
 
-	async function performOpmlExport(): Promise<void> {
-		opmlNotice = "";
-		try {
-			await editorController.flushAutosave();
-			const source = await api.exportOpml();
-			downloadTextFile(source, "text/x-opml;charset=utf-8", `radiora-${localDateValue(new Date())}.opml`);
-			opmlNotice = `${vocabulary.opmlExportSuccess}。`;
-		} catch (cause) {
-			error = `${vocabulary.opmlExport}ことができませんでした: ${errorMessage(cause)}`;
-		}
-	}
-
-	async function importOpmlFile(file: File): Promise<void> {
-		opmlNotice = "";
-		try {
-			await editorController.flushAutosave();
-			const result = await api.importOpml(await file.text());
-			await load();
-			opmlNotice = `${vocabulary.opmlImportSuccess}: ${result.importedCount}件。`;
-		} catch (cause) {
-			error = `${vocabulary.opmlImport}ことができませんでした: ${errorMessage(cause)}`;
-		}
-	}
-
-	async function performJsonBackupExport(): Promise<void> {
-		jsonBackupNotice = "";
-		try {
-			await editorController.flushAutosave();
-			const source = await api.exportJsonBackup();
-			downloadTextFile(source, "application/json;charset=utf-8", `radiora-backup-${localDateValue(new Date())}.json`);
-			jsonBackupNotice = `${vocabulary.jsonBackupExportSuccess}。`;
-		} catch (cause) {
-			error = `${vocabulary.jsonBackupExport}ことができませんでした: ${errorMessage(cause)}`;
-		}
-	}
-
-	async function restoreJsonBackupFile(file: File): Promise<void> {
-		jsonBackupNotice = "";
-		try {
-			await editorController.flushAutosave();
-			const result = await api.restoreJsonBackup(await file.text());
-			await relationTypes.load();
-			tree.reconcileRelations(relationTypes.names, true);
-			await load();
-			jsonBackupNotice =
-				`${vocabulary.jsonBackupRestoreSuccess}: ${result.workCount}件の${vocabulary.work}。`;
-		} catch (cause) {
-			error =
-				`${vocabulary.jsonBackupRestore}に失敗しました: ${errorMessage(cause)} ${vocabulary.jsonBackupRestoreFailureRecovery}`;
-		}
-	}
 
 	async function openLicenses(): Promise<void> {
 		licenseError = "";
@@ -1768,16 +1691,16 @@
 			<TrashView entries={trashEntries} onRestore={restoreTrash} onPurge={purgeTrash} />
 		{:else if viewMode === "options"}
 			<OptionsView
-				bind:markdownExportPreference
+				markdownExportPreference={markdownExport.preference}
 				bind:quickCapturePreference
 				markdownExportEnabled={commands.exportMarkdown.enabled}
 				markdownExportReason={commands.exportMarkdown.reason}
 				{markdownExportSelectionRequired}
-				{markdownExportNotice}
+				markdownExportNotice={markdownExport.notice}
 				startupReady={startup.phase === "ready"}
 				operationLogPort={api}
-				{opmlNotice}
-				{jsonBackupNotice}
+				opmlNotice={opml.notice}
+				jsonBackupNotice={jsonBackup.notice}
 				treeProjectionPreference={tree.projectionPreference}
 				{navCollapsed}
 				inspectorCollapsed={layout.preference.inspectorCollapsed}
@@ -1785,12 +1708,12 @@
 				themePreference={themeController.preference}
 				relationTypeDefinitions={relationTypes.definitions}
 				onCreateRelationTypeDefinition={createRelationTypeDefinition}
-				onPersistMarkdownExportPreference={persistMarkdownExportPreference}
+				onMarkdownExportPreferenceChange={markdownExport.setPreference}
 				onExportMarkdown={exportMarkdown}
-				onImportOpml={importOpmlFile}
-				onExportOpml={performOpmlExport}
-				onExportJsonBackup={performJsonBackupExport}
-				onRestoreJsonBackup={restoreJsonBackupFile}
+				onImportOpml={opml.import}
+				onExportOpml={opml.export}
+				onExportJsonBackup={jsonBackup.export}
+				onRestoreJsonBackup={jsonBackup.restore}
 				onTreeProjectionChange={(next) => tree.setProjection(next)}
 				onNavigationCollapsedChange={(next) => layout.setNavigationCollapsed(next)}
 				onInspectorCollapsedChange={(next) => layout.setInspectorCollapsed(next)}
