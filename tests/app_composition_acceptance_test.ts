@@ -48,33 +48,22 @@ Deno.test("#312 resize gesture listeners belong to the Layout View lifetime, not
 	);
 });
 
-// Pending #313/#314 TDD gates remain runnable explicitly before their implementation.
-Deno.test({
-	name: "#313 App does not own dialog license result, error, loading or open state",
-	ignore: Deno.env.get("RADIORA_RUN_TDD_ACCEPTANCE") !== "1",
-	fn: () => {
-		assertEquals(
-			collect((node) =>
-				ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) &&
-				/license/i.test(node.name.text) &&
-				node.initializer !== undefined && callsIdentifier(node.initializer, "$state")
-			),
-			[],
-		);
-	},
+Deno.test("#313 App does not own dialog license result, error, loading or open state", () => {
+	assertEquals(
+		collect((node) =>
+			ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) &&
+			/license/i.test(node.name.text) &&
+			node.initializer !== undefined && callsIdentifier(node.initializer, "$state")
+		),
+		[],
+	);
 });
 
-Deno.test({
-	name: "#313 App delegates license acquisition instead of fetching dialog data",
-	ignore: Deno.env.get("RADIORA_RUN_TDD_ACCEPTANCE") !== "1",
-	fn: () => {
-		assertEquals(
-			collect((node) =>
-				callsIdentifier(node, "fetchLicenseIndex") || callsIdentifier(node, "fetch")
-			),
-			[],
-		);
-	},
+Deno.test("#313 App delegates license acquisition instead of fetching dialog data", () => {
+	assertEquals(
+		collect((node) => callsIdentifier(node, "fetchLicenseIndex") || callsIdentifier(node, "fetch")),
+		[],
+	);
 });
 
 Deno.test({
