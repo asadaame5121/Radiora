@@ -17,7 +17,7 @@
 	import LongFormEditor from "./LongFormEditor.svelte";
 	import OutlineView from "./OutlineView.svelte";
 	import type { OutlineHelpers, OutlineRowHandlers } from "./outline_row_types.ts";
-	import InspectorView, { type InspectorAsideMode } from "./InspectorView.svelte";
+	import InspectorView from "./InspectorView.svelte";
 	import DuplicateCandidatesPanel from "./DuplicateCandidatesPanel.svelte";
 	import InAppHelp from "./InAppHelp.svelte";
 	import ContextMenu from "./ContextMenu.svelte";
@@ -90,11 +90,8 @@
 		loadQuickCapturePreference,
 		saveQuickCapturePreference,
 	} from "./quick_capture_preference";
-	import {
-		clampInspectorWidth,
-		loadUiLayoutPreference,
-		saveUiLayoutPreference,
-	} from "./ui_layout_preference";
+	import { LayoutController } from "./layout_controller.svelte.ts";
+	import { InspectorLayoutAdapter } from "./inspector_layout_adapter.ts";
 	import { createThemeController } from "./theme_controller.svelte.ts";
 	import { TreeController } from "./tree_controller.svelte.ts";
 	import {
@@ -147,6 +144,7 @@
 
 
 	const vocabulary = useUiVocabulary();
+	const layout = new LayoutController();
 	const bookmarkController = new BookmarkController({ read: () => api.listBookmarks(), reportError: (cause) => error = errorMessage(cause) });
 	const outlineController: OutlineController = new OutlineController({
 		readOutline: () => api.listOutline(),
@@ -192,8 +190,8 @@
 			commitBrowsing: (state) => navigationController.commitBrowsing(state),
 			filter: () => outlineFilter, setFilter: (next) => outlineDisplay.setFilter(next),
 			expanded: () => transientExpandedIds, setExpanded: (next) => outlineDisplay.setExpanded(next),
-			inspector: () => ({ mode: asideMode, collapsed: inspectorCollapsed }),
-			setInspector: (context) => { asideMode = context.mode; inspectorCollapsed = context.collapsed; },
+			inspector: () => layout.captureInspector(),
+			setInspector: (context) => layout.applyInspector(context),
 			longForm: () => longForm.active,
 			setLongForm: (active, id) => longFormController.setMode(active, itemById.get(id ?? "") ?? null),
 			capturePosition: () => outlineViewport.capture(browsingLocation.selectedOccurrenceId, browsingLocation.hoistOccurrenceId, longForm.active),
@@ -246,7 +244,7 @@
 		},
 	});
 	const transientExpandedIds = $derived(outlineDisplay.expanded);
-	let asideMode = $state<InspectorAsideMode>("overview");
+	const asideMode = $derived(layout.asideMode);
 	const tagController = new TagController({
 		api: {
 			listScopedTags: () => api.listScopedTags(),
@@ -263,18 +261,21 @@
 	let licenseDetail = $state<{ name: string; text: string } | null>(null);
 	let licenseError = $state("");
 	let licenseLoading = $state(false);
-
-	let inspectorElement = $state<HTMLElement | null>(null);
 	let inlineSemanticLinkNotice = $state("");
 	let markdownExportNotice = $state("");
 	let markdownExportPreference = $state(loadMarkdownExportPreference());
 	let quickCapturePreference = $state(loadQuickCapturePreference());
 	let opmlNotice = $state("");
 	let jsonBackupNotice = $state("");
-	const initialUiLayoutPreference = loadUiLayoutPreference();
-	let inspectorWidth = $state(initialUiLayoutPreference.inspectorWidth);
-	let inspectorCollapsed = $state(initialUiLayoutPreference.inspectorCollapsed);
-	let navCollapsed = $state(initialUiLayoutPreference.navCollapsed);
+	const inspectorLayout = new InspectorLayoutAdapter(layout, () => {
+		const origin = screenNavigation.origin;
+		const current = selectionWorkspace.currentReceipt();
+		return () => current() && screenNavigation.origin === origin;
+	});
+	onMount(() => () => inspectorLayout.dispose());
+	const inspectorWidth = $derived(layout.inspectorWidth);
+	const inspectorCollapsed = $derived(layout.inspectorCollapsed);
+	const navCollapsed = $derived(layout.navCollapsed);
 	const contextMenuController = new OccurrenceContextMenuController({
 		exists: (id) => itemById.has(id), select: (id) => selectOccurrence(id), selected: () => selectedId,
 		execute: (id) => executeCommand(id),
@@ -790,63 +791,6 @@
 		selectionWorkspace.setHoist(null);
 	}
 
-	async function revealInspector(): Promise<void> {
-		inspectorCollapsed = false;
-		persistUiLayoutPreference();
-		asideMode = "overview";
-		await tick();
-		inspectorElement?.scrollIntoView({ behavior: "smooth", block: "start" });
-	}
-
-	async function toggleInspector(): Promise<void> {
-		if (inspectorCollapsed) {
-			await revealInspector();
-			return;
-		}
-		inspectorCollapsed = true;
-		persistUiLayoutPreference();
-	}
-
-	function toggleNavigation(): void {
-		navCollapsed = !navCollapsed;
-		persistUiLayoutPreference();
-	}
-
-	function setNavigationCollapsed(next: boolean): void {
-		navCollapsed = next;
-		persistUiLayoutPreference();
-	}
-
-	function setInspectorCollapsed(next: boolean): void {
-		inspectorCollapsed = next;
-		persistUiLayoutPreference();
-	}
-
-	function setInspectorWidth(next: number): void {
-		inspectorWidth = clampInspectorWidth(next);
-		persistUiLayoutPreference();
-	}
-
-	function persistUiLayoutPreference(): void {
-		saveUiLayoutPreference({ navCollapsed, inspectorCollapsed, inspectorWidth });
-	}
-
-	function startInspectorResize(event: PointerEvent): void {
-		if (event.button !== 0 || inspectorCollapsed) return;
-		event.preventDefault();
-		const move = (next: PointerEvent) => {
-			const width = window.innerWidth - next.clientX;
-			inspectorWidth = clampInspectorWidth(width);
-		};
-		const stop = () => {
-			persistUiLayoutPreference();
-			window.removeEventListener("pointermove", move);
-			window.removeEventListener("pointerup", stop);
-		};
-		window.addEventListener("pointermove", move);
-		window.addEventListener("pointerup", stop, { once: true });
-	}
-
 	function selectInspectorPlacement(id: string): void {
 		openOutlineOccurrence(id);
 	}
@@ -1295,7 +1239,7 @@
 			startLongFormEditing: () => keyboardWorkspace.openLongForm(), showOutline: () => keyboardWorkspace.openOutline(),
 			showTree: () => keyboardWorkspace.openTree(), goBack: () => screenNavigation.goBack(), returnToEditor: () => keyboardWorkspace.returnToEditor(),
 			focusSearch: () => keyboardWorkspace.focusSearch(), focusQuickCapture: () => keyboardWorkspace.focusSearch(),
-			toggleSidebar: toggleNavigation, collapseAll: () => keyboardWorkspace.setAllCollapsed(true), expandAll: () => keyboardWorkspace.setAllCollapsed(false),
+			toggleSidebar: () => layout.toggleNavigation(), collapseAll: () => keyboardWorkspace.setAllCollapsed(true), expandAll: () => keyboardWorkspace.setAllCollapsed(false),
 			toggleCollapsed: async () => { const row = visibleRows.find((entry) => entry.item.id === selectedId); if (row) await toggle(row); },
 			zoomOut: () => keyboardWorkspace.zoomOut(), removeOccurrence: async () => { if (selectedId) await outlineOperations.remove(selectedId); },
 		},
@@ -1334,12 +1278,7 @@
 
 	async function openLinkEditor(): Promise<void> {
 		if (!selectedItem) return;
-		asideMode = "relation";
-		await tick();
-		const input = document.querySelector<HTMLInputElement>(
-			".link-editor input[type=search]",
-		);
-		input?.focus();
+		await inspectorLayout.openRelationEditor();
 	}
 
 	function inlineSemanticLinksFor(text: string) {
@@ -1364,7 +1303,7 @@
 		const advancedInput = `${quote(candidate.source)} :: ${candidate.type}${reason} :: ${quote(candidate.target)}`;
 		try {
 			const resolution = await api.resolveAdvancedLink(advancedInput);
-			asideMode = "relation";
+			layout.openInspector("relation");
 			inlineSemanticLinkNotice = resolution.source.status === "resolved" && resolution.target.status === "resolved"
 				? `候補を解決しました: ${candidate.type} · ${candidate.source} → ${candidate.target}`
 				: `未確定の候補です: ${resolution.source.reason ?? resolution.target.reason ?? "対象を選択してください。"}`;
@@ -1659,7 +1598,7 @@
 		activeView={viewMode}
 		recentItems={primaryNavigationRecentItems}
 		selectedId={selectedId}
-		onToggleCollapse={toggleNavigation}
+		onToggleCollapse={() => layout.toggleNavigation()}
 		onOpenToday={() => void openToday()}
 		onOpenUnplaced={() => void openUnplaced()}
 		onOpenStubs={() => void openStubs()}
@@ -1699,7 +1638,7 @@
 		onResumeEditing={resumeEditing}
 		onOpenBookmark={openBookmark}
 		onRemoveBookmark={removeBookmark}
-		onToggleInspector={toggleInspector}
+		onToggleInspector={() => inspectorLayout.toggleInspector()}
 		onRetryWorkingCopySave={retryWorkingCopySave}
 		onThemePreferenceChange={(preference) => themeController.setPreference(preference)}
 		{titleFor}
@@ -1841,7 +1780,7 @@
 				{jsonBackupNotice}
 				treeProjectionPreference={tree.projectionPreference}
 				{navCollapsed}
-				{inspectorCollapsed}
+				inspectorCollapsed={layout.preference.inspectorCollapsed}
 				{inspectorWidth}
 				themePreference={themeController.preference}
 				relationTypeDefinitions={relationTypes.definitions}
@@ -1853,9 +1792,9 @@
 				onExportJsonBackup={performJsonBackupExport}
 				onRestoreJsonBackup={restoreJsonBackupFile}
 				onTreeProjectionChange={(next) => tree.setProjection(next)}
-				onNavigationCollapsedChange={setNavigationCollapsed}
-				onInspectorCollapsedChange={setInspectorCollapsed}
-				onInspectorWidthChange={setInspectorWidth}
+				onNavigationCollapsedChange={(next) => layout.setNavigationCollapsed(next)}
+				onInspectorCollapsedChange={(next) => layout.setInspectorCollapsed(next)}
+				onInspectorWidthChange={(next) => layout.setInspectorWidth(next)}
 				onThemePreferenceChange={(preference) => themeController.setPreference(preference)}
 				onPersistQuickCapturePreference={persistQuickCapturePreference}
 				onOpenTrash={() => void openTrash()}
@@ -1986,9 +1925,9 @@
 				{emergenceSuggestions}
 				emergenceResolutionReasons={emergenceResolutionReasons}
 				{emergenceLoading}
-				onAsideModeChange={(mode) => asideMode = mode}
-				onElement={(element) => inspectorElement = element}
-				onStartResize={startInspectorResize}
+				onAsideModeChange={(mode) => layout.setAsideMode(mode)}
+				onConnectLayout={(element) => inspectorLayout.connect(element)}
+				onStartResize={inspectorLayout.startResize}
 				onAddBookmark={addBookmark}
 				onSelectOccurrence={selectOccurrence}
 				onUpdateSelectedHeading={updateSelectedHeading}
