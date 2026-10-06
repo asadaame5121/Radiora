@@ -1,6 +1,9 @@
 import { assertMatch } from "jsr:@std/assert@1";
 
 const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+const controller = await Deno.readTextFile(
+	new URL("../src/ui/opml_controller.svelte.ts", import.meta.url),
+);
 const view = await Deno.readTextFile(new URL("../src/ui/OptionsView.svelte", import.meta.url));
 const bindings = await Deno.readTextFile(new URL("../src/shared/bindings.ts", import.meta.url));
 const registration = await Deno.readTextFile(
@@ -9,20 +12,20 @@ const registration = await Deno.readTextFile(
 
 Deno.test("OPML UI exports UTF-8 and imports an explicitly selected file", () => {
 	assertMatch(
-		app,
-		/async function performOpmlExport\(\)[\s\S]*?await editorController\.flushAutosave\(\)[\s\S]*?api\.exportOpml\(\)/,
+		controller,
+		/export =[\s\S]*?this\.operation\.run\(this\.ports\.flush,[\s\S]*?this\.ports\.api\.exportOpml\(\)/,
 	);
 	assertMatch(
-		app,
-		/downloadTextFile\(source, "text\/x-opml;charset=utf-8", `radiora-\$\{localDateValue\(new Date\(\)\)\}\.opml`\)/,
+		controller,
+		/downloadTextFile\(\s*source,\s*"text\/x-opml;charset=utf-8",\s*`radiora-\$\{localDateValue\(new Date\(\)\)\}\.opml`,?\s*\)/,
 	);
 	assertMatch(
 		view,
 		/accept="\.opml,\.xml,text\/x-opml,application\/xml,text\/xml"[\s\S]*?onchange=\{importOpmlFile\}/,
 	);
 	assertMatch(
-		app,
-		/async function importOpmlFile\(file: File\)[\s\S]*?await editorController\.flushAutosave\(\)[\s\S]*?api\.importOpml\(await file\.text\(\)\)[\s\S]*?await load\(\)/,
+		controller,
+		/import =[\s\S]*?this\.operation\.runFile\([\s\S]*?this\.ports\.api\.importOpml\(source\)[\s\S]*?await this\.ports\.reload\(\)/,
 	);
 });
 
@@ -39,6 +42,6 @@ Deno.test("OPML operations use shared bindings and vocabulary", () => {
 			"opmlImportSuccess",
 		]
 	) {
-		assertMatch(`${app}\n${view}`, new RegExp(`vocabulary\\.${code}`));
+		assertMatch(`${controller}\n${view}`, new RegExp(`vocabulary\\.${code}`));
 	}
 });

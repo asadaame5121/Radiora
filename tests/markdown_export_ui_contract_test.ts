@@ -1,6 +1,9 @@
 import { assertMatch } from "jsr:@std/assert@1";
 
 const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
+const controller = await Deno.readTextFile(
+	new URL("../src/ui/markdown_export_controller.svelte.ts", import.meta.url),
+);
 const view = await Deno.readTextFile(new URL("../src/ui/OptionsView.svelte", import.meta.url));
 const editorController = await Deno.readTextFile(
 	new URL("../src/ui/editor_controller.svelte.ts", import.meta.url),
@@ -11,12 +14,12 @@ const download = await Deno.readTextFile(
 
 Deno.test("Markdown export flushes edits, renders the active snapshot, and downloads UTF-8 Markdown", () => {
 	assertMatch(
-		app,
-		/async function performMarkdownExport\(selectedOccurrenceId\?: string\): Promise<void> \{[\s\S]*?await editorController\.flushAutosave\(\);[\s\S]*?selectMarkdownExportSnapshot\(snapshot,[\s\S]*?renderOutlineSnapshotMarkdown\(exportSnapshot\)[\s\S]*?rewriteMarkdownExportReferences\(/,
+		controller,
+		/export = async[\s\S]*?await this\.ports\.flush\(\);[\s\S]*?selectMarkdownExportSnapshot\(this\.ports\.snapshot\(\),[\s\S]*?renderOutlineSnapshotMarkdown\(exportSnapshot\)[\s\S]*?rewriteMarkdownExportReferences\(/,
 	);
 	assertMatch(
-		app,
-		/downloadTextFile\(markdown, "text\/markdown;charset=utf-8", `radiora-\$\{localDateValue\(new Date\(\)\)\}\.md`\)/,
+		controller,
+		/downloadTextFile\(\s*markdown,\s*"text\/markdown;charset=utf-8",\s*`radiora-\$\{localDateValue\(new Date\(\)\)\}\.md`,?\s*\)/,
 	);
 	assertMatch(
 		download,
@@ -25,7 +28,7 @@ Deno.test("Markdown export flushes edits, renders the active snapshot, and downl
 	assertMatch(download, /setTimeout\(\(\) => URL\.revokeObjectURL\(url\), 0\)/);
 	assertMatch(
 		app,
-		/exportMarkdown: \(payload\) => performMarkdownExport\(payload\.exportOccurrenceId\)/,
+		/exportMarkdown: \(payload\) => markdownExport\.export\(payload\.exportOccurrenceId\)/,
 	);
 });
 
@@ -41,12 +44,12 @@ Deno.test("Markdown export has a visible command button and success notification
 		/disabled=\{!markdownExportEnabled \|\| markdownExportSelectionRequired\}/,
 	);
 	assertMatch(view, /<small class="markdown-export-notice" role="status">/);
-	assertMatch(app, /Markdownをエクスポートしました。/);
-	assertMatch(app, /Markdownをエクスポートできませんでした/);
+	assertMatch(controller, /Markdownをエクスポートしました。/);
+	assertMatch(controller, /Markdownをエクスポートできませんでした/);
 });
 
 Deno.test("Markdown export exposes persisted selected-node scope and independent advanced options", () => {
-	assertMatch(app, /let markdownExportPreference = \$state\(loadMarkdownExportPreference\(\)\)/);
+	assertMatch(controller, /private _preference = \$state\(loadMarkdownExportPreference\(\)\)/);
 	assertMatch(
 		view,
 		/value=\{markdownExportPreference\.scope\} onchange=\{updateMarkdownExportScope\}/,
@@ -65,10 +68,10 @@ Deno.test("Markdown export exposes persisted selected-node scope and independent
 		view,
 		/checked=\{markdownExportPreference\.includeSemanticNeighbors\} onchange=\{updateMarkdownExportIncludeSemanticNeighbors\}/,
 	);
-	assertMatch(app, /saveMarkdownExportPreference\(\{ \.\.\.markdownExportPreference \}\)/);
+	assertMatch(controller, /saveMarkdownExportPreference\(this\._preference\)/);
 	assertMatch(
 		app,
-		/markdownExportPreference\.scope === "selected" && !selectedItem/,
+		/markdownExport\.preference\.scope === "selected" && !selectedItem/,
 	);
 	assertMatch(view, /vocabulary\.markdownExportSelectionRequired/);
 });
@@ -82,7 +85,7 @@ Deno.test("Markdown export exposes all reference modes through shared vocabulary
 	assertMatch(view, /value="portable">\{vocabulary\.markdownExportPortable\}/);
 	assertMatch(view, /value="obsidian">\{vocabulary\.markdownExportObsidian\}/);
 	assertMatch(
-		app,
-		/markdownExportPreference\.referenceMode === "obsidian"[\s\S]*?api\.resolveInternalReferences\(rendered\)/,
+		controller,
+		/preference\.referenceMode === "obsidian"[\s\S]*?this\.ports\.api\.resolveInternalReferences\(rendered\)/,
 	);
 });

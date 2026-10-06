@@ -538,10 +538,10 @@ Linux環境依存3件失敗で停止。同じverifyを実行するpre-commit hoo
 ## #309: browsing・Omni・Paletteの分離（積み上げPR）
 
 PR base: main `dc43dba`（#316経由で#308反映済み）。#309はPR #317上の変更で、main未反映。
-NavigationControllerはpane/hoistだけを持つ。
-OmniSearchControllerのinputは検索とquick captureで共有する唯一の文字列を更新し、
-debounce・要求世代・候補・active indexを管理する。clear/disposeはtimerと公開権限を失効させる。
-検索選択の受理、quick captureの成功は開始時の入力receiptが有効な場合だけclearする。
+NavigationControllerはpane/hoistだけを持つ。 OmniSearchControllerのinputは検索とquick
+captureで共有する唯一の文字列を更新し、 debounce・要求世代・候補・active
+indexを管理する。clear/disposeはtimerと公開権限を失効させる。 検索選択の受理、quick
+captureの成功は開始時の入力receiptが有効な場合だけclearする。
 待機中の追加入力を遅い成功で消さない。WorkControllerは作成・submittingのみ所有する。
 
 検索はquery sessionとして扱い、選択IDはsearch実行時のranking contextにだけ使う。
@@ -582,8 +582,34 @@ PR #318のmain統合では、#307〜#309のsnapshot公開・BookmarkController�
 維持しつつ、command/menuの実行lockと入力adapterへの委譲を保持する。栞解除は共通lock内で
 DB書込後にBookmarkController.reloadへ委譲し、menu/keyboardの配置削除はOutlineOperationsを使う。
 
-統合検証（main `1320e9a` ＋ #318 head `f407f13`）: Deno849件、Svelte412件、
-screen navigation/Omniブラウザ44件、型チェック、build、lint・実装行数・magic number・
-duplicate ratchet・format・`git diff --check`が成功。Biome policyテストはworktree内の
+統合検証（main `1320e9a` ＋ #318 head `f407f13`）: Deno849件、Svelte412件、 screen
+navigation/Omniブラウザ44件、型チェック、build、lint・実装行数・magic number・ duplicate
+ratchet・format・`git diff --check`が成功。Biome policyテストはworktree内の
 依存参照不足で一度失敗し、既存Biome依存への参照を補った後、単独およびDeno全体の再実行で成功。
 pre-commitのDeno/npm shim問題を避け、同等の検証を個別実行してhookを省略した。
+
+## #311: Markdown・OPML・JSONの入出力owner
+
+実装baseはmain `2994dec`（#307/#308/#309/#310を含む）。この作業branchでの実装とmain反映を区別する。
+
+- MarkdownExportControllerが設定の唯一writer、scope・参照解決・download・notice・操作ログを所有する。
+  flush後のOutline描画snapshotを既存serviceへ渡し、保存済み値とdraftの扱いを変えない。
+  Optionsは読み取り値とsetPreferenceを受け取り、設定を直接bindしない。
+- OpmlControllerとJsonBackupControllerは形式別のRPC・ファイル読込・download・失敗文言を所有する。
+  共通のFileOperationStateは各feature専用instanceとしてflush・要求世代・notice公開・disposeだけを担当する。
+  parser、ファイル形式、storage atomicityは変更しない。
+- import/restore後はAppのload portから#307のOutlineController.reloadへ接続する。
+  falseは失敗または要求失効であり、成功noticeを出さず、reload
+  ownerのerror表示とsnapshot/draft保持を維持する。
+  JSON復元はRelationTypeController.load、TreeController.reconcileRelations、reloadの順序を保つ。
+- 新操作とdisposeで旧notice/error/downloadの公開権限を失効させる。
+  失効したflush・ファイル読込の後にRPCを始めない。完了したDB書込は巻き戻さない。
+  Markdownの操作ログは従来どおりfinallyで記録し、記録失敗はwarningとして処理する。
+
+直接回帰は[入出力Controller](../../vitest/file_io_controllers.svelte.test.ts)、
+Optionsの操作・設定のremount・download・restore/reload失敗は
+[ブラウザ回帰](../../tests/ui/file-io.spec.ts)に置く。
+
+検証: `deno task verify`成功（Deno849件、Svelte436件、lint・型・build・format・各ratchet）。
+追加ブラウザ回帰3件と入出力テストの独立TypeScriptチェックも成功。
+最後のテスト型注釈修正後は対象Controller24件を再実行し成功。main反映はこの作業branchのPR統合後とする。
