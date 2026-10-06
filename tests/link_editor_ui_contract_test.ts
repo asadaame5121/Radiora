@@ -14,6 +14,9 @@ Deno.test("Link Editor exposes GUI search, type selection, and direction selecti
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/link_editor_controller.svelte.ts", import.meta.url),
 	);
+	const relationLinkController = await Deno.readTextFile(
+		new URL("../src/ui/relation_link_controller.svelte.ts", import.meta.url),
+	);
 
 	assertMatch(inspector, /<InspectorRelationTab/);
 	assertMatch(relationTab, /<LinkEditor/);
@@ -34,8 +37,8 @@ Deno.test("Link Editor exposes GUI search, type selection, and direction selecti
 	assertMatch(app, /executeCommand\("createLink", undefined, input\)/);
 	assertMatch(app, /performAddLink\(payload\.linkInput\) : openLinkEditor\(\)/);
 	assertMatch(app, /async function reverseLink\(link: OutlineLink\)/);
-	assertMatch(app, /fromEndpoint: link\.to/);
-	assertMatch(app, /toEndpoint: link\.from/);
+	assertMatch(relationLinkController, /fromEndpoint: link\.to/);
+	assertMatch(relationLinkController, /toEndpoint: link\.from/);
 });
 
 Deno.test("Link Editor does not create graph entities or access storage directly", async () => {

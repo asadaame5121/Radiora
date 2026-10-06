@@ -14,6 +14,12 @@ export interface OutlineOperationsApi {
 		afterId: string | null;
 	}): Promise<OutlineItem>;
 	deleteItem(id: string): Promise<void>;
+	createOccurrence?(input: {
+		workId: string;
+		parentId: string | null;
+		afterId: string | null;
+	}): Promise<{ id: string }>;
+	setContextualHeading?(id: string, value: string): Promise<void>;
 }
 
 export interface OutlineOperationsControllerOptions {
@@ -61,6 +67,30 @@ export class OutlineOperationsController {
 		} catch (cause) {
 			if (current()) this.options.reportError(cause);
 		}
+	};
+
+	createChildOccurrence = async (
+		selectedItem: OutlineItem | undefined,
+	): Promise<void> => {
+		if (!selectedItem || !this.options.api.createOccurrence) return;
+		try {
+			await this.options.flushAutosave(selectedItem.workId);
+		} catch (cause) {
+			this.options.reportError(cause);
+			return;
+		}
+		const created = await this.options.api.createOccurrence({
+			workId: selectedItem.workId,
+			parentId: selectedItem.parentId,
+			afterId: selectedItem.id,
+		});
+		await this.options.reload(created.id);
+	};
+
+	updateHeading = async (id: string, value: string): Promise<void> => {
+		if (!this.options.api.setContextualHeading) return;
+		await this.options.api.setContextualHeading(id, value);
+		await this.options.reload(id);
 	};
 
 	remove = async (id: string): Promise<void> => {

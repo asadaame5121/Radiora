@@ -620,3 +620,32 @@ it("does not report error when root creation fails after request expired", async
 	await controller.createRoot();
 	expect(ports.reportError).not.toHaveBeenCalled();
 });
+
+it("creates child occurrence after flushing autosave and reloads", async () => {
+	const item = createItem("parent", null, 10);
+	const { controller, ports } = fixture([item]);
+	const createOccurrence = vi.fn().mockResolvedValue({ id: "child-created" });
+	(ports.api as unknown as { createOccurrence: typeof createOccurrence }).createOccurrence =
+		createOccurrence;
+
+	await controller.createChildOccurrence(item);
+	expect(ports.flushAutosave).toHaveBeenCalledWith(item.workId);
+	expect(createOccurrence).toHaveBeenCalledWith({
+		workId: item.workId,
+		parentId: item.parentId,
+		afterId: item.id,
+	});
+	expect(ports.reload).toHaveBeenCalledWith("child-created");
+});
+
+it("updates heading and reloads", async () => {
+	const item = createItem("item-1", null, 10);
+	const { controller, ports } = fixture([item]);
+	const setContextualHeading = vi.fn().mockResolvedValue(undefined);
+	(ports.api as unknown as { setContextualHeading: typeof setContextualHeading })
+		.setContextualHeading = setContextualHeading;
+
+	await controller.updateHeading("item-1", "New Title");
+	expect(setContextualHeading).toHaveBeenCalledWith("item-1", "New Title");
+	expect(ports.reload).toHaveBeenCalledWith("item-1");
+});

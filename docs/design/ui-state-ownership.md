@@ -662,3 +662,46 @@ PR base: main `3df74b1`（PR #321反映済み）。 `LicensesController`
 - ブラウザ回帰: `tests/ui/licenses-regression.spec.ts` (13件通過)、`tests/ui/app-lifetime.spec.ts`
   (#313の2件通過)。
 - 構造受入ゲート: `tests/app_composition_acceptance_test.ts` (#313の2件通過)。
+
+## #314: App.svelteのshell・feature配線への収束（親Issue #294 完了）
+
+PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存していた feature 固有の直接 API
+操作やワークフローを各 Controller に委譲・収束させ、単一式アロー関数による port 委譲と shell
+責務のみに純化した。
+
+- **残存 API 操作の各 Controller への移譲**:
+  - `saveStartupSnapshotCache`: `StartupController.saveSnapshotCache`
+    へ移譲。起動キャッシュ保存条件と失効を所有。
+  - `createBookmark` / `deleteBookmark` / `resolveBookmark`: `BookmarkController.addBookmark` /
+    `removeBookmark` / `resolveBookmark` へ移譲。
+  - `resolveResumePosition`: `EditorController.resolveResumePosition` へ移譲。
+  - `restoreRecoverySnapshot` / `promoteRecoverySnapshot` / `setOccurrenceRevision`:
+    `HistoryController` へ移譲。
+  - `createLink` / `deleteLink` / `resolveAdvancedLink`: `RelationLinkController`
+    を新設し、リンク追加・削除・反転（`reverseLink`）および候補インスペクト（`inspectCandidate`）のワークフローを委譲。
+  - `createOccurrence` / `setContextualHeading`: `OutlineOperationsController.createChildOccurrence`
+    / `updateHeading` へ移譲。
+- **App.svelte の責務純化**:
+  - `App.svelte` 内の `api.*` 呼び出しは、Controller コンストラクタへの port
+    委譲（単一式アロー関数）および観測ログ（`recordViewChange`,
+    `recordClientOperation`）のみに制限。
+  - 直接的なビジネスロジックやワークフローのブロック文を全廃。
+- **検証**:
+  - 構造受入ゲート: `tests/app_composition_acceptance_test.ts`（#314 の 2 件を含む全 6 件通過）。
+  - 各 Controller 単体回帰:
+    - `vitest/bookmark_controller.svelte.test.ts` (7件通過)
+    - `vitest/history_controller.svelte.test.ts` (5件通過)
+    - `vitest/relation_link_controller.svelte.test.ts` (5件通過)
+    - `vitest/outline_operations_controller.svelte.test.ts` (42件通過)
+    - `vitest/startup_controller.svelte.test.ts` (28件通過)
+    - `npm run test:svelte` 全体 (485件通過)
+  - UI 契約テスト: `tests/link_editor_ui_contract_test.ts` (通過)。
+  - ブラウザ回帰: `tests/ui/app-lifetime.spec.ts`, `tests/ui/layout-regression.spec.ts`,
+    `tests/ui/licenses-regression.spec.ts` (全件通過)。
+  - 静的検証: `svelte-check` (0 errors), `biome check` (code 0), `deno fmt` (通過), `vite build`
+    (通過)。
+- **親Issue #294 の完了判定**:
+  - #298, #299, #300, #301, #302, #303, #307, #308, #309, #310, #311, #312, #313, #314
+    の一連の分割・整理が完了。
+  - UI 状態所有契約（正本・owner・writer・読み手・寿命・失効条件）が各 feature module
+    へ確立され、`App.svelte` は shell と composition root のみに収束した。

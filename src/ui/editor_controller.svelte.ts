@@ -15,6 +15,7 @@ type EditorApi = Pick<
 	RadioraBindings,
 	| "updateItemText"
 	| "saveResumePosition"
+	| "resolveResumePosition"
 	| "listInternalReferenceCompletions"
 	| "quickCapture"
 	| "createLink"
@@ -197,6 +198,7 @@ export function createEditorController(ports: EditorControllerPorts) {
 			}
 		},
 		flushResume: () => resumeAutosave.flush(),
+		resolveResumePosition: () => ports.api.resolveResumePosition(),
 		retryAutosave: () => autosave.retry(),
 		updateLocalText,
 		updateEditorSelection,

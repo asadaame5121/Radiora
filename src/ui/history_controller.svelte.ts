@@ -2,10 +2,17 @@ import type { RecoverySnapshot, Revision } from "../domain/models.ts";
 import type { WorkLineageProjection } from "../services/branch_service.ts";
 import type { RadioraBindings } from "../shared/bindings.ts";
 
-type HistoryApi = Pick<
-	RadioraBindings,
-	"listRevisions" | "listRecoverySnapshots" | "listWorkLineage"
->;
+type HistoryApi =
+	& Pick<
+		RadioraBindings,
+		"listRevisions" | "listRecoverySnapshots" | "listWorkLineage"
+	>
+	& Partial<
+		Pick<
+			RadioraBindings,
+			"restoreRecoverySnapshot" | "promoteRecoverySnapshot" | "setOccurrenceRevision"
+		>
+	>;
 
 export class HistoryController {
 	revisions = $state<Revision[]>([]);
@@ -86,6 +93,48 @@ export class HistoryController {
 			}
 		} finally {
 			if (request === this.lineageRequest) this.workLineageLoading = false;
+		}
+	}
+
+	async restoreRecoverySnapshot(
+		snapshotId: string,
+		flushAutosave: () => Promise<void>,
+		reload: () => Promise<unknown>,
+	): Promise<void> {
+		const workId = this.getSelectedWorkId();
+		const branchId = this.getSelectedBranchId();
+		if (!workId || !branchId || !this.api.restoreRecoverySnapshot) return;
+		await flushAutosave();
+		await this.api.restoreRecoverySnapshot(snapshotId, workId, branchId, "confirmed");
+		await reload();
+		await this.loadRecoverySnapshots(workId, branchId);
+	}
+
+	async promoteRecoverySnapshot(snapshotId: string): Promise<void> {
+		const workId = this.getSelectedWorkId();
+		const branchId = this.getSelectedBranchId();
+		if (!workId || !branchId || !this.api.promoteRecoverySnapshot) return;
+		await this.api.promoteRecoverySnapshot(snapshotId, workId, branchId, "confirmed");
+		await Promise.all([
+			this.loadRevisions(workId),
+			this.loadWorkLineage(workId),
+			this.loadRecoverySnapshots(workId, branchId),
+		]);
+	}
+
+	async setOccurrenceRevision(
+		selectedId: string | null,
+		revisionId: string | null,
+		flushAutosave: () => Promise<void>,
+		reload: (id?: string) => Promise<unknown>,
+	): Promise<void> {
+		if (!selectedId || !this.api.setOccurrenceRevision) return;
+		try {
+			await flushAutosave();
+			await this.api.setOccurrenceRevision(selectedId, revisionId);
+			await reload(selectedId);
+		} catch (cause) {
+			this.reportError(cause);
 		}
 	}
 }

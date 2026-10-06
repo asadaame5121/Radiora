@@ -52,3 +52,39 @@ test("cancelled scope cannot revoke newer requests and dispose suppresses delaye
 	await reload;
 	expect(s.reportError).not.toHaveBeenCalled();
 });
+
+test("addBookmark creates bookmark and reloads", async () => {
+	const createBookmark = vi.fn().mockResolvedValue(undefined);
+	const read = vi.fn().mockResolvedValue([{ id: "bm-1" } as Bookmark]);
+	const controller = new BookmarkController({ read, createBookmark, reportError: vi.fn() });
+
+	await controller.addBookmark("occ-1");
+	expect(createBookmark).toHaveBeenCalledWith("occ-1");
+	expect(read).toHaveBeenCalled();
+	expect(controller.bookmarks[0].id).toBe("bm-1");
+});
+
+test("removeBookmark deletes bookmark and reloads", async () => {
+	const deleteBookmark = vi.fn().mockResolvedValue(undefined);
+	const read = vi.fn().mockResolvedValue([]);
+	const controller = new BookmarkController({ read, deleteBookmark, reportError: vi.fn() });
+
+	await controller.removeBookmark("bm-1");
+	expect(deleteBookmark).toHaveBeenCalledWith("bm-1");
+	expect(read).toHaveBeenCalled();
+});
+
+test("resolveBookmark delegates to port", async () => {
+	const resolveBookmark = vi.fn().mockResolvedValue({
+		target: { kind: "occurrence", occurrenceId: "occ-1" },
+	});
+	const controller = new BookmarkController({
+		read: vi.fn().mockResolvedValue([]),
+		resolveBookmark,
+		reportError: vi.fn(),
+	});
+
+	const resolved = await controller.resolveBookmark("bm-1");
+	expect(resolveBookmark).toHaveBeenCalledWith("bm-1");
+	expect(resolved?.target.kind).toBe("occurrence");
+});
