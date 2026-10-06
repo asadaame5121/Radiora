@@ -41,11 +41,7 @@
 	import { KeyboardWorkspaceController } from "./keyboard_workspace_controller.svelte.ts";
 	import { LongFormController } from "./long_form_controller.svelte.ts";
 	import LicensesDialog from "./LicensesDialog.svelte";
-	import {
-		fetchLicenseIndex,
-		type LicenseEntry,
-		type LicenseIndex,
-	} from "../services/license_index.ts";
+	import { LicensesController } from "./licenses_controller.svelte.ts";
 	import { rankRecentEditedItems } from "../services/recent_edited_items.ts";
 	import {
 		createConfirmationController,
@@ -249,11 +245,9 @@
 	});
 	const confirmationController = createConfirmationController();
 	let confirmationDialog: ConfirmationDialog;
-	let licensesDialogOpen = $state(false);
-	let licenseIndex = $state<LicenseIndex | null>(null);
-	let licenseDetail = $state<{ name: string; text: string } | null>(null);
-	let licenseError = $state("");
-	let licenseLoading = $state(false);
+	const licensesController = new LicensesController({
+		errorMessage: (cause) => errorMessage(cause),
+	});
 	let inlineSemanticLinkNotice = $state("");
 	const markdownExport = new MarkdownExportController({
 		api, flush: () => editorController.flushAutosave(),
@@ -436,7 +430,7 @@
 
 	const keyboard = new KeyboardController({
 		context: () => commandContext,
-		blocked: () => startup.phase !== "ready" || commandPaletteOpen || Boolean(confirmationController.pending) || licensesDialogOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
+		blocked: () => startup.phase !== "ready" || commandPaletteOpen || Boolean(confirmationController.pending) || licensesController.isOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
 		execute: executeCommand,
 		reportError: (cause) => error = errorMessage(cause),
 	});
@@ -710,6 +704,7 @@
 			opml.dispose();
 			jsonBackup.dispose();
 			paletteFocus.dispose();
+			licensesController.dispose();
 			contextMenuController.close();
 			// biome-ignore lint/plugin/noSwallowedRejection: Teardown cannot await; the retained draft and unload warning preserve recovery.
 			void editorController.flushAutosave().catch(() => {
@@ -1258,8 +1253,8 @@
 	const paletteFocus = new PaletteFocusAdapter({ open: () => commandPaletteOpen, afterRender: tick });
 	const globalKeyboard = new GlobalKeyboardAdapter({
 		chord: keyboard,
-		blocked: () => commandPaletteOpen || Boolean(confirmationController.pending) || licensesDialogOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
-		specialBlocked: () => Boolean(confirmationController.pending) || licensesDialogOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"]:not(.command-palette__content), dialog[open]')),
+		blocked: () => commandPaletteOpen || Boolean(confirmationController.pending) || licensesController.isOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
+		specialBlocked: () => Boolean(confirmationController.pending) || licensesController.isOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"]:not(.command-palette__content), dialog[open]')),
 		help: () => { if (commandPaletteOpen) void closeCommandPalette(); openHelp(); },
 		togglePalette: () => { if (commandPaletteOpen) void closeCommandPalette(); else void openCommandPalette(); },
 		focusPane: focusWorkspacePane, treeVisible: () => viewMode === "globalLineage", bindings: shortcuts.bindings,
@@ -1346,36 +1341,6 @@
 		saveQuickCapturePreference({ ...quickCapturePreference });
 	}
 
-
-	async function openLicenses(): Promise<void> {
-		licenseError = "";
-		licenseDetail = null;
-		licenseLoading = true;
-		try {
-			licenseIndex = await fetchLicenseIndex();
-		} catch (cause) {
-			licenseError = errorMessage(cause);
-		} finally {
-			licenseLoading = false;
-		}
-		licensesDialogOpen = true;
-	}
-
-	async function selectLicense(entry: LicenseEntry): Promise<void> {
-		if (!entry.file) return;
-		licenseDetail = { name: `${entry.name} ${entry.version}`, text: "ライセンス全文を読み込んでいます…" };
-		try {
-			const response = await fetch(`/licenses/${entry.file}`);
-			licenseDetail = {
-				name: `${entry.name} ${entry.version}`,
-				text: response.ok
-					? await response.text()
-					: `ライセンス全文を読み込めませんでした (${response.status})。`,
-			};
-		} catch (cause) {
-			licenseDetail = { name: `${entry.name} ${entry.version}`, text: errorMessage(cause) };
-		}
-	}
 
 
 	async function requestConfirmation(confirmation: PendingConfirmation): Promise<void> {
@@ -1721,7 +1686,7 @@
 				onThemePreferenceChange={(preference) => themeController.setPreference(preference)}
 				onPersistQuickCapturePreference={persistQuickCapturePreference}
 				onOpenTrash={() => void openTrash()}
-				onOpenLicenses={openLicenses}
+				onOpenLicenses={() => void licensesController.open()}
 			/>
 		{:else if viewMode === "help"}
 			<InAppHelp
@@ -1898,12 +1863,4 @@
 	onConfirm={confirmPendingAction}
 	onReset={() => confirmationController.reset()}
 />
-
-<LicensesDialog
-	bind:open={licensesDialogOpen}
-	{licenseIndex}
-	{licenseDetail}
-	{licenseError}
-	{licenseLoading}
-	onSelectLicense={selectLicense}
-/>
+<LicensesDialog controller={licensesController} />

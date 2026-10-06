@@ -116,10 +116,6 @@ test("#313 selected license shows loading and HTTP failure, then another selecti
 
 for (const status of [200, 503, "network"] as const) {
 	test(`#313 stale detail ${status} cannot replace a newer selection`, async ({ page }) => {
-		test.fixme(
-			process.env.RADIORA_RUN_TDD_ACCEPTANCE !== "1",
-			"TDD acceptance for unimplemented #313; run with RADIORA_RUN_TDD_ACCEPTANCE=1",
-		);
 		const held = await holdLicense(page);
 		await openButton(page).click();
 		const dialog = licenseDialog(page);
@@ -133,10 +129,6 @@ for (const status of [200, 503, "network"] as const) {
 	});
 
 	test(`#313 detail ${status} from a closed dialog cannot leak into a reopened dialog`, async ({ page }) => {
-		test.fixme(
-			process.env.RADIORA_RUN_TDD_ACCEPTANCE !== "1",
-			"TDD acceptance for unimplemented #313; run with RADIORA_RUN_TDD_ACCEPTANCE=1",
-		);
 		const held = await holdLicense(page);
 		await openButton(page).click();
 		const dialog = licenseDialog(page);
@@ -158,10 +150,6 @@ for (const status of [200, 503, "network"] as const) {
 
 for (const status of [200, 503]) {
 	test(`#313 index loading is closable and its late ${status} cannot reopen the dialog`, async ({ page }) => {
-		test.fixme(
-			process.env.RADIORA_RUN_TDD_ACCEPTANCE !== "1",
-			"TDD acceptance for unimplemented #313; run with RADIORA_RUN_TDD_ACCEPTANCE=1",
-		);
 		const held = await holdLicense(page, "index.json");
 		await openButton(page).click();
 		const route = await held.request;
@@ -185,10 +173,6 @@ for (const status of [200, 503]) {
 
 for (const status of [200, 503]) {
 	test(`#313 old index ${status} cannot overwrite a reopened dialog's index`, async ({ page }) => {
-		test.fixme(
-			process.env.RADIORA_RUN_TDD_ACCEPTANCE !== "1",
-			"TDD acceptance for unimplemented #313; run with RADIORA_RUN_TDD_ACCEPTANCE=1",
-		);
 		const held = await holdLicense(page, "index.json");
 		await openButton(page).click();
 		const route = await held.request;

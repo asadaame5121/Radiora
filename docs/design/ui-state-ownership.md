@@ -641,3 +641,24 @@ Appは通常reloadのstartup失効・必須Tree取得を維持したままOutlin
 同featureの新exportまたはdisposeがreload待機中に旧操作を失効させた場合、旧成功のsnapshot・
 選択補正・Tree/bookmark公開・cache保存と旧失敗のerror公開を抑止する。DB書込は巻き戻さない。
 入出力Controllerの8ケースは修正前に失敗し、修正後に関連48件が成功することを確認した。
+
+## #313: ライセンスdialogの取得状態と応答失効
+
+PR base: main `3df74b1`（PR #321反映済み）。 `LicensesController`
+がライセンス表示専用の短命状態（`isOpen`, `index`, `detail`, `error`,
+`loading`）と要求世代、非同期失効を所有する。
+
+- `App.svelte` から `licensesDialogOpen` 等の5つの `$state` および `fetchLicenseIndex` / `fetch`
+  呼び出しを完全に削除。
+- `LicensesDialog` は `LicensesController`
+  を受け取り、開閉状態および取得結果の表示・選択操作を委譲。
+- `OptionsView` は `onOpenLicenses={() => void licensesController.open()}` のトリガーのみを渡す。
+- 一覧取得中にダイアログを閉じられた場合、遅延到着した一覧応答によるダイアログ再オープンや状態上書きを阻止。
+- ライセンス連続選択時、古い詳細応答（200 / 503 / ネットワーク失敗）を破棄し最新の選択内容を維持。
+- ダイアログ閉鎖時・再オープン時に前回の詳細・エラーを破棄し、古い応答が漏洩しないことを保証。
+- App破棄（unmount）時に `controller.dispose()`
+  を呼び出し、保留中の非同期コールバックや未処理エラーの発生を防止。
+- 直接単体回帰: `vitest/licenses_controller.svelte.test.ts` (11件通過)。
+- ブラウザ回帰: `tests/ui/licenses-regression.spec.ts` (13件通過)、`tests/ui/app-lifetime.spec.ts`
+  (#313の2件通過)。
+- 構造受入ゲート: `tests/app_composition_acceptance_test.ts` (#313の2件通過)。

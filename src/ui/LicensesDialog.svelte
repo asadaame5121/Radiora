@@ -1,25 +1,15 @@
 <script lang="ts">
 	import { Dialog } from "bits-ui";
-	import type { LicenseEntry, LicenseIndex } from "../services/license_index.ts";
+	import type { LicensesController } from "./licenses_controller.svelte.ts";
 
 	let {
-		open = $bindable(),
-		licenseIndex,
-		licenseDetail,
-		licenseError,
-		licenseLoading,
-		onSelectLicense,
+		controller,
 	}: {
-		open: boolean;
-		licenseIndex: LicenseIndex | null;
-		licenseDetail: { name: string; text: string } | null;
-		licenseError: string;
-		licenseLoading: boolean;
-		onSelectLicense: (entry: LicenseEntry) => void | Promise<void>;
+		controller: LicensesController;
 	} = $props();
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root open={controller.isOpen} onOpenChange={(open) => { if (!open) controller.close(); }}>
 	<Dialog.Portal>
 		<Dialog.Overlay>
 			{#snippet child({ props })}
@@ -45,30 +35,30 @@
 								{/snippet}
 							</Dialog.Description>
 						</header>
-						{#if licenseError}
-							<p class="licenses-dialog__error" role="alert">{licenseError}</p>
-						{:else if licenseIndex}
+						{#if controller.error}
+							<p class="licenses-dialog__error" role="alert">{controller.error}</p>
+						{:else if controller.index}
 							<div class="licenses-dialog__layout">
 								<ul class="licenses-dialog__list">
-									{#each [...licenseIndex.runtime, ...licenseIndex.npm] as entry}
+									{#each [...controller.index.runtime, ...controller.index.npm] as entry}
 										<li>
-											<button type="button" onclick={() => onSelectLicense(entry)}>
+											<button type="button" onclick={() => controller.select(entry)}>
 												<strong>{entry.name}</strong>
 												<small>{entry.license}{entry.version ? ` · ${entry.version}` : ""}</small>
-												</button>
+											</button>
 										</li>
 									{/each}
 								</ul>
 								<div class="licenses-dialog__detail">
-									{#if licenseDetail}
-										<h3>{licenseDetail.name}</h3>
-										<pre>{licenseDetail.text}</pre>
+									{#if controller.detail}
+										<h3>{controller.detail.name}</h3>
+										<pre>{controller.detail.text}</pre>
 									{:else}
 										<p class="licenses-dialog__hint">左の一覧からライセンスを選択してください。</p>
 									{/if}
 								</div>
 							</div>
-						{:else if licenseLoading}
+						{:else if controller.loading}
 							<p>読み込んでいます…</p>
 						{/if}
 						<div class="licenses-dialog__actions">
