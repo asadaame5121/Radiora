@@ -421,4 +421,17 @@ describe("startup cache and retry request ordering", () => {
 		expect(controller.status.phase).toBe("ready");
 		expect(onReady).toHaveBeenCalledTimes(1);
 	});
+
+	it("saves startup cache when ready and canSave returns true", () => {
+		const { controller, api } = setup();
+		const saveStartupSnapshotCache = vi.fn().mockResolvedValue(undefined);
+		controller.status = { phase: "ready", message: "Ready" };
+		controller.cacheActive = false;
+		(controller as unknown as {
+			options: { api: { saveStartupSnapshotCache: typeof saveStartupSnapshotCache } };
+		}).options.api.saveStartupSnapshotCache = saveStartupSnapshotCache;
+
+		controller.saveSnapshotCache(cache.snapshot, cache.location, () => true);
+		expect(saveStartupSnapshotCache).toHaveBeenCalledWith(cache.snapshot, cache.location);
+	});
 });

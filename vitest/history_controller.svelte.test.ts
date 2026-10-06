@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, it, test, vi } from "vitest";
 import type { RecoverySnapshot, Revision } from "../src/domain/models.ts";
 import type { WorkLineageProjection } from "../src/services/branch_service.ts";
 import { HistoryController } from "../src/ui/history_controller.svelte.ts";
@@ -133,5 +133,69 @@ describe("history controller", () => {
 			expect.objectContaining({ message: "current failure" }),
 		);
 		expect(controller.revisionsLoading).toBe(false);
+	});
+
+	it("restores recovery snapshot after flushing autosave and reloads", async () => {
+		const api = {
+			listRevisions: vi.fn().mockResolvedValue([]),
+			listRecoverySnapshots: vi.fn().mockResolvedValue([]),
+			listWorkLineage: vi.fn().mockResolvedValue(null),
+			restoreRecoverySnapshot: vi.fn().mockResolvedValue(undefined),
+		};
+		const reportError = vi.fn();
+		const controller = new HistoryController(api, () => "work-1", () => "branch-1", reportError);
+		const flush = vi.fn().mockResolvedValue(undefined);
+		const reload = vi.fn().mockResolvedValue(undefined);
+
+		await controller.restoreRecoverySnapshot("snap-1", flush, reload);
+		expect(flush).toHaveBeenCalled();
+		expect(api.restoreRecoverySnapshot).toHaveBeenCalledWith(
+			"snap-1",
+			"work-1",
+			"branch-1",
+			"confirmed",
+		);
+		expect(reload).toHaveBeenCalled();
+		expect(api.listRecoverySnapshots).toHaveBeenCalledWith("work-1", "branch-1");
+	});
+
+	it("promotes recovery snapshot and reloads revisions and lineage", async () => {
+		const api = {
+			listRevisions: vi.fn().mockResolvedValue([]),
+			listRecoverySnapshots: vi.fn().mockResolvedValue([]),
+			listWorkLineage: vi.fn().mockResolvedValue(null),
+			promoteRecoverySnapshot: vi.fn().mockResolvedValue(undefined),
+		};
+		const reportError = vi.fn();
+		const controller = new HistoryController(api, () => "work-1", () => "branch-1", reportError);
+
+		await controller.promoteRecoverySnapshot("snap-1");
+		expect(api.promoteRecoverySnapshot).toHaveBeenCalledWith(
+			"snap-1",
+			"work-1",
+			"branch-1",
+			"confirmed",
+		);
+		expect(api.listRevisions).toHaveBeenCalledWith("work-1");
+		expect(api.listWorkLineage).toHaveBeenCalledWith("work-1");
+		expect(api.listRecoverySnapshots).toHaveBeenCalledWith("work-1", "branch-1");
+	});
+
+	it("sets occurrence revision after flushing autosave", async () => {
+		const api = {
+			listRevisions: vi.fn().mockResolvedValue([]),
+			listRecoverySnapshots: vi.fn().mockResolvedValue([]),
+			listWorkLineage: vi.fn().mockResolvedValue(null),
+			setOccurrenceRevision: vi.fn().mockResolvedValue(undefined),
+		};
+		const reportError = vi.fn();
+		const controller = new HistoryController(api, () => "work-1", () => "branch-1", reportError);
+		const flush = vi.fn().mockResolvedValue(undefined);
+		const reload = vi.fn().mockResolvedValue(undefined);
+
+		await controller.setOccurrenceRevision("item-1", "rev-1", flush, reload);
+		expect(flush).toHaveBeenCalled();
+		expect(api.setOccurrenceRevision).toHaveBeenCalledWith("item-1", "rev-1");
+		expect(reload).toHaveBeenCalledWith("item-1");
 	});
 });

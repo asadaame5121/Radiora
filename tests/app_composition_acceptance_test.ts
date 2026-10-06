@@ -66,27 +66,23 @@ Deno.test("#313 App delegates license acquisition instead of fetching dialog dat
 	);
 });
 
-Deno.test({
-	name: "#314 App API connections are single-expression port delegation, not feature workflows",
-	ignore: Deno.env.get("RADIORA_RUN_TDD_ACCEPTANCE") !== "1",
-	fn: () => {
-		assertEquals(
-			collect((node) => {
-				if (
-					!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)
-				) return false;
-				if (
-					!ts.isIdentifier(node.expression.expression) || node.expression.expression.text !== "api"
-				) return false;
-				// Operation logging observes the composition root; it neither loads nor mutates feature state.
-				if (
-					["recordViewChange", "recordClientOperation"].includes(node.expression.name.text)
-				) return false;
-				return !(ts.isArrowFunction(node.parent) && node.parent.body === node);
-			}),
-			[],
-		);
-	},
+Deno.test("#314 App API connections are single-expression port delegation, not feature workflows", () => {
+	assertEquals(
+		collect((node) => {
+			if (
+				!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)
+			) return false;
+			if (
+				!ts.isIdentifier(node.expression.expression) || node.expression.expression.text !== "api"
+			) return false;
+			// Operation logging observes the composition root; it neither loads nor mutates feature state.
+			if (
+				["recordViewChange", "recordClientOperation"].includes(node.expression.name.text)
+			) return false;
+			return !(ts.isArrowFunction(node.parent) && node.parent.body === node);
+		}),
+		[],
+	);
 });
 
 Deno.test("#314 App has no format-specific file reading or download procedure", () => {

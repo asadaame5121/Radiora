@@ -1,3 +1,5 @@
+import type { OutlineSnapshot } from "../domain/models.ts";
+import type { BrowsingLocation } from "../services/browsing_navigation_state.ts";
 import type { StartupSnapshotCache } from "../services/startup_snapshot_cache.ts";
 import type { StartupStatus } from "../shared/bindings.ts";
 
@@ -5,6 +7,10 @@ export interface StartupApi {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	loadStartupSnapshotCache(): Promise<StartupSnapshotCache | null>;
+	saveStartupSnapshotCache?(
+		snapshot: OutlineSnapshot,
+		location?: BrowsingLocation,
+	): Promise<void>;
 }
 
 export interface StartupControllerOptions {
@@ -50,6 +56,25 @@ export class StartupController {
 	dispose = (): void => {
 		this.#cancelled = true;
 		this.invalidateDataLoad();
+	};
+
+	saveSnapshotCache = (
+		snapshot: OutlineSnapshot,
+		location?: BrowsingLocation,
+		canSave: () => boolean = () => true,
+	): void => {
+		if (
+			this.cacheActive ||
+			this.status.phase !== "ready" ||
+			!canSave() ||
+			!this.options.api.saveStartupSnapshotCache
+		) {
+			return;
+		}
+		// biome-ignore lint/plugin/noSwallowedRejection: Startup acceleration is optional and must not interrupt editing.
+		void this.options.api.saveStartupSnapshotCache(snapshot, location).catch(() => {
+			// Startup acceleration must not interrupt editing when the cache cannot be written.
+		});
 	};
 
 	/** Normal Outline loads revoke pending startup publication, without owning their state here. */

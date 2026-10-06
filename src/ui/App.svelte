@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatCreatedAt, formatRecentEditAt, localDateValue } from "./calendar_display.ts";
+	import { formatCreatedAt, formatRecentEditAt } from "./calendar_display.ts";
 	import { DateProjectionController } from "./date_projection_controller.svelte.ts";
 	import { TagController } from "./tag_controller.svelte.ts";
 	import { onMount, tick, untrack } from "svelte";
@@ -58,6 +58,7 @@
 	import { createCommandPaletteController } from "./command_palette_controller.svelte.ts";
 	import { createNavigationController } from "./navigation_controller.svelte.ts";
 	import { RelationTypeController } from "./relation_type_controller.svelte.ts";
+	import { RelationLinkController } from "./relation_link_controller.svelte.ts";
 	import { createWorkController } from "./work_controller.svelte.ts";
 	import type { ContextMenuItem } from "./context_menu";
 	import { createRpcAdapter } from "./rpc_adapter";
@@ -134,7 +135,13 @@
 
 	const vocabulary = useUiVocabulary();
 	const layout = new LayoutController();
-	const bookmarkController = new BookmarkController({ read: () => api.listBookmarks(), reportError: (cause) => error = errorMessage(cause) });
+	const bookmarkController = new BookmarkController({
+		read: () => api.listBookmarks(),
+		createBookmark: (id) => api.createBookmark(id),
+		deleteBookmark: (id) => api.deleteBookmark(id),
+		resolveBookmark: (id) => api.resolveBookmark(id),
+		reportError: (cause) => error = errorMessage(cause),
+	});
 	const outlineController: OutlineController = new OutlineController({
 		readOutline: () => api.listOutline(),
 		prepareBookmarks: (current) => bookmarkController.prepareRefresh(current),
@@ -299,6 +306,14 @@
 		reportError: (cause) => error = errorMessage(cause),
 	});
 	const relationTypes = new RelationTypeController(api);
+	const relationLinks = new RelationLinkController({
+		createLink: (input) => api.createLink(input),
+		deleteLink: (fromId, toId, type) => api.deleteLink(fromId, toId, type),
+		resolveAdvancedLink: (advancedInput) => api.resolveAdvancedLink(advancedInput),
+		isSymmetric: (type) => relationTypes.isSymmetric(type),
+		reload: () => load(),
+		errorMessage,
+	});
 	const jsonBackup = new JsonBackupController({
 		api, vocabulary, flush: () => editorController.flushAutosave(),
 		reload: (current) => load(undefined, current, undefined, current),
@@ -745,12 +760,11 @@
 		snapshotToCache?: OutlineSnapshot,
 		location = navigationController.browsingLocation,
 	): void {
-		// Explicit snapshots are saved API data; only the drawing snapshot may contain unsaved input.
-		if (startupCacheActive || startup.phase !== "ready" || (!snapshotToCache && editorController.hasUnsavedChanges())) return;
-		// biome-ignore lint/plugin/noSwallowedRejection: Startup acceleration is optional and must not interrupt editing.
-		void api.saveStartupSnapshotCache(snapshotToCache ?? snapshot, location).catch(() => {
-			// Startup acceleration must not interrupt editing when the cache cannot be written.
-		});
+		startupController.saveSnapshotCache(
+			snapshotToCache ?? snapshot,
+			location,
+			() => Boolean(snapshotToCache) || !editorController.hasUnsavedChanges(),
+		);
 	}
 
 	function selectOccurrence(id: string | null, afterSelection?: (current: () => boolean) => void): boolean {
@@ -945,27 +959,24 @@
 	}
 
 	async function performAddBookmark(): Promise<void> {
-		if (!selectedId) return;
-		await api.createBookmark(selectedId);
-		await bookmarkController.reload();
+		await bookmarkController.addBookmark(selectedId);
 	}
 
 	async function removeBookmark(id: string): Promise<void> {
-		await commandExecution.run(async () => {
-			await api.deleteBookmark(id);
-			await bookmarkController.reload();
-		});
+		await commandExecution.run(() => bookmarkController.removeBookmark(id));
 	}
 
 	async function openBookmark(id: string): Promise<void> {
 		const origin = screenNavigation.origin;
-		const resolved = await api.resolveBookmark(id);
-		await openNavigationTarget(resolved.target, undefined, origin);
+		const resolved = await bookmarkController.resolveBookmark(id);
+		if (resolved) {
+			await openNavigationTarget(resolved.target, undefined, origin);
+		}
 	}
 
 	async function resumeEditing(): Promise<void> {
 		const origin = screenNavigation.origin;
-		const resolved = await api.resolveResumePosition();
+		const resolved = await editorController.resolveResumePosition();
 		if (!resolved) return;
 		await openNavigationTarget(resolved.target, resolved.resolvedCaretOffset, origin);
 	}
@@ -977,42 +988,24 @@
 	}
 
 	async function restoreRecoverySnapshot(snapshotId: string): Promise<void> {
-		if (!selectedItem || !selectedBranchId) return;
-		await editorController.flushAutosave();
-		await api.restoreRecoverySnapshot(
+		await history.restoreRecoverySnapshot(
 			snapshotId,
-			selectedItem.workId,
-			selectedBranchId,
-			"confirmed",
+			() => editorController.flushAutosave(),
+			() => load(),
 		);
-		await load();
-		await history.loadRecoverySnapshots(selectedItem.workId, selectedBranchId);
 	}
 
 	async function performPromoteRecoverySnapshot(snapshotId: string): Promise<void> {
-		if (!selectedItem || !selectedBranchId) return;
-		await api.promoteRecoverySnapshot(
-			snapshotId,
-			selectedItem.workId,
-			selectedBranchId,
-			"confirmed",
-		);
-		await Promise.all([
-			history.loadRevisions(selectedItem.workId),
-			history.loadWorkLineage(selectedItem.workId),
-			history.loadRecoverySnapshots(selectedItem.workId, selectedBranchId),
-		]);
+		await history.promoteRecoverySnapshot(snapshotId);
 	}
 
 	async function setSelectedOccurrenceRevision(revisionId: string | null): Promise<void> {
-		if (!selectedId) return;
-		try {
-			await editorController.flushAutosave();
-			await api.setOccurrenceRevision(selectedId, revisionId);
-			await load(selectedId);
-		} catch (cause) {
-			error = errorMessage(cause);
-		}
+		await history.setOccurrenceRevision(
+			selectedId,
+			revisionId,
+			() => editorController.flushAutosave(),
+			(id) => load(id),
+		);
 	}
 
 	async function openSelectedRevisionComparison(): Promise<void> {
@@ -1120,13 +1113,11 @@
 	}
 
 	async function performAddLink(input: CreateLinkInput): Promise<void> {
-		await api.createLink(input);
-		await load();
+		await relationLinks.addLink(input);
 	}
 
 	async function removeLink(link: OutlineLink): Promise<void> {
-		await api.deleteLink(link.fromId, link.toId, link.type);
-		await load();
+		await relationLinks.removeLink(link);
 	}
 
 	async function createRelationTypeDefinition(input: {
@@ -1138,19 +1129,7 @@
 	}
 
 	async function reverseLink(link: OutlineLink): Promise<void> {
-		if (link.origin === "derived" || relationTypes.isSymmetric(link.type)) return;
-		await api.deleteLink(link.fromId, link.toId, link.type);
-		await api.createLink({
-			fromId: link.toId,
-			toId: link.fromId,
-			fromEndpoint: link.to,
-			toEndpoint: link.from,
-			type: link.type,
-			status: link.status,
-			origin: link.origin,
-			reason: link.reason,
-		});
-		await load();
+		await relationLinks.reverseLink(link);
 	}
 	async function openTags(): Promise<void> {
 		await screenNavigation.navigate({ view: "tags" });
@@ -1200,25 +1179,12 @@
 	}
 
 	async function duplicateSelectedOccurrence(): Promise<void> {
-		if (!selectedItem) return;
-		try {
-			await editorController.flushAutosave(selectedItem.workId);
-		} catch (cause) {
-			error = errorMessage(cause);
-			return;
-		}
-		const created = await api.createOccurrence({
-			workId: selectedItem.workId,
-			parentId: selectedItem.parentId,
-			afterId: selectedItem.id,
-		});
-		await load(created.id);
+		await outlineOperations.createChildOccurrence(selectedItem ?? undefined);
 	}
 
 	async function updateSelectedHeading(value: string): Promise<void> {
 		if (!selectedItem) return;
-		await api.setContextualHeading(selectedItem.id, value);
-		await load(selectedItem.id);
+		await outlineOperations.updateHeading(selectedItem.id, value);
 	}
 
 	async function trashSelectedWork(): Promise<void> {
@@ -1299,20 +1265,8 @@
 	}
 
 	async function inspectInlineSemanticLink(candidate: InlineSemanticLinkCandidate): Promise<void> {
-		const quote = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-		const reason = candidate.reason === undefined
-			? ""
-			: `("${candidate.reason.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}")`;
-		const advancedInput = `${quote(candidate.source)} :: ${candidate.type}${reason} :: ${quote(candidate.target)}`;
-		try {
-			const resolution = await api.resolveAdvancedLink(advancedInput);
-			layout.openInspector("relation");
-			inlineSemanticLinkNotice = resolution.source.status === "resolved" && resolution.target.status === "resolved"
-				? `候補を解決しました: ${candidate.type} · ${candidate.source} → ${candidate.target}`
-				: `未確定の候補です: ${resolution.source.reason ?? resolution.target.reason ?? "対象を選択してください。"}`;
-		} catch (cause) {
-			inlineSemanticLinkNotice = `構文を確認できませんでした: ${errorMessage(cause)}`;
-		}
+		layout.openInspector("relation");
+		inlineSemanticLinkNotice = await relationLinks.inspectCandidate(candidate);
 	}
 
 	async function requestRewriteAsNewBranch(): Promise<void> {

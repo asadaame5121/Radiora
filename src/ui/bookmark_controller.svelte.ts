@@ -1,8 +1,10 @@
-// biome-ignore-all lint/plugin/noSwallowedRejection: Only superseded, cancelled or disposed bookmark failures are discarded; active failures are rethrown or reported.
-import type { Bookmark } from "../domain/models.ts";
+import type { Bookmark, ResolvedBookmark } from "../domain/models.ts";
 
-interface BookmarkPorts {
+export interface BookmarkPorts {
 	read(): Promise<Bookmark[]>;
+	createBookmark?(id: string): Promise<unknown>;
+	deleteBookmark?(id: string): Promise<unknown>;
+	resolveBookmark?(id: string): Promise<ResolvedBookmark>;
 	reportError(cause: unknown): void;
 }
 
@@ -52,6 +54,23 @@ export class BookmarkController {
 		} catch (cause) {
 			if (request.current()) this.ports.reportError(cause);
 		}
+	}
+
+	async addBookmark(selectedId: string | null): Promise<void> {
+		if (this.disposed || !selectedId || !this.ports.createBookmark) return;
+		await this.ports.createBookmark(selectedId);
+		await this.reload();
+	}
+
+	async removeBookmark(id: string): Promise<void> {
+		if (this.disposed || !this.ports.deleteBookmark) return;
+		await this.ports.deleteBookmark(id);
+		await this.reload();
+	}
+
+	async resolveBookmark(id: string): Promise<ResolvedBookmark | undefined> {
+		if (this.disposed || !this.ports.resolveBookmark) return undefined;
+		return await this.ports.resolveBookmark(id);
 	}
 
 	dispose(): void {
