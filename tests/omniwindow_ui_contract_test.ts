@@ -89,18 +89,15 @@ Deno.test("shell keeps global navigation, contextual inspector, and dedicated fu
 });
 
 Deno.test("left and right sidebars are collapsible", () => {
-	assertMatch(app, /let navCollapsed = \$state\(initialUiLayoutPreference\.navCollapsed\)/);
+	assertMatch(app, /const navCollapsed = \$derived\(layout\.navCollapsed\)/);
 	assertMatch(app, /class="shell" class:nav-collapsed=\{navCollapsed\}/);
 	assertMatch(app, /<PrimaryNavigation/);
-	assertMatch(app, /onToggleCollapse=\{toggleNavigation\}/);
+	assertMatch(app, /onToggleCollapse=\{\(\) => layout\.toggleNavigation\(\)\}/);
 	assertMatch(navigation, /class="primary-nav" class:nav-collapsed=\{collapsed\}/);
 	assertMatch(navigation, /class="nav-collapse-toggle"/);
 	assertMatch(navigation, /aria-expanded=\{!collapsed\}/);
 	assertMatch(navigation, /onclick=\{onToggleCollapse\}/);
-	assertMatch(
-		app,
-		/saveUiLayoutPreference\(\{ navCollapsed, inspectorCollapsed, inspectorWidth \}\)/,
-	);
+	assertNotMatch(app, /saveUiLayoutPreference\(/);
 	assertMatch(styles, /\.shell\.nav-collapsed \{\s*grid-template-columns: 42px minmax\(0, 1fr\);/);
 	assertMatch(styles, /\.app-main\.inspector-collapsed > \.inspector \{\s*display: none;/);
 	assertMatch(
@@ -112,7 +109,7 @@ Deno.test("left and right sidebars are collapsible", () => {
 		/\.primary-nav\.nav-collapsed \.brand,\s*\.primary-nav\.nav-collapsed section \{\s*display: none;/,
 	);
 	assertNotMatch(inspector, /inspector-close/);
-	assertMatch(app, /inspectorCollapsed = true/);
+	assertMatch(app, /onToggleInspector=\{\(\) => inspectorLayout\.toggleInspector\(\)\}/);
 	assertMatch(topBar, /class="inspector-jump"/);
 	assertMatch(topBar, /aria-expanded=\{!inspectorCollapsed\}/);
 	assertMatch(topBar, /onclick=\{onToggleInspector\}/);
