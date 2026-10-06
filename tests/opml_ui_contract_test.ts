@@ -25,7 +25,7 @@ Deno.test("OPML UI exports UTF-8 and imports an explicitly selected file", () =>
 	);
 	assertMatch(
 		controller,
-		/import =[\s\S]*?this\.operation\.runFile\([\s\S]*?this\.ports\.api\.importOpml\(source\)[\s\S]*?await this\.ports\.reload\(\)/,
+		/import =[\s\S]*?this\.operation\.runFile\([\s\S]*?this\.ports\.api\.importOpml\(source\)[\s\S]*?await this\.ports\.reload\(current\)/,
 	);
 });
 

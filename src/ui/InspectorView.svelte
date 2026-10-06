@@ -17,7 +17,7 @@
 		type InspectorRelationTabProps,
 	} from "./InspectorRelationTab.svelte";
 
-	export type InspectorAsideMode = "overview" | "relation" | "history" | "query";
+	import type { InspectorAsideMode } from "./layout_controller.svelte.ts";
 	type InspectorTab = Exclude<InspectorAsideMode, "query">;
 	type InspectorCommands = Pick<
 		Readonly<Record<CommandId, CommandAvailability>>,
@@ -32,7 +32,7 @@
 			commands: InspectorCommands;
 			vocabulary: UiVocabulary;
 			onAsideModeChange: (mode: InspectorAsideMode) => void;
-			onElement: (element: HTMLElement | null) => void;
+			onConnectLayout: (element: HTMLElement) => () => void;
 			onStartResize: (event: PointerEvent) => void;
 			onAddBookmark: () => void;
 			onSelectOccurrence: (id: string | null) => void;
@@ -43,8 +43,8 @@
 	let inspectorElement: HTMLElement | null = null;
 
 	onMount(() => {
-		props.onElement(inspectorElement);
-		return () => props.onElement(null);
+		if (!inspectorElement) throw new Error("Inspector element was not mounted");
+		return props.onConnectLayout(inspectorElement);
 	});
 
 	const tabValue = $derived<InspectorTab>(props.asideMode === "query" ? "overview" : props.asideMode);

@@ -75,6 +75,9 @@ Deno.test("branch rewrite and link commands remain keyboard-first and confirmati
 	const rewrite = await Deno.readTextFile(
 		new URL("../src/ui/branch_rewrite_controller.ts", import.meta.url),
 	);
+	const inspectorLayout = await Deno.readTextFile(
+		new URL("../src/ui/inspector_layout_adapter.ts", import.meta.url),
+	);
 
 	assert(app.includes("createBranch: requestRewriteAsNewBranch"));
 	assert(app.includes('action: "rewrite"'));
@@ -96,8 +99,12 @@ Deno.test("branch rewrite and link commands remain keyboard-first and confirmati
 	assert(confirmation.includes('event.key === "Enter" && rewriteBranchName.trim()'));
 	assert(app.includes("createLink: (payload)"));
 	assert(app.includes("performAddLink(payload.linkInput) : openLinkEditor()"));
-	assert(app.includes('".link-editor input[type=search]"'));
-	assert(app.includes("input?.focus()"));
+	assert(app.includes("await inspectorLayout.openRelationEditor()"));
+	assert(
+		inspectorLayout.includes(
+			'element.querySelector<HTMLInputElement>(".link-editor input[type=search]")?.focus()',
+		),
+	);
 	assert(bindings.includes("rewriteAsNewBranch("));
 	assert(
 		desktop.includes("context.rewriteAsNewBranch(sourceBranchId, newBranchName, confirmation)"),

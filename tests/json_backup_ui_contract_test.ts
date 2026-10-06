@@ -31,7 +31,7 @@ Deno.test("complete JSON backup is exposed through the desktop binding", () => {
 Deno.test("JSON restore flushes pending edits and reloads only after the binding succeeds", () => {
 	assertMatch(
 		controller,
-		/restore =[\s\S]*?this\.operation\.runFile\([\s\S]*?this\.ports\.api\.restoreJsonBackup\(source\)[\s\S]*?await this\.ports\.reload\(\)/,
+		/restore =[\s\S]*?this\.operation\.runFile\([\s\S]*?this\.ports\.api\.restoreJsonBackup\(source\)[\s\S]*?await this\.ports\.reload\(current\)/,
 	);
 	assertMatch(view, /accept="\.json,application\/json"/);
 	assertMatch(`${controller}\n${view}`, /vocabulary\.jsonBackupRestore/);

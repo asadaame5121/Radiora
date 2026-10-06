@@ -8,7 +8,7 @@ import {
 	setBrowsingHoist,
 } from "../services/browsing_navigation_state.ts";
 import type { OutlineFilter } from "../services/outline_filter.ts";
-import type { InspectorAsideMode } from "./InspectorView.svelte";
+import type { InspectorAsideMode } from "./layout_controller.svelte.ts";
 import type { EditorPosition } from "./editor_return_controller.svelte.ts";
 import {
 	type ScreenDestination,

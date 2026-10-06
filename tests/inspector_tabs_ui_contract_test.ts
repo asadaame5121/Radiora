@@ -21,7 +21,7 @@ Deno.test("Inspector uses horizontal automatic Bits Tabs for the three tab scree
 	assertMatch(inspector, /<Tabs\.Content value="history">/);
 });
 
-Deno.test("Inspector forwards Bits tab props and keeps active state controlled by App", () => {
+Deno.test("Inspector forwards Bits tab props and keeps active state controlled by Layout", () => {
 	assertMatch(inspector, /<nav \{\.\.\.props\} class="aside-tabs" aria-label="詳細表示">/);
 	assertMatch(
 		inspector,
@@ -40,8 +40,10 @@ Deno.test("Inspector falls back to overview for the deprecated query mode", () =
 Deno.test("App delegates Inspector state and callbacks to the extracted View", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	assertMatch(app, /<InspectorView/);
-	assertMatch(app, /onAsideModeChange=\{\(mode\) => asideMode = mode\}/);
-	assertMatch(app, /onStartResize=\{startInspectorResize\}/);
+	assertMatch(app, /onAsideModeChange=\{\(mode\) => layout\.setAsideMode\(mode\)\}/);
+	assertMatch(app, /onStartResize=\{inspectorLayout\.startResize\}/);
+	assertMatch(app, /onConnectLayout=\{\(element\) => inspectorLayout\.connect\(element\)\}/);
+	assertMatch(inspector, /return props\.onConnectLayout\(inspectorElement\)/);
 	assertMatch(app, /onUpdateSelectedHeading=\{updateSelectedHeading\}/);
 	assertMatch(app, /onResolveEmergence=\{resolveEmergence\}/);
 	assertMatch(app, /onSelectRevision=\{setSelectedOccurrenceRevision\}/);

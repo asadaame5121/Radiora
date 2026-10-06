@@ -43,7 +43,7 @@ state自体を永続化しないという意味で、元データのDB保存と�
 | paneごとの選択・Hoist・history/index・active pane / Outline閲覧位置 | `createNavigationController`の`browsing`                         | `browseToOccurrence`、`setHoist`、`clearHoist`、`activateBrowsingPane`、`resetBrowsing`、`reconcileBrowsing`、内部`commitBrowsing` | Outline projection、breadcrumb、Viewport、復帰捕捉              | App                                | startup cacheには現在の選択/Hoistのみ。pane全体の保存なし   | 削除時に各paneの現在位置を補正。画面外選択では更新しない           |
 | Outline filter / live表示条件                                       | `OutlineDisplayController.liveFilter`（読み取りは`filter`）      | View入力・Workspace復元から`setFilter`、明示解除から`clearFilter`                                                                  | Today・Unplacedの共有filter UI、復帰捕捉                        | App                                | 保存なし                                                    | 明示filter変更/clear、Outline復帰apply                             |
 | 一時展開 / live表示例外                                             | `OutlineDisplayController.liveExpanded`（読み取りは`expanded`）  | hoistから`expand`、選択/pane/復帰から`setExpanded`、collapseから`clearExpansion`、keyboardのclearから`setExpanded([])`             | `OutlineDisplayController.visibleRows`、選択Workspace、復帰捕捉 | App                                | 保存なし。保存済み`collapsed`は別途API                      | 明示clear/collapse、対象削除の復帰補正                             |
-| Inspector表示・tab / live表示状態                                   | Appの`inspectorCollapsed` / `asideMode`                          | ユーザー操作、関係編集表示、Outline復帰apply                                                                                       | Inspector、shell、復帰捕捉                                      | App                                | collapsedのユーザー設定だけlayout preference。tabは保存なし | 明示操作、復帰時の文脈適用                                         |
+| Inspector表示・tab / live表示状態                                   | `LayoutController`のlive Inspector context                       | `setInspectorCollapsed`、`setAsideMode`、関係編集の`openInspector`、復帰用`applyInspector`                                         | Inspector、shell、復帰捕捉                                      | App                                | collapsedのユーザー設定だけlayout preference。tabは保存なし | 明示操作、復帰文脈適用。DOM接続はView unmountで失効                |
 | 原稿本文・dirty・preview・mode / 原稿入力                           | `LongFormController.state`                                       | `input`、`save`、`reset`、内部`setMode`                                                                                            | LongFormEditor、Workspace、復帰捕捉                             | App。画面移動前に保存              | `updateItemText`。mode/previewは保存なし                    | 明示破棄、保存後close。保存中の追加入力は保持                      |
 | Outline復帰文脈 / 離脱時のUI位置の写し                              | Workspace内部`OutlineScreenState.suspended`                      | `capture`→受理した離脱で`remember`、`prepare`→commitで`apply`                                                                      | Workspaceだけ                                                   | App。次の受理したOutline離脱で置換 | 保存なし                                                    | 最新snapshotで選択/Hoist/展開IDを補正。本文・DBを巻き戻さない      |
 | caret・selection方向・pane/editor scroll・focus / DOM位置           | `OutlineViewportAdapter`、明示編集復帰は`EditorReturnController` | `track`、`capture`、`restore`、`remember` / `restore`                                                                              | Outline復帰、keyboard workspace                                 | adapterはApp、実DOMはView          | resume APIはoccurrence/caretのみ。scroll等の保存なし        | 対象削除、本文短縮、新要求。DOM参照を復帰文脈に保持しない          |
@@ -80,7 +80,7 @@ state自体を永続化しないという意味で、元データのDB保存と�
 | Link editor入力 / 編集session                                             | View生成の`LinkEditorController`                                                           | `reset`、`scheduleSearch`、確定/削除/反転の操作                                          | LinkEditor                                        | View                                    | 確定LinkだけAPI                                                       | 選択Work変更でreset、unmountで`destroy`がtimer解除と検索世代更新         |
 | emergence候補・reason入力・toast / API read modelと操作session            | App生成の`createEmergenceController`                                                       | `load` / `clear`、`resolve`、`dismissToast`                                              | 候補UI、Toast                                     | App                                     | 候補解決だけAPI。toastは保存なし                                      | 選択変更・新取得・clearで取得世代更新。汎用storeへ移さない               |
 | theme / ユーザー設定                                                      | `createThemeController`                                                                    | `setPreference`だけ                                                                      | ThemeSwitcher、document                           | App                                     | `radiora.themePreference`                                             | 明示変更。`init` cleanupでsystem theme listener解除                      |
-| layout preference / ユーザー設定                                          | 現状Appのnav/collapsed/width、writerは`persistUiLayoutPreference`                          | toggle、Options callback、resize終了                                                     | shell、Options、Inspector                         | App＋再起動                             | `radiora.uiLayoutPreference`                                          | 不正保存値は検証/fallback。復帰文脈適用は永続化の権限を持たない          |
+| layout preference / ユーザー設定                                          | `LayoutController.preference`、writerは内部`persist`一箇所                                 | toggle、Options callback、resize終了。復帰apply・関係編集openはliveだけ                  | shell、Options、Inspector                         | App＋再起動                             | `radiora.uiLayoutPreference`                                          | 不正保存値は検証/fallback。未完了resizeはView unmountで取消              |
 | export / quick capture preference / ユーザー設定                          | Appの`markdownExportPreference` / `quickCapturePreference`                                 | `persistMarkdownExportPreference` / `persistQuickCapturePreference`だけ                  | Options、export、Work作成                         | App＋再起動                             | `radiora.markdownExportPreference` / `radiora.quickCapturePreference` | 明示設定変更、不正値fallback。入力本文やnoticeは含めない                 |
 | startup phase/cache active/data loaded / 起動状態                         | 現状App、#300で既存StartupControllerへ移行                                                 | poll、retry、cache restore、`loadStartupData`                                            | StartupView/StartupCacheStatus、操作blocking      | Appの起動session                        | phase自体は保存なし。cacheは専用API                                   | 正式load成功、retryで前session失効、dispose                              |
 | bookmarks / API read model                                                | 現状Appの`bookmarks`                                                                       | `load`、add/remove後の再読込、WorkControllerのreloadBookmarks port                       | TopBar/Inspector/menu                             | App                                     | bookmark API。配列自身の保存なし                                      | mutation後再読込。現在はreload全体の世代保護なし                         |
@@ -307,12 +307,12 @@ Inspectorの永続ユーザー設定とOutline復帰中のcollapsedは値の用�
 `OutlineScreenState.apply`やQuery表示の一時openは保存しない。tabは永続化しない。
 後のwidth/nav変更でも一時collapsedを設定へ混入させず、最後の明示ユーザー設定を使う。
 
-現状はrestore portがcollapsedを直接代入し、保存は`persistUiLayoutPreference`で live
-nav/collapsed/widthをまとめるため、その後のresize/nav保存に復帰値が混入し得る。
-恒久設定とlive表示値の分離はLayout ownerの後続作業（#294）で実現する。 `asideMode`はView
-callbackと関係編集/Queryで変わるが、Outline文脈の復元とは別の明示操作。
-この差を「全layout変化を保存するeffect」で解消しない。 なおQueryへのdestination/aside
-mode互換値は残るが、現行Inspectorは`query`をoverviewへ表示補正する。
+#312のローカル実装では`LayoutController`が永続設定とlive Inspector contextを分離する。
+復帰portは`applyInspector`へ、一時的な関係編集openは`openInspector`へ接続し、設定を書かない。
+Optionsのcollapsedは永続設定を表示し、shellと復帰捕捉はlive表示を読む。
+`InspectorLayoutAdapter`はViewの接続cleanupでresize listenerを解除し、未完了幅を戻す。
+pointerup/cancelだけ幅を保存する。描画後のfocus/scrollは要求番号、Inspector revision、
+選択receipt、画面originと有効なView接続を再確認する。Query互換値はoverviewへ表示補正する。
 [Query非推奨化](query-deprecation.md)に従い、Query/検索aliasのlive ownerをAppへ再接続しない。
 
 ## 非同期の前提・取消・cleanup
@@ -587,6 +587,27 @@ navigation/Omniブラウザ44件、型チェック、build、lint・実装行数
 ratchet・format・`git diff --check`が成功。Biome policyテストはworktree内の
 依存参照不足で一度失敗し、既存Biome依存への参照を補った後、単独およびDeno全体の再実行で成功。
 pre-commitのDeno/npm shim問題を避け、同等の検証を個別実行してhookを省略した。
+
+## #312: Layout設定とInspector View寿命（ローカル実装）
+
+作業開始HEADは `3ae52772ca43f1180d8601f5aa16191bca935caf`。PR baseはmain
+`2994decae96e95be3a4fb6068935d096072a450f`。
+手元の`origin/main`（`2994decae96e95be3a4fb6068935d096072a450f`）には
+`LayoutController`/`InspectorLayoutAdapter`がなく、今回の完了はローカル実装・検証を指す。
+
+- nav/collapsed/width設定writerをLayoutへ移し、asideMode/live collapsedも同ownerへ集約した。 Tree
+  projection/themeは既存ownerに残し、設定保存用のeffectを追加していない。
+- Appは値・操作の配線だけを持つ。Inspector Viewのmountがadapter接続、
+  unmountがgesture取消とDOM要求失効を行う。App破棄でもadapterをdisposeする。
+- 回帰は復帰値の保存混入、関係編集の非永続化、pointerup/cancel・異なるpointer、
+  resize中unmount、狭幅のscroll/focus、旧DOM要求の失効を確認する。
+- #313/#314、#292のOptions情報配置・文言、#294の残責務は今回の完了に含めない。
+
+PR #321の競合・CI修正ではmain `59166f4`（PR #320反映済み）を統合し、Layoutのownerと file I/O
+Controller・reload receiptの配線を保持した。#312自体はこのPRのmain統合前である。
+未実装の#313/#314向け先行TDD受入テストはassertionを保持し、既知の失敗ケースだけを
+通常CIではfixme/ignoreにする。`RADIORA_RUN_TDD_ACCEPTANCE=1`で元のredテストを実行できる。
+対象Issueの実装時にこの保留を解除する。#312と既存の正常系・画面復帰回帰は通常CIで検証する。
 
 ## #311: Markdown・OPML・JSONの入出力owner
 
