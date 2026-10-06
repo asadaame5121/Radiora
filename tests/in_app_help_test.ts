@@ -18,7 +18,11 @@ Deno.test("in-app help is a dedicated, reachable and scannable page", async () =
 	assert(app.includes('viewMode === "help"'));
 	assert(app.includes("InAppHelp"));
 	assert(app.includes("function openHelp()"));
-	assert(app.includes('event.key === "F1"'));
+	const keyboard = await Deno.readTextFile(
+		new URL("../src/ui/global_keyboard_adapter.ts", import.meta.url),
+	);
+	assert(keyboard.includes('event.key === "F1"'));
+	assert(app.includes("help: () =>"));
 
 	// Semantic layout and headings
 	assert(help.includes('aria-labelledby="help-title"'));

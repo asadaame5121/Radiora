@@ -38,7 +38,7 @@
 	import IconButton from "./primitives/IconButton.svelte";
 	import CommandPaletteDialog from "./CommandPaletteDialog.svelte";
 	import ShortcutNavigation from "./ShortcutNavigation.svelte";
-	import { KeyboardController, focusWorkspacePane, IME_PROCESS_KEY_CODE } from "./keyboard_controller.svelte.ts";
+	import { KeyboardController, focusWorkspacePane } from "./keyboard_controller.svelte.ts";
 	import { KeyboardWorkspaceController } from "./keyboard_workspace_controller.svelte.ts";
 	import { LongFormController } from "./long_form_controller.svelte.ts";
 	import LicensesDialog from "./LicensesDialog.svelte";
@@ -106,9 +106,6 @@
 	import {
 		COMMAND_DEFINITIONS,
 		commandAvailability,
-		dispatchCommand,
-		isEditableTarget,
-		shortcutForKeyboardEvent,
 		validateShortcuts,
 		type CommandContext,
 		type CommandId,
@@ -141,15 +138,13 @@
 	import { OutlineDisplayController } from "./outline_display_controller.svelte.ts";
 	import { OutlineFocusAdapter } from "./outline_focus_adapter.ts";
 
+	import { CommandExecutionController } from "./command_execution_controller.ts";
+	import { GlobalKeyboardAdapter } from "./global_keyboard_adapter.ts";
+	import { PaletteFocusAdapter } from "./palette_focus_adapter.ts";
+	import { OccurrenceContextMenuController } from "./occurrence_context_menu_controller.svelte.ts";
+
 	const api = createRpcAdapter<RadioraBindings>();
 
-	type OccurrenceContextMenuState = {
-		targetId: string;
-		source: "outline" | "tree";
-		x: number;
-		y: number;
-		triggerElement: HTMLElement | SVGElement | null;
-	};
 
 	const vocabulary = useUiVocabulary();
 	const bookmarkController = new BookmarkController({ read: () => api.listBookmarks(), reportError: (cause) => error = errorMessage(cause) });
@@ -268,7 +263,7 @@
 	let licenseDetail = $state<{ name: string; text: string } | null>(null);
 	let licenseError = $state("");
 	let licenseLoading = $state(false);
-	let commandPaletteRestoreFocus: HTMLElement | null = null;
+
 	let inspectorElement = $state<HTMLElement | null>(null);
 	let inlineSemanticLinkNotice = $state("");
 	let markdownExportNotice = $state("");
@@ -280,7 +275,24 @@
 	let inspectorWidth = $state(initialUiLayoutPreference.inspectorWidth);
 	let inspectorCollapsed = $state(initialUiLayoutPreference.inspectorCollapsed);
 	let navCollapsed = $state(initialUiLayoutPreference.navCollapsed);
-	let occurrenceContextMenu = $state<OccurrenceContextMenuState | null>(null);
+	const contextMenuController = new OccurrenceContextMenuController({
+		exists: (id) => itemById.has(id), select: (id) => selectOccurrence(id), selected: () => selectedId,
+		execute: (id) => executeCommand(id),
+		remove: (id) => outlineOperations.remove(id),
+		navigate: (id, kind) => screenNavigation.navigate({
+			view: kind === "work-lineage" ? "workLineage" : "outline", occurrenceId: id,
+			...(kind === "zoom" ? { hoistId: id } : kind === "open-outline" ? { expandedIds: ancestorBreadcrumb(snapshot, id).map((item) => item.id) } : {}),
+		}),
+		run: (action) => commandExecution.run(action),
+		actions: {
+			bookmark: async (id) => { const bookmark = bookmarkController.bookmarks.find((entry) => entry.occurrenceId === id); if (bookmark) await removeBookmark(bookmark.id); else await executeCommand("addBookmark"); },
+			duplicate: () => commandExecution.run(duplicateSelectedOccurrence),
+			"revision-comparison": () => commandExecution.run(openSelectedRevisionComparison),
+			"export-selected": (id) => commandExecution.execute("exportMarkdown", { exportOccurrenceId: id }),
+			"trash-work": () => commandExecution.run(trashSelectedWork),
+		},
+	});
+	const occurrenceContextMenu = $derived(contextMenuController.state);
 	const tree = new TreeController({
 		listGlobalLineage: (filter) => api.listGlobalLineage(filter),
 		selectedWorkId: () => selectedItem?.workId ?? null,
@@ -667,74 +679,12 @@
 				});
 			}
 		};
-		const handleGlobalShortcut = (event: KeyboardEvent) => {
-			if (keyboard.handle(event)) return;
-			if (event.isComposing || event.keyCode === IME_PROCESS_KEY_CODE) return;
-			const openHelpPanel = () => {
-				event.preventDefault();
-				if (commandPaletteOpen) void closeCommandPalette();
-				openHelp();
-			};
-			if (
-				event.key === "F1" &&
-				!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey
-			) {
-				openHelpPanel();
-				return;
-			}
-			if (
-				event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey &&
-				(event.key === "/" || event.key === "?")
-			) {
-				openHelpPanel();
-				return;
-			}
-			if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLocaleLowerCase() === "k") {
-				event.preventDefault();
-				event.stopImmediatePropagation();
-				keyboardWorkspace.remember();
-				if (commandPaletteOpen) void closeCommandPalette();
-				else void openCommandPalette();
-				return;
-			}
-			if (event.defaultPrevented) return;
-			if (commandPaletteOpen || confirmationController.pending || licensesDialogOpen || occurrenceContextMenu || document.querySelector('[role="dialog"], dialog[open]')) return;
-			if (event.key === "F6" && !event.ctrlKey && !event.altKey && !event.metaKey) {
-				event.preventDefault();
-				focusWorkspacePane(event.shiftKey);
-				return;
-			}
-			if (
-				event.key === " " &&
-				!event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey &&
-				!isEditableTarget(event.target) &&
-				!(event.target instanceof HTMLElement && event.target.closest("button, a, [role='button']"))
-			) {
-				event.preventDefault();
-				void executeCommand(viewMode === "globalLineage" ? "showOutline" : "showTree");
-				return;
-			}
-			const shortcut = shortcutForKeyboardEvent(event);
-			const binding = shortcut === "Alt+." ? { commandId: "hoist" as const }
-				: shortcuts.bindings.find((candidate) => candidate.shortcut === shortcut);
-			if (!binding) return;
-			event.preventDefault();
-			event.stopImmediatePropagation();
-			if (event.repeat) return;
-			void executeCommand(binding.commandId);
-		};
-		const cancelChordOutside = (event: PointerEvent) => {
-			if (keyboard.open && !(event.target instanceof Element && event.target.closest("[data-shortcut-navigation]"))) keyboard.cancel(false);
-		};
-		const cancelChordOnBlur = () => keyboard.cancel(false);
-		window.addEventListener("pointerdown", cancelChordOutside, true);
-		window.addEventListener("blur", cancelChordOnBlur);
-		window.addEventListener("compositionstart", cancelChordOnBlur, true);
+		const cleanupKeyboard = globalKeyboard.connect();
 		window.addEventListener("beforeunload", warnAboutUnsavedChanges);
 		document.addEventListener("visibilitychange", flushWhenHidden);
 		// Capture before editor libraries so Ctrl+K cannot be consumed as a
 		// Markdown link-formatting shortcut while the textarea has focus.
-		window.addEventListener("keydown", handleGlobalShortcut, true);
+
 		void startupController.start();
 		return () => {
 			startupController.dispose();
@@ -748,10 +698,10 @@
 			persistStartupSnapshotCache();
 			window.removeEventListener("beforeunload", warnAboutUnsavedChanges);
 			document.removeEventListener("visibilitychange", flushWhenHidden);
-			window.removeEventListener("keydown", handleGlobalShortcut, true);
-			window.removeEventListener("pointerdown", cancelChordOutside, true);
-			window.removeEventListener("blur", cancelChordOnBlur);
-			window.removeEventListener("compositionstart", cancelChordOnBlur, true);
+			cleanupKeyboard();
+			commandExecution.dispose();
+			paletteFocus.dispose();
+			contextMenuController.close();
 			// biome-ignore lint/plugin/noSwallowedRejection: Teardown cannot await; the retained draft and unload warning preserve recovery.
 			void editorController.flushAutosave().catch(() => {
 				// beforeunload already warns while an unsaved draft exists.
@@ -818,83 +768,9 @@
 		selectOccurrence(null, releaseEditorFocus);
 	}
 
-	function openOccurrenceContextMenu(
-		id: string,
-		source: "outline" | "tree",
-		event: MouseEvent | KeyboardEvent,
-	): void {
-		if (!itemById.has(id)) return;
-		if (source === "outline" && isEditableTarget(event.target)) return;
-		event.preventDefault();
-		if (!selectOccurrence(id)) return;
-		const triggerElement = event.currentTarget instanceof HTMLElement || event.currentTarget instanceof SVGElement
-			? event.currentTarget
-			: null;
-		const rect = triggerElement?.getBoundingClientRect();
-		occurrenceContextMenu = {
-			targetId: id,
-			source,
-			x: event instanceof MouseEvent ? event.clientX : rect?.left ?? 8,
-			y: event instanceof MouseEvent ? event.clientY : rect?.bottom ?? 8,
-			triggerElement,
-		};
-	}
-
-	function handleOccurrenceContextMenuKeydown(
-		id: string,
-		source: "outline" | "tree",
-		event: KeyboardEvent,
-	): void {
-		if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
-		openOccurrenceContextMenu(id, source, event);
-	}
-
-	async function executeOccurrenceContextMenuAction(id: string): Promise<void> {
-		const targetId = occurrenceContextMenu?.targetId ?? selectedId;
-		if (!targetId || !itemById.has(targetId)) return;
-		if (id === "open-outline") {
-			openTreeOccurrence(targetId);
-			return;
-		}
-		if (id === "zoom" || id === "work-lineage") {
-			await screenNavigation.navigate({ view: id === "zoom" ? "outline" : "workLineage", occurrenceId: targetId, ...(id === "zoom" ? { hoistId: targetId } : {}) });
-			return;
-		}
-		// Opening the menu already accepted its selection; ignore commands from a stale menu.
-		if (selectedId !== targetId) return;
-		switch (id) {
-			case "long-form":
-				await executeCommand("startLongFormEditing");
-				break;
-			case "bookmark": {
-				const bookmark = bookmarkController.bookmarks.find((candidate) => candidate.occurrenceId === targetId);
-				if (bookmark) await removeBookmark(bookmark.id);
-				else await executeCommand("addBookmark");
-				break;
-			}
-			case "duplicate":
-				await duplicateSelectedOccurrence();
-				break;
-			case "create-link":
-				await executeCommand("createLink");
-				break;
-			case "create-branch":
-				await executeCommand("createBranch");
-				break;
-			case "revision-comparison":
-				openSelectedRevisionComparison();
-				break;
-			case "export-selected":
-				await performMarkdownExport(targetId);
-				break;
-			case "remove-occurrence":
-				await outlineOperations.remove(targetId);
-				break;
-			case "trash-work":
-				await trashSelectedWork();
-				break;
-		}
-	}
+	const openOccurrenceContextMenu = (id: string, source: "outline" | "tree", event: MouseEvent | KeyboardEvent): void => contextMenuController.open(id, source, event);
+	const handleOccurrenceContextMenuKeydown = (id: string, source: "outline" | "tree", event: KeyboardEvent): void => contextMenuController.keydown(id, source, event);
+	const executeOccurrenceContextMenuAction = contextMenuController.execute;
 
 	function openTreeOccurrence(id: string): void {
 		if (!itemById.has(id)) return;
@@ -1128,8 +1004,10 @@
 	}
 
 	async function removeBookmark(id: string): Promise<void> {
-		await api.deleteBookmark(id);
-		await bookmarkController.reload();
+		await commandExecution.run(async () => {
+			await api.deleteBookmark(id);
+			await bookmarkController.reload();
+		});
 	}
 
 	async function openBookmark(id: string): Promise<void> {
@@ -1190,8 +1068,8 @@
 		}
 	}
 
-	function openSelectedRevisionComparison(): void {
-		void comparison.openRevision(
+	async function openSelectedRevisionComparison(): Promise<void> {
+		await comparison.openRevision(
 			selectedItem?.revisionSelector.mode === "pinned"
 				? selectedItem.revisionSelector.revisionId
 				: "",
@@ -1404,70 +1282,48 @@
 	const openTrash = workController.openTrash;
 	const restoreTrash = workController.restoreTrash;
 
-	// ponytail: serialize commands globally; split per feature only if concurrent commands become necessary.
-	let commandExecuting = false;
-	async function executeCommand(
-		id: CommandId,
-		snapshotId?: string,
-		linkInput?: CreateLinkInput,
-	): Promise<void> {
-		if (commandExecuting) return;
-		commandExecuting = true;
-		try {
-		const executionContext: CommandContext = snapshotId
-			? { ...commandContext, hasSelectedRecoverySnapshot: true }
-			: commandContext;
-		const result = await dispatchCommand(id, executionContext, async (commandId) => {
-			switch (commandId) {
-				case "quickCapture": await performQuickCapture(); break;
-				case "hoist": hoistSelected(); break;
-				case "clearHoist": clearHoist(); break;
-				case "exportMarkdown": await performMarkdownExport(); break;
-				case "addBookmark": await performAddBookmark(); break;
-				case "createLink":
-					if (linkInput) await performAddLink(linkInput);
-					else await openLinkEditor();
-					break;
-			case "saveRevision": if (snapshotId) await performPromoteRecoverySnapshot(snapshotId); break;
-				case "createBranch": await requestRewriteAsNewBranch(); break;
-				case "startLongFormEditing": await keyboardWorkspace.openLongForm(); break;
-				case "showOutline": await keyboardWorkspace.openOutline(); break;
-				case "showTree": await keyboardWorkspace.openTree(); break;
-				case "goBack": await screenNavigation.goBack(); break;
-				case "returnToEditor": await keyboardWorkspace.returnToEditor(); break;
-				case "focusSearch":
-				case "focusQuickCapture": keyboardWorkspace.focusSearch(); break;
-				case "toggleSidebar": toggleNavigation(); break;
-				case "collapseAll": await keyboardWorkspace.setAllCollapsed(true); break;
-				case "expandAll": await keyboardWorkspace.setAllCollapsed(false); break;
-				case "toggleCollapsed": {
-					const row = visibleRows.find((entry) => entry.item.id === selectedId);
-					if (row) await toggle(row);
-					break;
-				}
-				case "zoomOut": await keyboardWorkspace.zoomOut(); break;
-				case "removeOccurrence": if (selectedId) await outlineOperations.remove(selectedId); break;
-			}
-		});
-		if (!result.executed && result.reason) error = result.reason;
-		} catch (cause) { error = errorMessage(cause); }
-		finally { commandExecuting = false; }
+	const commandExecution = new CommandExecutionController({
+		context: () => commandContext,
+		reportError: (cause) => error = errorMessage(cause),
+		reportUnavailable: (reason) => error = reason,
+		operations: {
+			quickCapture: performQuickCapture, hoist: hoistSelected, clearHoist,
+			exportMarkdown: (payload) => performMarkdownExport(payload.exportOccurrenceId), addBookmark: performAddBookmark,
+			createLink: (payload) => payload.linkInput ? performAddLink(payload.linkInput) : openLinkEditor(),
+			saveRevision: async (payload) => { if (payload.snapshotId) await performPromoteRecoverySnapshot(payload.snapshotId); },
+			createBranch: requestRewriteAsNewBranch,
+			startLongFormEditing: () => keyboardWorkspace.openLongForm(), showOutline: () => keyboardWorkspace.openOutline(),
+			showTree: () => keyboardWorkspace.openTree(), goBack: () => screenNavigation.goBack(), returnToEditor: () => keyboardWorkspace.returnToEditor(),
+			focusSearch: () => keyboardWorkspace.focusSearch(), focusQuickCapture: () => keyboardWorkspace.focusSearch(),
+			toggleSidebar: toggleNavigation, collapseAll: () => keyboardWorkspace.setAllCollapsed(true), expandAll: () => keyboardWorkspace.setAllCollapsed(false),
+			toggleCollapsed: async () => { const row = visibleRows.find((entry) => entry.item.id === selectedId); if (row) await toggle(row); },
+			zoomOut: () => keyboardWorkspace.zoomOut(), removeOccurrence: async () => { if (selectedId) await outlineOperations.remove(selectedId); },
+		},
+	});
+	function executeCommand(id: CommandId, snapshotId?: string, linkInput?: CreateLinkInput): Promise<void> {
+		return commandExecution.execute(id, { snapshotId, linkInput });
 	}
+	const paletteFocus = new PaletteFocusAdapter({ open: () => commandPaletteOpen, afterRender: tick });
+	const globalKeyboard = new GlobalKeyboardAdapter({
+		chord: keyboard,
+		blocked: () => commandPaletteOpen || Boolean(confirmationController.pending) || licensesDialogOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
+		specialBlocked: () => Boolean(confirmationController.pending) || licensesDialogOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"]:not(.command-palette__content), dialog[open]')),
+		help: () => { if (commandPaletteOpen) void closeCommandPalette(); openHelp(); },
+		togglePalette: () => { if (commandPaletteOpen) void closeCommandPalette(); else void openCommandPalette(); },
+		focusPane: focusWorkspacePane, treeVisible: () => viewMode === "globalLineage", bindings: shortcuts.bindings,
+		execute: executeCommand, reportError: (cause) => error = errorMessage(cause),
+	});
 
 	async function openCommandPalette(): Promise<void> {
 		keyboard.cancel();
 		keyboardWorkspace.remember();
-		commandPaletteRestoreFocus = document.activeElement instanceof HTMLElement
-			? document.activeElement
-			: null;
+		paletteFocus.remember();
 		paletteController.openCommandPalette();
 	}
 
 	async function closeCommandPalette(): Promise<void> {
 		paletteController.closeCommandPalette();
-		await tick();
-		commandPaletteRestoreFocus?.focus();
-		commandPaletteRestoreFocus = null;
+		await paletteFocus.restore();
 	}
 
 	async function executeCommandPaletteItem(command: CommandPaletteItem): Promise<void> {
@@ -1785,7 +1641,7 @@
 		y={occurrenceContextMenu.y}
 		triggerElement={occurrenceContextMenu.triggerElement}
 		onSelect={(id) => void executeOccurrenceContextMenuAction(id)}
-		onClose={() => (occurrenceContextMenu = null)}
+		onClose={contextMenuController.close}
 	/>
 {/if}
 

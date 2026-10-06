@@ -23,7 +23,10 @@ Deno.test("Markdown export flushes edits, renders the active snapshot, and downl
 		/document\.body\.append\(anchor\);[\s\S]*?anchor\.click\(\);[\s\S]*?anchor\.remove\(\);/,
 	);
 	assertMatch(download, /setTimeout\(\(\) => URL\.revokeObjectURL\(url\), 0\)/);
-	assertMatch(app, /case "exportMarkdown": await performMarkdownExport\(\)/);
+	assertMatch(
+		app,
+		/exportMarkdown: \(payload\) => performMarkdownExport\(payload\.exportOccurrenceId\)/,
+	);
 });
 
 Deno.test("Markdown export delegates its pending-edit barrier to the editor controller", () => {

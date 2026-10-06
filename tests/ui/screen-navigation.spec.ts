@@ -840,3 +840,108 @@ test("a direct selection save failure keeps the draft and allows guarded retry",
 	await expect(dialog).toHaveCount(0);
 	await expect(target).toHaveAttribute("aria-selected", "true");
 });
+
+for (const source of ["outline", "tree"] as const) {
+	test(`${source} context menu removes its occurrence and refreshes the current screen`, async ({ page }) => {
+		let remaining = [...items];
+		const deleted: string[] = [];
+		await page.route("**/api/rpc/listOutline", (route) =>
+			route.fulfill({
+				json: { result: { items: remaining, links: [], knots: [], stashItemIds: [] } },
+			}));
+		await page.route("**/api/rpc/listGlobalLineage", (route) =>
+			route.fulfill({
+				json: {
+					result: {
+						snapshot: { items: remaining, links: [], knots: [], stashItemIds: [] },
+						promotedBranches: [],
+						totalWorkCount: remaining.length,
+						filteredWorkCount: remaining.length,
+					},
+				},
+			}));
+		await page.route("**/api/rpc/deleteItem", (route) => {
+			const id: string = route.request().postDataJSON().args[0];
+			deleted.push(id);
+			remaining = remaining.filter((item) => item.id !== id);
+			return route.fulfill({ json: { result: null } });
+		});
+		await page.goto("/");
+		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
+		if (source === "tree") {
+			await page.getByRole("button", { name: "ツリー", exact: true }).click();
+			const node = page.locator(".tree-node").nth(1);
+			await node.focus();
+			await node.press("Enter");
+			await node.press("Shift+F10");
+		} else {
+			const row = page.getByRole("treeitem").filter({ hasText: "mock-7 editable text" });
+			await row.focus();
+			await row.press("Shift+F10");
+		}
+		const remove = page.getByRole("menuitem", { name: /この.*を外す/ });
+		await expect(remove).toBeEnabled();
+		await remove.click();
+		await expect.poll(() => deleted).toEqual(["mock-7"]);
+		if (source === "tree") {
+			await expect(page.getByRole("group", { name: "思索の系統樹" })).toBeVisible();
+			await expect(page.locator(".tree-node")).toHaveCount(1);
+			await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
+		}
+		await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]')).toHaveCount(
+			0,
+		);
+		await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]')).toBeVisible();
+	});
+}
+test("bookmark removal shares the menu/button lock and reports failure before retry", async ({ page }) => {
+	let bookmarks = [{
+		id: "bookmark-1",
+		workId: "mock-7",
+		occurrenceId: "mock-7",
+		createdAt: items[0].createdAt,
+	}];
+	let deletions = 0;
+	let release!: () => void;
+	const pending = new Promise<void>((resolve) => release = resolve);
+	const errors: string[] = [];
+	page.on("pageerror", (error) => errors.push(error.message));
+	await page.route(
+		"**/api/rpc/listBookmarks",
+		(route) => route.fulfill({ json: { result: bookmarks } }),
+	);
+	await page.route("**/api/rpc/deleteBookmark", async (route) => {
+		deletions++;
+		if (deletions === 1) {
+			await pending;
+			await route.fulfill({ status: 503, json: { message: "栞の削除失敗" } });
+		} else {
+			bookmarks = [];
+			await route.fulfill({ json: { result: null } });
+		}
+	});
+	try {
+		await page.goto("/");
+		const row = page.getByRole("treeitem").filter({ hasText: "mock-7 editable text" });
+		await row.focus();
+		await row.press("Shift+F10");
+		await page.getByRole("menuitem", { name: "栞を解除", exact: true }).click();
+		await expect(page.getByRole("menu")).toHaveCount(0);
+		await expect.poll(() => deletions).toBe(1);
+		const remove = page.getByRole("button", { name: "栞を削除", exact: true });
+		await remove.evaluate((element: HTMLButtonElement) => {
+			element.click();
+			element.click();
+		});
+		await expect(remove).toBeVisible();
+		expect(deletions).toBe(1);
+		release();
+		await expect(page.locator(".error")).toContainText("栞の削除失敗");
+		await remove.click();
+		await expect(remove).toHaveCount(0);
+		expect(deletions).toBe(2);
+		expect(errors).toEqual([]);
+	} finally {
+		release();
+	}
+});

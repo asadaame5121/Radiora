@@ -3,13 +3,19 @@ import { assert } from "jsr:@std/assert@1";
 Deno.test("App routes command buttons and global shortcuts through the command service", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	assert(app.includes("commandAvailability(commandContext)"));
-	assert(app.includes("dispatchCommand(id, executionContext"));
-	assert(app.includes("isEditableTarget(event.target)"));
+	const execution = await Deno.readTextFile(
+		new URL("../src/ui/command_execution_controller.ts", import.meta.url),
+	);
+	const adapter = await Deno.readTextFile(
+		new URL("../src/ui/global_keyboard_adapter.ts", import.meta.url),
+	);
+	assert(execution.includes("dispatchCommand(id, context"));
+	assert(adapter.includes("isEditableTarget(event.target)"));
 	assert(!app.includes('event.shiftKey && event.key.toLocaleLowerCase() === "l"'));
-	assert(app.includes("keyboard.handle(event)"));
+	assert(adapter.includes("this.ports.chord.handle(event)"));
 	assert(app.includes("validateShortcuts(COMMAND_DEFINITIONS"));
-	assert(app.includes('window.addEventListener("keydown", handleGlobalShortcut, true)'));
-	assert(app.includes('window.removeEventListener("keydown", handleGlobalShortcut, true)'));
+	assert(adapter.includes('target.addEventListener("keydown", this.handle, true)'));
+	assert(adapter.includes('target.removeEventListener("keydown", this.handle, true)'));
 	for (
 		const id of [
 			"quickCapture",
@@ -29,12 +35,18 @@ Deno.test("command palette projects command service state and guards disabled ex
 		new URL("../src/ui/CommandPaletteDialog.svelte", import.meta.url),
 	);
 	assert(app.includes("commandPaletteItems("));
-	assert(app.includes('event.key.toLocaleLowerCase() === "k"'));
+	const adapter = await Deno.readTextFile(
+		new URL("../src/ui/global_keyboard_adapter.ts", import.meta.url),
+	);
+	assert(adapter.includes('event.key.toLowerCase() === "k"'));
 	assert(app.includes("if (!command?.availability.enabled) return;"));
 	assert(palette.includes("command.availability.reason"));
-	assert(app.includes("commandPaletteRestoreFocus?.focus()"));
+	assert(app.includes("await paletteFocus.restore()"));
 	assert(app.includes("hasSelectedRecoverySnapshot: false"));
-	assert(app.includes("hasSelectedRecoverySnapshot: true"));
+	const execution = await Deno.readTextFile(
+		new URL("../src/ui/command_execution_controller.ts", import.meta.url),
+	);
+	assert(execution.includes("hasSelectedRecoverySnapshot: true"));
 });
 
 Deno.test("command palette is shortcut-only and closes through the dialog overlay", async () => {
@@ -64,7 +76,7 @@ Deno.test("branch rewrite and link commands remain keyboard-first and confirmati
 		new URL("../src/ui/branch_rewrite_controller.ts", import.meta.url),
 	);
 
-	assert(app.includes('case "createBranch": await requestRewriteAsNewBranch()'));
+	assert(app.includes("createBranch: requestRewriteAsNewBranch"));
 	assert(app.includes('action: "rewrite"'));
 	assert(confirmation.includes("rewriteBranchName.trim()"));
 	assert(
@@ -82,8 +94,8 @@ Deno.test("branch rewrite and link commands remain keyboard-first and confirmati
 	assert(rewrite.includes('"confirmed"'));
 	assert(confirmation.includes("rewriteInput?.focus()"));
 	assert(confirmation.includes('event.key === "Enter" && rewriteBranchName.trim()'));
-	assert(app.includes('case "createLink":'));
-	assert(app.includes("else await openLinkEditor()"));
+	assert(app.includes("createLink: (payload)"));
+	assert(app.includes("performAddLink(payload.linkInput) : openLinkEditor()"));
 	assert(app.includes('".link-editor input[type=search]"'));
 	assert(app.includes("input?.focus()"));
 	assert(bindings.includes("rewriteAsNewBranch("));
