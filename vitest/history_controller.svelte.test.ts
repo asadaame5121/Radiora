@@ -20,6 +20,9 @@ function createApi(overrides: Partial<Api> = {}): Api {
 		listRevisions: vi.fn(async () => []),
 		listRecoverySnapshots: vi.fn(async () => []),
 		listWorkLineage: vi.fn(async (workId) => lineage(workId)),
+		restoreRecoverySnapshot: vi.fn(),
+		promoteRecoverySnapshot: vi.fn(),
+		setOccurrenceRevision: vi.fn(),
 		...overrides,
 	};
 }
@@ -136,12 +139,12 @@ describe("history controller", () => {
 	});
 
 	it("restores recovery snapshot after flushing autosave and reloads", async () => {
-		const api = {
+		const api = createApi({
 			listRevisions: vi.fn().mockResolvedValue([]),
 			listRecoverySnapshots: vi.fn().mockResolvedValue([]),
 			listWorkLineage: vi.fn().mockResolvedValue(null),
 			restoreRecoverySnapshot: vi.fn().mockResolvedValue(undefined),
-		};
+		});
 		const reportError = vi.fn();
 		const controller = new HistoryController(api, () => "work-1", () => "branch-1", reportError);
 		const flush = vi.fn().mockResolvedValue(undefined);
@@ -160,12 +163,12 @@ describe("history controller", () => {
 	});
 
 	it("promotes recovery snapshot and reloads revisions and lineage", async () => {
-		const api = {
+		const api = createApi({
 			listRevisions: vi.fn().mockResolvedValue([]),
 			listRecoverySnapshots: vi.fn().mockResolvedValue([]),
 			listWorkLineage: vi.fn().mockResolvedValue(null),
 			promoteRecoverySnapshot: vi.fn().mockResolvedValue(undefined),
-		};
+		});
 		const reportError = vi.fn();
 		const controller = new HistoryController(api, () => "work-1", () => "branch-1", reportError);
 
@@ -182,12 +185,12 @@ describe("history controller", () => {
 	});
 
 	it("sets occurrence revision after flushing autosave", async () => {
-		const api = {
+		const api = createApi({
 			listRevisions: vi.fn().mockResolvedValue([]),
 			listRecoverySnapshots: vi.fn().mockResolvedValue([]),
 			listWorkLineage: vi.fn().mockResolvedValue(null),
 			setOccurrenceRevision: vi.fn().mockResolvedValue(undefined),
-		};
+		});
 		const reportError = vi.fn();
 		const controller = new HistoryController(api, () => "work-1", () => "branch-1", reportError);
 		const flush = vi.fn().mockResolvedValue(undefined);

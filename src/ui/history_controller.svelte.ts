@@ -2,17 +2,15 @@ import type { RecoverySnapshot, Revision } from "../domain/models.ts";
 import type { WorkLineageProjection } from "../services/branch_service.ts";
 import type { RadioraBindings } from "../shared/bindings.ts";
 
-type HistoryApi =
-	& Pick<
-		RadioraBindings,
-		"listRevisions" | "listRecoverySnapshots" | "listWorkLineage"
-	>
-	& Partial<
-		Pick<
-			RadioraBindings,
-			"restoreRecoverySnapshot" | "promoteRecoverySnapshot" | "setOccurrenceRevision"
-		>
-	>;
+type HistoryApi = Pick<
+	RadioraBindings,
+	| "listRevisions"
+	| "listRecoverySnapshots"
+	| "listWorkLineage"
+	| "restoreRecoverySnapshot"
+	| "promoteRecoverySnapshot"
+	| "setOccurrenceRevision"
+>;
 
 export class HistoryController {
 	revisions = $state<Revision[]>([]);
@@ -103,7 +101,7 @@ export class HistoryController {
 	): Promise<void> {
 		const workId = this.getSelectedWorkId();
 		const branchId = this.getSelectedBranchId();
-		if (!workId || !branchId || !this.api.restoreRecoverySnapshot) return;
+		if (!workId || !branchId) return;
 		await flushAutosave();
 		await this.api.restoreRecoverySnapshot(snapshotId, workId, branchId, "confirmed");
 		await reload();
@@ -113,7 +111,7 @@ export class HistoryController {
 	async promoteRecoverySnapshot(snapshotId: string): Promise<void> {
 		const workId = this.getSelectedWorkId();
 		const branchId = this.getSelectedBranchId();
-		if (!workId || !branchId || !this.api.promoteRecoverySnapshot) return;
+		if (!workId || !branchId) return;
 		await this.api.promoteRecoverySnapshot(snapshotId, workId, branchId, "confirmed");
 		await Promise.all([
 			this.loadRevisions(workId),
@@ -128,7 +126,7 @@ export class HistoryController {
 		flushAutosave: () => Promise<void>,
 		reload: (id?: string) => Promise<unknown>,
 	): Promise<void> {
-		if (!selectedId || !this.api.setOccurrenceRevision) return;
+		if (!selectedId) return;
 		try {
 			await flushAutosave();
 			await this.api.setOccurrenceRevision(selectedId, revisionId);

@@ -2,9 +2,9 @@ import type { Bookmark, ResolvedBookmark } from "../domain/models.ts";
 
 export interface BookmarkPorts {
 	read(): Promise<Bookmark[]>;
-	createBookmark?(id: string): Promise<unknown>;
-	deleteBookmark?(id: string): Promise<unknown>;
-	resolveBookmark?(id: string): Promise<ResolvedBookmark>;
+	createBookmark(id: string): Promise<unknown>;
+	deleteBookmark(id: string): Promise<unknown>;
+	resolveBookmark(id: string): Promise<ResolvedBookmark>;
 	reportError(cause: unknown): void;
 }
 
@@ -57,19 +57,19 @@ export class BookmarkController {
 	}
 
 	async addBookmark(selectedId: string | null): Promise<void> {
-		if (this.disposed || !selectedId || !this.ports.createBookmark) return;
+		if (this.disposed || !selectedId) return;
 		await this.ports.createBookmark(selectedId);
 		await this.reload();
 	}
 
 	async removeBookmark(id: string): Promise<void> {
-		if (this.disposed || !this.ports.deleteBookmark) return;
+		if (this.disposed) return;
 		await this.ports.deleteBookmark(id);
 		await this.reload();
 	}
 
 	async resolveBookmark(id: string): Promise<ResolvedBookmark | undefined> {
-		if (this.disposed || !this.ports.resolveBookmark) return undefined;
+		if (this.disposed) return undefined;
 		return await this.ports.resolveBookmark(id);
 	}
 

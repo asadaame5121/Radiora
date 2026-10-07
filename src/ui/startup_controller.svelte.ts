@@ -7,7 +7,7 @@ export interface StartupApi {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	loadStartupSnapshotCache(): Promise<StartupSnapshotCache | null>;
-	saveStartupSnapshotCache?(
+	saveStartupSnapshotCache(
 		snapshot: OutlineSnapshot,
 		location?: BrowsingLocation,
 	): Promise<void>;
@@ -65,9 +65,8 @@ export class StartupController {
 	): void => {
 		if (
 			this.cacheActive ||
-			this.status.phase !== "ready" ||
-			!canSave() ||
-			!this.options.api.saveStartupSnapshotCache
+			this.#cancelled || this.status.phase !== "ready" ||
+			!canSave()
 		) {
 			return;
 		}

@@ -45,6 +45,8 @@ function fixture(items: OutlineItem[]) {
 			events.push("create");
 			return createItem("new", null, 15, "");
 		}),
+		createOccurrence: vi.fn(async () => ({ id: "duplicate-created" })),
+		setContextualHeading: vi.fn(async (_id: string, _value: string): Promise<void> => undefined),
 		deleteItem: vi.fn(async () => {
 			events.push("delete");
 		}),
@@ -116,6 +118,8 @@ describe("OutlineOperationsController - structure operations", () => {
 		const controller = new OutlineOperationsController({
 			...adaptedPorts(),
 			api: {
+				createOccurrence: vi.fn(),
+				setContextualHeading: vi.fn(),
 				moveItem: vi.fn(),
 				setCollapsed: vi.fn(),
 				updateItemText: vi.fn(),
@@ -144,6 +148,8 @@ describe("OutlineOperationsController - structure operations", () => {
 		const controller = new OutlineOperationsController({
 			...adaptedPorts(),
 			api: {
+				createOccurrence: vi.fn(),
+				setContextualHeading: vi.fn(),
 				moveItem,
 				setCollapsed: vi.fn(),
 				updateItemText: vi.fn(),
@@ -175,6 +181,8 @@ describe("OutlineOperationsController - structure operations", () => {
 		const controller = new OutlineOperationsController({
 			...adaptedPorts(),
 			api: {
+				createOccurrence: vi.fn(),
+				setContextualHeading: vi.fn(),
 				moveItem,
 				setCollapsed: vi.fn(),
 				updateItemText: vi.fn(),
@@ -208,6 +216,8 @@ describe("OutlineOperationsController - structure operations", () => {
 		const controller = new OutlineOperationsController({
 			...adaptedPorts(),
 			api: {
+				createOccurrence: vi.fn(),
+				setContextualHeading: vi.fn(),
 				moveItem,
 				setCollapsed: vi.fn(),
 				updateItemText: vi.fn(),
@@ -244,6 +254,8 @@ describe("OutlineOperationsController - structure operations", () => {
 		const controller = new OutlineOperationsController({
 			...adaptedPorts(),
 			api: {
+				createOccurrence: vi.fn(),
+				setContextualHeading: vi.fn(),
 				moveItem: vi.fn(),
 				setCollapsed,
 				updateItemText: vi.fn(),
@@ -273,6 +285,8 @@ describe("OutlineOperationsController - structure operations", () => {
 		const controller = new OutlineOperationsController({
 			...adaptedPorts(),
 			api: {
+				createOccurrence: vi.fn(),
+				setContextualHeading: vi.fn(),
 				moveItem: vi.fn(),
 				setCollapsed: vi.fn(),
 				updateItemText,
@@ -308,6 +322,8 @@ describe("OutlineOperationsController - structure operations", () => {
 		const controller = new OutlineOperationsController({
 			...adaptedPorts(),
 			api: {
+				createOccurrence: vi.fn(),
+				setContextualHeading: vi.fn(),
 				moveItem: vi.fn(),
 				setCollapsed: vi.fn(),
 				updateItemText: vi.fn(),
@@ -338,6 +354,8 @@ describe("OutlineOperationsController - structure operations", () => {
 		const controller = new OutlineOperationsController({
 			...adaptedPorts(),
 			api: {
+				createOccurrence: vi.fn(),
+				setContextualHeading: vi.fn(),
 				moveItem: vi.fn(),
 				setCollapsed: vi.fn(),
 				updateItemText: vi.fn(),
@@ -621,31 +639,122 @@ it("does not report error when root creation fails after request expired", async
 	expect(ports.reportError).not.toHaveBeenCalled();
 });
 
-it("creates child occurrence after flushing autosave and reloads", async () => {
+it("duplicates occurrence at the same parent after flushing autosave and reloads", async () => {
 	const item = createItem("parent", null, 10);
 	const { controller, ports } = fixture([item]);
-	const createOccurrence = vi.fn().mockResolvedValue({ id: "child-created" });
-	(ports.api as unknown as { createOccurrence: typeof createOccurrence }).createOccurrence =
-		createOccurrence;
+	const createOccurrence = ports.api.createOccurrence.mockResolvedValue({
+		id: "duplicate-created",
+	});
 
-	await controller.createChildOccurrence(item);
+	await controller.duplicateOccurrence(item);
 	expect(ports.flushAutosave).toHaveBeenCalledWith(item.workId);
 	expect(createOccurrence).toHaveBeenCalledWith({
 		workId: item.workId,
 		parentId: item.parentId,
 		afterId: item.id,
 	});
-	expect(ports.reload).toHaveBeenCalledWith("child-created");
+	expect(ports.reload).toHaveBeenCalledWith("duplicate-created", expect.any(Function));
 });
 
 it("updates heading and reloads", async () => {
 	const item = createItem("item-1", null, 10);
 	const { controller, ports } = fixture([item]);
-	const setContextualHeading = vi.fn().mockResolvedValue(undefined);
-	(ports.api as unknown as { setContextualHeading: typeof setContextualHeading })
-		.setContextualHeading = setContextualHeading;
+	const setContextualHeading = ports.api.setContextualHeading;
 
 	await controller.updateHeading("item-1", "New Title");
 	expect(setContextualHeading).toHaveBeenCalledWith("item-1", "New Title");
-	expect(ports.reload).toHaveBeenCalledWith("item-1");
+	expect(ports.reload).toHaveBeenCalledWith("item-1", expect.any(Function));
 });
+it.each(["duplicate", "heading"] as const)(
+	"expires %s publication after persistence without undoing the write",
+	async (operation) => {
+		const item = createItem("row", null, 10);
+		const { controller, ports, invalidate } = fixture([item]);
+		const pending = Promise.withResolvers<void>();
+		ports.api.createOccurrence.mockImplementation(async () => {
+			await pending.promise;
+			return { id: "saved-duplicate" };
+		});
+		ports.api.setContextualHeading.mockImplementation(() => pending.promise);
+		const mutation = operation === "duplicate"
+			? controller.duplicateOccurrence(item)
+			: controller.updateHeading(item.id, "Saved heading");
+		await vi.waitFor(() =>
+			expect(
+				operation === "duplicate" ? ports.api.createOccurrence : ports.api.setContextualHeading,
+			).toHaveBeenCalled()
+		);
+		invalidate();
+		pending.resolve();
+		await mutation;
+		expect(ports.reload).not.toHaveBeenCalled();
+		expect(ports.reportError).not.toHaveBeenCalled();
+	},
+);
+
+it.each(["duplicate", "heading"] as const)(
+	"reports only current %s persistence failures",
+	async (operation) => {
+		for (const stale of [false, true]) {
+			const item = createItem("row", null, 10);
+			const { controller, ports, invalidate } = fixture([item]);
+			const pending = Promise.withResolvers<void>();
+			const cause = new Error("write failed");
+			ports.api.createOccurrence.mockImplementation(async () => {
+				await pending.promise;
+				return { id: "never-created" };
+			});
+			ports.api.setContextualHeading.mockImplementation(() => pending.promise);
+			const mutation = operation === "duplicate"
+				? controller.duplicateOccurrence(item)
+				: controller.updateHeading(item.id, "Heading");
+			await vi.waitFor(() =>
+				expect(
+					operation === "duplicate" ? ports.api.createOccurrence : ports.api.setContextualHeading,
+				).toHaveBeenCalled()
+			);
+			if (stale) invalidate();
+			pending.reject(cause);
+			await mutation;
+			expect(ports.reportError).toHaveBeenCalledTimes(stale ? 0 : 1);
+			if (!stale) expect(ports.reportError).toHaveBeenCalledWith(cause);
+			expect(ports.reload).not.toHaveBeenCalled();
+		}
+	},
+);
+
+it("does not publish a duplicate autosave failure after selection expires", async () => {
+	const item = createItem("row", null, 10);
+	const { controller, ports, invalidate } = fixture([item]);
+	const pending = Promise.withResolvers<void>();
+	ports.flushAutosave.mockImplementation(() => pending.promise);
+	const mutation = controller.duplicateOccurrence(item);
+	invalidate();
+	pending.reject(new Error("old autosave failed"));
+	await mutation;
+	expect(ports.api.createOccurrence).not.toHaveBeenCalled();
+	expect(ports.reportError).not.toHaveBeenCalled();
+	expect(ports.reload).not.toHaveBeenCalled();
+});
+it.each(["duplicate", "heading"] as const)(
+	"expires %s focus authority while reload is pending",
+	async (operation) => {
+		const item = createItem("row", null, 10);
+		const { controller, ports, invalidate } = fixture([item]);
+		const pending = Promise.withResolvers<boolean>();
+		let focusAllowed = true;
+		ports.reload.mockImplementation(async (_id, current) => {
+			await pending.promise;
+			focusAllowed = current?.() ?? true;
+			return true;
+		});
+		const mutation = operation === "duplicate"
+			? controller.duplicateOccurrence(item)
+			: controller.updateHeading(item.id, "Heading");
+		await vi.waitFor(() => expect(ports.reload).toHaveBeenCalled());
+		invalidate();
+		pending.resolve(true);
+		await mutation;
+		expect(focusAllowed).toBe(false);
+	},
+);

@@ -14,12 +14,12 @@ export interface OutlineOperationsApi {
 		afterId: string | null;
 	}): Promise<OutlineItem>;
 	deleteItem(id: string): Promise<void>;
-	createOccurrence?(input: {
+	createOccurrence(input: {
 		workId: string;
 		parentId: string | null;
 		afterId: string | null;
 	}): Promise<{ id: string }>;
-	setContextualHeading?(id: string, value: string): Promise<void>;
+	setContextualHeading(id: string, value: string): Promise<void>;
 }
 
 export interface OutlineOperationsControllerOptions {
@@ -69,28 +69,31 @@ export class OutlineOperationsController {
 		}
 	};
 
-	createChildOccurrence = async (
-		selectedItem: OutlineItem | undefined,
-	): Promise<void> => {
-		if (!selectedItem || !this.options.api.createOccurrence) return;
+	duplicateOccurrence = async (selectedItem: OutlineItem | undefined): Promise<void> => {
+		if (!selectedItem) return;
+		const current = this.options.captureRequest();
 		try {
 			await this.options.flushAutosave(selectedItem.workId);
+			const created = await this.options.api.createOccurrence({
+				workId: selectedItem.workId,
+				parentId: selectedItem.parentId,
+				afterId: selectedItem.id,
+			});
+			// Persistence remains valid after selection/navigation expires; only publication retires.
+			if (current()) await this.options.reload(created.id, current);
 		} catch (cause) {
-			this.options.reportError(cause);
-			return;
+			if (current()) this.options.reportError(cause);
 		}
-		const created = await this.options.api.createOccurrence({
-			workId: selectedItem.workId,
-			parentId: selectedItem.parentId,
-			afterId: selectedItem.id,
-		});
-		await this.options.reload(created.id);
 	};
 
 	updateHeading = async (id: string, value: string): Promise<void> => {
-		if (!this.options.api.setContextualHeading) return;
-		await this.options.api.setContextualHeading(id, value);
-		await this.options.reload(id);
+		const current = this.options.captureRequest();
+		try {
+			await this.options.api.setContextualHeading(id, value);
+			if (current()) await this.options.reload(id, current);
+		} catch (cause) {
+			if (current()) this.options.reportError(cause);
+		}
 	};
 
 	remove = async (id: string): Promise<void> => {

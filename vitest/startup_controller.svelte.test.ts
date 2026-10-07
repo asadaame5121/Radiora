@@ -21,6 +21,7 @@ describe("StartupController", () => {
 	it("initializes with starting phase", () => {
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus: vi.fn(),
 				retryStartup: vi.fn(),
 				loadStartupSnapshotCache: vi.fn(),
@@ -37,6 +38,7 @@ describe("StartupController", () => {
 		const onCacheRestored = vi.fn(() => true);
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus: vi.fn(),
 				retryStartup: vi.fn(),
 				loadStartupSnapshotCache: vi.fn().mockResolvedValue(mockCache),
@@ -53,6 +55,7 @@ describe("StartupController", () => {
 	it("tolerates cache load error gracefully", async () => {
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus: vi.fn(),
 				retryStartup: vi.fn(),
 				loadStartupSnapshotCache: vi.fn().mockRejectedValue(new Error("Corrupt cache")),
@@ -75,6 +78,7 @@ describe("StartupController", () => {
 
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus,
 				retryStartup: vi.fn(),
 				loadStartupSnapshotCache: vi.fn(),
@@ -94,6 +98,7 @@ describe("StartupController", () => {
 		const getStartupStatus = vi.fn().mockRejectedValue(new Error("Backend crash"));
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus,
 				retryStartup: vi.fn(),
 				loadStartupSnapshotCache: vi.fn(),
@@ -113,6 +118,7 @@ describe("StartupController", () => {
 		const onReady = vi.fn().mockResolvedValue(undefined);
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus: vi.fn(),
 				retryStartup,
 				loadStartupSnapshotCache: vi.fn(),
@@ -131,6 +137,7 @@ describe("StartupController", () => {
 		const getStartupStatus = vi.fn().mockResolvedValue({ phase: "starting" });
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus,
 				retryStartup: vi.fn(),
 				loadStartupSnapshotCache: vi.fn(),
@@ -150,6 +157,7 @@ describe("StartupController", () => {
 		const onReady = vi.fn().mockRejectedValue(new Error("relationTypes load failed"));
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus,
 				retryStartup: vi.fn(),
 				loadStartupSnapshotCache: vi.fn(),
@@ -170,6 +178,7 @@ describe("StartupController", () => {
 		const onReady = vi.fn().mockRejectedValue(new Error("load failed"));
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus: vi.fn(),
 				retryStartup,
 				loadStartupSnapshotCache: vi.fn(),
@@ -192,6 +201,7 @@ describe("StartupController", () => {
 		});
 		controllerInstance = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus: vi.fn().mockResolvedValue(readyStatus),
 				retryStartup: vi.fn(),
 				loadStartupSnapshotCache: vi.fn(),
@@ -214,6 +224,7 @@ describe("StartupController", () => {
 		const onReady = vi.fn();
 		const controller = new StartupController({
 			api: {
+				saveStartupSnapshotCache: vi.fn(async () => undefined),
 				getStartupStatus,
 				retryStartup: vi.fn(),
 				loadStartupSnapshotCache: vi.fn(),
@@ -246,6 +257,7 @@ function deferred<T>() {
 
 function setup() {
 	const api = {
+		saveStartupSnapshotCache: vi.fn(async () => undefined),
 		getStartupStatus: vi.fn<() => Promise<StartupStatus>>().mockResolvedValue({ phase: "ready" }),
 		retryStartup: vi.fn<() => Promise<StartupStatus>>().mockResolvedValue({ phase: "ready" }),
 		loadStartupSnapshotCache: vi.fn<() => Promise<StartupSnapshotCache | null>>().mockResolvedValue(
@@ -424,14 +436,22 @@ describe("startup cache and retry request ordering", () => {
 
 	it("saves startup cache when ready and canSave returns true", () => {
 		const { controller, api } = setup();
-		const saveStartupSnapshotCache = vi.fn().mockResolvedValue(undefined);
+		const saveStartupSnapshotCache = api.saveStartupSnapshotCache;
 		controller.status = { phase: "ready", message: "Ready" };
 		controller.cacheActive = false;
-		(controller as unknown as {
-			options: { api: { saveStartupSnapshotCache: typeof saveStartupSnapshotCache } };
-		}).options.api.saveStartupSnapshotCache = saveStartupSnapshotCache;
 
 		controller.saveSnapshotCache(cache.snapshot, cache.location, () => true);
 		expect(saveStartupSnapshotCache).toHaveBeenCalledWith(cache.snapshot, cache.location);
 	});
 });
+it.each(["starting", "cache", "draft", "disposed"] as const)(
+	"does not save startup cache for %s",
+	(reason) => {
+		const { controller, api } = setup();
+		controller.status = { phase: reason === "starting" ? "starting" : "ready", message: "Test" };
+		controller.cacheActive = reason === "cache";
+		if (reason === "disposed") controller.dispose();
+		controller.saveSnapshotCache(cache.snapshot, cache.location, () => reason !== "draft");
+		expect(api.saveStartupSnapshotCache).not.toHaveBeenCalled();
+	},
+);

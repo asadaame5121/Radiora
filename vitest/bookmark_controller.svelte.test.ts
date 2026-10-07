@@ -1,11 +1,26 @@
 import { expect, test, vi } from "vitest";
 import type { Bookmark } from "../src/domain/models.ts";
-import { BookmarkController } from "../src/ui/bookmark_controller.svelte.ts";
+import { BookmarkController, type BookmarkPorts } from "../src/ui/bookmark_controller.svelte.ts";
+
+function createPorts(overrides: Partial<BookmarkPorts> = {}): BookmarkPorts {
+	return {
+		read: vi.fn(async () => []),
+		createBookmark: vi.fn(),
+		deleteBookmark: vi.fn(),
+		resolveBookmark: vi.fn(),
+		reportError: vi.fn(),
+		...overrides,
+	};
+}
 
 function setup() {
 	const read = vi.fn(async (): Promise<Bookmark[]> => []);
 	const reportError = vi.fn();
-	return { controller: new BookmarkController({ read, reportError }), read, reportError };
+	return {
+		controller: new BookmarkController(createPorts({ read, reportError })),
+		read,
+		reportError,
+	};
 }
 
 test.each([false, true])("standalone reload retires staged Outline bookmark %s", async (failed) => {
@@ -56,7 +71,7 @@ test("cancelled scope cannot revoke newer requests and dispose suppresses delaye
 test("addBookmark creates bookmark and reloads", async () => {
 	const createBookmark = vi.fn().mockResolvedValue(undefined);
 	const read = vi.fn().mockResolvedValue([{ id: "bm-1" } as Bookmark]);
-	const controller = new BookmarkController({ read, createBookmark, reportError: vi.fn() });
+	const controller = new BookmarkController(createPorts({ read, createBookmark }));
 
 	await controller.addBookmark("occ-1");
 	expect(createBookmark).toHaveBeenCalledWith("occ-1");
@@ -67,7 +82,7 @@ test("addBookmark creates bookmark and reloads", async () => {
 test("removeBookmark deletes bookmark and reloads", async () => {
 	const deleteBookmark = vi.fn().mockResolvedValue(undefined);
 	const read = vi.fn().mockResolvedValue([]);
-	const controller = new BookmarkController({ read, deleteBookmark, reportError: vi.fn() });
+	const controller = new BookmarkController(createPorts({ read, deleteBookmark }));
 
 	await controller.removeBookmark("bm-1");
 	expect(deleteBookmark).toHaveBeenCalledWith("bm-1");
@@ -78,11 +93,7 @@ test("resolveBookmark delegates to port", async () => {
 	const resolveBookmark = vi.fn().mockResolvedValue({
 		target: { kind: "occurrence", occurrenceId: "occ-1" },
 	});
-	const controller = new BookmarkController({
-		read: vi.fn().mockResolvedValue([]),
-		resolveBookmark,
-		reportError: vi.fn(),
-	});
+	const controller = new BookmarkController(createPorts({ resolveBookmark }));
 
 	const resolved = await controller.resolveBookmark("bm-1");
 	expect(resolveBookmark).toHaveBeenCalledWith("bm-1");

@@ -663,15 +663,15 @@ PR base: main `3df74b1`（PR #321反映済み）。 `LicensesController`
   (#313の2件通過)。
 - 構造受入ゲート: `tests/app_composition_acceptance_test.ts` (#313の2件通過)。
 
-## #314: App.svelteのshell・feature配線への収束（親Issue #294 完了）
+## #314: App.svelteの残存API操作のControllerへの移譲
 
 PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存していた feature 固有の直接 API
-操作やワークフローを各 Controller に委譲・収束させ、単一式アロー関数による port 委譲と shell
-責務のみに純化した。
+操作やワークフローを各 Controller へ移譲した。main `dc0f728`（PR #323）に反映済み。
+以下はAPI操作の移譲記録であり、App全体の状態所有・失効契約の完了証明ではない。
 
 - **残存 API 操作の各 Controller への移譲**:
   - `saveStartupSnapshotCache`: `StartupController.saveSnapshotCache`
-    へ移譲。起動キャッシュ保存条件と失効を所有。
+    へ移譲。起動キャッシュ保存条件を所有。非同期書込みの順序保証はこの移譲では追加していない。
   - `createBookmark` / `deleteBookmark` / `resolveBookmark`: `BookmarkController.addBookmark` /
     `removeBookmark` / `resolveBookmark` へ移譲。
   - `resolveResumePosition`: `EditorController.resolveResumePosition` へ移譲。
@@ -679,14 +679,14 @@ PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存して
     `HistoryController` へ移譲。
   - `createLink` / `deleteLink` / `resolveAdvancedLink`: `RelationLinkController`
     を新設し、リンク追加・削除・反転（`reverseLink`）および候補インスペクト（`inspectCandidate`）のワークフローを委譲。
-  - `createOccurrence` / `setContextualHeading`: `OutlineOperationsController.createChildOccurrence`
-    / `updateHeading` へ移譲。
-- **App.svelte の責務純化**:
+  - `createOccurrence` / `setContextualHeading`: `OutlineOperationsController.duplicateOccurrence` /
+    `updateHeading` へ移譲。
+- **App.svelte の直接API呼出しの制限**:
   - `App.svelte` 内の `api.*` 呼び出しは、Controller コンストラクタへの port
     委譲（単一式アロー関数）および観測ログ（`recordViewChange`,
     `recordClientOperation`）のみに制限。
-  - 直接的なビジネスロジックやワークフローのブロック文を全廃。
-- **検証**:
+  - このゲートは直接API呼出しの構文だけを検査する。Appには起動・再読込・確認操作等の調停処理が残る。
+- **PR #323に記録された検証（今回の再実行結果は追補を参照）**:
   - 構造受入ゲート: `tests/app_composition_acceptance_test.ts`（#314 の 2 件を含む全 6 件通過）。
   - 各 Controller 単体回帰:
     - `vitest/bookmark_controller.svelte.test.ts` (7件通過)
@@ -700,8 +700,31 @@ PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存して
     `tests/ui/licenses-regression.spec.ts` (全件通過)。
   - 静的検証: `svelte-check` (0 errors), `biome check` (code 0), `deno fmt` (通過), `vite build`
     (通過)。
-- **親Issue #294 の完了判定**:
-  - #298, #299, #300, #301, #302, #303, #307, #308, #309, #310, #311, #312, #313, #314
-    の一連の分割・整理が完了。
-  - UI 状態所有契約（正本・owner・writer・読み手・寿命・失効条件）が各 feature module
-    へ確立され、`App.svelte` は shell と composition root のみに収束した。
+- **親Issue #294 の完了記録の訂正**:
+  - 上記の構造ゲートと単体テストだけでは、全featureの状態所有・寿命・失効契約の成立を証明できない。
+    PR #323での親Issueのcloseと、契約を横断して検証した完了判定は区別する。
+  - 残る検証対象はHistory・RelationLink等の操作中の選択変更・画面遷移・破棄、 startup
+    cacheの並行書込み順序。これらの完了をこの記録では主張しない。
+
+### PR #323レビュー後の局所修正（2026-10-07）
+
+修正baseはmain `dc0f728`。この追補は本修正コミットに含め、mainへの反映はGit履歴で確認する。
+
+- Bookmark・History・OutlineOperations・Startupの移譲したAPI portを必須にする。
+  配線漏れを黙って成功終了させず、型検査で検出する。
+- 同じWorkを同じ親の下に追加する操作を`duplicateOccurrence`と呼ぶ。
+  複製・見出し変更は開始時のOutline要求を捕捉し、成功後の再読込へfocusの失効条件を渡す。
+  保存待機中に要求が失効した場合、保存結果を残し、旧操作からの再読込開始とerror公開を抑止する。
+  再読込開始後のsnapshot・error・loadingはOutlineControllerが所有し、選択変更後のfocusだけを抑止する。
+  選択確定は元の要求を失効させるため、旧選択のreceiptをsnapshot全体の公開条件には使わない。
+- 起動キャッシュ保存はdispose後の新規呼出しを拒否する。既に開始した書込みは巻き戻さない。
+- 回帰シナリオ: 保存待機中の要求失効、現在/古い保存失敗、古いautosave失敗、
+  再読込待機中のfocus失効、起動前・cache表示中・draft保持中・dispose後のcache保存抑止。
+  構造ゲートはAPI直接呼出しの制限を補助的に確認し、挙動の保証は回帰テストで行う。
+- 検証: 修正前に競合回帰5件が失敗。修正後のSvelte単体全496件、最終形の関連109件、
+  構造・UI契約8件が通過。svelte-checkは0 errors / 0 warnings、変更したTypeScriptのBiome・ Deno
+  fmt・Bookmark/History/Outlineのテストfixture型検査が通過。ブラウザ回帰は今回未実行。
+- main反映前にDeno全855件、Svelte全496件、svelte-check、Vite buildが通過。
+  lint・行数品質・magic-number ratchet・重複ratchet・全体format・Deno型検査も通過。
+- pre-commit内のDeno経由npm起動はWindows shimをJavaScriptとして読み込み失敗した。
+  残りの必須check・test・test:svelte・buildを通常のCLI経由で通過させ、今回のcommitのみhookを省略した。

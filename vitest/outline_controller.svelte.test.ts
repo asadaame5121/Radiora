@@ -76,6 +76,9 @@ function setup() {
 		clearError: vi.fn(),
 	};
 	const bookmarks = new BookmarkController({
+		createBookmark: vi.fn(),
+		deleteBookmark: vi.fn(),
+		resolveBookmark: vi.fn(),
 		read: ports.readBookmarks,
 		reportError: ports.reportError,
 	});

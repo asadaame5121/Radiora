@@ -1179,7 +1179,7 @@
 	}
 
 	async function duplicateSelectedOccurrence(): Promise<void> {
-		await outlineOperations.createChildOccurrence(selectedItem ?? undefined);
+		await outlineOperations.duplicateOccurrence(selectedItem ?? undefined);
 	}
 
 	async function updateSelectedHeading(value: string): Promise<void> {
