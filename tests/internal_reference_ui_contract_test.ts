@@ -34,8 +34,8 @@ Deno.test("internal reference UI supports [[ completion, caret replacement, safe
 	assertMatch(outlineRowItem, /vocabulary\.internalReference/);
 	assertMatch(inspector, /<InspectorRelationTab/);
 	assertMatch(relationTab, /vocabulary\.backlink/);
-	assertMatch(vocabulary, /internalReference: "項目へのリンク"/);
-	assertMatch(vocabulary, /backlink: "この項目へのリンク"/);
+	assertMatch(vocabulary, /internalReference: "メモへのリンク"/);
+	assertMatch(vocabulary, /backlink: "このメモへのリンク"/);
 	assertMatch(controller, /resolution\.navigationTarget\.kind === "work"[\s\S]*?return;/);
 });
 

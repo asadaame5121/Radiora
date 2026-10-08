@@ -1,3 +1,4 @@
+import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 import type { CommandContext, CommandDefinition } from "./command_service.ts";
 
 const ready = (context: CommandContext) =>
@@ -10,7 +11,7 @@ const outline = (context: CommandContext) =>
 		: ready(context);
 const selected = (context: CommandContext) =>
 	!context.selectedOccurrenceId
-		? { enabled: false, reason: "項目を選択してください。" }
+		? { enabled: false, reason: "メモを選択してください。" }
 		: outline(context);
 
 export const KEYBOARD_COMMANDS: readonly CommandDefinition[] = [
@@ -23,8 +24,8 @@ export const KEYBOARD_COMMANDS: readonly CommandDefinition[] = [
 				? ready(context)
 				: { enabled: false, reason: "アウトラインを表示しています。" },
 	},
-	{ id: "showOutline", label: () => "Outlineへ移動", chordKey: "o", availability: ready },
-	{ id: "showTree", label: () => "Treeへ移動", chordKey: "t", availability: ready },
+	{ id: "showOutline", label: () => "アウトラインへ移動", chordKey: "o", availability: ready },
+	{ id: "showTree", label: () => "ツリーへ移動", chordKey: "t", availability: ready },
 	{
 		id: "returnToEditor",
 		label: () => "元の編集位置へ戻る",
@@ -34,7 +35,7 @@ export const KEYBOARD_COMMANDS: readonly CommandDefinition[] = [
 				? ready(context)
 				: { enabled: false, reason: "戻る編集位置がありません。" },
 	},
-	{ id: "focusSearch", label: () => "検索・項目ジャンプ", chordKey: "j", availability: ready },
+	{ id: "focusSearch", label: () => "検索・メモジャンプ", chordKey: "j", availability: ready },
 	{
 		id: "focusQuickCapture",
 		label: () => "クイック入力へ移動",
@@ -44,14 +45,14 @@ export const KEYBOARD_COMMANDS: readonly CommandDefinition[] = [
 	{ id: "toggleSidebar", label: () => "サイドバー開閉", chordKey: "s", availability: ready },
 	{
 		id: "collapseAll",
-		label: () => "すべてのNodeを折りたたむ",
+		label: () => "すべて折りたたむ",
 		chordKey: "c",
 		availability: outline,
 	},
-	{ id: "expandAll", label: () => "すべてのNodeを展開する", chordKey: "e", availability: outline },
+	{ id: "expandAll", label: () => "すべて展開する", chordKey: "e", availability: outline },
 	{
 		id: "toggleCollapsed",
-		label: () => "選択項目の折りたたみ／展開",
+		label: (vocabulary: UiVocabulary) => `選択した${vocabulary.work}の折りたたみ／展開`,
 		shortcut: "Ctrl+.",
 		availability: selected,
 	},
@@ -62,11 +63,11 @@ export const KEYBOARD_COMMANDS: readonly CommandDefinition[] = [
 		availability: (context) =>
 			context.isHoisted
 				? outline(context)
-				: { enabled: false, reason: "絞り込み表示中ではありません。" },
+				: { enabled: false, reason: "フォーカス中ではありません。" },
 	},
 	{
 		id: "removeOccurrence",
-		label: () => "この配置を削除",
+		label: (vocabulary: UiVocabulary) => `この${vocabulary.occurrence}を外す`,
 		shortcut: "Ctrl+Shift+Backspace",
 		availability: selected,
 	},

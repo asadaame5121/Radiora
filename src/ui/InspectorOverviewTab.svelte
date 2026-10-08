@@ -44,7 +44,7 @@
 {#if selectedItem}
 	<div>
 		<label class="heading-label">
-			{vocabulary.occurrence}固有の見出し
+			この{vocabulary.occurrence}での見出し
 			<input
 				value={selectedItem.contextualHeading ?? ""}
 				onchange={(event) => void onUpdateSelectedHeading(event.currentTarget.value)}

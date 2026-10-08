@@ -622,7 +622,7 @@ describe("editor controller", () => {
 			});
 
 			await controller.commitInlineLink("item-1");
-			expect(ports.reportError).toHaveBeenCalledWith("同じNode自身にはLinkできません。");
+			expect(ports.reportError).toHaveBeenCalledWith("同じWorkにはLinkを追加できません。");
 		});
 
 		test("handleInlineLinkOmniKeydown handles keyboard navigation and escape", async () => {

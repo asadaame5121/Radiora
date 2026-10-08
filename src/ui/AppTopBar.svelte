@@ -104,7 +104,7 @@
 		<input
 			role="combobox"
 			aria-label={`検索・${vocabulary.quickCapture}`}
-			placeholder={`思索を検索、Shift+Enterで${quickCaptureDestinationLabel}へ作成…`}
+			placeholder={`${vocabulary.work}を検索、Shift+Enterで${quickCaptureDestinationLabel}へ作成…`}
 			value={quickCaptureText}
 			oninput={(event) => onQuickCaptureInput(event.currentTarget.value)}
 			onkeydown={onQuickCaptureKeydown}

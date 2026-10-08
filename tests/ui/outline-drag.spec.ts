@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { DEFAULT_UI_VOCABULARY as vocabulary } from "../../src/shared/ui_vocabulary.ts";
 
 function outlineRow(page: Page, id: string) {
 	return page.getByRole("treeitem").filter({ has: page.locator(`textarea[data-item-id="${id}"]`) });
@@ -57,7 +58,7 @@ test("self drop and cancelled drag do not move; blank clicks respect the drag li
 		await route.fulfill({ json: { result: null } });
 	});
 	const source = outlineRow(page, "mock-7");
-	await source.getByRole("button", { name: "項目を選択", exact: true }).click();
+	await source.getByRole("button", { name: `${vocabulary.work}を選択`, exact: true }).click();
 	await source.locator("textarea").focus();
 	await expect(source).toHaveAttribute("aria-selected", "true");
 	await source.dispatchEvent("dragstart");
@@ -87,7 +88,7 @@ test("native drag reports a failed move and clears drag state", async ({ page })
 	await source.dragTo(outlineRow(page, "mock-8"));
 	await expect(page.getByText("Move persistence failed")).toBeVisible();
 	await expect(source).not.toHaveClass(/dragging/);
-	await source.getByRole("button", { name: "項目を選択", exact: true }).click();
+	await source.getByRole("button", { name: `${vocabulary.work}を選択`, exact: true }).click();
 	await source.locator("textarea").focus();
 	await page.getByRole("tree").dispatchEvent("mousedown", { button: 0 });
 	await expect(source).toHaveAttribute("aria-selected", "false");
@@ -110,7 +111,7 @@ test("leaving Outline cancels a drag even without a dragend event", async ({ pag
 	const source = outlineRow(page, "mock-7");
 	await expect(source).not.toHaveClass(/dragging/);
 	await outlineRow(page, "mock-8").dispatchEvent("drop");
-	await source.getByRole("button", { name: "項目を選択", exact: true }).click();
+	await source.getByRole("button", { name: `${vocabulary.work}を選択`, exact: true }).click();
 	await page.getByRole("tree").dispatchEvent("mousedown", { button: 0 });
 	await expect(source).toHaveAttribute("aria-selected", "false");
 	expect(moves).toEqual([]);

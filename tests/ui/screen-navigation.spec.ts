@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { DEFAULT_UI_VOCABULARY as vocabulary } from "../../src/shared/ui_vocabulary.ts";
 
 const items = ["mock-1", "mock-7"].map((id, index) => ({
 	id,
@@ -76,7 +77,16 @@ test("every primary screen resumes the same Outline", async ({ page }) => {
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
 	const navigation = page.getByRole("navigation", { name: "主な画面" });
-	for (const name of ["今日", "未配置項目", "未完成項目一覧", "重複候補", "タグ管理", "Option"]) {
+	for (
+		const name of [
+			"今日",
+			vocabulary.unplacedInbox,
+			vocabulary.stubList,
+			"重複候補",
+			"タグ管理",
+			"Option",
+		]
+	) {
 		await navigation.getByRole("button", { name, exact: true }).click();
 		await expect(page.getByRole("button", { name: "アウトラインに戻る", exact: true }))
 			.toBeEnabled();
@@ -109,7 +119,10 @@ test("revision comparison returns to the original occurrence and history tab", a
 	await expect(editor).toBeFocused();
 	await editor.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(3, 7));
 	await page.getByRole("tab", { name: "履歴", exact: true }).click();
-	await page.getByRole("button", { name: "版比較を開く", exact: true }).click();
+	await page.getByRole("button", {
+		name: `${vocabulary.revision}${vocabulary.comparisonPane}を開く`,
+		exact: true,
+	}).click();
 	await expect(page.locator(".revision-comparison")).toBeVisible();
 	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
 	await expect(editor).toBeFocused();
@@ -203,7 +216,7 @@ for (const operation of ["place", "root capture"] as const) {
 			await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
 			await page.keyboard.press("Control+Shift+H");
 			await page.getByRole("textbox", { name: "年", exact: true }).fill("2026");
-			await page.getByRole("button", { name: "未配置項目", exact: true }).click();
+			await page.getByRole("button", { name: vocabulary.unplacedInbox, exact: true }).click();
 			await page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }).fill("work");
 			if (operation === "place") {
 				await page.getByRole("button", { name: "Rootへ配置", exact: true }).click();
@@ -219,7 +232,8 @@ for (const operation of ["place", "root capture"] as const) {
 			await expect(dialog).toHaveCount(0);
 			const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
 			if (choice === "キャンセル") {
-				await expect(page.getByRole("region", { name: "未配置項目", exact: true })).toBeVisible();
+				await expect(page.getByRole("region", { name: vocabulary.unplacedInbox, exact: true }))
+					.toBeVisible();
 				await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue("2026");
 				await back.click();
 				await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
@@ -332,8 +346,12 @@ test("a delayed comparison cannot replace Help or add an obsolete caller to hist
 		await page.goto("/");
 		await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
 		await page.getByRole("tab", { name: "履歴", exact: true }).click();
-		await page.getByRole("button", { name: "版の履歴を開く", exact: true }).click();
-		await page.getByRole("button", { name: "この版を比較", exact: true }).click();
+		await page.getByRole("button", { name: `${vocabulary.workLineage}を開く`, exact: true })
+			.click();
+		await page.getByRole("button", {
+			name: `この${vocabulary.revision}を${vocabulary.comparisonPane}`,
+			exact: true,
+		}).click();
 		await expect.poll(() => requested).toBe(true);
 		await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
 		const response = page.waitForResponse("**/api/rpc/listWorkComparisonDocuments");
@@ -387,7 +405,8 @@ test("last row caret and a scrolled Outline survive resume after Help", async ({
 	);
 	await expect.poll(() => page.locator(".outline-panel").evaluate((element) => element.scrollTop))
 		.toBe(scrollTop);
-	await expect(page.getByRole("button", { name: "ここだけ表示を解除", exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: `${vocabulary.hoist}を解除`, exact: true }))
+		.toBeVisible();
 });
 
 test("manuscript display and caret survive leaving and resuming Outline", async ({ page }) => {
@@ -571,10 +590,10 @@ test("rewriting a branch creates an explicit Outline destination for subsequent 
 for (
 	const action of [
 		"アウトラインで開く",
-		"この位置へZoom",
-		"版の履歴を開く",
+		`この${vocabulary.occurrence}に${vocabulary.hoist}`,
+		`${vocabulary.workLineage}を開く`,
 		"原稿として開く",
-		"版比較を開く",
+		`${vocabulary.revision}${vocabulary.comparisonPane}を開く`,
 	]
 ) {
 	test(`Tree context-menu destination uses the common gateway: ${action}`, async ({ page }) => {
@@ -590,7 +609,12 @@ for (
 		await command.press("Enter");
 		await expect(page.getByRole("group", { name: "思索の系統樹" })).toHaveCount(0);
 		const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
-		const explicit = ["アウトラインで開く", "この位置へZoom", "原稿として開く"].includes(action);
+		const explicit = [
+			"アウトラインで開く",
+			`この${vocabulary.occurrence}に${vocabulary.hoist}`,
+			"原稿として開く",
+		]
+			.includes(action);
 		if (explicit) {
 			await expect(back).toBeDisabled();
 			await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
@@ -674,7 +698,8 @@ test("Return to Editor restores remembered caret and panel scroll after another 
 	);
 	await expect.poll(() => page.locator(".outline-panel").evaluate((element) => element.scrollTop))
 		.toBe(scrollTop);
-	await expect(page.getByRole("button", { name: "ここだけ表示を解除", exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: `${vocabulary.hoist}を解除`, exact: true }))
+		.toBeVisible();
 });
 
 test("an explicit offscreen target scrolls into view instead of restoring panel position zero", async ({ page }) => {
@@ -697,7 +722,7 @@ test("an explicit offscreen target scrolls into view instead of restoring panel 
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-0"]').click();
 	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
-	await page.getByRole("region", { name: "最近編集した項目" }).getByRole("button", {
+	await page.getByRole("region", { name: `最近編集した${vocabulary.work}` }).getByRole("button", {
 		name: /row 44 with editable content/,
 	}).click();
 
@@ -768,7 +793,7 @@ for (const completion of ["reference", "link"] as const) {
 			completion === "reference" ? ".internal-reference-completions" : ".inline-link-completions",
 		);
 		await expect(popup).toBeVisible();
-		await page.getByRole("region", { name: "最近編集した項目" }).getByRole("button", {
+		await page.getByRole("region", { name: `最近編集した${vocabulary.work}` }).getByRole("button", {
 			name: /mock-7 editable text/,
 		}).click();
 		await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
