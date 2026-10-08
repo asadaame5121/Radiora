@@ -74,7 +74,11 @@
 	<Dialog.Portal>
 		<Dialog.Overlay>
 			{#snippet child({ props })}
-				<div {...props} class="confirmation-dialog__overlay"></div>
+				<div
+					{...props}
+					class="confirmation-dialog__overlay"
+					onpointerdown={() => handleOpenChange(false)}
+				></div>
 			{/snippet}
 		</Dialog.Overlay>
 		<Dialog.Content onOpenAutoFocus={handleOpenAutoFocus}>
