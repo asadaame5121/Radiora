@@ -142,6 +142,9 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Test component interactions (Storybook)
+        run: npm run test:storybook
+
       - name: Test application interactions
         run: npm run test:ui
 
