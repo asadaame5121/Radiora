@@ -30,12 +30,15 @@ async function clickBackdropOutsideDialog(canvasElement: HTMLElement): Promise<v
 		{ x: overlayBounds.left + 1, y: overlayBounds.bottom - 1 },
 		{ x: overlayBounds.right - 1, y: overlayBounds.bottom - 1 },
 	].find(({ x, y }) =>
-		x < dialogBounds.left || x > dialogBounds.right || y < dialogBounds.top || y > dialogBounds.bottom
+		x < dialogBounds.left || x > dialogBounds.right || y < dialogBounds.top ||
+		y > dialogBounds.bottom
 	);
 	if (!point) throw new Error("No clickable backdrop area outside the dialog");
 
 	const target = document.elementFromPoint(point.x, point.y);
-	if (!target || dialog.contains(target)) throw new Error("Backdrop click did not reach outside the dialog");
+	if (!target || dialog.contains(target)) {
+		throw new Error("Backdrop click did not reach outside the dialog");
+	}
 
 	await userEvent.pointer([
 		{ target, coords: point },
