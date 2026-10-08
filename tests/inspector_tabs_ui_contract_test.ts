@@ -50,7 +50,7 @@ Deno.test("App delegates Inspector state and callbacks to the extracted View", a
 });
 
 Deno.test("Inspector history switches a placement between current text and a fixed revision", () => {
-	assertMatch(history, /この配置で表示する/);
+	assertMatch(history, /この\{vocabulary\.occurrence\}で表示する/);
 	assertMatch(history, /<option value="">現在の本稿<\/option>/);
 	assertMatch(history, /onSelectRevision\(event\.currentTarget\.value \|\| null\)/);
 });

@@ -6,6 +6,6 @@ Deno.test("App receives UiVocabulary from Svelte Context without design-term lit
 
 	assert(app.includes("useUiVocabulary()"));
 	assert(entry.includes("UI_VOCABULARY_CONTEXT"));
-	assert(entry.includes("DEFAULT_UI_VOCABULARY"));
+	assert(entry.includes("DEFAULT_UI_VOCABULARY_DEFINITION"));
 	assertFalse(/実身|化身|項目|リンク/.test(app));
 });

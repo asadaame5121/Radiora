@@ -12,6 +12,29 @@ export interface InlineLinkTriggerIdentity {
 	range: { start: number; end: number };
 }
 
+export type InternalReferenceCompletionState = {
+	itemId: string;
+	range: { start: number; end: number };
+	candidates: InternalReferenceCompletion[];
+	activeIndex: number;
+};
+
+export type InlineLinkCompletionPhase = "candidate" | "type" | "direction";
+export type InlineLinkDirection = "forward" | "reverse";
+export type InlineLinkCompletionState = {
+	itemId: string;
+	query: string;
+	range: { start: number; end: number };
+	candidates: InternalReferenceCompletion[];
+	activeIndex: number;
+	phase: InlineLinkCompletionPhase;
+	selectedCandidate?: InternalReferenceCompletion;
+	selectedType?: LinkType;
+	direction: InlineLinkDirection;
+	searching: boolean;
+	creating: boolean;
+};
+
 export function isSameInlineLinkTrigger(
 	current: InlineLinkTriggerIdentity | null,
 	itemId: string,
