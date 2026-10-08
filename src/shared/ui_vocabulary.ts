@@ -1,3 +1,10 @@
+import {
+	DEFAULT_UI_CONCEPTS,
+	freezeUiConcepts,
+	type UiConceptCode,
+	type UiConcepts,
+} from "./ui_concepts.ts";
+
 export type UiEntityCode =
 	| "work"
 	| "occurrence"
@@ -101,15 +108,15 @@ export type UiEntityCode =
 export type UiVocabulary = Readonly<Record<UiEntityCode, string>>;
 
 export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
-	work: "メモ",
-	occurrence: "表示場所",
-	semanticLink: "関係",
+	work: DEFAULT_UI_CONCEPTS.work.label,
+	occurrence: DEFAULT_UI_CONCEPTS.occurrence.label,
+	semanticLink: DEFAULT_UI_CONCEPTS.semanticLink.label,
 	workingCopy: "本文",
-	revision: "バージョン",
+	revision: DEFAULT_UI_CONCEPTS.revision.label,
 	branch: "別稿",
 	merge: "統合版",
-	globalLineage: "ツリー",
-	workLineage: "バージョンの系譜",
+	globalLineage: DEFAULT_UI_CONCEPTS.globalLineage.label,
+	workLineage: DEFAULT_UI_CONCEPTS.workLineage.label,
 	recoverySnapshot: "復元ポイント",
 	tag: "タグ",
 	bookmark: "栞",
@@ -120,7 +127,7 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	quickCaptureDestinationRoot: "ルート直下",
 	quickCaptureDestinationUnplaced: "未配置メモ",
 	unplacedInbox: "未配置メモ",
-	hoist: "フォーカス",
+	hoist: DEFAULT_UI_CONCEPTS.hoist.label,
 	breadcrumb: "現在位置",
 	browsingHistory: "閲覧履歴",
 	pane: "ペイン",
@@ -147,7 +154,7 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	editorNormal: "通常",
 	editorPlain: "Markdown",
 	editorPreview: "プレビュー",
-	sparseOutline: "文脈付き表示",
+	sparseOutline: DEFAULT_UI_CONCEPTS.sparseOutline.label,
 	queryResult: "結果",
 	noQueryResult: "一致するメモはありません",
 	stub: "仮メモ",
@@ -201,4 +208,35 @@ export const DEFAULT_UI_VOCABULARY: UiVocabulary = Object.freeze({
 	jsonBackupRestoreSuccess: "完全バックアップを復元しました",
 	jsonBackupRestoreFailureRecovery:
 		"現在のデータは変更されていません。空き容量とファイル内容を確認して、もう一度お試しください。",
+});
+
+export type UiVocabularyDefinition = Readonly<{
+	vocabulary: UiVocabulary;
+	concepts: UiConcepts;
+}>;
+
+/** Concept labels and descriptions share one source; action and notice labels remain strings. */
+export function createUiVocabulary(
+	concepts: UiConcepts,
+	labels: Partial<Omit<UiVocabulary, UiConceptCode>> = {},
+): UiVocabularyDefinition {
+	const snapshot = freezeUiConcepts(concepts);
+	const vocabulary: UiVocabulary = Object.freeze({
+		...DEFAULT_UI_VOCABULARY,
+		...labels,
+		work: snapshot.work.label,
+		occurrence: snapshot.occurrence.label,
+		semanticLink: snapshot.semanticLink.label,
+		revision: snapshot.revision.label,
+		hoist: snapshot.hoist.label,
+		workLineage: snapshot.workLineage.label,
+		globalLineage: snapshot.globalLineage.label,
+		sparseOutline: snapshot.sparseOutline.label,
+	});
+	return Object.freeze({ vocabulary, concepts: snapshot });
+}
+
+export const DEFAULT_UI_VOCABULARY_DEFINITION: UiVocabularyDefinition = Object.freeze({
+	vocabulary: DEFAULT_UI_VOCABULARY,
+	concepts: DEFAULT_UI_CONCEPTS,
 });
