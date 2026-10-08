@@ -16,6 +16,20 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+async function clickBackdropOutsideDialog(canvasElement: HTMLElement): Promise<void> {
+	const overlay = canvasElement.ownerDocument.body.querySelector<HTMLElement>(
+		".confirmation-dialog__overlay",
+	);
+	if (!overlay) throw new Error("Confirmation dialog overlay was not rendered");
+
+	// The dialog is centered, so click a viewport corner to reach the backdrop.
+	await userEvent.pointer({
+		target: overlay,
+		coords: { x: 1, y: 1 },
+		keys: "[MouseLeft]",
+	});
+}
+
 export const Trash: Story = {
 	play: async ({ canvasElement, args }) => {
 		const canvas = within(canvasElement.ownerDocument.body);
@@ -52,11 +66,7 @@ export const Escape: Story = {
 
 export const OutsideClick: Story = {
 	play: async ({ canvasElement, args }) => {
-		const overlay = canvasElement.ownerDocument.body.querySelector<HTMLElement>(
-			".confirmation-dialog__overlay",
-		);
-		if (!overlay) throw new Error("Confirmation dialog overlay was not rendered");
-		await userEvent.click(overlay);
+		await clickBackdropOutsideDialog(canvasElement);
 		await waitFor(() => expect(args.onReset).toHaveBeenCalledOnce());
 		await waitFor(() =>
 			expect(canvasElement.ownerDocument.body.querySelector(".confirmation-dialog")).toBeNull()
@@ -70,11 +80,7 @@ export const Submitting: Story = {
 		const body = within(canvasElement.ownerDocument.body);
 		await expect(body.getByRole("button", { name: "キャンセル" })).toBeDisabled();
 		await userEvent.keyboard("{Escape}");
-		const overlay = canvasElement.ownerDocument.body.querySelector<HTMLElement>(
-			".confirmation-dialog__overlay",
-		);
-		if (!overlay) throw new Error("Confirmation dialog overlay was not rendered");
-		await userEvent.click(overlay);
+		await clickBackdropOutsideDialog(canvasElement);
 		await expect(args.onReset).not.toHaveBeenCalled();
 		await expect(body.getByRole("button", { name: "キャンセル" })).toBeDisabled();
 	},
