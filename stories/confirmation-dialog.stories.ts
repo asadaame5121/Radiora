@@ -17,17 +17,30 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 async function clickBackdropOutsideDialog(canvasElement: HTMLElement): Promise<void> {
-	const overlay = canvasElement.ownerDocument.body.querySelector<HTMLElement>(
-		".confirmation-dialog__overlay",
-	);
-	if (!overlay) throw new Error("Confirmation dialog overlay was not rendered");
+	const document = canvasElement.ownerDocument;
+	const overlay = document.body.querySelector<HTMLElement>(".confirmation-dialog__overlay");
+	const dialog = document.body.querySelector<HTMLElement>(".confirmation-dialog");
+	if (!overlay || !dialog) throw new Error("Confirmation dialog was not rendered");
 
-	// The dialog is centered, so click a viewport corner to reach the backdrop.
-	await userEvent.pointer({
-		target: overlay,
-		coords: { x: 1, y: 1 },
-		keys: "[MouseLeft]",
-	});
+	const overlayBounds = overlay.getBoundingClientRect();
+	const dialogBounds = dialog.getBoundingClientRect();
+	const point = [
+		{ x: overlayBounds.left + 1, y: overlayBounds.top + 1 },
+		{ x: overlayBounds.right - 1, y: overlayBounds.top + 1 },
+		{ x: overlayBounds.left + 1, y: overlayBounds.bottom - 1 },
+		{ x: overlayBounds.right - 1, y: overlayBounds.bottom - 1 },
+	].find(({ x, y }) =>
+		x < dialogBounds.left || x > dialogBounds.right || y < dialogBounds.top || y > dialogBounds.bottom
+	);
+	if (!point) throw new Error("No clickable backdrop area outside the dialog");
+
+	const target = document.elementFromPoint(point.x, point.y);
+	if (!target || dialog.contains(target)) throw new Error("Backdrop click did not reach outside the dialog");
+
+	await userEvent.pointer([
+		{ target, coords: point },
+		{ target, coords: point, keys: "[MouseLeft]" },
+	]);
 }
 
 export const Trash: Story = {
