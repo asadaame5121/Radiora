@@ -42,7 +42,7 @@ Deno.test("styles.css defines light theme tokens and data-theme rules", () => {
 	assertMatch(styles, /\[data-theme="light"\]/);
 	assertMatch(styles, /--bg:\s*#f4f0e6/);
 	assertMatch(styles, /--text:\s*#111/);
-	assertMatch(styles, /--cyan:\s*#d63b2c/);
+	assertMatch(styles, /--cyan:\s*#9f2b20/);
 	assertMatch(styles, /--view-switcher-active-bg/);
 	assertMatch(styles, /\[data-theme="dark"\]/);
 });
