@@ -43,12 +43,15 @@
 		font-size: 12px;
 	}
 	.startup-cache-status button {
-		border: 1px solid var(--border-bright);
+		border: 1px solid #4d7a85;
 		border-radius: 5px;
 		padding: 5px 8px;
-		background: var(--surface-hover);
-		color: inherit;
+		background: rgb(255 255 255 / 12%);
+		color: #ffffff;
 		cursor: pointer;
 		white-space: nowrap;
+	}
+	.startup-cache-status button:hover {
+		background: rgb(255 255 255 / 20%);
 	}
 </style>
