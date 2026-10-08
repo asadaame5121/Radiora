@@ -595,7 +595,7 @@
 		);
 		return [
 			{ id: "open-outline", label: "アウトラインで開く" },
-			{ id: "zoom", label: `この${vocabulary.occurrence}へZoom` },
+			{ id: "zoom", label: `この${vocabulary.occurrence}に${vocabulary.hoist}` },
 			{
 				id: "long-form",
 				label: vocabulary.manuscriptOpen,
@@ -609,7 +609,7 @@
 				disabled: !bookmarked && !commands.addBookmark.enabled,
 				reason: commands.addBookmark.reason,
 			},
-			{ id: "duplicate", label: `同じ${vocabulary.work}を別の場所へ配置` },
+			{ id: "duplicate", label: `同じ${vocabulary.work}を別の${vocabulary.occurrence}へ配置` },
 			{
 				id: "create-link",
 				label: `${vocabulary.semanticLink}を追加`,

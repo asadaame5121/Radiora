@@ -53,7 +53,7 @@
 	<button type="button" class="history-btn" onclick={onOpenWorkLineage} disabled={!selectedItem}>{vocabulary.workLineage}を開く</button>
 	<button type="button" class="history-btn" onclick={onOpenRevisionComparison} disabled={!selectedItem}>{vocabulary.revision}{vocabulary.comparisonPane}を開く</button>
 	<label class="revision-selector">
-		<span>この配置で表示する{vocabulary.revision}</span>
+		<span>この{vocabulary.occurrence}で表示する{vocabulary.revision}</span>
 		<select
 			value={selectedRevisionId}
 			disabled={!selectedItem}
@@ -66,10 +66,10 @@
 		</select>
 	</label>
 	{#if selectedBranchId}
-		<button type="button" class="history-btn" onclick={onOpenWorkLineage}>Recovery snapshotsを開く</button>
-		<small>{recoverySnapshots.length}件のRecovery snapshot</small>
+		<button type="button" class="history-btn" onclick={onOpenWorkLineage}>{vocabulary.recoverySnapshot}一覧を開く</button>
+		<small>{recoverySnapshots.length}件の{vocabulary.recoverySnapshot}</small>
 	{:else}
-		<small>Recoveryは{vocabulary.branch}を選択すると利用できます。</small>
+		<small>{vocabulary.recoverySnapshot}は{vocabulary.branch}を選択すると利用できます。</small>
 	{/if}
 </div>
 

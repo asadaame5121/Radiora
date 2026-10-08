@@ -123,7 +123,6 @@
 <section class="revision-comparison comparison-pane" aria-label={vocabulary.comparisonPane}>
 	<div class="comparison-heading">
 		<div>
-			<p class="eyebrow">COMPARISON</p>
 			<h1>{vocabulary.comparisonPane}</h1>
 		</div>
 		<div class="comparison-context">

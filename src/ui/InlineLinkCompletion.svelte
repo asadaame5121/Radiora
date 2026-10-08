@@ -136,7 +136,7 @@
 							selectedDefinition?.direction,
 						)}
 				</p>
-				<button type="button" onclick={onCommit}>この方向で{vocabulary.semanticLink}</button>
+				<button type="button" onclick={onCommit}>この向きで{vocabulary.semanticLink}を追加</button>
 			{/if}
 		{/if}
 	</div>

@@ -30,15 +30,15 @@ Deno.test("command applicability returns one authoritative disabled reason", () 
 		enabled: false,
 		reason: "クイック入力の本文を入力してください。",
 	});
-	assertEquals(availability.hoist, { enabled: false, reason: "項目を選択してください。" });
-	assertEquals(availability.createLink, { enabled: false, reason: "項目を選択してください。" });
+	assertEquals(availability.hoist, { enabled: false, reason: "メモを選択してください。" });
+	assertEquals(availability.createLink, { enabled: false, reason: "メモを選択してください。" });
 	assertEquals(commandAvailability(context({ isHoisted: false })).clearHoist, {
 		enabled: false,
-		reason: "絞り込み表示中ではありません。",
+		reason: "フォーカス中ではありません。",
 	});
 	assertEquals(commandAvailability(context({ hasSelectedRecoverySnapshot: false })).saveRevision, {
 		enabled: false,
-		reason: "保存する復元用保存を選択してください。",
+		reason: "保存する復元ポイントを選択してください。",
 	});
 	assertEquals(commandAvailability(context({ hasSelectedBranch: false })).createBranch, {
 		enabled: false,

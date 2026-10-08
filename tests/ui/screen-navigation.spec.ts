@@ -590,7 +590,7 @@ test("rewriting a branch creates an explicit Outline destination for subsequent 
 for (
 	const action of [
 		"アウトラインで開く",
-		`この${vocabulary.occurrence}へZoom`,
+		`この${vocabulary.occurrence}に${vocabulary.hoist}`,
 		`${vocabulary.workLineage}を開く`,
 		"原稿として開く",
 		`${vocabulary.revision}${vocabulary.comparisonPane}を開く`,
@@ -609,7 +609,11 @@ for (
 		await command.press("Enter");
 		await expect(page.getByRole("group", { name: "思索の系統樹" })).toHaveCount(0);
 		const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
-		const explicit = ["アウトラインで開く", `この${vocabulary.occurrence}へZoom`, "原稿として開く"]
+		const explicit = [
+			"アウトラインで開く",
+			`この${vocabulary.occurrence}に${vocabulary.hoist}`,
+			"原稿として開く",
+		]
 			.includes(action);
 		if (explicit) {
 			await expect(back).toBeDisabled();
