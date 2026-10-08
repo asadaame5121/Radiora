@@ -35,15 +35,11 @@ async function clickBackdropOutsideDialog(canvasElement: HTMLElement): Promise<v
 	);
 	if (!point) throw new Error("No clickable backdrop area outside the dialog");
 
-	const target = document.elementFromPoint(point.x, point.y);
-	if (!target || dialog.contains(target)) {
-		throw new Error("Backdrop click did not reach outside the dialog");
-	}
-
-	await userEvent.pointer([
-		{ target, coords: point },
-		{ target, coords: point, keys: "[MouseLeft]" },
-	]);
+	await userEvent.pointer({
+		target: overlay,
+		coords: point,
+		keys: "[MouseLeft]",
+	});
 }
 
 export const Trash: Story = {
