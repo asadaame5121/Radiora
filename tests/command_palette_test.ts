@@ -62,7 +62,7 @@ Deno.test("command palette includes Markdown export", () => {
 
 Deno.test("command palette cannot dispatch a revision save without a selected recovery snapshot", async () => {
 	const [saveRevision] = commandPaletteItems(
-		"版として残す",
+		"バージョンとして残す",
 		context({
 			hasSelectedRecoverySnapshot: false,
 		}),

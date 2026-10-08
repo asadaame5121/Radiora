@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { DEFAULT_UI_VOCABULARY as vocabulary } from "../../src/shared/ui_vocabulary.ts";
 
 // #312/#314: exercise the shell's public UI, not the eventual Layout owner API.
 test("#312 explicit Options layout changes survive reload", async ({ page }) => {
@@ -116,7 +117,7 @@ test("#312 narrow relation editing opens temporarily and preserves the saved clo
 	await page.locator(".markdown-editor-host").first().click();
 	await page.getByRole("button", { name: "インスペクターペインを閉じる", exact: true }).click();
 	await page.keyboard.press("Control+k");
-	await page.getByRole("option", { name: /関連を追加/ }).click();
+	await page.getByRole("option", { name: `${vocabulary.semanticLink}を追加` }).click();
 	const input = page.locator(".link-editor input[type=search]").first();
 	await expect(input).toBeFocused();
 	await expect(input).toBeInViewport();
