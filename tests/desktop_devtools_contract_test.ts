@@ -8,6 +8,9 @@ Deno.test("desktop DevTools inspection stays opt-in and exposes a CDP audit task
 	const audit = await Deno.readTextFile(
 		new URL("../scripts/desktop_cdp_audit.ts", import.meta.url),
 	);
+	const fixture = await Deno.readTextFile(
+		new URL("../scripts/performance_fixture.ts", import.meta.url),
+	);
 
 	assertEquals(
 		config.tasks["desktop:inspect"],
@@ -21,4 +24,10 @@ Deno.test("desktop DevTools inspection stays opt-in and exposes a CDP audit task
 	assert(audit.includes('client.send("Runtime.evaluate"'));
 	assert(audit.includes('client.send("Page.captureScreenshot"'));
 	assert(audit.includes("toWebSocketUrl(inspector.baseUrl, muxPath)"));
+	assertEquals(config.tasks["performance:fixture"], "deno run -A scripts/performance_fixture.ts");
+	assert(fixture.includes("export function createPerformanceFixture"));
+	assert(fixture.includes("export async function writePerformanceDatabase"));
+	assert(audit.includes('client.send("Tracing.start"'));
+	assert(audit.includes('client.on("Tracing.dataCollected"'));
+	assert(audit.includes("--trace <path>"));
 });

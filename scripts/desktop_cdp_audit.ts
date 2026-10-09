@@ -21,6 +21,8 @@ interface AuditOptions {
 	waitMs: number;
 	expression?: string;
 	screenshot?: string;
+	trace?: string;
+	output?: string;
 	strict: boolean;
 }
 
@@ -29,6 +31,7 @@ interface AuditEvents {
 	exceptions: JsonRecord[];
 	logs: JsonRecord[];
 	failedRequests: JsonRecord[];
+	traceEvents: unknown[];
 }
 
 interface InspectorState {
@@ -144,13 +147,26 @@ class CdpClient {
 	}
 }
 
-const options = parseOptions(Deno.args);
 if (Deno.args.includes("--help") || Deno.args.includes("-h")) {
 	printHelp();
 } else {
 	try {
+		const options = parseOptions(Deno.args);
 		const report = await runAudit(options);
-		console.log(JSON.stringify(report, null, 2));
+		if (options.output) {
+			await writeNewJsonFile(options.output, report);
+			console.log(JSON.stringify(
+				{
+					outputPath: options.output,
+					issueCount: report.issueCount,
+					trace: report.trace,
+				},
+				null,
+				2,
+			));
+		} else {
+			console.log(JSON.stringify(report, null, 2));
+		}
 		if (options.strict && report.issueCount > 0) Deno.exit(2);
 	} catch (cause) {
 		console.error(`Desktop CDP audit failed: ${asError(cause).message}`);
@@ -159,6 +175,15 @@ if (Deno.args.includes("--help") || Deno.args.includes("-h")) {
 }
 
 async function runAudit(options: AuditOptions): Promise<JsonRecord & { issueCount: number }> {
+	await Promise.all(
+		[options.trace, options.output]
+			.filter((path): path is string => path !== undefined)
+			.map(assertFileDoesNotExist),
+	);
+	let resolveTraceComplete: ((params: JsonRecord) => void) | undefined;
+	const traceComplete = options.trace
+		? new Promise<JsonRecord>((resolve) => resolveTraceComplete = resolve)
+		: undefined;
 	const inspector = await discoverInspector(options);
 	const candidates = endpointCandidates(options.target, inspector);
 	const { client, webSocketUrl } = await connectToFirst(candidates);
@@ -167,6 +192,7 @@ async function runAudit(options: AuditOptions): Promise<JsonRecord & { issueCoun
 		exceptions: [],
 		logs: [],
 		failedRequests: [],
+		traceEvents: [],
 	};
 	client.on("Runtime.consoleAPICalled", (params) => events.console.push(consoleEvent(params)));
 	client.on("Runtime.exceptionThrown", (params) => events.exceptions.push(exceptionEvent(params)));
@@ -177,6 +203,10 @@ async function runAudit(options: AuditOptions): Promise<JsonRecord & { issueCoun
 			errorText: params.errorText,
 			blockedReason: params.blockedReason ?? null,
 		}));
+	client.on("Tracing.dataCollected", (params) => {
+		if (Array.isArray(params.value)) events.traceEvents.push(...params.value);
+	});
+	client.on("Tracing.tracingComplete", (params) => resolveTraceComplete?.(params));
 
 	try {
 		await client.send("Runtime.enable");
@@ -185,14 +215,43 @@ async function runAudit(options: AuditOptions): Promise<JsonRecord & { issueCoun
 			await sendOptional(client, "Page.enable");
 			await sendOptional(client, "Network.enable");
 		}
+		if (options.trace) {
+			await client.send("Tracing.start", {
+				traceConfig: {
+					recordMode: "recordUntilFull",
+					includedCategories: ["devtools.timeline", "blink.user_timing", "v8"],
+				},
+				transferMode: "ReportEvents",
+			});
+		}
 		await wait(options.waitMs);
 		const summary = await evaluate(client, summaryExpression(options.target));
 		const expressionResult = options.expression ? await evaluate(client, options.expression) : null;
 		const screenshot = options.screenshot && options.target === "renderer"
 			? await captureScreenshot(client, options.screenshot)
 			: null;
+		let trace: JsonRecord | null = null;
+		if (options.trace) {
+			await client.send("Tracing.end");
+			if (!traceComplete) throw new Error("Trace completion listener was not initialized.");
+			const completed = await withTimeout(traceComplete, 30_000, "CDP tracing");
+			await writeNewJsonFile(options.trace, {
+				traceEvents: events.traceEvents,
+				metadata: {
+					targetKind: options.target,
+					browser: inspector.version.Browser ?? null,
+					generatedAt: new Date().toISOString(),
+				},
+			});
+			trace = {
+				path: options.trace,
+				eventCount: events.traceEvents.length,
+				dataLossOccurred: completed.dataLossOccurred === true,
+			};
+		}
 		const issueCount = events.console.filter((event) => event.type === "error").length +
-			events.exceptions.length + events.failedRequests.length;
+			events.exceptions.length + events.failedRequests.length +
+			(trace?.dataLossOccurred === true ? 1 : 0);
 		return {
 			generatedAt: new Date().toISOString(),
 			targetKind: options.target,
@@ -211,6 +270,7 @@ async function runAudit(options: AuditOptions): Promise<JsonRecord & { issueCoun
 			logs: events.logs,
 			failedRequests: events.failedRequests,
 			screenshot,
+			trace,
 			issueCount,
 		};
 	} finally {
@@ -379,9 +439,23 @@ function parseOptions(args: string[]): AuditOptions {
 			case "--screenshot":
 				options.screenshot = value;
 				break;
+			case "--trace":
+				options.trace = value;
+				break;
+			case "--output":
+				options.output = value;
+				break;
 			default:
 				throw new Error(`Unknown option: ${flag}`);
 		}
+	}
+	if (options.trace && options.target !== "renderer") {
+		throw new Error("--trace requires --target renderer.");
+	}
+	const outputPaths = [options.trace, options.output, options.screenshot]
+		.filter((path): path is string => path !== undefined);
+	if (new Set(outputPaths).size !== outputPaths.length) {
+		throw new Error("--trace, --output, and --screenshot must use different paths.");
 	}
 	return options;
 }
@@ -436,6 +510,45 @@ function wait(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+async function writeNewJsonFile(path: string, value: unknown): Promise<void> {
+	const separator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+	if (separator > 0) await Deno.mkdir(path.slice(0, separator), { recursive: true });
+	await Deno.writeTextFile(path, `${JSON.stringify(value, null, 2)}\n`, { createNew: true });
+}
+
+async function assertFileDoesNotExist(path: string): Promise<void> {
+	try {
+		await Deno.lstat(path);
+	} catch (cause) {
+		if (cause instanceof Deno.errors.NotFound) return;
+		throw cause;
+	}
+	throw new Error(`Refusing to replace existing audit output: ${path}`);
+}
+
+async function withTimeout<T>(
+	promise: Promise<T>,
+	milliseconds: number,
+	label: string,
+): Promise<T> {
+	return await new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(
+			() => reject(new Error(`${label} did not complete within ${milliseconds} ms.`)),
+			milliseconds,
+		);
+		promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(cause) => {
+				clearTimeout(timer);
+				reject(cause);
+			},
+		);
+	});
+}
+
 function printHelp(): void {
 	console.log(`Usage: deno task desktop:audit [options]
 
@@ -448,6 +561,8 @@ Options:
   --wait-ms <milliseconds>  Collect events for this long before evaluation
   --expression <source>     Evaluate an expression in the selected target
   --screenshot <path>       Save a renderer PNG (ignored for --target deno)
+  --trace <path>            Save renderer Performance trace as Chrome trace JSON
+  --output <path>           Save audit report JSON without replacing existing files
   --strict                  Exit with code 2 when issues are observed
   --help                    Show this help
 `);
