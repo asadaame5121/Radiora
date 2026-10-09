@@ -136,6 +136,13 @@ Deno/Vitestテスト、frontend buildを実行します。
 - `npm run test:mutation:*` — Strykerによるmutation test（parsers / projections / domain / storage /
   controllers）
 - `deno task desktop:inspect` + `deno task desktop:audit` — DevTools/CDP監査
+- `deno task performance:fixture --profile baseline --topic-count 10000 --seed 42 --database reports/performance/baseline.db`
+  固定seedで1,000/10,000件の5プロファイルを生成・検証し、新規SQLite試験DBとマニフェストを保存します。生成・DB投入時間は計測値と分けて出力します。既存ファイルは上書きしません。
+- `deno task desktop:audit --wait-ms 60000 --trace reports/performance/renderer-trace.json --output reports/performance/renderer-audit.json`
+  起動中のDevTools対象アプリを60秒記録します。その間に手動で操作してください。監査JSONはconsole、例外、ログ、失敗した通信を含み、traceはChrome
+  Performanceで開ける形式です。
+- UI操作の成否・処理時間はOptionsの「操作記録」からJSONLで書き出せます。記録項目と保存期間は
+  [docs/operation-log.md](docs/operation-log.md) を参照してください。
 
 OpengrepとGitleaksはSHA-256で検証した固定binaryをCIで実行します。Strykerの全mutationと
 coverage・画像差分は週次workflowで実行します。UIのView構成とstate ownershipの指針は `AGENTS.md`
