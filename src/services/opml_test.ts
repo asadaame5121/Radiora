@@ -147,3 +147,34 @@ Deno.test(
 		);
 	},
 );
+
+Deno.test("namespaced external OPML preserves nested outlines, empty text, and standard attributes", () => {
+	const source = [
+		'<o:opml xmlns:o="urn:opml" version="2.0"><o:body>',
+		"<o:outline text='親 &amp; 子' category='memo'>",
+		'<o:outline text="" _note=""/>',
+		'<o:outline text="孫" _note="一行目&#10;二行目"/>',
+		"</o:outline></o:body></o:opml>",
+	].join("");
+
+	assertEquals(parseOpml(source), [{
+		text: "親 & 子",
+		children: [
+			{ text: "", children: [] },
+			{ text: "孫\n一行目\n二行目", children: [] },
+		],
+	}]);
+});
+
+Deno.test("OPML rejects missing text, duplicate attributes, unsupported entities, and trailing XML", () => {
+	for (
+		const [source, message] of [
+			["<opml><body><outline/></body></opml>", "requires a text attribute"],
+			['<opml><body><outline text="a" text="b"/></body></opml>', "duplicate XML attributes"],
+			['<opml><body><outline text="a &bogus;"/></body></opml>', "unsupported XML entity"],
+			["<opml><body/></opml><opml/>", "not well-formed XML"],
+		]
+	) {
+		assertThrows(() => parseOpml(source), Error, message);
+	}
+});

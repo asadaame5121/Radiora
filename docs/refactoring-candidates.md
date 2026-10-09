@@ -1,6 +1,6 @@
 # リファクタリング・バックログ
 
-更新日: 2026-10-04。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
+更新日: 2026-10-09。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
 に変更なし）。
 
 責務、state ownership、I/O、transaction の変更理由に沿って、挙動を維持したまま整理する計画。
@@ -116,7 +116,21 @@ P4は意味リンクdiagnosticsの条件付き抽出。現在の小さなparser�
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
 
-## 今週の実績（2026-10-04〜05、#299の現行適合）
+## 今週の実績（2026-10-09、O1）
+
+#311と#294は閉鎖済み。未完了のO1（Issue #256）を最新main `9f6a069` から `codex/weekly-opml-o1`
+で実施した。既存OPML parser/serviceテスト8件を変更前に確認し、
+namespace付き要素と入れ子、空のtext、通常属性とXML entityの組合せ、
+text欠落・重複属性・未知entity・余分なrootの拒否を2件の契約テストで補強した。 production
+codeと保存形式は変更していない。
+
+検証: 対象10件、Deno全体859件、Vitest503件、lint・format・型チェック・品質ラチェットが成功。
+`deno task verify` のbuild段階だけ外部一時フォルダのアクセス拒否で停止したため、
+TMP/TEMPを作業ツリー内の一時領域に指定して同じ `npm run build` を再実行し成功した。
+このbranchの完了とmainへの反映は区別する。次回はO2（Issue #257）の独立した変更理由を確認し、
+理由がなければ分割を見送り、G1へ進む。
+
+## 過去の実績（2026-10-04〜05、#299の現行適合）
 
 main `5240c44`（#298はPR #304で反映済み）をbaseに、 `codex/issue-299-outline-operations`でPR
 #274のControllerと8件のテストを再利用した。
@@ -502,7 +516,8 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
 - [ ] **G2** — 難易度3、依存 G1: schema の形状検査と参照/DAG
       不変条件の依存を確認し、必要な集合だけ抽出。 既存 record
       関数を一律に個別ファイル化しない。入口の検証順と返却値を固定する。
-- [ ] **O1** — 難易度2: `opml_test.ts` の namespace/属性/入れ子/空要素/不正 XML の不足を確認。
+- [x] **O1** — 難易度2: `opml_test.ts` の namespace/属性/入れ子/空要素/不正 XML
+      の不足を確認。2026-10-09にbranchで完了（main反映待ち）。
 - [ ] **O2** — 難易度3、依存 O1: element 走査と import model
       変換の独立した変更理由がある場合に限定して抽出。
 
