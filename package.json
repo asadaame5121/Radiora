@@ -10,6 +10,8 @@
 		"check": "svelte-check --tsconfig ./tsconfig.json",
 		"knip": "knip",
 		"test:svelte": "vitest run --project unit",
+		"test:changed": "deno task test:changed",
+		"test:staged": "deno task test:staged",
 		"storybook": "storybook dev -p 6006",
 		"build-storybook": "storybook build",
 		"test:storybook": "vitest run --project storybook",
