@@ -43,6 +43,8 @@
 		"desktop:preflight": "deno run -A scripts/desktop_preflight.ts",
 		"test": "deno test -A src tests scripts",
 		"test:svelte": "npm run test:svelte",
+		"test:changed": "deno run -A scripts/test_changed.ts changed",
+		"test:staged": "deno run -A scripts/test_changed.ts staged",
 		"test:storybook": "npm run test:storybook",
 		"coverage:deno": "deno test -A --coverage=reports/coverage/deno src tests scripts && deno coverage --lcov --output=reports/coverage/deno.lcov reports/coverage/deno",
 		"coverage:ratchet": "deno run --allow-read scripts/quality/coverage_ratchet.ts",
