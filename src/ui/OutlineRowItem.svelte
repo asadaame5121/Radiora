@@ -81,7 +81,7 @@
 		type="button"
 		class="bullet"
 		aria-label={`${vocabulary.work}を選択`}
-		title={`ダブルクリックでこの${vocabulary.work}へZoom`}
+		title={`ダブルクリックでこの${vocabulary.work}に${vocabulary.hoist}`}
 		onclick={() => handlers.selectOccurrence(row.item.id)}
 		ondblclick={() => handlers.hoistOccurrence(row.item.id)}
 	>•</button>

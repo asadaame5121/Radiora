@@ -64,7 +64,7 @@ const ready = (context: CommandContext): CommandAvailability =>
 
 const selection = (context: CommandContext): CommandAvailability =>
 	!context.selectedOccurrenceId
-		? { enabled: false, reason: "項目を選択してください。" }
+		? { enabled: false, reason: "メモを選択してください。" }
 		: ready(context);
 
 const queryDeprecated = (): CommandAvailability => ({
@@ -104,7 +104,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 		label: (vocabulary) => `${vocabulary.hoist}を解除`,
 		availability: (context) =>
 			!context.isHoisted
-				? { enabled: false, reason: "絞り込み表示中ではありません。" }
+				? { enabled: false, reason: "フォーカス中ではありません。" }
 				: ready(context),
 	},
 	{
@@ -120,14 +120,14 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 	},
 	{
 		id: "saveRevision",
-		label: (vocabulary) => `${vocabulary.revision}として残す`,
+		label: (vocabulary) => `${vocabulary.revision}として保存`,
 		availability: (context) =>
 			!selection(context).enabled
 				? selection(context)
 				: !context.hasSelectedBranch
 				? { enabled: false, reason: "保存対象の別稿を選択してください。" }
 				: !context.hasSelectedRecoverySnapshot
-				? { enabled: false, reason: "保存する復元用保存を選択してください。" }
+				? { enabled: false, reason: "保存する復元ポイントを選択してください。" }
 				: { enabled: true },
 	},
 	{
@@ -148,7 +148,7 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 			!selection(context).enabled
 				? selection(context)
 				: !context.canOpenLinkEditor
-				? { enabled: false, reason: "関連を追加する項目を選択してください。" }
+				? { enabled: false, reason: "関係を追加するメモを選択してください。" }
 				: { enabled: true },
 	},
 	{

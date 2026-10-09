@@ -137,9 +137,11 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
+        id: dependencies
         run: npm ci
 
       - name: Install Chromium
+        id: chromium
         run: npx playwright install --with-deps chromium
 
       - name: Test application interactions
@@ -147,8 +149,12 @@ jobs:
         run: npm run test:ui
 
       - name: Audit the mock application
-        if: ${{ !cancelled() && (steps.ui.outcome == 'success' || steps.ui.outcome == 'failure') }}
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.chromium.outcome == 'success' && (steps.ui.outcome == 'success' || steps.ui.outcome == 'failure') }}
         run: npm run test:a11y
+
+      - name: Test component interactions (Storybook)
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.chromium.outcome == 'success' }}
+        run: npm run test:storybook
 
       - name: Upload Playwright test results
         if: ${{ !cancelled() }}

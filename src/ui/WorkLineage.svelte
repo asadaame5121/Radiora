@@ -42,7 +42,6 @@
 	<header>
 		<div>
 			<button class="back-button" type="button" onclick={onBack}>← アウトラインに戻る</button>
-			<p class="eyebrow">VERSION LINEAGE</p>
 			<h1>{vocabulary.workLineage}</h1>
 		</div>
 		<p>

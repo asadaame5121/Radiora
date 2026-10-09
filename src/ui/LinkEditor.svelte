@@ -157,7 +157,7 @@
 				type="search"
 				bind:value={controller.searchQuery}
 				oninput={() => controller.scheduleSearch(props.selectedWorkId)}
-				placeholder="ノードを検索して接続…"
+				placeholder={`${vocabulary.work}を検索して接続…`}
 				aria-label="接続先を検索"
 				aria-busy={controller.searching}
 				disabled={controller.submitting}

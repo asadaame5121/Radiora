@@ -7,40 +7,29 @@ import {
 	filterInlineLinkCandidates,
 	inlineLinkCandidateCount,
 	inlineLinkCandidateFromCreated,
+	type InlineLinkCompletionPhase,
+	type InlineLinkCompletionState,
+	type InlineLinkDirection,
+	type InternalReferenceCompletionState,
 	isSameInlineLinkTrigger,
 	isSymmetricType,
 	relationTypeNames,
 } from "./inline_link_completion.ts";
 import type { EditorCompletionPorts } from "./editor_completion_ports.ts";
 
+export type {
+	InlineLinkCompletionPhase,
+	InlineLinkCompletionState,
+	InlineLinkDirection,
+	InternalReferenceCompletionState,
+};
+
 const REFERENCE_LIMIT = 12, LINK_LIMIT = 16;
 
-export type InternalReferenceCompletionState = {
-	itemId: string;
-	range: { start: number; end: number };
-	candidates: InternalReferenceCompletion[];
-	activeIndex: number;
-};
-
-export type InlineLinkCompletionPhase = "candidate" | "type" | "direction";
-export type InlineLinkDirection = "forward" | "reverse";
-export type InlineLinkCompletionState = {
-	itemId: string;
-	query: string;
-	range: { start: number; end: number };
-	candidates: InternalReferenceCompletion[];
-	activeIndex: number;
-	phase: InlineLinkCompletionPhase;
-	selectedCandidate?: InternalReferenceCompletion;
-	selectedType?: LinkType;
-	direction: InlineLinkDirection;
-	searching: boolean;
-	creating: boolean;
-};
-
 function dispatchReplacementInput(textarea: HTMLTextAreaElement, data: string): void {
-	const options = { bubbles: true, inputType: "insertReplacementText", data };
-	textarea.dispatchEvent(new InputEvent("input", options));
+	textarea.dispatchEvent(
+		new InputEvent("input", { bubbles: true, inputType: "insertReplacementText", data }),
+	);
 }
 
 export function createEditorCompletionController(ports: EditorCompletionPorts) {
@@ -326,7 +315,9 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 			candidate.scope !== "work"
 		) return;
 		if (item.workId === candidate.workId) {
-			ports.reportError(`同じNode自身には${ports.vocabulary.semanticLink}できません。`);
+			ports.reportError(
+				`同じ${ports.vocabulary.work}には${ports.vocabulary.semanticLink}を追加できません。`,
+			);
 			return;
 		}
 		const textarea = ports.findTextarea(itemId);

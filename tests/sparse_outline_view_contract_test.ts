@@ -1,4 +1,5 @@
 import { assert, assertMatch } from "jsr:@std/assert@1";
+import { DEFAULT_UI_VOCABULARY } from "../src/shared/ui_vocabulary.ts";
 
 Deno.test("Sparse Outline View component exists and accepts TransientProjectionNode props", async () => {
 	const source = await Deno.readTextFile(
@@ -179,6 +180,6 @@ Deno.test("ui_vocabulary includes sparse outline codes", async () => {
 	assert(source.includes("sparseOutline"), "has sparseOutline code");
 	assert(source.includes("queryResult"), "has queryResult code");
 	assert(source.includes("noQueryResult"), "has noQueryResult code");
-	assert(source.includes("文脈付き表示"), "has sparseOutline label");
+	assert(DEFAULT_UI_VOCABULARY.sparseOutline === "文脈付き表示", "has sparseOutline label");
 	assert(source.includes("一致するメモはありません"), "has noQueryResult label");
 });
