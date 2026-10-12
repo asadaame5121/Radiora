@@ -208,6 +208,110 @@ test("empty Backspace removes its pending record and focuses the previous siblin
 		.toBe("[]");
 });
 
+test("collapsing a row does not reload the Outline or unrelated views", async ({ page }) => {
+	const items = [item("A", 10), { ...item("child", 20), parentId: "A" }, item("B", 30)];
+	const reads = { outline: 0, tree: 0, bookmarks: 0 };
+	await page.route("**/api/rpc/listOutline", (route) => {
+		reads.outline++;
+		return route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } });
+	});
+	await page.route("**/api/rpc/listGlobalLineage", (route) => {
+		reads.tree++;
+		return route.continue();
+	});
+	await page.route("**/api/rpc/listBookmarks", (route) => {
+		reads.bookmarks++;
+		return route.continue();
+	});
+	await page.route("**/api/rpc/setCollapsed", (route) => {
+		const [id, collapsed]: [string, boolean] = route.request().postDataJSON().args;
+		const target = items.find((row) => row.id === id);
+		if (!target) throw new Error(`Unknown item: ${id}`);
+		target.collapsed = collapsed;
+		return route.fulfill({ json: { result: null } });
+	});
+	await page.goto("/", { waitUntil: "domcontentloaded" });
+	const disclosure = page.getByRole("button", { name: "Aを折りたたむ", exact: true });
+	await expect(disclosure).toBeVisible();
+	const unrelatedEditor = await page.locator('textarea[data-item-id="B"]').elementHandle();
+	const unrelatedUpdates = await page.locator('.row').filter({
+		has: page.locator('textarea[data-item-id="B"]'),
+	}).evaluateHandle((row) => {
+		const records: MutationRecord[] = [];
+		const observer = new MutationObserver((changes) => {
+			// OverType dismisses link tooltips on every document click, independently of row updates.
+			records.push(...changes.filter((change) =>
+				!(change.target instanceof Element && change.target.closest(".overtype-link-tooltip"))
+			));
+		});
+		observer.observe(row, { attributes: true, characterData: true, childList: true, subtree: true });
+		return { observer, records };
+	});
+	const initialReads = { ...reads };
+	await disclosure.click();
+	await expect(page.locator('textarea[data-item-id="child"]')).toHaveCount(0);
+	expect(reads).toEqual(initialReads);
+	expect(await unrelatedEditor?.evaluate((element) => element.isConnected)).toBe(true);
+	await page.getByRole("button", { name: "Aを展開", exact: true }).click();
+	await expect(page.locator('.markdown-editor-host[data-editor-item-id="child"]')).toBeVisible();
+	expect(reads).toEqual(initialReads);
+	expect(await unrelatedUpdates.evaluate(({ records }) => records.length)).toBe(0);
+	await unrelatedUpdates.evaluate(({ observer }) => observer.disconnect());
+	await unrelatedUpdates.dispose();
+});
+
+test("collapse saved during Outline return preparation does not cancel the newer navigation", async ({ page }) => {
+	const items = [item("A", 10), { ...item("child", 20), parentId: "A" }];
+	const write = deferred();
+	const navigationRead = deferred();
+	let writeStarted = false;
+	let holdNextRead = false;
+	let readWaiting = false;
+	let reads = 0;
+	await page.route("**/api/rpc/listOutline", async (route) => {
+		reads++;
+		const captured = items.map((row) => ({ ...row }));
+		if (holdNextRead) {
+			holdNextRead = false;
+			readWaiting = true;
+			await navigationRead.promise;
+		}
+		await route.fulfill({
+			json: { result: { items: captured, links: [], knots: [], stashItemIds: [] } },
+		});
+	});
+	await page.route("**/api/rpc/setCollapsed", async (route) => {
+		writeStarted = true;
+		await write.promise;
+		items[0].collapsed = true;
+		await route.fulfill({ json: { result: null } });
+	});
+	await page.goto("/", { waitUntil: "domcontentloaded" });
+	await page.locator('.markdown-editor-host[data-editor-item-id="A"]').click();
+	await expect(page.locator('textarea[data-item-id="A"]')).toBeFocused();
+	await page.getByRole("button", { name: "Aを折りたたむ", exact: true }).click();
+	await expect.poll(() => writeStarted).toBe(true);
+	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
+	const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
+	await expect(back).toBeEnabled();
+	const initialReads = reads;
+	holdNextRead = true;
+	await back.click();
+	await expect.poll(() => readWaiting).toBe(true);
+	try {
+		const response = page.waitForResponse("**/api/rpc/setCollapsed");
+		write.release();
+		await response;
+		await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+		expect(reads).toBe(initialReads + 1);
+	} finally {
+		navigationRead.release();
+	}
+	await expect(page.locator(".outline-context h1")).toHaveText("ルート");
+	await expect(page.getByRole("button", { name: "Aを展開", exact: true })).toBeVisible();
+	await expect(page.locator('textarea[data-item-id="child"]')).toHaveCount(0);
+});
+
 test("a failed disclosure click reports its cause without an unhandled rejection or reload", async ({ page }) => {
 	const items = [item("A", 10), { ...item("child", 20), parentId: "A" }];
 	let reads = 0;

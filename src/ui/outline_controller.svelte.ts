@@ -44,6 +44,7 @@ export class OutlineController {
 	private published = false;
 	private disposed = false;
 	private readEdits: Set<string> | null = null;
+	private readCollapsed: Map<string, boolean> | null = null;
 	private cancelPending: (() => void) | null = null;
 
 	constructor(private readonly ports: OutlinePorts) {}
@@ -66,6 +67,7 @@ export class OutlineController {
 		this.cancelPending?.();
 		this.cancelPending = null;
 		this.readEdits = null;
+		this.readCollapsed = null;
 		this._loading = false;
 	}
 
@@ -76,6 +78,8 @@ export class OutlineController {
 		const initialDrafts = this.ports.drafts();
 		const readEdits = new Set<string>();
 		this.readEdits = readEdits;
+		const readCollapsed = new Map<string, boolean>();
+		this.readCollapsed = readCollapsed;
 		let accepted = false;
 		const current = () => !this.disposed && generation === this.generation && canPublish();
 		return {
@@ -90,7 +94,11 @@ export class OutlineController {
 						applyBranchWorkingCopyText(next.items, item, item.text, item.updatedAt);
 					}
 				}
-				this.savedSnapshot = snapshot;
+				for (const item of next.items) {
+					const collapsed = readCollapsed.get(item.id);
+					if (collapsed !== undefined) item.collapsed = collapsed;
+				}
+				this.savedSnapshot = this.withCollapsed(snapshot, readCollapsed);
 				this._snapshot = next;
 				this._hasSnapshot = true;
 				this.published = true;
@@ -112,6 +120,32 @@ export class OutlineController {
 	updateText(item: OutlineItem, text: string, updatedAt: string): void {
 		applyBranchWorkingCopyText(this._snapshot.items, item, text, updatedAt);
 		this.readEdits?.add(branchKey(item));
+	}
+
+	/** A completed placement write corrects the current cache and any staged read, without retiring navigation. */
+	prepareCollapsed(id: string): (collapsed: boolean) => boolean {
+		const workId = this._snapshot.items.find((entry) => entry.id === id)?.workId;
+		return (collapsed) => {
+			if (this.disposed || workId === undefined) return false;
+			const item = this._snapshot.items.find((entry) => entry.id === id);
+			if (!item || item.workId !== workId) return false;
+			item.collapsed = collapsed;
+			this.readCollapsed?.set(id, collapsed);
+			this.savedSnapshot = this.withCollapsed(this.savedSnapshot, new Map([[id, collapsed]]));
+			this.ports.persist(this.savedSnapshot);
+			return true;
+		};
+	}
+
+	private withCollapsed(snapshot: OutlineSnapshot, changes: ReadonlyMap<string, boolean>): OutlineSnapshot {
+		if (!changes.size) return snapshot;
+		return {
+			...snapshot,
+			items: snapshot.items.map((item) => {
+				const collapsed = changes.get(item.id);
+				return collapsed === undefined ? item : { ...item, collapsed };
+			}),
+		};
 	}
 
 	async reload(options: {
@@ -151,7 +185,7 @@ export class OutlineController {
 			this.ports.reconcileSelection();
 			tree.publish();
 			bookmarks.publish();
-			this.ports.persist(snapshot);
+			this.ports.persist(this.savedSnapshot);
 			if (options.focusId && focusAllowed) this.ports.focus(options.focusId, current);
 			return true;
 		} catch (cause) {

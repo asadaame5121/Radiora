@@ -31,7 +31,8 @@ export interface OutlineOperationsControllerOptions {
 	reportError: (cause: unknown) => void;
 	captureRequest: () => () => boolean;
 	pendingEmpty: { track(id: string): void; forget(id: string): void };
-	clearTemporaryExpansion: (id: string) => void;
+	prepareClearTemporaryExpansion: (id: string) => () => void;
+	prepareCollapsed: (id: string) => (collapsed: boolean) => boolean;
 	selection: { current(): string | null; clear(): void };
 }
 
@@ -51,6 +52,8 @@ const IME_PROCESS_KEY_CODE = 229;
 
 /** Editing order lives here; snapshot, drafts, pending records and selection retain their owners. */
 export class OutlineOperationsController {
+	private readonly pendingCollapses = new Set<string>();
+
 	constructor(private readonly options: OutlineOperationsControllerOptions) {}
 
 	createRoot = async (): Promise<void> => {
@@ -170,9 +173,17 @@ export class OutlineOperationsController {
 	};
 
 	toggle = async (item: OutlineItem): Promise<void> => {
-		this.options.clearTemporaryExpansion(item.id);
-		await this.options.api.setCollapsed(item.id, !item.collapsed);
-		await this.options.reload();
+		if (this.pendingCollapses.has(item.id)) return;
+		const collapsed = !item.collapsed;
+		const publish = this.options.prepareCollapsed(item.id);
+		const clearExpansion = this.options.prepareClearTemporaryExpansion(item.id);
+		this.pendingCollapses.add(item.id);
+		try {
+			await this.options.api.setCollapsed(item.id, collapsed);
+			if (publish(collapsed)) clearExpansion();
+		} finally {
+			this.pendingCollapses.delete(item.id);
+		}
 	};
 
 	splitRow = async (

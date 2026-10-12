@@ -25,7 +25,8 @@ function adaptedPorts() {
 	return {
 		captureRequest: () => () => true,
 		pendingEmpty: { track: vi.fn(), forget: vi.fn() },
-		clearTemporaryExpansion: vi.fn(),
+		prepareClearTemporaryExpansion: vi.fn(() => vi.fn()),
+		prepareCollapsed: vi.fn(() => vi.fn(() => true)),
 		selection: { current: (): string | null => null, clear: vi.fn() },
 	};
 }
@@ -69,7 +70,13 @@ function fixture(items: OutlineItem[]) {
 			track: vi.fn((_id: string) => events.push("track")),
 			forget: vi.fn((_id: string) => events.push("forget")),
 		},
-		clearTemporaryExpansion: vi.fn((_id: string) => events.push("clear-expansion")),
+		prepareCollapsed: vi.fn(() => vi.fn((collapsed: boolean) => {
+			events.push(`publish-collapse:${collapsed}`);
+			return true;
+		})),
+		prepareClearTemporaryExpansion: vi.fn((_id: string) =>
+			vi.fn(() => events.push("clear-expansion"))
+		),
 		selection: {
 			current: vi.fn((): string | null => null),
 			clear: vi.fn(() => events.push("clear-selection")),
@@ -271,7 +278,7 @@ describe("OutlineOperationsController - structure operations", () => {
 
 		await controller.toggle(item);
 		expect(setCollapsed).toHaveBeenCalledWith("1", true);
-		expect(reload).toHaveBeenCalledWith();
+		expect(reload).not.toHaveBeenCalled();
 	});
 
 	it("splits row at cursor position and loads created item", async () => {
@@ -521,11 +528,12 @@ describe("OutlineOperationsController - current ownership contracts", () => {
 		expect(current?.()).toBe(false);
 	});
 
-	it("clears temporary expansion before persisting collapse and leaves other owners to reload", async () => {
+	it("publishes collapse and clears temporary expansion only after persistence without reload", async () => {
 		const item = createItem("row", null, 10);
-		const { controller, events } = fixture([item]);
+		const { controller, ports, events } = fixture([item]);
 		await controller.toggle(item);
-		expect(events).toEqual(["clear-expansion", "collapse", "reload"]);
+		expect(events).toEqual(["collapse", "publish-collapse:true", "clear-expansion"]);
+		expect(ports.reload).not.toHaveBeenCalled();
 	});
 
 	it("propagates collapse failure to the caller without reloading", async () => {
@@ -536,6 +544,32 @@ describe("OutlineOperationsController - current ownership contracts", () => {
 		await expect(controller.toggle(item)).rejects.toBe(cause);
 		expect(ports.reportError).not.toHaveBeenCalled();
 		expect(ports.reload).not.toHaveBeenCalled();
+		expect(ports.prepareClearTemporaryExpansion.mock.results[0].value).not.toHaveBeenCalled();
+		expect(ports.prepareCollapsed.mock.results[0].value).not.toHaveBeenCalled();
+	});
+
+	it("does not reload or clear expansion when the placement is no longer publishable", async () => {
+		const { controller, ports } = fixture([createItem("row", null, 10)]);
+		ports.prepareCollapsed.mockReturnValue(vi.fn(() => false));
+		await controller.toggle(createItem("row", null, 10));
+		expect(ports.api.setCollapsed).toHaveBeenCalledWith("row", true);
+		expect(ports.prepareClearTemporaryExpansion.mock.results[0].value).not.toHaveBeenCalled();
+		expect(ports.reload).not.toHaveBeenCalled();
+	});
+
+	it("coalesces repeated disclosure clicks during persistence and allows retry after failure", async () => {
+		const item = createItem("row", null, 10);
+		const { controller, ports } = fixture([item]);
+		const pending = Promise.withResolvers<void>();
+		ports.api.setCollapsed.mockReturnValueOnce(pending.promise);
+		const first = controller.toggle(item);
+		await controller.toggle(item);
+		expect(ports.api.setCollapsed).toHaveBeenCalledTimes(1);
+		pending.reject(new Error("save failed"));
+		await expect(first).rejects.toThrow("save failed");
+		await controller.toggle(item);
+		expect(ports.api.setCollapsed).toHaveBeenCalledTimes(2);
+		expect(ports.prepareClearTemporaryExpansion.mock.results[1].value).toHaveBeenCalledOnce();
 	});
 
 	it.each([
