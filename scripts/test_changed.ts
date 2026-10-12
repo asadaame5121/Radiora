@@ -173,6 +173,14 @@ export function vitestTestCount(report: unknown): number {
 	return report.numTotalTests;
 }
 
+async function resolveVitestPath(cwd: string, file: string): Promise<string> {
+	try {
+		return (await Deno.realPath(`${cwd}/${file}`)).replaceAll("\\", "/");
+	} catch (error) {
+		if (error instanceof Deno.errors.NotFound) return file;
+		throw error;
+	}
+}
 async function runVitest(cwd: string, plan: TestPlan): Promise<number> {
 	const report = await Deno.makeTempFile({ suffix: ".json" });
 	try {
@@ -192,9 +200,11 @@ async function runVitest(cwd: string, plan: TestPlan): Promise<number> {
 			const code = await run(cwd, "node", [
 				base[0],
 				"related",
+				...await Promise.all(
+					plan.vitest.map((file) => resolveVitestPath(cwd, file)),
+				),
 				...base.slice(1),
 				"--passWithNoTests",
-				...plan.vitest,
 			]);
 			// Never turn compilation failures or failed tests into a fallback success.
 			if (code !== 0) return code;
