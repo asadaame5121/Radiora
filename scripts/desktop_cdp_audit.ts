@@ -1,5 +1,5 @@
-type JsonRecord = Record<string, unknown>;
-type TargetKind = "renderer" | "deno";
+import { asError, CdpClient, type JsonRecord } from "./desktop_cdp_audit/cdp_client.ts";
+import { type AuditOptions, parseOptions, type TargetKind } from "./desktop_cdp_audit/options.ts";
 
 interface CdpTarget {
 	id?: string;
@@ -14,18 +14,6 @@ interface InspectorVersion {
 	webSocketDebuggerUrl?: string;
 }
 
-interface AuditOptions {
-	host: string;
-	port: number;
-	target: TargetKind;
-	waitMs: number;
-	expression?: string;
-	screenshot?: string;
-	trace?: string;
-	output?: string;
-	strict: boolean;
-}
-
 interface AuditEvents {
 	console: JsonRecord[];
 	exceptions: JsonRecord[];
@@ -38,113 +26,6 @@ interface InspectorState {
 	baseUrl: string;
 	version: InspectorVersion;
 	targets: CdpTarget[];
-}
-
-interface CdpMessage {
-	id?: number;
-	method?: string;
-	params?: JsonRecord;
-	result?: JsonRecord;
-	error?: JsonRecord;
-}
-
-interface PendingCommand {
-	resolve: (message: CdpMessage) => void;
-	reject: (cause: Error) => void;
-	timer: ReturnType<typeof setTimeout>;
-}
-
-const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 9230;
-const COMMAND_TIMEOUT_MS = 5_000;
-
-class CdpClient {
-	readonly #socket: WebSocket;
-	readonly #pending = new Map<number, PendingCommand>();
-	readonly #listeners = new Map<string, Set<(params: JsonRecord) => void>>();
-	readonly #connected: Promise<void>;
-	#nextId = 0;
-
-	constructor(webSocketUrl: string) {
-		this.#socket = new WebSocket(webSocketUrl);
-		this.#connected = new Promise<void>((resolve, reject) => {
-			let opened = false;
-			this.#socket.addEventListener("open", () => {
-				opened = true;
-				resolve();
-			});
-			this.#socket.addEventListener("error", () => {
-				if (!opened) reject(new Error(`CDP WebSocket connection failed: ${webSocketUrl}`));
-			});
-		});
-		this.#socket.addEventListener("message", (event) => this.#handleMessage(String(event.data)));
-		this.#socket.addEventListener("close", () => {
-			for (const pending of this.#pending.values()) {
-				clearTimeout(pending.timer);
-				pending.reject(new Error("CDP WebSocket closed before the command completed."));
-			}
-			this.#pending.clear();
-		});
-	}
-
-	async ready(): Promise<void> {
-		await this.#connected;
-	}
-
-	on(method: string, listener: (params: JsonRecord) => void): () => void {
-		const listeners = this.#listeners.get(method) ?? new Set();
-		listeners.add(listener);
-		this.#listeners.set(method, listeners);
-		return () => listeners.delete(listener);
-	}
-
-	async send(method: string, params: JsonRecord = {}): Promise<CdpMessage> {
-		await this.ready();
-		const id = ++this.#nextId;
-		return await new Promise<CdpMessage>((resolve, reject) => {
-			const timer = setTimeout(() => {
-				this.#pending.delete(id);
-				reject(new Error(`CDP command timed out: ${method}`));
-			}, COMMAND_TIMEOUT_MS);
-			this.#pending.set(id, { resolve, reject, timer });
-			try {
-				this.#socket.send(JSON.stringify({ id, method, params }));
-			} catch (cause) {
-				clearTimeout(timer);
-				this.#pending.delete(id);
-				reject(asError(cause));
-			}
-		});
-	}
-
-	close(): void {
-		this.#socket.close();
-	}
-
-	#handleMessage(raw: string): void {
-		let message: CdpMessage;
-		try {
-			message = JSON.parse(raw) as CdpMessage;
-		} catch {
-			return;
-		}
-		if (typeof message.id === "number") {
-			const pending = this.#pending.get(message.id);
-			if (!pending) return;
-			this.#pending.delete(message.id);
-			clearTimeout(pending.timer);
-			if (message.error) {
-				pending.reject(new Error(`CDP ${message.error.message ?? "command failed"}`));
-			} else {
-				pending.resolve(message);
-			}
-			return;
-		}
-		if (!message.method) return;
-		for (const listener of this.#listeners.get(message.method) ?? []) {
-			listener(message.params ?? {});
-		}
-	}
 }
 
 if (Deno.args.includes("--help") || Deno.args.includes("-h")) {
@@ -419,85 +300,6 @@ function formatRemoteValue(value: unknown): unknown {
 	return value;
 }
 
-function parseOptions(args: string[]): AuditOptions {
-	const options: AuditOptions = {
-		host: DEFAULT_HOST,
-		port: DEFAULT_PORT,
-		target: "renderer",
-		waitMs: 500,
-		strict: false,
-	};
-	for (let index = 0; index < args.length; index += 1) {
-		const arg = args[index];
-		if (arg === "--help" || arg === "-h") continue;
-		if (arg === "--strict") {
-			options.strict = true;
-			continue;
-		}
-		const [flag, inlineValue] = arg.split("=", 2);
-		const value = inlineValue ?? args[++index];
-		if (!value) throw new Error(`Missing value for ${flag}`);
-		applyAuditOption(options, flag, value);
-	}
-	if (options.trace && options.target !== "renderer") {
-		throw new Error("--trace requires --target renderer.");
-	}
-	const outputPaths = [options.trace, options.output, options.screenshot]
-		.filter((path): path is string => path !== undefined);
-	if (new Set(outputPaths).size !== outputPaths.length) {
-		throw new Error("--trace, --output, and --screenshot must use different paths.");
-	}
-	return options;
-}
-
-function applyAuditOption(options: AuditOptions, flag: string, value: string): void {
-	switch (flag) {
-		case "--host":
-			options.host = value;
-			break;
-		case "--port":
-			options.port = parsePositiveInteger(value, flag);
-			break;
-		case "--target":
-			if (value !== "renderer" && value !== "deno") throw new Error(`Invalid target: ${value}`);
-			options.target = value;
-			break;
-		case "--wait-ms":
-			options.waitMs = parseNonNegativeInteger(value, flag);
-			break;
-		case "--expression":
-			options.expression = value;
-			break;
-		case "--screenshot":
-			options.screenshot = value;
-			break;
-		case "--trace":
-			options.trace = value;
-			break;
-		case "--output":
-			options.output = value;
-			break;
-		default:
-			throw new Error(`Unknown option: ${flag}`);
-	}
-}
-
-function parsePositiveInteger(value: string, flag: string): number {
-	const parsed = Number(value);
-	if (!Number.isInteger(parsed) || parsed <= 0) {
-		throw new Error(`${flag} must be a positive integer.`);
-	}
-	return parsed;
-}
-
-function parseNonNegativeInteger(value: string, flag: string): number {
-	const parsed = Number(value);
-	if (!Number.isInteger(parsed) || parsed < 0) {
-		throw new Error(`${flag} must be a non-negative integer.`);
-	}
-	return parsed;
-}
-
 async function fetchJson<T>(url: string): Promise<T> {
 	const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
 	if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}.`);
@@ -522,10 +324,6 @@ function asRecord(value: unknown): JsonRecord {
 
 function isRecord(value: unknown): value is JsonRecord {
 	return typeof value === "object" && value !== null;
-}
-
-function asError(cause: unknown): Error {
-	return cause instanceof Error ? cause : new Error(String(cause));
 }
 
 function wait(milliseconds: number): Promise<void> {
