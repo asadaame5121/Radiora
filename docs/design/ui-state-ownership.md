@@ -728,3 +728,27 @@ PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存して
   lint・行数品質・magic-number ratchet・重複ratchet・全体format・Deno型検査も通過。
 - pre-commit内のDeno経由npm起動はWindows shimをJavaScriptとして読み込み失敗した。
   残りの必須check・test・test:svelte・buildを通常のCLI経由で通過させ、今回のcommitのみhookを省略した。
+
+## 単一配置の折りたたみ局所公開（2026-10-12、ローカル実装）
+
+- 開閉ボタンと単一配置の開閉コマンドは、`OutlineOperationsController.toggle`で保存し、
+  `OutlineController.prepareCollapsed`の保存済み配置補正操作で対象配置の`collapsed`だけ更新する。
+  `.svelte` Viewからsnapshotへ直接書き込まない。
+- 保存成功時にのみ一時展開を解除する。保存失敗時はsnapshotと一時展開を維持し、既存の呼出し元へ
+  原因を伝える。同一配置の保存中の連打は重複保存せず、成功・失敗後に再操作できる。
+- live snapshotや無関係なitemの同一性を保ち、Outline・Tree・栞を再取得しない。
+  保存済みstartup cache側にも開閉状態を反映するが、Editor draftは保存済み本文へ混ぜない。
+- 読込開始後に成功した局所公開は、その読込の古い開閉状態より優先する。
+  保存済み配置の補正は選択・focusの公開と異なる内部権限とし、新しい読込やnavigationにも
+  保存成功を引き継ぐ。現在の描画cacheと進行中の正式読込へ反映するが、読込世代を変更せず、
+  新しい画面遷移を失効させない。補正後の全reloadは行わない。
+  dispose・対象配置の消失・Workの同一性変更後には補正しない。完了済みDB書込は取り消さない。
+- 一時展開の解除権限は`OutlineDisplayController.prepareClearExpansion`が捕捉する。
+  保存中に新たに設定された展開状態は消さず、同じID列の再調停では権限を失効させない。
+- 回帰証拠: `tests/ui/outline-operations.spec.ts`で開閉後のOutline・Tree・栞の追加読込が0回、
+  無関係なeditor DOMが同じままであることを確認。無関係な行のDOM変更も監視するが、OverTypeが
+  document clickで行うtooltip非表示処理は除く。Controller試験でdraft維持、読込中の開閉、
+  失効、保存失敗、連打と再試行を検証する。
+- 残る範囲: 可視行配列の再構築、startup cache保存、全配置開閉、構造編集時の全reload、
+  入力時の更新伝播、仮想化。全コンポーネントの再描画問題が解消したとは扱わない。
+  main反映は未確認。

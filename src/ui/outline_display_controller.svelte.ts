@@ -20,13 +20,22 @@ export class OutlineDisplayController {
 		this.setFilter({ ...EMPTY_OUTLINE_FILTER });
 	}
 	setExpanded(ids: readonly string[]): void {
-		this.liveExpanded = [...new Set(ids)];
+		const next = [...new Set(ids)];
+		if (next.length === this.liveExpanded.length && next.every((id, index) => id === this.liveExpanded[index])) return;
+		this.liveExpanded = next;
 	}
 	expand(id: string): void {
 		this.setExpanded([...this.liveExpanded, id]);
 	}
 	clearExpansion(id: string): void {
 		this.setExpanded(this.liveExpanded.filter((key) => key !== id));
+	}
+	/** Clear only the expansion that existed before the asynchronous disclosure write. */
+	prepareClearExpansion(id: string): () => void {
+		const expanded = this.liveExpanded;
+		return () => {
+			if (this.liveExpanded === expanded) this.clearExpansion(id);
+		};
 	}
 	visibleRows(
 		snapshot: OutlineSnapshot,

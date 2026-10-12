@@ -422,7 +422,8 @@
 		flushAutosave: (workId) => editorController.flushAutosave(workId),
 		reportError: (cause) => error = errorMessage(cause),
 		pendingEmpty: pendingEmptyItemController,
-		clearTemporaryExpansion: (id) => outlineDisplay.clearExpansion(id),
+		prepareClearTemporaryExpansion: (id) => outlineDisplay.prepareClearExpansion(id),
+		prepareCollapsed: (id) => outlineController.prepareCollapsed(id),
 		captureRequest: captureOutlineRequest,
 		selection: { current: () => selectedId, clear: () => selectOccurrence(null) },
 	});

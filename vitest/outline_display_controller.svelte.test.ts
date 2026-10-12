@@ -20,6 +20,21 @@ it("keeps live conditions independent of captured restoration values", () => {
 	expect(display.filter).toEqual(EMPTY_OUTLINE_FILTER);
 });
 
+it("clears the captured expansion after unchanged reconciliation but not a newer expansion", () => {
+	const display = new OutlineDisplayController();
+	display.expand("a");
+	const clear = display.prepareClearExpansion("a");
+	display.setExpanded(["a"]);
+	clear();
+	expect(display.expanded).toEqual([]);
+	display.expand("a");
+	const oldClear = display.prepareClearExpansion("a");
+	display.clearExpansion("a");
+	display.expand("a");
+	oldClear();
+	expect(display.expanded).toEqual(["a"]);
+});
+
 function item(id: string, parentId: string | null, orderKey: number): OutlineItem {
 	return {
 		id,

@@ -3,6 +3,8 @@ import type { Bookmark, OutlineItem, OutlineSnapshot } from "../src/domain/model
 import type { WorkingCopyDraft } from "../src/services/working_copy_autosave.ts";
 import { BookmarkController } from "../src/ui/bookmark_controller.svelte.ts";
 import { OutlineController } from "../src/ui/outline_controller.svelte.ts";
+import { OutlineDisplayController } from "../src/ui/outline_display_controller.svelte.ts";
+import { OutlineOperationsController } from "../src/ui/outline_operations_controller.svelte.ts";
 
 function snapshot(text = "saved"): OutlineSnapshot {
 	const item: OutlineItem = {
@@ -95,6 +97,144 @@ function setup() {
 		select: () => selectionGeneration++,
 	};
 }
+
+test("collapse publication changes only its placement and retains live snapshot identity and drafts", () => {
+	const s = setup();
+	const saved = snapshot();
+	s.setDrafts([draft("unsaved")]);
+	s.controller.restoreCache(saved);
+	const live = s.controller.snapshot;
+	const other = live.items[1];
+	const publish = s.controller.prepareCollapsed("main");
+	expect(publish(true)).toBe(true);
+	expect(s.controller.snapshot).toBe(live);
+	expect(live.items[0].collapsed).toBe(true);
+	expect(live.items[0].text).toBe("unsaved");
+	expect(live.items[1]).toBe(other);
+	expect(other.collapsed).toBe(false);
+	expect(saved.items[0].collapsed).toBe(false);
+	expect(s.controller.cacheSnapshot.items[0].collapsed).toBe(true);
+	expect(s.controller.cacheSnapshot.items[0].text).toBe("saved");
+	expect(s.ports.persist).toHaveBeenCalledWith(s.controller.cacheSnapshot);
+	expect(s.ports.readOutline).not.toHaveBeenCalled();
+	expect(s.ports.prepareTree).not.toHaveBeenCalled();
+});
+
+test.each(["invalidate", "reload"] as const)(
+	"completed collapse corrects saved data across %s without selection or focus publication",
+	async (departure) => {
+		const s = setup();
+		s.controller.restoreCache(snapshot());
+		const publish = s.controller.prepareCollapsed("main");
+		if (departure === "reload") await s.controller.reload();
+		else s.controller[departure]();
+		expect(publish(true)).toBe(true);
+		expect(s.controller.snapshot.items[0].collapsed).toBe(true);
+		expect(s.ports.focus).not.toHaveBeenCalled();
+	},
+);
+
+test("completed collapse cannot patch a disposed owner or a replaced placement", () => {
+	for (const disposed of [false, true]) {
+		const s = setup();
+		s.controller.restoreCache(snapshot());
+		const publish = s.controller.prepareCollapsed("main");
+		if (disposed) s.controller.dispose();
+		else {
+			const replacement = snapshot();
+			replacement.items[0].workId = "replacement";
+			s.controller.begin().publish(replacement);
+		}
+		expect(publish(true)).toBe(false);
+		expect(s.controller.snapshot.items[0].collapsed).toBe(false);
+	}
+});
+
+test("completed collapse preserves a navigation publication and overlays its stale prepared snapshot", () => {
+	const s = setup();
+	s.controller.restoreCache(snapshot());
+	const publishCollapse = s.controller.prepareCollapsed("main");
+	s.controller.invalidate();
+	const navigation = s.controller.begin();
+	expect(publishCollapse(true)).toBe(true);
+	expect(navigation.current()).toBe(true);
+	expect(navigation.publish(snapshot())).toBe(true);
+	expect(s.controller.snapshot.items[0].collapsed).toBe(true);
+	expect(s.controller.cacheSnapshot.items[0].collapsed).toBe(true);
+	expect(s.ports.readOutline).not.toHaveBeenCalled();
+	expect(s.ports.focus).not.toHaveBeenCalled();
+});
+
+test("a collapse saved during an Outline read survives its older response and startup persistence", async () => {
+	const s = setup();
+	s.controller.restoreCache(snapshot());
+	const pending = Promise.withResolvers<OutlineSnapshot>();
+	s.ports.readOutline.mockReturnValueOnce(pending.promise);
+	const reading = s.controller.reload();
+	expect(s.controller.prepareCollapsed("main")(true)).toBe(true);
+	pending.resolve(snapshot());
+	await reading;
+	expect(s.controller.snapshot.items[0].collapsed).toBe(true);
+	expect(s.controller.cacheSnapshot.items[0].collapsed).toBe(true);
+	expect(s.ports.persist).toHaveBeenLastCalledWith(s.controller.cacheSnapshot);
+});
+
+test.each([false, true])(
+	"a read started during collapse persistence cannot retain stale cache (read already published: %s)",
+	async (alreadyPublished) => {
+		const s = setup();
+		s.controller.restoreCache(snapshot());
+		const display = new OutlineDisplayController();
+		display.expand("main");
+		const write = Promise.withResolvers<void>();
+		const read = Promise.withResolvers<OutlineSnapshot>();
+		const saved = snapshot();
+		const operations = new OutlineOperationsController({
+			api: {
+				moveItem: vi.fn(),
+				setCollapsed: async () => {
+					await write.promise;
+					saved.items[0].collapsed = true;
+				},
+				updateItemText: vi.fn(),
+				createItem: vi.fn(),
+				deleteItem: vi.fn(),
+				createOccurrence: vi.fn(),
+				setContextualHeading: vi.fn(),
+			},
+			getItems: () => s.controller.snapshot.items,
+			getItemById: (id) => s.controller.snapshot.items.find((item) => item.id === id),
+			reload: () => s.controller.reload(),
+			flushAutosave: vi.fn(),
+			reportError: vi.fn(),
+			captureRequest: () => () => true,
+			pendingEmpty: { track: vi.fn(), forget: vi.fn() },
+			prepareClearTemporaryExpansion: (id) => display.prepareClearExpansion(id),
+			prepareCollapsed: (id) => s.controller.prepareCollapsed(id),
+			selection: { current: () => "main", clear: vi.fn() },
+		});
+		const collapse = operations.toggle(s.controller.snapshot.items[0]);
+		s.ports.readOutline.mockReturnValueOnce(read.promise).mockImplementation(async () => saved);
+		const staleRead = s.controller.reload();
+		if (alreadyPublished) {
+			read.resolve(snapshot());
+			await staleRead;
+			// Reconciliation may repeat the same expansion IDs without a new user expansion.
+			display.setExpanded(display.expanded);
+		}
+		write.resolve();
+		await collapse;
+		if (!alreadyPublished) {
+			read.resolve(snapshot());
+			expect(await staleRead).toBe(true);
+		}
+		expect(s.controller.snapshot.items[0].collapsed).toBe(true);
+		expect(s.controller.cacheSnapshot.items[0].collapsed).toBe(true);
+		expect(display.expanded).not.toContain("main");
+		expect(s.ports.focus).not.toHaveBeenCalled();
+		expect(s.ports.readOutline).toHaveBeenCalledTimes(1);
+	},
+);
 
 for (const failed of [false, true]) {
 	test(`reverse reload ${failed ? "failure" : "success"} cannot replace snapshot/bookmarks/error/focus`, async () => {
