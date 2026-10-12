@@ -24,12 +24,14 @@ function gate() {
 	return { promise, release };
 }
 
-test("reload caches saved API text while an unsaved draft stays visible", async ({ page }) => {
+test("collapse persists the saved snapshot without replacing an unsaved editor draft", async ({ page }) => {
 	let cached: OutlineSnapshot | null = null;
 	const cachedItem = () => cached?.items[0];
 	let collapsed = false;
 	let writes = 0;
+	let outlineReads = 0;
 	await page.route("**/api/rpc/listOutline", (route) => {
+		outlineReads++;
 		const snapshot = outline(collapsed ? "new saved text" : "saved text");
 		snapshot.items[0].collapsed = collapsed;
 		snapshot.items.push({
@@ -63,9 +65,11 @@ test("reload caches saved API text while an unsaved draft stays visible", async 
 	await editor.fill("unsaved draft");
 	await expect(page.locator(".working-copy-save-status.failed")).toBeVisible();
 	await page.getByRole("button", { name: /を折りたたむ$/ }).click();
-	await expect.poll(() => cached?.items[0].text).toBe("new saved text");
+	await expect.poll(() => cached?.items[0].collapsed).toBe(true);
 	await expect(editor).toHaveValue("unsaved draft");
 	expect(cachedItem()?.collapsed).toBe(true);
+	expect(cachedItem()?.text).toBe("saved text");
+	expect(outlineReads).toBe(1);
 	const savedWrites = writes;
 	await page.evaluate(() => window.dispatchEvent(new Event("beforeunload")));
 	await expect(editor).toHaveValue("unsaved draft");

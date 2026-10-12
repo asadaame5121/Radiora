@@ -180,34 +180,8 @@ async function runAudit(options: AuditOptions): Promise<JsonRecord & { issueCoun
 			.filter((path): path is string => path !== undefined)
 			.map(assertFileDoesNotExist),
 	);
-	let resolveTraceComplete: ((params: JsonRecord) => void) | undefined;
-	const traceComplete = options.trace
-		? new Promise<JsonRecord>((resolve) => resolveTraceComplete = resolve)
-		: undefined;
-	const inspector = await discoverInspector(options);
-	const candidates = endpointCandidates(options.target, inspector);
-	const { client, webSocketUrl } = await connectToFirst(candidates);
-	const events: AuditEvents = {
-		console: [],
-		exceptions: [],
-		logs: [],
-		failedRequests: [],
-		traceEvents: [],
-	};
-	client.on("Runtime.consoleAPICalled", (params) => events.console.push(consoleEvent(params)));
-	client.on("Runtime.exceptionThrown", (params) => events.exceptions.push(exceptionEvent(params)));
-	client.on("Log.entryAdded", (params) => events.logs.push(asRecord(params.entry)));
-	client.on("Network.loadingFailed", (params) =>
-		events.failedRequests.push({
-			requestId: params.requestId,
-			errorText: params.errorText,
-			blockedReason: params.blockedReason ?? null,
-		}));
-	client.on("Tracing.dataCollected", (params) => {
-		if (Array.isArray(params.value)) events.traceEvents.push(...params.value);
-	});
-	client.on("Tracing.tracingComplete", (params) => resolveTraceComplete?.(params));
-
+	const { inspector, client, webSocketUrl } = await connectAudit(options);
+	const { events, traceComplete } = registerAuditListeners(client, options.trace !== undefined);
 	try {
 		await client.send("Runtime.enable");
 		await sendOptional(client, "Log.enable");
@@ -230,25 +204,7 @@ async function runAudit(options: AuditOptions): Promise<JsonRecord & { issueCoun
 		const screenshot = options.screenshot && options.target === "renderer"
 			? await captureScreenshot(client, options.screenshot)
 			: null;
-		let trace: JsonRecord | null = null;
-		if (options.trace) {
-			await client.send("Tracing.end");
-			if (!traceComplete) throw new Error("Trace completion listener was not initialized.");
-			const completed = await withTimeout(traceComplete, 30_000, "CDP tracing");
-			await writeNewJsonFile(options.trace, {
-				traceEvents: events.traceEvents,
-				metadata: {
-					targetKind: options.target,
-					browser: inspector.version.Browser ?? null,
-					generatedAt: new Date().toISOString(),
-				},
-			});
-			trace = {
-				path: options.trace,
-				eventCount: events.traceEvents.length,
-				dataLossOccurred: completed.dataLossOccurred === true,
-			};
-		}
+		const trace = await captureTrace(options, client, inspector, events, traceComplete);
 		const issueCount = events.console.filter((event) => event.type === "error").length +
 			events.exceptions.length + events.failedRequests.length +
 			(trace?.dataLossOccurred === true ? 1 : 0);
@@ -276,6 +232,68 @@ async function runAudit(options: AuditOptions): Promise<JsonRecord & { issueCoun
 	} finally {
 		client.close();
 	}
+}
+
+async function connectAudit(options: AuditOptions) {
+	const inspector = await discoverInspector(options);
+	const candidates = endpointCandidates(options.target, inspector);
+	const connection = await connectToFirst(candidates);
+	return { inspector, ...connection };
+}
+
+function registerAuditListeners(client: CdpClient, traceEnabled: boolean) {
+	let resolveTraceComplete: ((params: JsonRecord) => void) | undefined;
+	const traceComplete = traceEnabled
+		? new Promise<JsonRecord>((resolve) => resolveTraceComplete = resolve)
+		: undefined;
+	const events: AuditEvents = {
+		console: [],
+		exceptions: [],
+		logs: [],
+		failedRequests: [],
+		traceEvents: [],
+	};
+	client.on("Runtime.consoleAPICalled", (params) => events.console.push(consoleEvent(params)));
+	client.on("Runtime.exceptionThrown", (params) => events.exceptions.push(exceptionEvent(params)));
+	client.on("Log.entryAdded", (params) => events.logs.push(asRecord(params.entry)));
+	client.on("Network.loadingFailed", (params) =>
+		events.failedRequests.push({
+			requestId: params.requestId,
+			errorText: params.errorText,
+			blockedReason: params.blockedReason ?? null,
+		}));
+	client.on("Tracing.dataCollected", (params) => {
+		if (Array.isArray(params.value)) events.traceEvents.push(...params.value);
+	});
+	client.on("Tracing.tracingComplete", (params) => resolveTraceComplete?.(params));
+	return { events, traceComplete };
+}
+
+async function captureTrace(
+	options: AuditOptions,
+	client: CdpClient,
+	inspector: InspectorState,
+	events: AuditEvents,
+	traceComplete: Promise<JsonRecord> | undefined,
+): Promise<JsonRecord | null> {
+	const tracePath = options.trace;
+	if (!tracePath) return null;
+	await client.send("Tracing.end");
+	if (!traceComplete) throw new Error("Trace completion listener was not initialized.");
+	const completed = await withTimeout(traceComplete, 30_000, "CDP tracing");
+	await writeNewJsonFile(tracePath, {
+		traceEvents: events.traceEvents,
+		metadata: {
+			targetKind: options.target,
+			browser: inspector.version.Browser ?? null,
+			generatedAt: new Date().toISOString(),
+		},
+	});
+	return {
+		path: tracePath,
+		eventCount: events.traceEvents.length,
+		dataLossOccurred: completed.dataLossOccurred === true,
+	};
 }
 
 async function discoverInspector(options: AuditOptions): Promise<InspectorState> {
@@ -419,35 +437,7 @@ function parseOptions(args: string[]): AuditOptions {
 		const [flag, inlineValue] = arg.split("=", 2);
 		const value = inlineValue ?? args[++index];
 		if (!value) throw new Error(`Missing value for ${flag}`);
-		switch (flag) {
-			case "--host":
-				options.host = value;
-				break;
-			case "--port":
-				options.port = parsePositiveInteger(value, flag);
-				break;
-			case "--target":
-				if (value !== "renderer" && value !== "deno") throw new Error(`Invalid target: ${value}`);
-				options.target = value;
-				break;
-			case "--wait-ms":
-				options.waitMs = parseNonNegativeInteger(value, flag);
-				break;
-			case "--expression":
-				options.expression = value;
-				break;
-			case "--screenshot":
-				options.screenshot = value;
-				break;
-			case "--trace":
-				options.trace = value;
-				break;
-			case "--output":
-				options.output = value;
-				break;
-			default:
-				throw new Error(`Unknown option: ${flag}`);
-		}
+		applyAuditOption(options, flag, value);
 	}
 	if (options.trace && options.target !== "renderer") {
 		throw new Error("--trace requires --target renderer.");
@@ -458,6 +448,38 @@ function parseOptions(args: string[]): AuditOptions {
 		throw new Error("--trace, --output, and --screenshot must use different paths.");
 	}
 	return options;
+}
+
+function applyAuditOption(options: AuditOptions, flag: string, value: string): void {
+	switch (flag) {
+		case "--host":
+			options.host = value;
+			break;
+		case "--port":
+			options.port = parsePositiveInteger(value, flag);
+			break;
+		case "--target":
+			if (value !== "renderer" && value !== "deno") throw new Error(`Invalid target: ${value}`);
+			options.target = value;
+			break;
+		case "--wait-ms":
+			options.waitMs = parseNonNegativeInteger(value, flag);
+			break;
+		case "--expression":
+			options.expression = value;
+			break;
+		case "--screenshot":
+			options.screenshot = value;
+			break;
+		case "--trace":
+			options.trace = value;
+			break;
+		case "--output":
+			options.output = value;
+			break;
+		default:
+			throw new Error(`Unknown option: ${flag}`);
+	}
 }
 
 function parsePositiveInteger(value: string, flag: string): number {

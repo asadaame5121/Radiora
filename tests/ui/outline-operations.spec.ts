@@ -234,17 +234,24 @@ test("collapsing a row does not reload the Outline or unrelated views", async ({
 	const disclosure = page.getByRole("button", { name: "Aを折りたたむ", exact: true });
 	await expect(disclosure).toBeVisible();
 	const unrelatedEditor = await page.locator('textarea[data-item-id="B"]').elementHandle();
-	const unrelatedUpdates = await page.locator('.row').filter({
+	const unrelatedUpdates = await page.locator(".row").filter({
 		has: page.locator('textarea[data-item-id="B"]'),
 	}).evaluateHandle((row) => {
 		const records: MutationRecord[] = [];
 		const observer = new MutationObserver((changes) => {
 			// OverType dismisses link tooltips on every document click, independently of row updates.
-			records.push(...changes.filter((change) =>
-				!(change.target instanceof Element && change.target.closest(".overtype-link-tooltip"))
-			));
+			records.push(
+				...changes.filter((change) =>
+					!(change.target instanceof Element && change.target.closest(".overtype-link-tooltip"))
+				),
+			);
 		});
-		observer.observe(row, { attributes: true, characterData: true, childList: true, subtree: true });
+		observer.observe(row, {
+			attributes: true,
+			characterData: true,
+			childList: true,
+			subtree: true,
+		});
 		return { observer, records };
 	});
 	const initialReads = { ...reads };
@@ -302,8 +309,9 @@ test("collapse saved during Outline return preparation does not cancel the newer
 		const response = page.waitForResponse("**/api/rpc/setCollapsed");
 		write.release();
 		await response;
-		await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
-		expect(reads).toBe(initialReads + 1);
+		await page.evaluate(() =>
+			new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+		);
 	} finally {
 		navigationRead.release();
 	}

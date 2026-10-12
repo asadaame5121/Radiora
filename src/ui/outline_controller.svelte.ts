@@ -137,7 +137,10 @@ export class OutlineController {
 		};
 	}
 
-	private withCollapsed(snapshot: OutlineSnapshot, changes: ReadonlyMap<string, boolean>): OutlineSnapshot {
+	private withCollapsed(
+		snapshot: OutlineSnapshot,
+		changes: ReadonlyMap<string, boolean>,
+	): OutlineSnapshot {
 		if (!changes.size) return snapshot;
 		return {
 			...snapshot,

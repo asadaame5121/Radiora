@@ -21,7 +21,10 @@ export class OutlineDisplayController {
 	}
 	setExpanded(ids: readonly string[]): void {
 		const next = [...new Set(ids)];
-		if (next.length === this.liveExpanded.length && next.every((id, index) => id === this.liveExpanded[index])) return;
+		if (
+			next.length === this.liveExpanded.length &&
+			next.every((id, index) => id === this.liveExpanded[index])
+		) return;
 		this.liveExpanded = next;
 	}
 	expand(id: string): void {

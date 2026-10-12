@@ -319,46 +319,59 @@ function buildWorkingCopies(
 ): GraphStateSnapshot["workingCopies"] {
 	const random = createRandom(options.seed, TEXT_RANDOM_SALT);
 	return workIds.map((workId, index) => {
-		const bucket = index % 100;
-		const bodyLength = bucket < 5
-			? 0
-			: bucket < 40
-			? 32 + Math.floor(random() * 96)
-			: bucket === 99
-			? 10_000
-			: 200 + Math.floor(random() * 1_801);
-		const targetIndex = (index + 17) % workIds.length;
-		const internalReference = bodyLength > 120 && index % 97 === 0
-			? `Related: ${
-				canonicalInternalReferenceMarkdown(
-					`Topic ${targetIndex.toString().padStart(5, "0")}`,
-					"work",
-					workIds[targetIndex],
-				)
-			}`
-			: "";
-		const textBodyLength = Math.max(
-			0,
-			bodyLength - (internalReference ? internalReference.length + 1 : 0),
-		);
-		const phrase =
-			`Seed ${options.seed} topic ${index} records a thought with evidence and context. `;
-		const textBody = phrase.repeat(Math.ceil(textBodyLength / phrase.length)).slice(
-			0,
-			textBodyLength,
-		);
-		const text = `# Topic ${index.toString().padStart(5, "0")}${
-			textBody || internalReference
-				? `\n\n${textBody}${internalReference ? `\n${internalReference}` : ""}`
-				: ""
-		}`;
+		const bodyLength = workingCopyBodyLength(index % 100, random);
+		const internalReference = buildInternalReference(workIds, index, bodyLength);
 		return {
 			branchId: fixtureId(options.seed, 2, index),
 			workId,
-			text,
+			text: workingCopyText(options.seed, index, bodyLength, internalReference),
 			updatedAt: fixtureTimestamp(index),
 		};
 	});
+}
+
+function workingCopyBodyLength(bucket: number, random: () => number): number {
+	if (bucket < 5) return 0;
+	if (bucket < 40) return 32 + Math.floor(random() * 96);
+	if (bucket === 99) return 10_000;
+	return 200 + Math.floor(random() * 1_801);
+}
+
+function buildInternalReference(
+	workIds: readonly string[],
+	index: number,
+	bodyLength: number,
+): string {
+	if (bodyLength <= 120 || index % 97 !== 0) return "";
+	const targetIndex = (index + 17) % workIds.length;
+	return `Related: ${
+		canonicalInternalReferenceMarkdown(
+			`Topic ${targetIndex.toString().padStart(5, "0")}`,
+			"work",
+			workIds[targetIndex],
+		)
+	}`;
+}
+
+function workingCopyText(
+	seed: number,
+	index: number,
+	bodyLength: number,
+	internalReference: string,
+): string {
+	const textBodyLength = Math.max(
+		0,
+		bodyLength - (internalReference ? internalReference.length + 1 : 0),
+	);
+	const phrase = `Seed ${seed} topic ${index} records a thought with evidence and context. `;
+	const textBody = phrase.repeat(Math.ceil(textBodyLength / phrase.length)).slice(
+		0,
+		textBodyLength,
+	);
+	const body = textBody || internalReference
+		? `\n\n${textBody}${internalReference ? `\n${internalReference}` : ""}`
+		: "";
+	return `# Topic ${index.toString().padStart(5, "0")}${body}`;
 }
 
 function buildLinkPairs(
@@ -428,18 +441,73 @@ function measureFixture(
 	) {
 		throw new Error("Performance fixture topic collections do not match topicCount.");
 	}
-	const rootCount = validateParentForest(state.occurrences, occurrenceById);
+	const topology = measureTopology(state.occurrences, occurrenceById);
+	const links = measureLinks(state.links, workIds);
+	const text = measureWorkingCopies(state.workingCopies, workIds);
+	const sampleRandom = createRandom(options.seed, SAMPLE_RANDOM_SALT);
+	const randomOccurrenceIds: string[] = [];
+	const sampleIndices = new Set<number>();
+	while (randomOccurrenceIds.length < 5) {
+		const index = Math.floor(sampleRandom() * state.occurrences.length);
+		if (sampleIndices.has(index)) continue;
+		sampleIndices.add(index);
+		randomOccurrenceIds.push(state.occurrences[index].id);
+	}
+	return {
+		fixtureVersion: FIXTURE_VERSION,
+		...options,
+		rootCount: topology.rootCount,
+		maximumDepth: topology.maximumDepth,
+		depthDistribution: topology.depthDistribution,
+		childCountDistribution: topology.childCountDistribution,
+		linkCount: state.links.length,
+		uniqueAdjacentTopics: links.uniqueAdjacentTopics,
+		maximumDegree: links.maximumDegree,
+		totalBodyCharacters: text.totalBodyCharacters,
+		totalTextBytes: text.totalTextBytes,
+		bodyLengthDistribution: text.bodyLengthDistribution,
+		internalReferenceCount: text.internalReferenceCount,
+		samples: {
+			randomOccurrenceIds,
+			deepestOccurrenceIds: topology.deepestOccurrenceIds,
+			widestParentOccurrenceIds: topology.widestParentOccurrenceIds,
+			highestDegreeWorkIds: links.highestDegreeWorkIds,
+		},
+	};
+}
+
+function measureTopology(
+	occurrences: readonly Occurrence[],
+	occurrenceById: ReadonlyMap<string, Occurrence>,
+) {
+	const rootCount = validateParentForest(occurrences, occurrenceById);
 	if (rootCount < 80 || rootCount > 200) {
 		throw new Error("Performance fixture rootCount is outside 80–200.");
 	}
-	const depthById = calculateDepths(state.occurrences, occurrenceById);
-	const depthDistribution: Record<string, number> = {};
+	const depthById = calculateDepths(occurrences, occurrenceById);
+	const childCounts = countChildrenByParent(occurrences);
+	return {
+		rootCount,
+		maximumDepth: Math.max(0, ...depthById.values()),
+		depthDistribution: countDepths(depthById),
+		childCountDistribution: countChildCounts(occurrences, childCounts),
+		deepestOccurrenceIds: sortCounts(depthById).slice(0, 5).map(([id]) => id),
+		widestParentOccurrenceIds: sortCounts(childCounts).slice(0, 5).map(([id]) => id),
+	};
+}
+
+function countDepths(depthById: ReadonlyMap<string, number>): Record<string, number> {
+	const distribution: Record<string, number> = {};
 	for (const depth of depthById.values()) {
 		const key = String(depth);
-		depthDistribution[key] = (depthDistribution[key] ?? 0) + 1;
+		distribution[key] = (distribution[key] ?? 0) + 1;
 	}
+	return distribution;
+}
+
+function countChildrenByParent(occurrences: readonly Occurrence[]): Map<string, number> {
 	const childCounts = new Map<string, number>();
-	for (const occurrence of state.occurrences) {
+	for (const occurrence of occurrences) {
 		if (occurrence.parentOccurrenceId) {
 			childCounts.set(
 				occurrence.parentOccurrenceId,
@@ -447,8 +515,14 @@ function measureFixture(
 			);
 		}
 	}
-	let maximumChildren = 0;
-	const childCountDistribution = {
+	return childCounts;
+}
+
+function countChildCounts(
+	occurrences: readonly Occurrence[],
+	childCounts: ReadonlyMap<string, number>,
+) {
+	const distribution = {
 		leaf: 0,
 		oneToFive: 0,
 		sixToTwenty: 0,
@@ -457,22 +531,36 @@ function measureFixture(
 		overThreeHundred: 0,
 		maximum: 0,
 	};
-	for (const occurrence of state.occurrences) {
+	for (const occurrence of occurrences) {
 		const count = childCounts.get(occurrence.id) ?? 0;
-		maximumChildren = Math.max(maximumChildren, count);
-		if (count === 0) childCountDistribution.leaf += 1;
-		else if (count <= 5) childCountDistribution.oneToFive += 1;
-		else if (count <= 20) childCountDistribution.sixToTwenty += 1;
-		else if (count <= 100) childCountDistribution.twentyOneToHundred += 1;
-		else if (count <= 300) childCountDistribution.hundredOneToThreeHundred += 1;
-		else childCountDistribution.overThreeHundred += 1;
+		distribution[childCountBucket(count)] += 1;
+		distribution.maximum = Math.max(distribution.maximum, count);
 	}
-	childCountDistribution.maximum = maximumChildren;
+	return distribution;
+}
 
+function childCountBucket(
+	count: number,
+):
+	| "leaf"
+	| "oneToFive"
+	| "sixToTwenty"
+	| "twentyOneToHundred"
+	| "hundredOneToThreeHundred"
+	| "overThreeHundred" {
+	if (count === 0) return "leaf";
+	if (count <= 5) return "oneToFive";
+	if (count <= 20) return "sixToTwenty";
+	if (count <= 100) return "twentyOneToHundred";
+	if (count <= 300) return "hundredOneToThreeHundred";
+	return "overThreeHundred";
+}
+
+function measureLinks(links: GraphStateSnapshot["links"], workIds: ReadonlySet<string>) {
 	const degree = new Map<string, number>();
 	const adjacent = new Set<string>();
 	const pairKeys = new Set<string>();
-	for (const link of state.links) {
+	for (const link of links) {
 		if (
 			link.from.scope !== "work" ||
 			link.to.scope !== "work" ||
@@ -491,13 +579,23 @@ function measureFixture(
 		degree.set(link.from.workId, (degree.get(link.from.workId) ?? 0) + 1);
 		degree.set(link.to.workId, (degree.get(link.to.workId) ?? 0) + 1);
 	}
-	const maximumDegree = Math.max(0, ...degree.values());
+	return {
+		uniqueAdjacentTopics: adjacent.size,
+		maximumDegree: Math.max(0, ...degree.values()),
+		highestDegreeWorkIds: sortCounts(degree).slice(0, 5).map(([id]) => id),
+	};
+}
+
+function measureWorkingCopies(
+	copies: GraphStateSnapshot["workingCopies"],
+	workIds: ReadonlySet<string>,
+) {
 	let totalBodyCharacters = 0;
 	let totalTextBytes = 0;
 	let internalReferenceCount = 0;
 	const bodyLengthDistribution = { empty: 0, short: 0, medium: 0, long: 0 };
 	const encoder = new TextEncoder();
-	for (const copy of state.workingCopies) {
+	for (const copy of copies) {
 		const separator = copy.text.indexOf("\n\n");
 		const body = separator < 0 ? "" : copy.text.slice(separator + 2);
 		const bodyLength = body.length;
@@ -507,55 +605,26 @@ function measureFixture(
 		else if (bodyLength <= 200) bodyLengthDistribution.short += 1;
 		else if (bodyLength <= 2_000) bodyLengthDistribution.medium += 1;
 		else bodyLengthDistribution.long += 1;
-		if (copy.text.includes("radiora://work/")) {
-			for (const reference of parseInternalWorkReferences(copy.text)) {
-				if (!workIds.has(reference)) {
-					throw new Error(`Internal reference target not found: ${reference}`);
-				}
-				internalReferenceCount += 1;
-			}
+		internalReferenceCount += countInternalReferences(copy.text, workIds);
+	}
+	return { totalBodyCharacters, totalTextBytes, bodyLengthDistribution, internalReferenceCount };
+}
+
+function countInternalReferences(text: string, workIds: ReadonlySet<string>): number {
+	if (!text.includes("radiora://work/")) return 0;
+	const references = parseInternalWorkReferences(text);
+	for (const reference of references) {
+		if (!workIds.has(reference)) {
+			throw new Error(`Internal reference target not found: ${reference}`);
 		}
 	}
-	const maximumDepth = Math.max(0, ...depthById.values());
-	const childSorted = [...childCounts.entries()].sort((left, right) =>
+	return references.length;
+}
+
+function sortCounts(counts: ReadonlyMap<string, number>): Array<[string, number]> {
+	return [...counts.entries()].sort((left, right) =>
 		right[1] - left[1] || left[0].localeCompare(right[0])
 	);
-	const degreeSorted = [...degree.entries()].sort((left, right) =>
-		right[1] - left[1] || left[0].localeCompare(right[0])
-	);
-	const depthSorted = [...depthById.entries()].sort((left, right) =>
-		right[1] - left[1] || left[0].localeCompare(right[0])
-	);
-	const sampleRandom = createRandom(options.seed, SAMPLE_RANDOM_SALT);
-	const randomOccurrenceIds: string[] = [];
-	const sampleIndices = new Set<number>();
-	while (randomOccurrenceIds.length < 5) {
-		const index = Math.floor(sampleRandom() * state.occurrences.length);
-		if (sampleIndices.has(index)) continue;
-		sampleIndices.add(index);
-		randomOccurrenceIds.push(state.occurrences[index].id);
-	}
-	return {
-		fixtureVersion: FIXTURE_VERSION,
-		...options,
-		rootCount,
-		maximumDepth,
-		depthDistribution,
-		childCountDistribution,
-		linkCount: state.links.length,
-		uniqueAdjacentTopics: adjacent.size,
-		maximumDegree,
-		totalBodyCharacters,
-		totalTextBytes,
-		bodyLengthDistribution,
-		internalReferenceCount,
-		samples: {
-			randomOccurrenceIds,
-			deepestOccurrenceIds: depthSorted.slice(0, 5).map(([id]) => id),
-			widestParentOccurrenceIds: childSorted.slice(0, 5).map(([id]) => id),
-			highestDegreeWorkIds: degreeSorted.slice(0, 5).map(([id]) => id),
-		},
-	};
 }
 
 function validateParentForest(
@@ -566,11 +635,22 @@ function validateParentForest(
 	let rootCount = 0;
 	for (const occurrence of occurrences) {
 		const parentId = occurrence.parentOccurrenceId;
-		if (parentId === null) rootCount += 1;
-		else if (parentId === occurrence.id || !ids.has(parentId)) {
+		if (parentId === null) {
+			rootCount += 1;
+			continue;
+		}
+		if (parentId === occurrence.id || !ids.has(parentId)) {
 			throw new Error(`Invalid parent reference: ${occurrence.id}`);
 		}
 	}
+	assertAcyclicParents(occurrences, occurrenceById);
+	return rootCount;
+}
+
+function assertAcyclicParents(
+	occurrences: readonly Occurrence[],
+	occurrenceById: ReadonlyMap<string, Occurrence>,
+): void {
 	const resolved = new Set<string>();
 	for (const occurrence of occurrences) {
 		const path: string[] = [];
@@ -584,7 +664,6 @@ function validateParentForest(
 		}
 		for (const id of path) resolved.add(id);
 	}
-	return rootCount;
 }
 
 function calculateDepths(
@@ -600,7 +679,7 @@ function calculateDepths(
 			path.push(cursor);
 			cursor = occurrenceById.get(cursor)?.parentOccurrenceId ?? null;
 		}
-		let depth = cursor === null ? -1 : depths.get(cursor)!;
+		let depth = cursor === null ? -1 : (depths.get(cursor) ?? -1);
 		for (const id of path.reverse()) {
 			depth += 1;
 			depths.set(id, depth);
@@ -646,13 +725,7 @@ function normalizeOptions(options: PerformanceFixtureOptions): PerformanceFixtur
 }
 
 function parseCliOptions(args: string[]): CliOptions {
-	let profile: PerformanceFixtureProfile = "baseline";
-	let topicCount: PerformanceTopicCount = 1_000;
-	let seed = 42;
-	let outputPath: string | undefined;
-	let databasePath: string | undefined;
-	let manifestPath: string | undefined;
-	let validatePath: string | undefined;
+	const options: CliOptions = { profile: "baseline", topicCount: 1_000, seed: 42 };
 	for (let index = 0; index < args.length; index += 1) {
 		const [flag, inlineValue] = args[index].split("=", 2);
 		const value = inlineValue ?? args[++index];
@@ -661,51 +734,60 @@ function parseCliOptions(args: string[]): CliOptions {
 			Deno.exit(0);
 		}
 		if (!value) throw new Error(`Missing value for ${flag}`);
-		switch (flag) {
-			case "--profile":
-				profile = parseProfile(value);
-				break;
-			case "--topic-count":
-				topicCount = parseTopicCount(Number(value));
-				break;
-			case "--seed":
-				seed = parseSeed(Number(value));
-				break;
-			case "--output":
-				outputPath = value;
-				break;
-			case "--database":
-				databasePath = value;
-				break;
-			case "--manifest":
-				manifestPath = value;
-				break;
-			case "--validate":
-				validatePath = value;
-				break;
-			default:
-				throw new Error(`Unknown option: ${flag}`);
-		}
+		applyPerformanceFixtureOption(options, flag, value);
 	}
-	if (validatePath) {
-		if (outputPath || databasePath || manifestPath) {
-			throw new Error("--validate cannot be combined with output, database, or manifest paths.");
-		}
-	} else if (!outputPath && !databasePath) {
+	validateCliOptions(options);
+	return options;
+}
+
+function applyPerformanceFixtureOption(options: CliOptions, flag: string, value: string): void {
+	switch (flag) {
+		case "--profile":
+			options.profile = parseProfile(value);
+			break;
+		case "--topic-count":
+			options.topicCount = parseTopicCount(Number(value));
+			break;
+		case "--seed":
+			options.seed = parseSeed(Number(value));
+			break;
+		case "--output":
+			options.outputPath = value;
+			break;
+		case "--database":
+			options.databasePath = value;
+			break;
+		case "--manifest":
+			options.manifestPath = value;
+			break;
+		case "--validate":
+			options.validatePath = value;
+			break;
+		default:
+			throw new Error(`Unknown option: ${flag}`);
+	}
+}
+
+function validateCliOptions(options: CliOptions): void {
+	if (
+		options.validatePath && (options.outputPath || options.databasePath || options.manifestPath)
+	) {
+		throw new Error("--validate cannot be combined with output, database, or manifest paths.");
+	}
+	if (!options.validatePath && !options.outputPath && !options.databasePath) {
 		throw new Error("Specify --output and/or --database for generated data.");
 	}
-	if (!validatePath && !manifestPath) {
-		const primaryPath = databasePath ?? outputPath;
+	if (!options.validatePath && !options.manifestPath) {
+		const primaryPath = options.databasePath ?? options.outputPath;
 		if (!primaryPath) throw new Error("Specify --output and/or --database for generated data.");
-		manifestPath = `${primaryPath}.manifest.json`;
+		options.manifestPath = `${primaryPath}.manifest.json`;
 	}
-	const destinations = [outputPath, databasePath, manifestPath].filter(
+	const destinations = [options.outputPath, options.databasePath, options.manifestPath].filter(
 		(path): path is string => path !== undefined,
 	);
 	if (new Set(destinations).size !== destinations.length) {
 		throw new Error("Output, database, and manifest paths must be different.");
 	}
-	return { profile, topicCount, seed, outputPath, databasePath, manifestPath, validatePath };
 }
 
 function parseProfile(value: unknown): PerformanceFixtureProfile {

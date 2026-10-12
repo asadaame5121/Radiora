@@ -70,10 +70,12 @@ function fixture(items: OutlineItem[]) {
 			track: vi.fn((_id: string) => events.push("track")),
 			forget: vi.fn((_id: string) => events.push("forget")),
 		},
-		prepareCollapsed: vi.fn(() => vi.fn((collapsed: boolean) => {
-			events.push(`publish-collapse:${collapsed}`);
-			return true;
-		})),
+		prepareCollapsed: vi.fn(() =>
+			vi.fn((collapsed: boolean) => {
+				events.push(`publish-collapse:${collapsed}`);
+				return true;
+			})
+		),
 		prepareClearTemporaryExpansion: vi.fn((_id: string) =>
 			vi.fn(() => events.push("clear-expansion"))
 		),
