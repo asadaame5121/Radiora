@@ -109,10 +109,8 @@
 		parseInlineSemanticLinks,
 		type InlineSemanticLinkCandidate,
 	} from "../services/inline_semantic_link";
-	import {
-		projectSemanticLinkAnnotations,
-		type SemanticLinkAnnotation,
-	} from "../services/semantic_link_annotations";
+	import type { SemanticLinkAnnotation } from "../services/semantic_link_annotations";
+	import { SemanticLinkAnnotationsController } from "./semantic_link_annotations_controller.svelte.ts";
 	import type { ViewMode } from "./app_view_mode.ts";
 	import { BookmarkController } from "./bookmark_controller.svelte.ts";
 	import { OutlineController } from "./outline_controller.svelte.ts";
@@ -518,9 +516,11 @@
 			link.fromId === selectedItem.workId || link.toId === selectedItem.workId
 		)
 		: []);
-	const semanticLinkAnnotations = $derived(
-		projectSemanticLinkAnnotations(snapshot.items, snapshot.links, relationTypes.definitions),
-	);
+	const semanticLinkAnnotations = new SemanticLinkAnnotationsController({
+		items: () => snapshot.items,
+		links: () => snapshot.links,
+		relationTypeDefinitions: () => relationTypes.definitions,
+	});
 	const linkableWorks = $derived([
 		...new Map([
 			...snapshot.items.map((item) => [item.workId, { workId: item.workId, text: item.text }] as const),
@@ -1254,8 +1254,8 @@
 		return parseInlineSemanticLinks(text, relationTypes.names);
 	}
 
-	function semanticLinkAnnotationsFor(occurrenceId: string): SemanticLinkAnnotation[] {
-		return semanticLinkAnnotations.filter((annotation) => annotation.occurrenceId === occurrenceId);
+	function semanticLinkAnnotationsFor(occurrenceId: string): readonly SemanticLinkAnnotation[] {
+		return semanticLinkAnnotations.forOccurrence(occurrenceId);
 	}
 
 	function annotationDirection(annotation: SemanticLinkAnnotation): string {

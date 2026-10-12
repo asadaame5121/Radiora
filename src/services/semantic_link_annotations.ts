@@ -1,8 +1,8 @@
-import {
-	type LinkType,
-	type OutlineItem,
-	type OutlineLink,
-	type RelationTypeDefinition,
+import type {
+	LinkType,
+	OutlineItem,
+	OutlineLink,
+	RelationTypeDefinition,
 } from "../domain/models.ts";
 import { BUILT_IN_RELATION_TYPES, isRelationTypeSymmetric } from "../domain/relation_type.ts";
 import { titleFromText } from "./search_text.ts";
@@ -39,18 +39,13 @@ export function projectSemanticLinkAnnotations(
 	items: readonly OutlineItem[],
 	links: readonly OutlineLink[],
 	relationTypeDefinitions: readonly RelationTypeDefinition[] = BUILT_IN_RELATION_TYPES,
+	displayNameByWorkId: ReadonlyMap<string, string> = projectSemanticLinkDisplayNames(items),
 ): SemanticLinkAnnotation[] {
 	const itemsByWorkId = new Map<string, OutlineItem[]>();
 	for (const item of items) {
 		const placements = itemsByWorkId.get(item.workId) ?? [];
 		placements.push(item);
 		itemsByWorkId.set(item.workId, placements);
-	}
-
-	const displayNameByWorkId = new Map<string, string>();
-	for (const [workId, placements] of itemsByWorkId) {
-		const representative = [...placements].sort(compareOccurrences)[0];
-		if (representative) displayNameByWorkId.set(workId, displayNameFor(representative));
 	}
 
 	const annotations: SemanticLinkAnnotation[] = [];
@@ -87,6 +82,18 @@ export function projectSemanticLinkAnnotations(
 	}
 
 	return annotations.sort(compareAnnotations);
+}
+
+/** Display names are separate from placement/link structure so body-only edits need not reproject links. */
+export function projectSemanticLinkDisplayNames(
+	items: readonly OutlineItem[],
+): Map<string, string> {
+	const representatives = new Map<string, OutlineItem>();
+	for (const item of items) {
+		const previous = representatives.get(item.workId);
+		if (!previous || compareOccurrences(item, previous) < 0) representatives.set(item.workId, item);
+	}
+	return new Map([...representatives].map(([workId, item]) => [workId, displayNameFor(item)]));
 }
 
 function appendAnnotations(

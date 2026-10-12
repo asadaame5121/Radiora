@@ -728,3 +728,25 @@ PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存して
   lint・行数品質・magic-number ratchet・重複ratchet・全体format・Deno型検査も通過。
 - pre-commit内のDeno経由npm起動はWindows shimをJavaScriptとして読み込み失敗した。
   残りの必須check・test・test:svelte・buildを通常のCLI経由で通過させ、今回のcommitのみhookを省略した。
+
+## 入力時の関係注釈の更新伝播（2026-10-12、ローカル実装）
+
+- `SemanticLinkAnnotationsController`はApp寿命の読み取り専用描画モデルを所有する。
+  Outline snapshotと関係型定義のowner・writerは変更せず、Viewには既存の取得callbackで
+  配置IDに対応する注釈を渡す。DBアクセス、保存、副作用の`$effect`は追加しない。
+- Workの表示名と配置・関係構造の派生を分ける。代表配置は既存と同じ作成日・ID順、
+  表示名はその配置のcontextual heading優先・本文の最初の非空行とする。
+  実効表示名が同じ本文編集では注釈の全体投影を実行しない。
+- 注釈は一度だけ配置IDでgroupし、各行で全注釈をfilterしない。値が変わらない注釈object、
+  行配列、全体indexの参照を維持し、無関係な行への描画更新の伝播を抑える。
+  純粋なgroup・参照再利用はserviceに置き、Runeから分離する。
+- 本文入力・同branch別配置の更新・Pinnedと別branchの保護・autosaveの契約は変更しない。
+  関係の撤回・理由・方向・関係型定義・配置追加削除・代表配置交代でも既存の投影結果と一致させる。
+- 回帰証拠: `tests/ui/outline-annotation-updates.spec.ts`は実Appの入力経路を使い、
+  本文のみの編集で追加投影0回、タイトル変更で参照先の注釈表示が更新されること、
+  無関係な行のDOMと入力editorのDOM・focusの維持を確認する。計数のためのmodule計装は
+  試験時のHTTP応答に限定し、productionには入れない。値・参照の契約はVitestで確認する。
+- 残る範囲: 実効表示名の確認では代表配置の選択・表示名を再計算する。表示名が変われば
+  全注釈を再投影して参照を再利用するため、影響関係だけを計算する完全な増分投影ではない。
+  最近編集ランキング、linkableWorks、同branch配置の探索、仮想化は今回の対象外。
+  main反映は未確認。
