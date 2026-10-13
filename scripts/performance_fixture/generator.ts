@@ -22,6 +22,7 @@ import {
 import type { PerformanceFixture, PerformanceFixtureOptions } from "./model.ts";
 import { createRandom } from "./random.ts";
 import { measureFixture, validateProfileShape } from "./manifest.ts";
+import { FIXTURE_LINK_TYPE, fixtureId, fixtureTimestamp, makeLink } from "./entities.ts";
 
 interface ParentLayout {
 	parentIndices: Array<number | null>;
@@ -34,7 +35,7 @@ interface LinkPair {
 	toIndex: number;
 }
 
-const LINK_TYPE: LinkType = LINK_TYPES[0];
+const LINK_TYPE: LinkType = FIXTURE_LINK_TYPE;
 
 export function createPerformanceFixture(input: PerformanceFixtureOptions): PerformanceFixture {
 	const options = normalizeOptions(input);
@@ -286,30 +287,6 @@ function normalizeOptions(options: PerformanceFixtureOptions): PerformanceFixtur
 		profile: parseProfile(options.profile),
 		topicCount: parseTopicCount(options.topicCount),
 		seed: parseSeed(options.seed),
-	};
-}
-
-function fixtureId(seed: number, kind: number, index: number): string {
-	return `${seed.toString(16).padStart(8, "0")}-${kind.toString(16).padStart(4, "0")}-4000-8000-${
-		index.toString(16).padStart(12, "0")
-	}`;
-}
-
-function fixtureTimestamp(index: number): string {
-	return new Date(FIXTURE_BASE_TIME + index * FIXTURE_TIME_STEP_MS).toISOString();
-}
-
-function makeLink(seed: number, index: number, fromId: string, toId: string): OutlineLink {
-	return {
-		id: fixtureId(seed, 4, index),
-		fromId,
-		toId,
-		from: { scope: "work", workId: fromId },
-		to: { scope: "work", workId: toId },
-		type: LINK_TYPE,
-		status: "asserted",
-		origin: "import",
-		createdAt: fixtureTimestamp(index),
 	};
 }
 

@@ -1,0 +1,92 @@
+{
+	"caseId": "1k-all-roots-text",
+	"seed": 42,
+	"manifest": {
+		"fixtureVersion": 2,
+		"seed": 42,
+		"nodeCount": 1000,
+		"shape": "all-roots",
+		"bodyBytes": "short",
+		"revisionsPerWork": 0,
+		"linkMultiplier": 1,
+		"timeShape": "normal",
+		"hub": false,
+		"rootCount": 1000,
+		"maximumDepth": 0,
+		"cycleSize": null,
+		"edgeCount": 1000,
+		"revisionCount": 0,
+		"totalTextBytes": 777299
+	},
+	"trials": {
+		"warmup": [
+			6.527800000000298,
+			4.1404999999999745,
+			9.501299999999901,
+			7.421599999999671,
+			6.256500000000415
+		],
+		"samples": [
+			4.853299999999763,
+			5.243199999999888,
+			5.710799999999836,
+			5.658100000000559,
+			4.4869999999991705,
+			4.518300000001545,
+			6.338799999999537,
+			6.079299999999421,
+			5.042999999999665,
+			6.678299999999581,
+			5.244099999999889,
+			5.405299999998533,
+			6.153500000000349,
+			5.696599999999307,
+			5.2784000000028755,
+			6.323800000001938,
+			7.279199999997218,
+			4.484700000000885,
+			5.14719999999943,
+			5.150900000000547,
+			6.742200000000594,
+			4.745699999999488,
+			5.650900000000547,
+			4.504999999997381,
+			3.947700000000623,
+			5.424800000000687,
+			6.346700000001874,
+			5.966100000001461,
+			5.5349999999998545,
+			7.416399999998248
+		]
+	},
+	"stats": {
+		"min": 3.947700000000623,
+		"median": 5.424800000000687,
+		"p95": 7.279199999997218,
+		"max": 7.416399999998248
+	},
+	"counters": {
+		"rpc": 0,
+		"transaction": 1,
+		"sql": 3,
+		"capture": 0,
+		"fullTextParse": 0,
+		"buildVisibleRows": 0,
+		"worldLayout": 0,
+		"lineage": 0,
+		"scc": 0,
+		"lane": 0,
+		"pairCompare": 0
+	},
+	"queueWaitMs": null,
+	"environment": {
+		"runtime": "deno 2.9.7",
+		"os": "windows",
+		"arch": "x86_64",
+		"cpuCount": 8,
+		"commit": "35bce5ac5693b2b45142c81711ead2534fa6f53b"
+	},
+	"heap": null,
+	"heapReason": "Deno memory measurement not available in current runtime",
+	"success": true
+}

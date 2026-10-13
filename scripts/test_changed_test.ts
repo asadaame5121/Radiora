@@ -372,7 +372,7 @@ Deno.test("Vitest CLI runs related tests and falls back only for a valid zero co
 });
 
 Deno.test("real Vitest related selects a Svelte View/Controller suite, not an unrelated suite", async () => {
-	const cwd = await Deno.makeTempDir();
+	const cwd = await Deno.makeTempDir({ dir: Deno.cwd() });
 	try {
 		await Deno.symlink(new URL("../node_modules", import.meta.url), `${cwd}/node_modules`, {
 			type: Deno.build.os === "windows" ? "junction" : "dir",
