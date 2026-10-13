@@ -1,22 +1,23 @@
 import type { HistoricalTime } from "../domain/historical_time.ts";
-import type {
-	Bookmark,
-	Branch,
-	EmergenceAction,
-	EmergenceSuggestion,
-	Knot,
-	LinkType,
-	Occurrence,
-	OutlineLink,
-	PurgeManifest,
-	RecoverySnapshot,
-	RelationTypeDefinition,
-	ResumePosition,
-	Revision,
-	SavedRuleQuery,
-	SearchAlias,
-	Work,
-	WorkingCopy,
+import {
+	areKnotsEqual,
+	type Bookmark,
+	type Branch,
+	type EmergenceAction,
+	type EmergenceSuggestion,
+	type Knot,
+	type LinkType,
+	type Occurrence,
+	type OutlineLink,
+	type PurgeManifest,
+	type RecoverySnapshot,
+	type RelationTypeDefinition,
+	type ResumePosition,
+	type Revision,
+	type SavedRuleQuery,
+	type SearchAlias,
+	type Work,
+	type WorkingCopy,
 } from "../domain/models.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
 import { type GraphStateSnapshot, type MergeWorksInput, type WorkBundle } from "./graph_store.ts";
@@ -210,6 +211,9 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	override async replaceKnots(knots: Knot[]): Promise<void> {
+		if (areKnotsEqual(this.state.knots, knots)) {
+			return;
+		}
 		await this.persistence.mutate(() => super.replaceKnots(knots));
 	}
 

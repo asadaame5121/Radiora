@@ -1,28 +1,30 @@
 import type { HistoricalTime } from "../domain/historical_time.ts";
-import type {
-	Bookmark,
-	Branch,
-	EmergenceAction,
-	EmergenceSuggestion,
-	Knot,
-	LinkType,
-	Occurrence,
-	OutlineLink,
-	PurgeManifest,
-	RecoverySnapshot,
-	RelationTypeDefinition,
-	ResumePosition,
-	Revision,
-	SavedRuleQuery,
-	SearchAlias,
-	Work,
-	WorkingCopy,
+import {
+	areKnotsEqual,
+	type Bookmark,
+	type Branch,
+	type EmergenceAction,
+	type EmergenceSuggestion,
+	type Knot,
+	type LinkType,
+	type Occurrence,
+	type OutlineLink,
+	type PurgeManifest,
+	type RecoverySnapshot,
+	type RelationTypeDefinition,
+	type ResumePosition,
+	type Revision,
+	type SavedRuleQuery,
+	type SearchAlias,
+	type Work,
+	type WorkingCopy,
 } from "../domain/models.ts";
 import type { GraphStateSnapshot, MergeWorksInput, WorkBundle } from "./graph_store.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
 import { migrateSqliteHistoricalTime } from "./sqlite_historical_migration.ts";
 import { SQLITE_SCHEMA_SQL, SQLITE_STORAGE_SCHEMA_VERSION } from "./sqlite_schema.ts";
 import {
+	applySqliteDiffOperations,
 	isRecord,
 	NodeSqliteDatabaseAdapter,
 	persistSqliteDiff,
@@ -30,6 +32,13 @@ import {
 	type SqliteDatabase,
 	type SqliteDatabaseTransaction,
 } from "./sqlite_records.ts";
+import {
+	planTargetedBranchWorkingCopyUpdate,
+	planTargetedOccurrenceUpdate,
+	planTargetedResumePositionClear,
+	planTargetedResumePositionSet,
+	type TargetedMutationStep,
+} from "./sqlite_targeted_mutations.ts";
 
 export type { SqliteDatabase, SqliteDatabaseTransaction };
 
@@ -188,12 +197,16 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		return this.mutate(() => super.deleteBookmark(id));
 	}
 
+	override updateOccurrence(occurrence: Occurrence): Promise<void> {
+		return this.mutateTargeted(() => planTargetedOccurrenceUpdate(this.state, occurrence));
+	}
+
 	override setResumePosition(position: ResumePosition): Promise<void> {
-		return this.mutate(() => super.setResumePosition(position));
+		return this.mutateTargeted(() => planTargetedResumePositionSet(this.state, position));
 	}
 
 	override clearResumePosition(): Promise<void> {
-		return this.mutate(() => super.clearResumePosition());
+		return this.mutateTargeted(() => planTargetedResumePositionClear(this.state));
 	}
 
 	override createBranch(branch: Branch, workingCopy: WorkingCopy): Promise<void> {
@@ -209,17 +222,17 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		text: string,
 		updatedAt: string,
 	): Promise<void> {
-		return this.mutate(() => super.updateBranchWorkingCopy(branchId, text, updatedAt));
+		return this.mutateTargeted(() =>
+			planTargetedBranchWorkingCopyUpdate(this.state, branchId, text, updatedAt)
+		);
 	}
 
 	override updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
-		return this.mutate(() => {
-			const main = this.state.branches.find((branch) =>
-				branch.workId === workId && branch.name === "main"
-			);
-			if (!main) return Promise.reject(new Error(`Main Branch not found for Work: ${workId}`));
-			return super.updateBranchWorkingCopy(main.id, text, updatedAt);
-		});
+		const main = this.state.branches.find((branch) =>
+			branch.workId === workId && branch.name === "main"
+		);
+		if (!main) return Promise.reject(new Error(`Main Branch not found for Work: ${workId}`));
+		return this.updateBranchWorkingCopy(main.id, text, updatedAt);
 	}
 
 	override createRevision(revision: Revision, branchId: string): Promise<void> {
@@ -261,10 +274,6 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		);
 	}
 
-	override updateOccurrence(occurrence: Occurrence): Promise<void> {
-		return this.mutate(() => super.updateOccurrence(occurrence));
-	}
-
 	override deleteOccurrence(id: string): Promise<void> {
 		return this.mutate(() => super.deleteOccurrence(id));
 	}
@@ -290,6 +299,9 @@ export class SqliteGraphStore extends MemoryGraphStore {
 	}
 
 	override replaceKnots(knots: Knot[]): Promise<void> {
+		if (areKnotsEqual(this.state.knots, knots)) {
+			return Promise.resolve();
+		}
 		return this.mutate(() => super.replaceKnots(knots));
 	}
 
@@ -333,7 +345,25 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		return this.mutate(() => super.createRelationTypeDefinition(definition));
 	}
 
-	private async mutate<T>(operation: () => Promise<T>): Promise<T> {
+	override batch<T>(operation: () => Promise<T>): Promise<T> {
+		if (this.isBatching) {
+			return operation();
+		}
+		return this.mutate(async () => {
+			this.isBatching = true;
+			try {
+				return await operation();
+			} finally {
+				this.isBatching = false;
+			}
+		});
+	}
+
+	override exportGraphState(): Promise<GraphStateSnapshot> {
+		return super.exportGraphState();
+	}
+
+	private async enqueueMutation<T>(task: () => Promise<T>): Promise<T> {
 		this.assertInitialized();
 		if (this.closePromise) throw new Error("SqliteGraphStore is closing");
 
@@ -347,19 +377,45 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		});
 		try {
 			this.assertInitialized();
-			const before = await super.exportGraphState();
+			return await task();
+		} finally {
+			gate.resolve();
+		}
+	}
+
+	private mutateTargeted<T>(plan: () => TargetedMutationStep<T>): Promise<T> {
+		if (this.isBatching) {
+			return plan().execute();
+		}
+		return this.enqueueMutation(async () => {
+			const step = plan();
+			try {
+				const result = await step.execute();
+				applySqliteDiffOperations(step.diff, this.database());
+				return result;
+			} catch (cause) {
+				step.rollback();
+				throw cause;
+			}
+		});
+	}
+
+	private mutate<T>(operation: () => Promise<T>): Promise<T> {
+		if (this.isBatching) {
+			return operation();
+		}
+		return this.enqueueMutation(async () => {
+			const before = await this.exportGraphState();
 			try {
 				const result = await operation();
-				const after = await super.exportGraphState();
+				const after = await this.exportGraphState();
 				persistSqliteDiff(before, after, this.database());
 				return result;
 			} catch (cause) {
 				await super.restoreGraphState(before);
 				throw cause;
 			}
-		} finally {
-			gate.resolve();
-		}
+		});
 	}
 
 	private readState(): GraphStateSnapshot {

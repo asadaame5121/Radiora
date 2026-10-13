@@ -8,6 +8,7 @@ import { graphStateHash, migrateLegacyStorageToTurso } from "../src/storage/turs
 import { NodeSqliteDatabaseAdapter } from "../src/storage/sqlite_records.ts";
 import { SQLITE_SCHEMA_SQL } from "../src/storage/sqlite_schema.ts";
 import type { GraphStateSnapshot } from "../src/storage/graph_store.ts";
+import { OccurrenceOperations } from "../src/services/occurrence_operations.ts";
 
 const CREATED_AT = "2026-07-28T00:00:00.000Z";
 
@@ -203,10 +204,19 @@ Deno.test("SqliteGraphStore statement trace proves single WorkingCopy update wri
 
 		// Clear statement log after initial state restoration
 		executedStatements.length = 0;
+		let exportCount = 0;
+		const originalExport = store.exportGraphState.bind(store);
+		store.exportGraphState = async () => {
+			exportCount++;
+			return await originalExport();
+		};
 
 		// Perform a single working copy update
 		const updatedText = "差分永続化テスト: 単一WorkingCopyのみ更新";
 		await store.updateWorkingCopy(snapshot.works[0].id, updatedText, "2026-08-01T00:00:00.000Z");
+
+		// Must bypass full exportGraphState capture
+		assertEquals(exportCount, 0);
 
 		// Exactly three statements must be executed:
 		// 1 for work (updatedAt), 1 for working_copy (text + updatedAt), 1 for storage_metadata
@@ -529,6 +539,300 @@ Deno.test("migrateLegacyStorageToTurso executes atomic migration roundtrip into 
 		assertEquals(loaded.workingCopies[0].text, sampleSnapshot.workingCopies[0].text);
 		await store.close();
 	} finally {
+		await safeRemoveDir(root);
+	}
+});
+
+Deno.test("SqliteGraphStore batch commits multiple operations atomically and rolls back on failure", async () => {
+	const root = await Deno.makeTempDir({ prefix: "radiora-batch-test-" });
+	const targetPath = `${root}\\batch.db`;
+	const store = new SqliteGraphStore(targetPath);
+	await store.initialize();
+
+	try {
+		const workId = crypto.randomUUID();
+		const branchId = crypto.randomUUID();
+		const occId1 = crypto.randomUUID();
+		const occId2 = crypto.randomUUID();
+
+		await store.createWorkBundle(
+			{ id: workId, createdAt: CREATED_AT, updatedAt: CREATED_AT },
+			{ id: branchId, workId, name: "main", headRevisionId: null, createdAt: CREATED_AT },
+			{ branchId, workId, text: "initial text", updatedAt: CREATED_AT },
+			{
+				id: occId1,
+				workId,
+				parentOccurrenceId: null,
+				orderKey: 1024,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId },
+			},
+		);
+
+		// Execute batch of multiple operations
+		await store.batch(async () => {
+			await store.createOccurrence({
+				id: occId2,
+				workId,
+				parentOccurrenceId: occId1,
+				orderKey: 2048,
+				collapsed: true,
+				revisionSelector: { mode: "branch", branchId },
+			});
+			await store.updateOccurrence({
+				id: occId1,
+				workId,
+				parentOccurrenceId: null,
+				orderKey: 512,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId },
+			});
+		});
+
+		// Verify both updates committed
+		const occurrences = await store.listOccurrences();
+		assertEquals(occurrences.length, 2);
+		assertEquals(occurrences.find((o) => o.id === occId1)?.orderKey, 512);
+		assertEquals(occurrences.find((o) => o.id === occId2)?.parentOccurrenceId, occId1);
+
+		// Verify failed batch rolls back both in memory and disk
+		await assertRejects(
+			() =>
+				store.batch(async () => {
+					await store.updateOccurrence({
+						id: occId1,
+						workId,
+						parentOccurrenceId: null,
+						orderKey: 9999,
+						collapsed: false,
+						revisionSelector: { mode: "branch", branchId },
+					});
+					throw new Error("simulated failure inside batch");
+				}),
+			Error,
+			"simulated failure inside batch",
+		);
+
+		// Ensure orderKey was rolled back to 512
+		const rolledBack = await store.listOccurrences();
+		assertEquals(rolledBack.find((o) => o.id === occId1)?.orderKey, 512);
+
+		// Reopen store from disk to ensure SQLite database also did not commit the failed change
+		await store.close();
+		const reopened = new SqliteGraphStore(targetPath);
+		await reopened.initialize();
+		const diskOccurrences = await reopened.listOccurrences();
+		assertEquals(diskOccurrences.find((o) => o.id === occId1)?.orderKey, 512);
+		await reopened.close();
+	} finally {
+		await safeRemoveDir(root);
+	}
+});
+
+Deno.test("SqliteGraphStore replaceKnots skips mutation and transaction when knots are unchanged", async () => {
+	const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-knot-trace-" });
+	const dbPath = `${root}\\radiora.db`;
+	const snapshot = createComplexSnapshot();
+	const executedStatements: Array<{ sql: string; args: unknown[] }> = [];
+
+	const connector = async (path: string): Promise<SqliteDatabase> => {
+		const opened = await NodeSqliteDatabaseAdapter.open(path);
+		return {
+			exec: (sql) => opened.exec(sql),
+			get: (sql, ...args) => opened.get(sql, ...args),
+			all: (sql, ...args) => opened.all(sql, ...args),
+			transaction: <T>(fn: (txn: SqliteDatabaseTransaction) => T): T => {
+				return opened.transaction((txn) => {
+					return fn({
+						run: (sql, ...args) => {
+							executedStatements.push({ sql, args });
+							txn.run(sql, ...args);
+						},
+					});
+				});
+			},
+			close: () => opened.close(),
+		};
+	};
+
+	try {
+		const store = new SqliteGraphStore(dbPath, { connector });
+		await store.initialize();
+		await store.restoreGraphState(snapshot);
+
+		executedStatements.length = 0;
+		let exportCount = 0;
+		const originalExport = store.exportGraphState.bind(store);
+		store.exportGraphState = async () => {
+			exportCount++;
+			return await originalExport();
+		};
+
+		const currentKnots = await store.listKnots();
+		await store.replaceKnots(currentKnots);
+
+		// Must not trigger exportGraphState or any write/transaction statements
+		assertEquals(exportCount, 0);
+		assertEquals(executedStatements.length, 0);
+
+		await store.close();
+	} finally {
+		await safeRemoveDir(root);
+	}
+});
+
+Deno.test("OccurrenceOperations listOutline executes zero write transactions and zero exports when knots are unchanged", async () => {
+	const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-listoutline-trace-" });
+	const dbPath = `${root}\\radiora.db`;
+	const snapshot = createComplexSnapshot();
+	const executedStatements: Array<{ sql: string; args: unknown[] }> = [];
+
+	const connector = async (path: string): Promise<SqliteDatabase> => {
+		const opened = await NodeSqliteDatabaseAdapter.open(path);
+		return {
+			exec: (sql) => opened.exec(sql),
+			get: (sql, ...args) => opened.get(sql, ...args),
+			all: (sql, ...args) => opened.all(sql, ...args),
+			transaction: <T>(fn: (txn: SqliteDatabaseTransaction) => T): T => {
+				return opened.transaction((txn) => {
+					return fn({
+						run: (sql, ...args) => {
+							executedStatements.push({ sql, args });
+							txn.run(sql, ...args);
+						},
+					});
+				});
+			},
+			close: () => opened.close(),
+		};
+	};
+
+	let store: SqliteGraphStore | null = null;
+	try {
+		store = new SqliteGraphStore(dbPath, { connector });
+		await store.initialize();
+		await store.restoreGraphState(snapshot);
+
+		const operations = new OccurrenceOperations(store);
+
+		// First call reconciles and persists knot projection
+		await operations.listOutline();
+
+		executedStatements.length = 0;
+		let replaceKnotsCalls = 0;
+		const originalReplaceKnots = store.replaceKnots.bind(store);
+		store.replaceKnots = async (knots) => {
+			replaceKnotsCalls++;
+			return await originalReplaceKnots(knots);
+		};
+
+		// Second call must execute zero write statements / transactions and zero replaceKnots calls
+		await operations.listOutline();
+		assertEquals(replaceKnotsCalls, 0);
+		assertEquals(executedStatements.length, 0);
+	} finally {
+		if (store) await store.close();
+		await safeRemoveDir(root);
+	}
+});
+
+Deno.test("SqliteGraphStore targeted mutations (occurrence and resume position) bypass full snapshot capture and roll back on error", async () => {
+	const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-targeted-" });
+	const dbPath = `${root}\\radiora.db`;
+	const snapshot = createComplexSnapshot();
+	const executedStatements: Array<{ sql: string; args: unknown[] }> = [];
+
+	let failTransaction = false;
+
+	const connector = async (path: string): Promise<SqliteDatabase> => {
+		const opened = await NodeSqliteDatabaseAdapter.open(path);
+		return {
+			exec: (sql) => opened.exec(sql),
+			get: (sql, ...args) => opened.get(sql, ...args),
+			all: (sql, ...args) => opened.all(sql, ...args),
+			transaction: <T>(fn: (txn: SqliteDatabaseTransaction) => T): T => {
+				if (failTransaction) {
+					throw new Error("simulated disk transaction failure");
+				}
+				return opened.transaction((txn) => {
+					return fn({
+						run: (sql, ...args) => {
+							executedStatements.push({ sql, args });
+							txn.run(sql, ...args);
+						},
+					});
+				});
+			},
+			close: () => opened.close(),
+		};
+	};
+
+	let store: SqliteGraphStore | null = null;
+	try {
+		store = new SqliteGraphStore(dbPath, { connector });
+		await store.initialize();
+		await store.restoreGraphState(snapshot);
+
+		let exportCount = 0;
+		const originalExport = store.exportGraphState.bind(store);
+		store.exportGraphState = async () => {
+			exportCount++;
+			return await originalExport();
+		};
+
+		// 1. updateOccurrence (e.g. collapse toggle)
+		executedStatements.length = 0;
+		exportCount = 0;
+		const occ = snapshot.occurrences[0];
+		await store.updateOccurrence({ ...occ, collapsed: true });
+
+		assertEquals(exportCount, 0);
+		assertEquals(executedStatements.length, 2); // 1 for occurrence, 1 for metadata
+		assert(executedStatements[0].sql.includes("INSERT INTO occurrence "));
+		assertEquals(executedStatements[0].args[0], occ.id);
+
+		// Verify in memory
+		const inMemOcc = (await store.listOccurrences()).find((o) => o.id === occ.id);
+		assertEquals(inMemOcc?.collapsed, true);
+
+		// 2. setResumePosition (caret move)
+		executedStatements.length = 0;
+		exportCount = 0;
+		await store.setResumePosition({
+			workId: occ.workId,
+			occurrenceId: occ.id,
+			caretOffset: 42,
+			updatedAt: "2026-08-02T00:00:00.000Z",
+		});
+
+		assertEquals(exportCount, 0);
+		assertEquals(executedStatements.length, 2); // 1 for resume_position, 1 for metadata
+		assert(executedStatements[0].sql.includes("INSERT INTO resume_position "));
+		assertEquals((await store.getResumePosition())?.caretOffset, 42);
+
+		// 3. clearResumePosition
+		executedStatements.length = 0;
+		exportCount = 0;
+		await store.clearResumePosition();
+
+		assertEquals(exportCount, 0);
+		assertEquals(executedStatements.length, 2); // 1 for DELETE resume_position, 1 for metadata
+		assert(executedStatements[0].sql.includes("DELETE FROM resume_position"));
+		assertEquals(await store.getResumePosition(), null);
+
+		// 4. Rollback on transaction failure
+		failTransaction = true;
+		await assertRejects(
+			() => store!.updateOccurrence({ ...occ, collapsed: false }),
+			Error,
+			"simulated disk transaction failure",
+		);
+
+		// Memory state must remain rolled back to collapsed: true
+		const rolledBackOcc = (await store.listOccurrences()).find((o) => o.id === occ.id);
+		assertEquals(rolledBackOcc?.collapsed, true);
+	} finally {
+		if (store) await store.close();
 		await safeRemoveDir(root);
 	}
 });
