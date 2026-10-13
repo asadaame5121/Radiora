@@ -172,7 +172,8 @@ export function projectBrowsingOutline(
 	const children = childrenByParent(snapshot.items);
 	const stack: string[] = [hoistOccurrenceId];
 	while (stack.length > 0) {
-		const id = stack.pop()!;
+		const id = stack.pop();
+		if (id === undefined) continue;
 		if (included.has(id)) continue;
 		included.add(id);
 		const directChildren = children.get(id);
