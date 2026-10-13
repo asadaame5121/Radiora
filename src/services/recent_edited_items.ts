@@ -8,45 +8,70 @@ export interface RankRecentEditedItemsOptions {
 	readonly limit?: number;
 }
 
+interface TopEntry {
+	item: OutlineItem;
+	time: number;
+	inputIndex: number;
+}
+
+function compareEntries(a: TopEntry, b: TopEntry): number {
+	return (
+		b.time - a.time ||
+		a.item.id.localeCompare(b.item.id) ||
+		a.inputIndex - b.inputIndex
+	);
+}
+
+function normalizeLimit(rawLimit?: number): number {
+	if (rawLimit === undefined) return DEFAULT_RECENT_EDITED_LIMIT;
+	if (Number.isNaN(rawLimit) || rawLimit <= 0) return 0;
+	if (!Number.isFinite(rawLimit)) return Number.MAX_SAFE_INTEGER;
+	return Math.floor(rawLimit);
+}
+
+function insertSorted(top: TopEntry[], candidate: TopEntry): void {
+	const index = top.findIndex((entry) => compareEntries(candidate, entry) < 0);
+	if (index < 0) top.push(candidate);
+	else top.splice(index, 0, candidate);
+}
+
+function retainCandidate(top: TopEntry[], candidate: TopEntry, limit: number): void {
+	const existingIndex = top.findIndex((entry) => entry.item.workId === candidate.item.workId);
+	if (existingIndex >= 0) {
+		if (compareEntries(candidate, top[existingIndex]) < 0) {
+			top.splice(existingIndex, 1);
+			insertSorted(top, candidate);
+		}
+		return;
+	}
+	if (top.length < limit) {
+		insertSorted(top, candidate);
+		return;
+	}
+	if (compareEntries(candidate, top[top.length - 1]) < 0) {
+		insertSorted(top, candidate);
+		top.pop();
+	}
+}
+
 export function rankRecentEditedItems(options: RankRecentEditedItemsOptions): OutlineItem[] {
-	const limit = options.limit ?? DEFAULT_RECENT_EDITED_LIMIT;
+	const limit = normalizeLimit(options.limit);
 	if (limit <= 0) return [];
 
-	const stashedIds = new Set(options.stashItemIds ?? []);
-	const bestByWork = new Map<string, { item: OutlineItem; time: number }>();
+	const stashedIds = options.stashItemIds && options.stashItemIds.length > 0
+		? new Set(options.stashItemIds)
+		: null;
 
-	for (const item of options.items) {
-		if (stashedIds.has(item.id)) continue;
+	const top: TopEntry[] = [];
+
+	for (let i = 0; i < options.items.length; i++) {
+		const item = options.items[i];
+		if (stashedIds?.has(item.id)) continue;
+
 		const parsed = Date.parse(item.updatedAt);
 		const time = Number.isNaN(parsed) ? 0 : parsed;
-		const existing = bestByWork.get(item.workId);
-		if (!existing) {
-			bestByWork.set(item.workId, { item, time });
-		} else {
-			if (
-				time > existing.time ||
-				(time === existing.time && item.id.localeCompare(existing.item.id) < 0)
-			) {
-				bestByWork.set(item.workId, { item, time });
-			}
-		}
-	}
-
-	const top: Array<{ item: OutlineItem; time: number }> = [];
-
-	for (const candidate of bestByWork.values()) {
-		if (top.length < limit) {
-			top.push(candidate);
-			top.sort((a, b) => b.time - a.time || a.item.id.localeCompare(b.item.id));
-		} else {
-			const worst = top[top.length - 1];
-			const isBetter = candidate.time > worst.time ||
-				(candidate.time === worst.time && candidate.item.id.localeCompare(worst.item.id) < 0);
-			if (isBetter) {
-				top[top.length - 1] = candidate;
-				top.sort((a, b) => b.time - a.time || a.item.id.localeCompare(b.item.id));
-			}
-		}
+		const candidate: TopEntry = { item, time, inputIndex: i };
+		retainCandidate(top, candidate, limit);
 	}
 
 	return top.map((entry) => entry.item);
