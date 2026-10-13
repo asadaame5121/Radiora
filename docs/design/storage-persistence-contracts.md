@@ -20,8 +20,8 @@ tags:
 つのバックエンドにおける保存・復元経路、トランザクション保証、ロールバック挙動、
 および対応するテストを体系的に整理・対応付けた永続化契約の正本である。
 
-JSON の通常保存を SQLite と同等の ACID
-保証と仮定せず、各バックエンドが提供する固有の保証と制約を明確化する。
+JSON の通常保存を SQLite と同等の ACID /
+キュー保証と仮定せず、各バックエンドが提供する固有の保証と制約を明確化する。
 
 ---
 
@@ -55,45 +55,46 @@ JSON の通常保存を SQLite と同等の ACID
 
 各 mutation 操作に対する各バックエンドの挙動:
 
-| 操作分類          | メソッド名                     | Memory 挙動                    | SQLite 挙動                                            | JSON 挙動                                                       | 主な検証テスト                                                 |
-| :---------------- | :----------------------------- | :----------------------------- | :----------------------------------------------------- | :-------------------------------------------------------------- | :------------------------------------------------------------- |
-| **Work Bundle**   | `createWorkBundle`             | 同期インメモリ追加             | `mutate()`: queue 直列化, 差分保存, エラー時メモリ復元 | `super` 実行後 `persist()` 全体書き出し                         | `graph_store_contract_test.ts`                                 |
-|                   | `importWorkBundles`            | 一括検証後に追加               | `mutate()`                                             | `captureAllState()` で退避、失敗時 `restoreAllState()`          | `work_bundle_import_test.ts`                                   |
-|                   | `createUnplacedWork`           | 未配置 Work/Branch/Copy 追加   | `mutate()`                                             | 退避後 `persist()`、失敗時 rollback                             | `unplaced_inbox_ui_contract_test.ts`                           |
-|                   | `resolveWorkStub`              | stub 属性解除と更新日反映      | `mutate()`                                             | `super` 実行後 `persist()`                                      | `stub_ui_contract_test.ts`                                     |
-|                   | `mergeWorks`                   | 分岐統合、リンク・配置の書換   | `mutate()`                                             | `captureAllState()` で退避、失敗時 rollback                     | `memory_store_operations_test.ts`                              |
-|                   | `setWorkHistoricalTime`        | 歴史年代の付与/解除            | `mutate()`                                             | `captureAllState()` で退避、失敗時 rollback                     | `sqlite_store_contract_test.ts`                                |
-| **Branch / Copy** | `createBranch`                 | Branch / Copy 追加             | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `updateBranch`                 | headRevisionId / name 更新     | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `updateBranchWorkingCopy`      | 本文 / updatedAt 更新          | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `updateWorkingCopy`            | main 本文更新                  | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-| **Revision**      | `createRevision`               | DAG 不変条件検証後に追加       | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-| **Recovery**      | `createRecoverySnapshot`       | snapshot 追加                  | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `applyRecoverySnapshot`        | Working Copy へ復元            | `mutate()`                                             | `captureRecoveryMutationState()` で退避、失敗時 rollback        | `graph_store_contract_test.ts`                                 |
-|                   | `restoreRecoverySnapshot`      | 退避 snapshot 作成の上で復元   | `mutate()`                                             | `captureRecoveryMutationState()` で退避、失敗時 rollback        | `graph_store_contract_test.ts`                                 |
-|                   | `promoteRecoverySnapshot`      | snapshot を Revision へ昇格    | `mutate()`                                             | `captureRecoveryMutationState()` で退避、失敗時 rollback        | `graph_store_contract_test.ts`                                 |
-| **Trash / Purge** | `trashWork`                    | `deletedAt` 設定               | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `restoreWork`                  | `deletedAt = null`             | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `purgeWork`                    | 関連全実体削除 & manifest 生成 | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-| **Occurrence**    | `createOccurrence`             | 配置レコード追加               | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `updateOccurrence`             | 順序・折畳・見出し等更新       | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `deleteOccurrence`             | 配置レコード削除               | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-| **Bookmark**      | `createBookmark`               | 栞レコード追加                 | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `deleteBookmark`               | 栞レコード削除                 | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-| **Resume**        | `setResumePosition`            | 単一再開位置更新               | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `clearResumePosition`          | 再開位置 null 設定             | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-| **Relation**      | `createLink`                   | 意味リンク追加                 | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `deleteLink`                   | 意味リンク削除                 | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `replaceKnots`                 | 循環 Knot 一括置換             | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-| **Discovery**     | `upsertAlias`                  | 検索別名追加/更新              | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `deleteAlias`                  | 検索別名削除                   | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `setEmergenceFeedback`         | フィードバック記録             | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `upsertEmergenceSuggestion`    | 提案レコード追加/更新          | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `resolveEmergenceSuggestion`   | 提案状態遷移・リンク生成       | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `upsertSavedRuleQuery`         | 保存クエリ追加/更新            | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-|                   | `deleteSavedRuleQuery`         | 保存クエリ削除                 | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-| **Relation Type** | `createRelationTypeDefinition` | カスタム関係型追加             | `mutate()`                                             | `super` 実行後 `persist()`                                      | `graph_store_contract_test.ts`                                 |
-| **Restore**       | `restoreGraphState`            | 全状態のスナップショット置換   | `mutate()` (差分計算しテーブルへ一括反映)              | 一時ファイル `.tmp` 出力 → アトミック `rename`、失敗時 `remove` | `json_backup_restore_test.ts`, `sqlite_store_contract_test.ts` |
+| 操作分類          | メソッド名                     | Memory 挙動                    | SQLite 挙動                                                                                                 | JSON 挙動                                                                                                      | 主な検証テスト                                                       |
+| :---------------- | :----------------------------- | :----------------------------- | :---------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------- |
+| **Work Bundle**   | `createWorkBundle`             | 同期インメモリ追加             | `mutate()`: queue 直列化, 差分保存, エラー時メモリ復元                                                      | `super` 実行後 `persist()` 全体書き出し                                                                        | `graph_store_contract_test.ts`                                       |
+|                   | `importWorkBundles`            | 一括検証後に追加               | `mutate()`                                                                                                  | `captureAllState()` で退避、失敗時 `restoreAllState()`                                                         | `work_bundle_import_test.ts`                                         |
+|                   | `createUnplacedWork`           | 未配置 Work/Branch/Copy 追加   | `mutate()`                                                                                                  | 退避後 `persist()`、失敗時 rollback                                                                            | `unplaced_inbox_ui_contract_test.ts`                                 |
+|                   | `resolveWorkStub`              | stub 属性解除と更新日反映      | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `stub_ui_contract_test.ts`                                           |
+|                   | `mergeWorks`                   | 分岐統合、リンク・配置の書換   | `mutate()`                                                                                                  | `captureAllState()` で退避、失敗時 rollback                                                                    | `memory_store_operations_test.ts`                                    |
+|                   | `setWorkHistoricalTime`        | 歴史年代の付与/解除            | `mutate()`                                                                                                  | `captureAllState()` で退避、失敗時 rollback                                                                    | `sqlite_store_contract_test.ts`                                      |
+| **Branch / Copy** | `createBranch`                 | Branch / Copy 追加             | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `updateBranch`                 | headRevisionId / name 更新     | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `updateBranchWorkingCopy`      | 本文 / updatedAt 更新          | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `updateWorkingCopy`            | main 本文更新                  | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+| **Revision**      | `createRevision`               | DAG 不変条件検証後に追加       | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+| **Recovery**      | `createRecoverySnapshot`       | snapshot 追加                  | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `applyRecoverySnapshot`        | Working Copy へ復元            | `mutate()`                                                                                                  | `captureRecoveryMutationState()` で退避、失敗時 rollback                                                       | `graph_store_contract_test.ts`                                       |
+|                   | `restoreRecoverySnapshot`      | 退避 snapshot 作成の上で復元   | `mutate()`                                                                                                  | `captureRecoveryMutationState()` で退避、失敗時 rollback                                                       | `graph_store_contract_test.ts`                                       |
+|                   | `promoteRecoverySnapshot`      | snapshot を Revision へ昇格    | `mutate()`                                                                                                  | `captureRecoveryMutationState()` で退避、失敗時 rollback                                                       | `graph_store_contract_test.ts`                                       |
+| **Trash / Purge** | `trashWork`                    | `deletedAt` 設定               | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `restoreWork`                  | `deletedAt = null`             | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `purgeWork`                    | 関連全実体削除 & manifest 生成 | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+| **Occurrence**    | `createOccurrence`             | 配置レコード追加               | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `updateOccurrence`             | 順序・折畳・見出し等更新       | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `deleteOccurrence`             | 配置レコード削除               | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+| **Bookmark**      | `createBookmark`               | 栞レコード追加                 | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `deleteBookmark`               | 栞レコード削除                 | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+| **Resume**        | `setResumePosition`            | 単一再開位置更新               | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `clearResumePosition`          | 再開位置 null 設定             | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+| **Relation**      | `createLink`                   | 意味リンク追加                 | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `deleteLink`                   | 意味リンク削除                 | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `replaceKnots`                 | 循環 Knot 一括置換             | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+| **Discovery**     | `upsertAlias`                  | 検索別名追加/更新              | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `deleteAlias`                  | 検索別名削除                   | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `setEmergenceFeedback`         | フィードバック記録             | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `upsertEmergenceSuggestion`    | 提案レコード追加/更新          | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `resolveEmergenceSuggestion`   | 提案状態遷移・リンク生成       | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `upsertSavedRuleQuery`         | 保存クエリ追加/更新            | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+|                   | `deleteSavedRuleQuery`         | 保存クエリ削除                 | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+| **Relation Type** | `createRelationTypeDefinition` | カスタム関係型追加             | `mutate()`                                                                                                  | `super` 実行後 `persist()`                                                                                     | `graph_store_contract_test.ts`                                       |
+| **Batch**         | `batch`                        | 同期/非同期例外時 rollback     | `batch()`: `AsyncLocalStorage` 文脈, 単一トランザクション差分コミット, 外部操作キュー待機, 失敗時メモリ復元 | `batch()`: `AsyncLocalStorage` 文脈, 一時ファイル (`.batch-*.tmp`) 出力 → アトミック `rename`, 失敗時 rollback | `sqlite_store_contract_test.ts`, `json_persistence_contract_test.ts` |
+| **Restore**       | `restoreGraphState`            | 全状態のスナップショット置換   | `mutate()` (差分計算しテーブルへ一括反映)                                                                   | 一時ファイル `.tmp` 出力 → アトミック `rename`、失敗時 `remove`                                                | `json_backup_restore_test.ts`, `sqlite_store_contract_test.ts`       |
 
 ---
 
@@ -102,14 +103,38 @@ JSON の通常保存を SQLite と同等の ACID
 ### 4.1 SqliteGraphStore（現行本番 backend）
 
 - **保証**:
-  1. **直列化キュー (`mutationQueue`)**: すべての非同期 mutation は内部キューにより 1
+  1. **直列化キュー (`mutationQueue`)**: すべての外部非同期 mutation は内部キューにより 1
      つずつ順序通りに実行される。
-  2. **ACID トランザクション**: `persistSqliteDiff` は単一の SQLite
-     トランザクション内で実行され、成功時のみコミットされる。
-  3. **自動ロールバック**: DB 書き込みが失敗した場合、`mutate()` の catch 節で直ちに直前の `before`
-     スナップショットへ `MemoryStateContainer.rollback(before)` でインメモリ状態を巻き戻す。
-  4. **クローズ待機**: `close()` 呼び出し時はキュー内の先行 mutation がすべて完了するのを待機し、WAL
-     チェックポイント（`TRUNCATE`）および `journal_mode = DELETE` を実行して安全にファイルを閉じる。
+  2. **`AsyncLocalStorage` による非同期実行文脈分離 (C05)**:
+     - 各 store インスタンスが独立した `batchContext` を保持し、`batch(operation)`
+       の実行文脈を追跡する。
+     - バッチ内部の mutation はキューを迂回してインメモリ状態のみ更新し、バッチ終了時に単一の SQLite
+       トランザクションで差分を一括適用する。
+     - バッチ実行中に外部から発行された mutation
+       はキューで待機し、バッチ完了（コミットまたはロールバック）後に順次実行される。バッチのロールバックが外部更新を巻き込むことはない。
+     - ネストした `batch()` は親文脈を共有し、二重キャプチャやトランザクションの多重開始を防止する。
+     - バッチ文脈が終了した後に遅延発行された mutation（期限切れ文脈）は明示的に reject される。
+  3. **キュー内での先行変更反映 (C06, C07)**:
+     - `replaceKnots` の同値判定はキュー取得後に最新メモリ状態と比較して判定され、先行 mutation
+       の影響を正しく反映する（C06）。
+     - `updateWorkingCopy` は実行計画内で最新の `main` Branch を探索し、直前の `createWorkBundle`
+       等で生成された Branch を確実に検出する（C07）。
+  4. **局所保存と参照整合性検証 (C04, C08)**:
+     - `sqlite_targeted_mutations.ts` は全状態スナップショット（O(N)）をバイパスして差分保存を行う。
+     - 更新対象の Occurrence が存在しない場合は no-op として正常終了し、例外を投げない（C08）。
+     - 対象が存在する場合は、shape 検証に加えて Work 存在、Branch または pinned Revision
+       存在、および Bookmark / ResumePosition
+       との参照整合性を厳格に検証し、不正参照の保存を拒否する（C04）。
+  5. **ACID トランザクションと自動ロールバック**:
+     - `persistSqliteDiff` は単一の SQLite トランザクション内で実行され、成功時のみコミットされる。
+     - DB 書き込みが失敗した場合、直ちに直前の `before` スナップショットへインメモリ状態を巻き戻す。
+  6. **クローズ契約**:
+     - `close()` 呼び出し時はキュー内の先行 mutation がすべて完了するのを待機し、WAL
+       チェックポイント（`TRUNCATE`）および `journal_mode = DELETE`
+       を実行して安全にファイルを閉じる。
+     - クローズ開始後に発行された新規 mutation は直ちに reject される。
+     - 自身のデッドロックを防ぐため、アクティブなバッチ内部からの `close()` 呼び出しは明示的に
+       reject される。
 - **非保証**:
   - 外部プロセスによる同一 SQLite
     ファイルへの同時排他制御（単一デスクトップアプリインスタンスによる専有利用を前提とする）。
@@ -117,25 +142,34 @@ JSON の通常保存を SQLite と同等の ACID
 ### 4.2 JsonGraphStore（バックアップ・可搬用 / 旧ローカル backend）
 
 - **保証**:
-  1. **完全スナップショット出力**: 各 mutation 成功後にメモリ内の全状態をフォーマット V8 の JSON
-     ファイルとして同期出力する。
-  2. **アトミック復元 (`restoreGraphState`)**: 復元時は直接ファイルを上書きせず、一意な UUID
-     を付与した一時ファイル（`${path}.restore-${uuid}.tmp`）へ完全に書き出してから、ファイルシステムの
-     `rename` 操作でアトミックに置換する。失敗時は一時ファイルを削除し、メモリ状態を `before`
-     へ戻す。
-  3. **部分ロールバック**:
-     `importWorkBundles`、`mergeWorks`、`createUnplacedWork`、`setWorkHistoricalTime`
-     などの複合操作では、実行前に状態を capture し、失敗時に restore する。
-  4. **直列化キュー**: mutation・復元・バッチを同一キューで実行する。同じ非同期実行文脈の
-     内部呼び出しだけがキューを再利用し、独立した要求は先行操作の完了を待つ。
+  1. **直列化キュー (`mutationQueue`)**:
+     - `JsonPersistence` は gate 方式の単一キューを持ち、すべての外部 `mutate` /
+       `mutateWithRollback` / `persist` / `batch` / `restoreGraphState` の実行順序を固定する。
+  2. **`AsyncLocalStorage` による非同期再入・文脈管理 (C02)**:
+     - 内部 mutation（例: `super.updateWorkingCopy` から呼ばれる別
+       override）はアクティブ文脈を検知して余分なキューイング・二重保存を行わずメモリ操作のみを実行する。
+     - ネストした操作は外側のコミットで一度だけ永続化される。
+  3. **アトミック batch 永続化 (C02)**:
+     - `batch(operation)` はバッチ中の途中保存をスキップし、完了後にフォーマット V8 の完全 JSON
+       を一意な一時ファイル（`${path}.batch-${uuid}.tmp`）へ出力後、ファイルシステムの `rename`
+       操作でアトミックに置換する。
+     - コールバックや書き込みが失敗した場合は一時ファイルを cleanup し、インメモリ状態を `before`
+       スナップショットへロールバックする。
+  4. **アトミック復元 (`restoreGraphState`)**:
+     - 復元時は直接ファイルを上書きせず、一時ファイル（`${path}.restore-${uuid}.tmp`）へ書き出してから
+       `rename` 操作でアトミックに置換する。失敗時は一時ファイルを削除し、メモリ状態を `before`
+       へ戻す。
+  5. **クローズ契約**:
+     - `JsonGraphStore.close()` は `persistence.close()`
+       へ委譲し、キュー内の未完了保存が完了するのを待機する。
+     - クローズ開始後の新規保存要求は拒否される。
+     - アクティブなバッチ内部からの `close()` は明示的に reject される。
 - **非保証**:
-  - **通常保存時のトランザクション**: 通常の `persist()`
-    はファイルへの直接上書き（`Deno.writeTextFile`）であり、SQLite
-    のようなDBトランザクションを持たない。
-  - **部分ロールバックの網羅性**: 軽微な
-    mutation（単一レコード追加・削除など）では、ファイル書き込み失敗時にメモリ内の配列操作が完全には巻き戻されない場合がある（S1
-    で `MemoryStateContainer` を導入し、全 mutation
-    に対する統一的なスナップショット・ロールバック機構を確立する）。
+  - **通常保存時の ACID トランザクション**: 通常の個別 mutation
+    はキューで直列化されるが、ファイルへの直接書き込み（direct
+    write）であり、書き込み失敗時の自動ロールバックは複合操作（`importWorkBundles`
+    等）を除き提供しない（変更後のインメモリ状態が保持される）。トランザクション境界とアトミック性が必要な場合は
+    `batch()` を使用する。
 
 ### 4.3 MemoryGraphStore（参照・インメモリ backend）
 
@@ -145,27 +179,20 @@ JSON の通常保存を SQLite と同等の ACID
   2. **ドメイン不変条件の厳格な検証**: Revision の DAG
      不変条件（循環参照・存在しない親・多重親など）、WorkBundle
      の一意性、関係型定義の正当性などをメモリ上で即座に検証・拒否する。
+  3. **`batch()` の同期・非同期例外耐性**: `async/try/catch/finally` により、同期 throw や非同期
+     reject が発生しても確実にロールバックし、バッチ中フラグを解除する。
 - **非保証**:
   - **永続性（Durability）**: プロセス終了時にデータは消失する。
+  - **並行競合制御**: 単一スレッドでの同期・非同期呼び出しを前提とし、SQLite や JSON
+    永続化層のような独立した排他キュー機構は持たない。
 
-### 4.4 Outline バッチと Knot 投影（PR #335）
+### 4.4 RPC 境界の入力検証契約 (C03)
 
-2026-10-13、base は `main` の `6238bef`。以下は PR 上の契約で、main への反映はマージ後に確認する。
-
-- Memory は独立した `batch()` 呼び出しを直列化する。非同期実行文脈を追跡し、ネストした
-  呼び出しだけを現在のバッチへ参加させる。失敗時はバッチ開始前の全状態へ戻す。
-- SQLite はバッチ全体を既存 mutation キューに載せ、内部 mutation の個別保存を抑止する。
-  成功時の差分保存は単一トランザクション、失敗時はメモリとDBの両方を巻き戻す。
-- JSON は内部 mutation の個別保存を抑止し、成功時に一時ファイルを書き出して rename する。
-  保存失敗時はメモリを巻き戻してから一時ファイルを削除する。
-- Knot の正本は active Work の Occurrence 親関係。保存済み `knots` は派生投影として扱い、
-  初期化・復元時に再構築する。構造変更中は dirty を記録し、成功した外側バッチの最後に一度
-  再計算する。collapsed 更新は再計算を発生させず、`listOutline()` は書き込まない。
-- 同じ cycle の保存済み Knot は ID・createdAt・cycleIds の順序を保持する。復元時に新しく 検出した
-  Knot の createdAt は保存データの最新 Work 更新日時から決め、再読込で変化させない。
-  旧ストレージ移行のハッシュ照合も再構築後の snapshot を対象にする。
-- 回帰シナリオは `graph_batch_isolation_test.ts`（並行要求・ネスト・保存失敗・復元・初期化）と
-  `durable_knot_commit_test.ts`（100子の昇格時に再計算1回・SQLite transaction 1回）。
+- **保証**:
+  - デスクトップ RPC エントリポイント（`src/desktop/register_bindings.ts`）において、Valibot
+    スキーマを用いて外部入力を厳格に検証する。
+  - `setCollapsedBatch` RPC では、対象 ID
+    の配列形式（UUID）および真偽値フラグが検証され、不正な入力はドメイン層やストレージ層へ到達する前に拒否される。
 
 ---
 
