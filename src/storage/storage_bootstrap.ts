@@ -1,7 +1,7 @@
 import type { GraphStore, RelationTypeDefinitionStorePort } from "./graph_store.ts";
 import { JsonGraphStore } from "./json_store.ts";
 import { SqliteGraphStore } from "./sqlite_store.ts";
-import { isLegacyStorageMigrationComplete } from "./turso_migration.ts";
+import { readMigrationMarker } from "./turso_migration.ts";
 import { storagePathExists } from "./migration_backup.ts";
 
 export type BootstrappedGraphStore = GraphStore & RelationTypeDefinitionStorePort;
@@ -28,6 +28,8 @@ export interface StorageBootstrapSession {
  * SQLite is the sole persistent production database backend.
  * When legacy SurrealDB data exists without a complete and matching migration marker,
  * startup is refused non-destructively to require running the standalone migration tool.
+ * After migration, SQLite is authoritative. The retained legacy database is an archive,
+ * not a live dependency: startup must not read its schema marker, data, or LOCK file.
  */
 export async function bootstrapStorage(
 	options: StorageBootstrapOptions,
@@ -57,25 +59,23 @@ export async function bootstrapStorage(
 			const targetPath = `${tursoDir}\\radiora.db`;
 			const surrealDir = `${dataDir}\\surreal`;
 			const sourcePath = `${surrealDir}\\main.db`;
-			const sourceVersionMarkerPath = `${surrealDir}\\storage-schema-version`;
 			const markerPath = `${targetPath}.migration.json`;
 
 			await Deno.mkdir(tursoDir, { recursive: true });
 
 			if (await storagePathExists(sourcePath)) {
-				const status = await isLegacyStorageMigrationComplete({
-					sourcePath,
-					sourceVersionMarkerPath,
-					targetPath,
-					markerPath,
-				});
-
-				if (!status.complete) {
+				const marker = await readMigrationMarker(markerPath);
+				const targetExists = await storagePathExists(targetPath);
+				if (!marker || marker.sourcePath !== sourcePath || !targetExists) {
+					const reason = !targetExists
+						? "migrated SQLite database is missing"
+						: !marker
+						? "migration completion marker is missing"
+						: "migration marker sourcePath does not match the legacy source";
 					throw new Error(
-						`Legacy SurrealDB data detected at ${sourcePath}, but has not been cleanly migrated to SQLite yet (${
-							status.reason ?? "migration missing"
-						}). ` +
-							`Please run 'deno task storage:migrate:legacy' to migrate your data before starting Radiora.`,
+						`Legacy SurrealDB data detected at ${sourcePath}: ${reason}. ` +
+							`For first-time migration, close older versions of Radiora and run 'deno task storage:migrate:legacy'. ` +
+							`If SQLite already exists, preserve both databases and restore the matching migration marker or SQLite from backup; do not overwrite existing data.`,
 					);
 				}
 			}
