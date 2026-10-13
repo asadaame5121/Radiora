@@ -31,6 +31,8 @@ export type { JsonRestoreFileOperations } from "./json_persistence.ts";
 
 export class JsonGraphStore extends MemoryGraphStore {
 	private readonly persistence: JsonPersistence;
+	private knotsDirty = false;
+
 	constructor(
 		private readonly path: string | URL,
 		restoreFileOperations?: JsonRestoreFileOperations,
@@ -38,10 +40,25 @@ export class JsonGraphStore extends MemoryGraphStore {
 		super();
 		this.persistence = new JsonPersistence(path, {
 			capture: () => this.state.capture(),
-			rollback: (state) => this.state.rollback(state),
+			rollback: (state) => {
+				this.knotsDirty = false;
+				this.state.rollback(state);
+			},
 			exportGraphState: () => this.exportGraphState(),
 			restoreGraphState: (state) => super.restoreGraphState(state),
+			prepareSnapshot: () => this.prepareSnapshot(),
 		}, restoreFileOperations);
+	}
+
+	protected override afterOutlineStructureChanged(): void {
+		this.knotsDirty = true;
+	}
+
+	private prepareSnapshot(): void {
+		if (this.knotsDirty) {
+			this.reconcileOutlineKnots();
+			this.knotsDirty = false;
+		}
 	}
 
 	override async initialize(): Promise<void> {
@@ -56,6 +73,14 @@ export class JsonGraphStore extends MemoryGraphStore {
 		} catch (cause) {
 			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
 		}
+	}
+
+	override batch<T>(operation: () => Promise<T>): Promise<T> {
+		return this.persistence.batch(operation);
+	}
+
+	override close(): Promise<void> {
+		return this.persistence.close();
 	}
 
 	override async createWorkBundle(

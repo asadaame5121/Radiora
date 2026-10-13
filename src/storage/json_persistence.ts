@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { BackupV8, StoredGraphV7 } from "./backup_migrations.ts";
 import type { GraphStateSnapshot } from "./graph_store.ts";
 
@@ -12,6 +13,7 @@ interface JsonPersistenceMemory {
 	rollback(state: GraphStateSnapshot): void;
 	exportGraphState(): Promise<GraphStateSnapshot>;
 	restoreGraphState(state: GraphStateSnapshot): Promise<void>;
+	prepareSnapshot?(): void;
 }
 
 const denoRestoreFileOperations: JsonRestoreFileOperations = {
@@ -20,44 +22,187 @@ const denoRestoreFileOperations: JsonRestoreFileOperations = {
 	remove: (path) => Deno.remove(path),
 };
 
+export type JsonPersistenceContextKind = "ordinary" | "rollback" | "batch" | "restore";
+
+export interface JsonPersistenceContext {
+	active: boolean;
+	kind: JsonPersistenceContextKind;
+}
+
 /** JSON-specific save guarantees; memory/domain operations remain owned by the store. */
 export class JsonPersistence {
+	private readonly context = new AsyncLocalStorage<JsonPersistenceContext>();
+	private mutationQueue: Promise<void> = Promise.resolve();
+	private closePromise: Promise<void> | null = null;
+
 	constructor(
 		private readonly path: string | URL,
 		private readonly memory: JsonPersistenceMemory,
 		private readonly restoreFiles = denoRestoreFileOperations,
 	) {}
 
+	close(): Promise<void> {
+		const current = this.context.getStore();
+		if (current?.active) {
+			return Promise.reject(
+				new Error("Cannot close JsonPersistence from inside an active operation"),
+			);
+		}
+		this.closePromise ??= (async () => {
+			await this.mutationQueue.catch((cause) => cause);
+		})();
+		return this.closePromise;
+	}
+
+	private async enqueue<T>(task: () => Promise<T>): Promise<T> {
+		if (this.closePromise) throw new Error("JsonPersistence is closing");
+		const currentQueue = this.mutationQueue;
+		const gate = Promise.withResolvers<void>();
+		this.mutationQueue = gate.promise;
+
+		await currentQueue.catch((cause) => cause);
+		try {
+			if (this.closePromise) throw new Error("JsonPersistence is closing");
+			return await task();
+		} finally {
+			gate.resolve();
+		}
+	}
+
+	private async writeDirect(): Promise<void> {
+		this.memory.prepareSnapshot?.();
+		const data = await this.memory.exportGraphState();
+		await Deno.writeTextFile(this.path, serializeBackup(data));
+	}
+
+	private activeContext(): JsonPersistenceContext | undefined {
+		const current = this.context.getStore();
+		if (current && !current.active) throw new Error("JsonPersistence context is expired");
+		return current;
+	}
+
 	/** Ordinary saves retain mutated memory when a direct write fails. */
 	async mutate<T>(operation: () => Promise<T>): Promise<T> {
-		const result = await operation();
-		await this.persist();
-		return result;
+		const current = this.activeContext();
+		if (current) {
+			return await operation();
+		}
+		return await this.enqueue(async () => {
+			const ctx: JsonPersistenceContext = { active: true, kind: "ordinary" };
+			return await this.context.run(ctx, async () => {
+				try {
+					const result = await operation();
+					await this.writeDirect();
+					return result;
+				} finally {
+					ctx.active = false;
+				}
+			});
+		});
 	}
 
 	/** Selected batch/domain operations roll back memory, but still write directly to disk. */
 	async mutateWithRollback(operation: () => Promise<void>): Promise<void> {
-		const before = this.memory.capture();
-		try {
-			await this.mutate(operation);
-		} catch (cause) {
-			this.memory.rollback(before);
-			throw cause;
+		const current = this.activeContext();
+		if (current) {
+			const before = this.memory.capture();
+			try {
+				await operation();
+			} catch (cause) {
+				this.memory.rollback(before);
+				throw cause;
+			}
+			return;
 		}
+		return await this.enqueue(async () => {
+			const before = this.memory.capture();
+			const ctx: JsonPersistenceContext = { active: true, kind: "rollback" };
+			return await this.context.run(ctx, async () => {
+				try {
+					await operation();
+					await this.writeDirect();
+				} catch (cause) {
+					this.memory.rollback(before);
+					throw cause;
+				} finally {
+					ctx.active = false;
+				}
+			});
+		});
 	}
 
 	async persist(): Promise<void> {
-		const data = await this.memory.exportGraphState();
-		// Restore-only injected operations must not change the ordinary save path.
-		await Deno.writeTextFile(this.path, serializeBackup(data));
+		const current = this.context.getStore();
+		if (current?.active) {
+			return;
+		}
+		await this.enqueue(() => this.writeDirect());
+	}
+
+	async batch<T>(operation: () => Promise<T>): Promise<T> {
+		const current = this.activeContext();
+		if (current) {
+			if (current.kind === "batch") {
+				return await operation();
+			}
+			return Promise.reject(
+				new Error("Cannot start batch inside active persistence operation"),
+			);
+		}
+		return await this.enqueue(async () => {
+			const before = this.memory.capture();
+			const ctx: JsonPersistenceContext = { active: true, kind: "batch" };
+			const temporaryPath = this.createTemporaryPath("batch");
+			try {
+				const result = await this.context.run(ctx, async () => {
+					try {
+						return await operation();
+					} finally {
+						ctx.active = false;
+					}
+				});
+				this.memory.prepareSnapshot?.();
+				const after = await this.memory.exportGraphState();
+				await this.restoreFiles.writeTextFile(temporaryPath, serializeBackup(after));
+				await this.restoreFiles.rename(temporaryPath, this.path);
+				return result;
+			} catch (cause) {
+				this.memory.rollback(before);
+				await this.cleanupTemporaryFile(temporaryPath);
+				throw cause;
+			}
+		});
 	}
 
 	/** Restore alone replaces the file by rename and rolls memory back before cleanup. */
 	async restoreGraphState(state: GraphStateSnapshot): Promise<void> {
+		const current = this.context.getStore();
+		if (current?.active) {
+			return Promise.reject(
+				new Error("Cannot restoreGraphState from inside an active persistence operation"),
+			);
+		}
+		return await this.enqueue(async () => {
+			const ctx: JsonPersistenceContext = { active: true, kind: "restore" };
+			return await this.context.run(ctx, async () => {
+				try {
+					await this.restoreGraphStateDirect(state);
+				} finally {
+					ctx.active = false;
+				}
+			});
+		});
+	}
+
+	private createTemporaryPath(prefix: string): string | URL {
+		return typeof this.path === "string"
+			? `${this.path}.${prefix}-${crypto.randomUUID()}.tmp`
+			: new URL(`${this.path.href}.${prefix}-${crypto.randomUUID()}.tmp`);
+	}
+
+	private async restoreGraphStateDirect(state: GraphStateSnapshot): Promise<void> {
 		const before = await this.memory.exportGraphState();
-		const temporaryPath = typeof this.path === "string"
-			? `${this.path}.restore-${crypto.randomUUID()}.tmp`
-			: new URL(`${this.path.href}.restore-${crypto.randomUUID()}.tmp`);
+		const temporaryPath = this.createTemporaryPath("restore");
 		try {
 			await this.memory.restoreGraphState(state);
 			const data = await this.memory.exportGraphState();
@@ -74,8 +219,6 @@ export class JsonPersistence {
 		try {
 			await this.restoreFiles.remove(path);
 		} catch (_cleanupCause) {
-			// Missing files and failed cleanup both preserve the original restore error.
-			// A stale temp file is safe to leave, as in the existing restore contract.
 			return;
 		}
 	}

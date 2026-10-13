@@ -1,10 +1,21 @@
-import type { Occurrence, ResumePosition, Work, WorkingCopy } from "../domain/models.ts";
+import type {
+	Bookmark,
+	Branch,
+	Occurrence,
+	ResumePosition,
+	Revision,
+	Work,
+	WorkingCopy,
+} from "../domain/models.ts";
 import { type SqliteDiffOperations, validateStoredPayload } from "./sqlite_records.ts";
 
 export interface TargetedMutableState {
 	works: Work[];
+	branches: Branch[];
 	workingCopies: WorkingCopy[];
 	occurrences: Occurrence[];
+	revisions: Revision[];
+	bookmarks: Bookmark[];
 	resumePosition: ResumePosition | null;
 }
 
@@ -14,17 +25,61 @@ export interface TargetedMutationStep<T = void> {
 	diff: SqliteDiffOperations;
 }
 
+function validateOccurrenceSelector(state: TargetedMutableState, occurrence: Occurrence): void {
+	const selector = occurrence.revisionSelector;
+	const valid = selector.mode === "branch"
+		? state.branches.some((branch) =>
+			branch.id === selector.branchId && branch.workId === occurrence.workId
+		)
+		: state.revisions.some((revision) =>
+			revision.id === selector.revisionId && revision.workId === occurrence.workId
+		);
+	if (!valid) {
+		const name = selector.mode === "branch" ? "Branch" : "Revision";
+		throw new Error(`Invalid Occurrence ${name} selector: ${occurrence.id}`);
+	}
+}
+
+function validateOccurrenceWorkChange(
+	state: TargetedMutableState,
+	previous: Occurrence,
+	next: Occurrence,
+): void {
+	if (previous.workId === next.workId) return;
+	for (const bookmark of state.bookmarks) {
+		if (bookmark.occurrenceId === next.id && bookmark.workId !== next.workId) {
+			throw new Error(`Invalid Bookmark workId reference for Occurrence: ${next.id}`);
+		}
+	}
+	const position = state.resumePosition;
+	if (position?.occurrenceId === next.id && position.workId !== next.workId) {
+		throw new Error(`Invalid ResumePosition workId reference for Occurrence: ${next.id}`);
+	}
+}
+
 export function planTargetedOccurrenceUpdate(
 	state: TargetedMutableState,
 	occurrence: Occurrence,
 ): TargetedMutationStep {
 	const occIndex = state.occurrences.findIndex((candidate) => candidate.id === occurrence.id);
 	if (occIndex < 0) {
-		throw new Error(`Occurrence not found: ${occurrence.id}`);
+		return {
+			execute: () => Promise.resolve(),
+			rollback: () => Promise.resolve(),
+			diff: { deletes: [], upserts: [] },
+		};
 	}
-	const prevOccurrence = state.occurrences[occIndex];
+
 	const nextOccurrence = structuredClone(occurrence);
 	validateStoredPayload("occurrence", nextOccurrence);
+
+	const work = state.works.find((candidate) => candidate.id === nextOccurrence.workId);
+	if (!work) {
+		throw new Error(`Occurrence Work not found: ${nextOccurrence.workId}`);
+	}
+	validateOccurrenceSelector(state, nextOccurrence);
+	const prevOccurrence = state.occurrences[occIndex];
+	validateOccurrenceWorkChange(state, prevOccurrence, nextOccurrence);
 
 	return {
 		execute: () => {

@@ -9,6 +9,10 @@ import { NodeSqliteDatabaseAdapter } from "../src/storage/sqlite_records.ts";
 import { SQLITE_SCHEMA_SQL } from "../src/storage/sqlite_schema.ts";
 import type { GraphStateSnapshot } from "../src/storage/graph_store.ts";
 import { OccurrenceOperations } from "../src/services/occurrence_operations.ts";
+import {
+	createCountingSqliteConnector,
+	createPerformanceCounters,
+} from "./support/performance_counters.ts";
 
 const CREATED_AT = "2026-07-28T00:00:00.000Z";
 
@@ -822,8 +826,10 @@ Deno.test("SqliteGraphStore targeted mutations (occurrence and resume position) 
 
 		// 4. Rollback on transaction failure
 		failTransaction = true;
+		const activeStore = store;
+		if (!activeStore) throw new Error("Store was closed before rollback verification");
 		await assertRejects(
-			() => store!.updateOccurrence({ ...occ, collapsed: false }),
+			() => activeStore.updateOccurrence({ ...occ, collapsed: false }),
 			Error,
 			"simulated disk transaction failure",
 		);
@@ -836,3 +842,605 @@ Deno.test("SqliteGraphStore targeted mutations (occurrence and resume position) 
 		await safeRemoveDir(root);
 	}
 });
+
+Deno.test(
+	"SqliteGraphStore batch isolates in-flight batch from concurrent external mutations and preserves external mutation on rollback (C05)",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-batch-isolate-" });
+		const targetPath = `${root}\\radiora.db`;
+		const store = new SqliteGraphStore(targetPath);
+		let storeClosed = false;
+		let reopened: SqliteGraphStore | null = null;
+		await store.initialize();
+
+		try {
+			const snapshot = createComplexSnapshot();
+			await store.restoreGraphState(snapshot);
+			const workId = snapshot.works[0].id;
+			const occ = snapshot.occurrences[0];
+
+			const entered = Promise.withResolvers<void>();
+			const release = Promise.withResolvers<void>();
+
+			const batchPromise = store.batch(async () => {
+				await store.updateOccurrence({ ...occ, collapsed: true });
+				entered.resolve();
+				await release.promise;
+				throw new Error("simulated failure inside batch");
+			});
+
+			const batchRejection = assertRejects(
+				() => batchPromise,
+				Error,
+				"simulated failure inside batch",
+			);
+
+			await entered.promise;
+
+			let externalSettled = false;
+			try {
+				const externalUpdatePromise = store.updateWorkingCopy(
+					workId,
+					"Concurrent external update text",
+					"2026-08-01T12:00:00.000Z",
+				).then(() => {
+					externalSettled = true;
+				});
+
+				await new Promise((resolve) => setTimeout(resolve, 30));
+				assert(!externalSettled, "External mutation should wait in queue while batch is active");
+
+				release.resolve();
+				await batchRejection;
+
+				await externalUpdatePromise;
+				assert(externalSettled, "External mutation should succeed after batch finishes");
+
+				const memoryOcc = (await store.listOccurrences()).find((o) => o.id === occ.id);
+				assertEquals(memoryOcc?.collapsed, false);
+				const memoryText = (await store.exportGraphState()).workingCopies.find((w) =>
+					w.workId === workId
+				)?.text;
+				assertEquals(memoryText, "Concurrent external update text");
+
+				await store.close();
+				storeClosed = true;
+				reopened = new SqliteGraphStore(targetPath);
+				await reopened.initialize();
+				const diskOcc = (await reopened.listOccurrences()).find((o) => o.id === occ.id);
+				assertEquals(diskOcc?.collapsed, false);
+				const diskText = (await reopened.exportGraphState()).workingCopies.find((w) =>
+					w.workId === workId
+				)?.text;
+				assertEquals(diskText, "Concurrent external update text");
+			} finally {
+				release.resolve();
+				await batchRejection;
+			}
+		} finally {
+			if (!storeClosed) await store.close();
+			if (reopened) await reopened.close();
+			await safeRemoveDir(root);
+		}
+	},
+);
+
+Deno.test(
+	"SqliteGraphStore batch serializes concurrent external mutation on successful batch completion",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-batch-success-concur-" });
+		const targetPath = `${root}\\radiora.db`;
+		const store = new SqliteGraphStore(targetPath);
+		let storeClosed = false;
+		let reopened: SqliteGraphStore | null = null;
+		await store.initialize();
+
+		try {
+			const snapshot = createComplexSnapshot();
+			await store.restoreGraphState(snapshot);
+			const workId = snapshot.works[0].id;
+			const occ = snapshot.occurrences[0];
+
+			const entered = Promise.withResolvers<void>();
+			const release = Promise.withResolvers<void>();
+
+			const batchPromise = store.batch(async () => {
+				await store.updateOccurrence({ ...occ, collapsed: true });
+				entered.resolve();
+				await release.promise;
+			});
+
+			await entered.promise;
+
+			let externalSettled = false;
+			try {
+				const externalUpdatePromise = store.updateWorkingCopy(
+					workId,
+					"External text after success",
+					"2026-08-01T12:00:00.000Z",
+				).then(() => {
+					externalSettled = true;
+				});
+
+				await new Promise((resolve) => setTimeout(resolve, 30));
+				assert(!externalSettled, "External mutation should wait in queue while batch is active");
+
+				release.resolve();
+				await batchPromise;
+				await externalUpdatePromise;
+				assert(externalSettled);
+
+				const memoryOcc = (await store.listOccurrences()).find((o) => o.id === occ.id);
+				assertEquals(memoryOcc?.collapsed, true);
+				const memoryText = (await store.exportGraphState()).workingCopies.find((w) =>
+					w.workId === workId
+				)?.text;
+				assertEquals(memoryText, "External text after success");
+
+				await store.close();
+				storeClosed = true;
+				reopened = new SqliteGraphStore(targetPath);
+				await reopened.initialize();
+				const diskOcc = (await reopened.listOccurrences()).find((o) => o.id === occ.id);
+				assertEquals(diskOcc?.collapsed, true);
+				const diskText = (await reopened.exportGraphState()).workingCopies.find((w) =>
+					w.workId === workId
+				)?.text;
+				assertEquals(diskText, "External text after success");
+			} finally {
+				release.resolve();
+				await batchPromise;
+			}
+		} finally {
+			if (!storeClosed) await store.close();
+			if (reopened) await reopened.close();
+			await safeRemoveDir(root);
+		}
+	},
+);
+
+Deno.test(
+	"SqliteGraphStore batch handles synchronous throw cleanly without leaving active batch state",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-batch-syncthrow-" });
+		const targetPath = `${root}\\radiora.db`;
+		const store = new SqliteGraphStore(targetPath);
+		await store.initialize();
+
+		try {
+			const snapshot = createComplexSnapshot();
+			await store.restoreGraphState(snapshot);
+			const workId = snapshot.works[0].id;
+
+			await assertRejects(
+				() =>
+					store.batch(() => {
+						throw new Error("sync error inside batch");
+					}),
+				Error,
+				"sync error inside batch",
+			);
+
+			await store.updateWorkingCopy(workId, "Post sync throw text", "2026-08-01T12:00:00.000Z");
+			const text = (await store.exportGraphState()).workingCopies.find((w) => w.workId === workId)
+				?.text;
+			assertEquals(text, "Post sync throw text");
+
+			await store.close();
+			const reopened = new SqliteGraphStore(targetPath);
+			await reopened.initialize();
+			const diskText = (await reopened.exportGraphState()).workingCopies.find((w) =>
+				w.workId === workId
+			)?.text;
+			assertEquals(diskText, "Post sync throw text");
+			await reopened.close();
+		} finally {
+			await safeRemoveDir(root);
+		}
+	},
+);
+
+Deno.test(
+	"SqliteGraphStore nested batch shares batch context without duplicate transaction or capture",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-batch-nested-" });
+		const targetPath = `${root}\\radiora.db`;
+		let transactionCount = 0;
+		const connector = async (path: string): Promise<SqliteDatabase> => {
+			const opened = await NodeSqliteDatabaseAdapter.open(path);
+			return {
+				exec: (sql) => opened.exec(sql),
+				get: (sql, ...args) => opened.get(sql, ...args),
+				all: (sql, ...args) => opened.all(sql, ...args),
+				transaction: <T>(fn: (txn: SqliteDatabaseTransaction) => T): T => {
+					transactionCount++;
+					return opened.transaction(fn);
+				},
+				close: () => opened.close(),
+			};
+		};
+
+		const store = new SqliteGraphStore(targetPath, { connector });
+		await store.initialize();
+
+		try {
+			const snapshot = createComplexSnapshot();
+			await store.restoreGraphState(snapshot);
+			const occ = snapshot.occurrences[0];
+
+			let exportCount = 0;
+			const originalExport = store.exportGraphState.bind(store);
+			store.exportGraphState = async () => {
+				exportCount++;
+				return await originalExport();
+			};
+
+			transactionCount = 0;
+			exportCount = 0;
+
+			await store.batch(async () => {
+				await store.updateOccurrence({ ...occ, collapsed: true });
+				await store.batch(async () => {
+					await store.setResumePosition({
+						workId: occ.workId,
+						occurrenceId: occ.id,
+						caretOffset: 99,
+						updatedAt: "2026-08-01T12:00:00.000Z",
+					});
+				});
+			});
+
+			assertEquals(transactionCount, 1);
+			assertEquals(exportCount, 2);
+
+			const inMemOcc = (await store.listOccurrences()).find((o) => o.id === occ.id);
+			assertEquals(inMemOcc?.collapsed, true);
+			const pos = await store.getResumePosition();
+			assertEquals(pos?.caretOffset, 99);
+
+			await store.close();
+			const reopened = new SqliteGraphStore(targetPath);
+			await reopened.initialize();
+			const diskOcc = (await reopened.listOccurrences()).find((o) => o.id === occ.id);
+			assertEquals(diskOcc?.collapsed, true);
+			const diskPos = await reopened.getResumePosition();
+			assertEquals(diskPos?.caretOffset, 99);
+			await reopened.close();
+		} finally {
+			await safeRemoveDir(root);
+		}
+	},
+);
+
+Deno.test(
+	"SqliteGraphStore rejects mutations issued from an expired batch context",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-batch-expired-" });
+		const targetPath = `${root}\\radiora.db`;
+		const store = new SqliteGraphStore(targetPath);
+		let storeClosed = false;
+		await store.initialize();
+
+		try {
+			const snapshot = createComplexSnapshot();
+			await store.restoreGraphState(snapshot);
+			const workId = snapshot.works[0].id;
+
+			const timerTriggered = Promise.withResolvers<Promise<void>>();
+
+			await store.batch(async () => {
+				setTimeout(() => {
+					timerTriggered.resolve(
+						store.updateWorkingCopy(workId, "late text", "2026-08-01T12:00:00.000Z"),
+					);
+				}, 10);
+			});
+
+			await assertRejects(
+				() => timerTriggered.promise,
+				Error,
+				"Batch context is expired",
+			);
+
+			await store.close();
+			storeClosed = true;
+		} finally {
+			if (!storeClosed) await store.close();
+			await safeRemoveDir(root);
+		}
+	},
+);
+
+Deno.test(
+	"SqliteGraphStore rejects close call attempted from inside an active batch",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-batch-close-" });
+		const targetPath = `${root}\\radiora.db`;
+		const store = new SqliteGraphStore(targetPath);
+		await store.initialize();
+
+		try {
+			const snapshot = createComplexSnapshot();
+			await store.restoreGraphState(snapshot);
+
+			await store.batch(async () => {
+				await assertRejects(
+					() => store.close(),
+					Error,
+					"Cannot close SqliteGraphStore from inside an active batch",
+				);
+			});
+
+			await store.close();
+		} finally {
+			await safeRemoveDir(root);
+		}
+	},
+);
+
+Deno.test(
+	"SqliteGraphStore serializes concurrent replaceKnots requests and respects latest queue state (C06)",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-knot-order-" });
+		const targetPath = `${root}\\radiora.db`;
+		const store = new SqliteGraphStore(targetPath);
+		let storeClosed = false;
+		await store.initialize();
+
+		try {
+			const snapshot = createComplexSnapshot();
+			await store.restoreGraphState(snapshot);
+			const knotsA = structuredClone(snapshot.knots);
+			const knotsB = [{
+				id: crypto.randomUUID(),
+				cycleIds: [snapshot.occurrences[0].id],
+				createdAt: CREATED_AT,
+			}];
+
+			const p1 = store.replaceKnots(knotsB);
+			const p2 = store.replaceKnots(knotsA);
+
+			await Promise.all([p1, p2]);
+
+			const finalKnots = (await store.exportGraphState()).knots;
+			assertEquals(finalKnots[0].id, knotsA[0].id);
+
+			await store.close();
+			storeClosed = true;
+			const reopened = new SqliteGraphStore(targetPath);
+			await reopened.initialize();
+			const diskKnots = (await reopened.exportGraphState()).knots;
+			assertEquals(diskKnots[0].id, knotsA[0].id);
+			await reopened.close();
+		} finally {
+			if (!storeClosed) await store.close();
+			await safeRemoveDir(root);
+		}
+	},
+);
+
+Deno.test(
+	"SqliteGraphStore allows updateWorkingCopy immediately after concurrent createWorkBundle (C07)",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-bundle-order-" });
+		const targetPath = `${root}\\radiora.db`;
+		const store = new SqliteGraphStore(targetPath);
+		let storeClosed = false;
+		await store.initialize();
+
+		try {
+			const newWorkId = crypto.randomUUID();
+			const newBranchId = crypto.randomUUID();
+			const newOccId = crypto.randomUUID();
+			const work = { id: newWorkId, createdAt: CREATED_AT, updatedAt: CREATED_AT };
+			const branch = {
+				id: newBranchId,
+				workId: newWorkId,
+				name: "main",
+				headRevisionId: null,
+				createdAt: CREATED_AT,
+			};
+			const workingCopy = {
+				branchId: newBranchId,
+				workId: newWorkId,
+				text: "Initial text",
+				updatedAt: CREATED_AT,
+			};
+			const occurrence = {
+				id: newOccId,
+				workId: newWorkId,
+				parentOccurrenceId: null,
+				orderKey: 1024,
+				collapsed: false,
+				revisionSelector: { mode: "branch" as const, branchId: newBranchId },
+			};
+
+			const p1 = store.createWorkBundle(work, branch, workingCopy, occurrence);
+			const p2 = store.updateWorkingCopy(
+				newWorkId,
+				"Updated concurrent text",
+				"2026-08-01T12:00:00.000Z",
+			);
+
+			await Promise.all([p1, p2]);
+
+			const memoryText = (await store.exportGraphState()).workingCopies.find((w) =>
+				w.workId === newWorkId
+			)?.text;
+			assertEquals(memoryText, "Updated concurrent text");
+
+			await store.close();
+			storeClosed = true;
+			const reopened = new SqliteGraphStore(targetPath);
+			await reopened.initialize();
+			const diskText = (await reopened.exportGraphState()).workingCopies.find((w) =>
+				w.workId === newWorkId
+			)?.text;
+			assertEquals(diskText, "Updated concurrent text");
+			await reopened.close();
+		} finally {
+			if (!storeClosed) await store.close();
+			await safeRemoveDir(root);
+		}
+	},
+);
+
+Deno.test(
+	"SqliteGraphStore targeted mutations validate local references and treat missing occurrence as no-op (C04/C08)",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-ref-valid-" });
+		const targetPath = `${root}\\radiora.db`;
+		const store = new SqliteGraphStore(targetPath);
+		let storeClosed = false;
+		await store.initialize();
+
+		try {
+			const snapshot = createTwoWorkSnapshot();
+			const rev1 = {
+				id: crypto.randomUUID(),
+				workId: snapshot.works[0].id,
+				text: "rev 1 text",
+				parentRevisionIds: [],
+				kind: "checkpoint" as const,
+				createdAt: CREATED_AT,
+			};
+			const rev2 = {
+				id: crypto.randomUUID(),
+				workId: snapshot.works[1].id,
+				text: "rev 2 text",
+				parentRevisionIds: [],
+				kind: "checkpoint" as const,
+				createdAt: CREATED_AT,
+			};
+			snapshot.revisions = [rev1, rev2];
+			await store.restoreGraphState(snapshot);
+
+			let exportCount = 0;
+			const originalExport = store.exportGraphState.bind(store);
+			store.exportGraphState = async () => {
+				exportCount++;
+				return await originalExport();
+			};
+
+			const occ1 = snapshot.occurrences[0];
+
+			// 1. Missing occurrence -> no-op (no throw, exportCount = 0)
+			exportCount = 0;
+			const missingOcc = { ...occ1, id: crypto.randomUUID(), collapsed: true };
+			await store.updateOccurrence(missingOcc);
+			assertEquals(exportCount, 0);
+
+			// 2. Nonexistent workId -> rejects and memory unchanged
+			exportCount = 0;
+			await assertRejects(
+				() => store.updateOccurrence({ ...occ1, workId: "nonexistent-work-id" }),
+				Error,
+			);
+			assertEquals(exportCount, 0);
+
+			// 3. Branch selector belongs to another work -> rejects
+			await assertRejects(
+				() =>
+					store.updateOccurrence({
+						...occ1,
+						revisionSelector: { mode: "branch", branchId: snapshot.branches[1].id },
+					}),
+				Error,
+			);
+
+			// 4. Pinned selector belongs to another work -> rejects
+			await assertRejects(
+				() =>
+					store.updateOccurrence({
+						...occ1,
+						revisionSelector: { mode: "pinned", revisionId: rev2.id },
+					}),
+				Error,
+			);
+
+			// 5. Valid pinned selector -> succeeds with exportCount = 0
+			exportCount = 0;
+			await store.updateOccurrence({
+				...occ1,
+				revisionSelector: { mode: "pinned", revisionId: rev1.id },
+			});
+			assertEquals(exportCount, 0);
+
+			const inMemOcc = (await store.listOccurrences()).find((o) => o.id === occ1.id);
+			assertEquals(inMemOcc?.revisionSelector.mode, "pinned");
+
+			// 6. Reopen from disk to verify persistence
+			await store.close();
+			storeClosed = true;
+			const reopened = new SqliteGraphStore(targetPath);
+			await reopened.initialize();
+			const diskOcc = (await reopened.listOccurrences()).find((o) => o.id === occ1.id);
+			assertEquals(diskOcc?.revisionSelector.mode, "pinned");
+			await reopened.close();
+		} finally {
+			if (!storeClosed) await store.close();
+			await safeRemoveDir(root);
+		}
+	},
+);
+
+Deno.test(
+	"SqliteGraphStore OccurrenceOperations.discardEmptyItems deletes 100 empty items in a single transaction",
+	async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-sqlite-discard-empty-" });
+		const targetPath = `${root}\\radiora.db`;
+		const counters = createPerformanceCounters();
+		const connector = createCountingSqliteConnector(counters);
+
+		const store = new SqliteGraphStore(targetPath, { connector });
+		await store.initialize();
+		let storeClosed = false;
+
+		try {
+			const operations = new OccurrenceOperations(store);
+			const emptyItemIds: string[] = [];
+
+			// 100件の空アイテムを作成（バッチ内で）
+			await store.batch(async () => {
+				for (let i = 0; i < 100; i++) {
+					const item = await operations.createItem({ text: "", parentId: null });
+					emptyItemIds.push(item.id);
+				}
+			});
+
+			const initialItems = await store.listItems();
+			assertEquals(initialItems.length, 100);
+
+			// スナップショット取得
+			const beforeDiscard = counters.snapshot();
+
+			// discardEmptyItems を実行
+			const result = await operations.discardEmptyItems(emptyItemIds);
+
+			assertEquals(result.deletedIds.length, 100);
+			assertEquals(result.handledIds.length, 100);
+			// 100件の削除が1つのトランザクション（batch）内で完了したことをassert
+			const delta = counters.delta(beforeDiscard);
+			assertEquals(delta.transaction, 1);
+
+			// メモリ上で削除されていることを確認
+			const remainingItems = await store.listItems();
+			assertEquals(remainingItems.length, 0);
+
+			// ディスクに正しく反映されていることを再オープンで確認
+			await store.close();
+			storeClosed = true;
+
+			const reopened = new SqliteGraphStore(targetPath);
+			await reopened.initialize();
+			const diskItems = await reopened.listItems();
+			assertEquals(diskItems.length, 0);
+			const diskTrash = await new OccurrenceOperations(reopened).listTrash();
+			assertEquals(diskTrash.length, 100);
+			await reopened.close();
+		} finally {
+			if (!storeClosed) await store.close();
+			await safeRemoveDir(root);
+		}
+	},
+);
