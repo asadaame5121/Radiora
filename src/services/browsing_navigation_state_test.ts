@@ -106,6 +106,29 @@ Deno.test("all browsing operations leave content and persisted placement fields 
 	assertEquals(snapshot.items.map(persistedFields), before.items.map(persistedFields));
 });
 
+Deno.test("ancestorBreadcrumb and projectBrowsingOutline handle deep trees without stack overflow", () => {
+	const depth = 10_000;
+	const items: OutlineItem[] = [];
+	for (let i = 0; i < depth; i++) {
+		items.push(item(`node-${i}`, i === 0 ? null : `node-${i - 1}`, i + 1, false));
+	}
+	const snapshot: OutlineSnapshot = {
+		items,
+		links: [],
+		knots: [],
+		stashItemIds: [],
+	};
+
+	const crumbs = ancestorBreadcrumb(snapshot, `node-${depth - 1}`);
+	assertEquals(crumbs.length, depth - 1);
+	assertEquals(crumbs[0].id, "node-0");
+	assertEquals(crumbs[crumbs.length - 1].id, `node-${depth - 2}`);
+
+	const projection = projectBrowsingOutline(snapshot, "node-0");
+	assertEquals(projection.items.length, depth);
+	assertEquals(projection.rootOccurrenceIds, ["node-0"]);
+});
+
 function persistedFields(item: OutlineItem) {
 	return {
 		text: item.text,

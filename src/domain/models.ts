@@ -192,6 +192,20 @@ export interface Knot {
 	createdAt: string;
 }
 
+export function areKnotsEqual(left: readonly Knot[], right: readonly Knot[]): boolean {
+	if (left.length !== right.length) return false;
+	for (let i = 0; i < left.length; i++) {
+		const a = left[i];
+		const b = right[i];
+		if (a.id !== b.id) return false;
+		if (a.cycleIds.length !== b.cycleIds.length) return false;
+		for (let j = 0; j < a.cycleIds.length; j++) {
+			if (a.cycleIds[j] !== b.cycleIds[j]) return false;
+		}
+	}
+	return true;
+}
+
 export interface OutlineSnapshot {
 	items: OutlineItem[];
 	links: OutlineLink[];

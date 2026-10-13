@@ -1,17 +1,19 @@
-import type {
-	CreateItemInput,
-	CreateOccurrenceInput,
-	Knot,
-	MoveItemInput,
-	OutlineItem,
-	OutlineSnapshot,
-	PurgeManifest,
-	Revision,
-	RevisionSelector,
-	TrashEntry,
+import {
+	areKnotsEqual,
+	type CreateItemInput,
+	type CreateOccurrenceInput,
+	type Knot,
+	type MoveItemInput,
+	type OutlineItem,
+	type OutlineSnapshot,
+	type PurgeManifest,
+	type Revision,
+	type RevisionSelector,
+	type TrashEntry,
 } from "../domain/models.ts";
 import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
 import { fetchActiveMergedLinks } from "./implicit_relation.ts";
+import { detectOutlineKnots, markRecursivePlacements } from "./occurrence_knot_detection.ts";
 
 const ORDER_STEP = 1024;
 
@@ -27,8 +29,11 @@ export class OccurrenceOperations {
 
 	async listOutline(): Promise<OutlineSnapshot> {
 		const items = await this.store.listItems();
-		const knots = this.detectKnots(items);
-		await this.store.replaceKnots(knots);
+		const existingKnots = await this.store.listKnots();
+		const knots = this.detectKnots(items, existingKnots);
+		if (!areKnotsEqual(existingKnots, knots)) {
+			await this.store.replaceKnots(knots);
+		}
 		const stashItemIds = [...new Set(knots.flatMap((knot) => knot.cycleIds))];
 		return {
 			items: this.markRecursivePlacements(items),
@@ -284,29 +289,7 @@ export class OccurrenceOperations {
 	}
 
 	private markRecursivePlacements(items: OutlineItem[]): OutlineItem[] {
-		const byId = new Map(items.map((item) => [item.id, item]));
-		return items.map((item) => {
-			const visited = new Set<string>();
-			let parentId = item.parentId;
-			while (parentId) {
-				if (visited.has(parentId)) break;
-				visited.add(parentId);
-				const parent = byId.get(parentId);
-				if (!parent) break;
-				if (parent.workId === item.workId) return { ...item, referenceStub: true };
-				parentId = parent.parentId;
-			}
-			return item;
-		});
-	}
-
-	private fingerprint(value: string): string {
-		let hash = 2166136261;
-		for (const char of value) {
-			hash ^= char.codePointAt(0) ?? 0;
-			hash = Math.imul(hash, 16777619);
-		}
-		return `s-${(hash >>> 0).toString(16)}`;
+		return markRecursivePlacements(items);
 	}
 
 	private async requireItem(id: string): Promise<OutlineItem> {
@@ -354,50 +337,16 @@ export class OccurrenceOperations {
 		return (siblings[index].orderKey + siblings[index + 1].orderKey) / 2;
 	}
 
-	private detectKnots(items: OutlineItem[]): Knot[] {
-		const byId = new Map(items.map((item) => [item.id, item]));
-		const signatures = new Set<string>();
-		const knots: Knot[] = [];
-		for (const start of items) {
-			const path: string[] = [];
-			const position = new Map<string, number>();
-			let current: OutlineItem | undefined = start;
-			while (current) {
-				const existing = position.get(current.id);
-				if (existing !== undefined) {
-					const cycleIds = path.slice(existing).sort();
-					const signature = cycleIds.join(":");
-					if (!signatures.has(signature)) {
-						signatures.add(signature);
-						knots.push({
-							id: this.fingerprint(`knot:${signature}`),
-							cycleIds,
-							createdAt: new Date().toISOString(),
-						});
-					}
-					break;
-				}
-				position.set(current.id, path.length);
-				path.push(current.id);
-				if (current.parentId && !byId.has(current.parentId)) {
-					const signature = `orphan:${current.id}`;
-					if (!signatures.has(signature)) {
-						signatures.add(signature);
-						knots.push({
-							id: this.fingerprint(`knot:${signature}`),
-							cycleIds: [current.id],
-							createdAt: new Date().toISOString(),
-						});
-					}
-					break;
-				}
-				current = current.parentId ? byId.get(current.parentId) : undefined;
-			}
-		}
-		return knots;
+	private detectKnots(items: OutlineItem[], existingKnots?: readonly Knot[]): Knot[] {
+		return detectOutlineKnots(items, existingKnots);
 	}
 
 	private async reconcileKnots(): Promise<void> {
-		await this.store.replaceKnots(this.detectKnots(await this.store.listItems()));
+		const items = await this.store.listItems();
+		const existingKnots = await this.store.listKnots();
+		const knots = this.detectKnots(items, existingKnots);
+		if (!areKnotsEqual(existingKnots, knots)) {
+			await this.store.replaceKnots(knots);
+		}
 	}
 }

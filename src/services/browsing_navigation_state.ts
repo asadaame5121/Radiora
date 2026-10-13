@@ -170,12 +170,18 @@ export function projectBrowsingOutline(
 
 	const included = new Set<string>();
 	const children = childrenByParent(snapshot.items);
-	const visit = (id: string) => {
-		if (included.has(id)) return;
+	const stack: string[] = [hoistOccurrenceId];
+	while (stack.length > 0) {
+		const id = stack.pop()!;
+		if (included.has(id)) continue;
 		included.add(id);
-		for (const child of children.get(id) ?? []) visit(child.id);
-	};
-	visit(hoistOccurrenceId);
+		const directChildren = children.get(id);
+		if (directChildren) {
+			for (let i = directChildren.length - 1; i >= 0; i--) {
+				stack.push(directChildren[i].id);
+			}
+		}
+	}
 
 	return {
 		items: snapshot.items.filter((item) => included.has(item.id)),
@@ -197,9 +203,10 @@ export function ancestorBreadcrumb(
 		seen.add(parentId);
 		const parent = byId.get(parentId);
 		if (!parent) break;
-		result.unshift(parent);
+		result.push(parent);
 		parentId = parent.parentId;
 	}
+	result.reverse();
 	return result;
 }
 

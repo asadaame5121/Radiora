@@ -43,14 +43,20 @@ export class ManuscriptProjectionService {
 
 		const sections: ManuscriptSection[] = [];
 		const visited = new Set<string>();
-		const visit = (item: OutlineItem, depth: number): void => {
-			if (visited.has(item.id)) return;
+		const stack: Array<{ item: OutlineItem; depth: number }> = [{ item: root, depth: 0 }];
+		while (stack.length > 0) {
+			const { item, depth } = stack.pop()!;
+			if (visited.has(item.id)) continue;
 			visited.add(item.id);
 			sections.push(manuscriptSectionFromItem(item, depth));
-			if (item.referenceStub) return;
-			for (const child of childrenByParent.get(item.id) ?? []) visit(child, depth + 1);
-		};
-		visit(root, 0);
+			if (item.referenceStub) continue;
+			const children = childrenByParent.get(item.id) ?? [];
+			for (let i = children.length - 1; i >= 0; i--) {
+				if (!visited.has(children[i].id)) {
+					stack.push({ item: children[i], depth: depth + 1 });
+				}
+			}
+		}
 		return sections;
 	}
 }

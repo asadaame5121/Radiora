@@ -310,22 +310,20 @@ function validateKnots(
 	occurrenceById: ReadonlyMap<string, Occurrence>,
 	purgedOccurrenceIds: ReadonlySet<string>,
 ): void {
-	for (const knot of knots) {
-		const parsed = v.safeParse(KnotSchema, knot);
+	for (const k of knots) {
 		if (
-			!parsed.success ||
-			knot.cycleIds.some((id) => !occurrenceById.has(id) && !purgedOccurrenceIds.has(id))
+			!v.safeParse(KnotSchema, k).success ||
+			k.cycleIds.some((id) => !occurrenceById.has(id) && !purgedOccurrenceIds.has(id))
 		) {
-			throw new Error(`Invalid Knot: ${knot?.id}`);
+			throw new Error(`Invalid Knot: ${k?.id}`);
 		}
 	}
 }
 
 function validateAliases(aliases: readonly SearchAlias[]): void {
-	for (const alias of aliases) {
-		const parsed = v.safeParse(SearchAliasSchema, alias);
-		if (!parsed.success) {
-			throw new Error(`Invalid Search Alias: ${alias?.id}`);
+	for (const a of aliases) {
+		if (!v.safeParse(SearchAliasSchema, a).success) {
+			throw new Error(`Invalid Search Alias: ${a?.id}`);
 		}
 	}
 }
@@ -337,38 +335,33 @@ function validateEmergenceSuggestions(
 	purgedWorkIds: ReadonlySet<string>,
 	purgedOccurrenceIds: ReadonlySet<string>,
 ): void {
-	for (const suggestion of suggestions) {
-		const parsed = v.safeParse(EmergenceSuggestionSchema, suggestion);
+	for (const s of suggestions) {
 		if (
-			!parsed.success ||
-			(!workById.has(suggestion.contextWorkId) &&
-				!purgedWorkIds.has(suggestion.contextWorkId)) ||
-			(!workById.has(suggestion.targetWorkId) &&
-				!purgedWorkIds.has(suggestion.targetWorkId)) ||
-			(!purgedOccurrenceIds.has(suggestion.contextItemId) &&
-				occurrenceById.get(suggestion.contextItemId)?.workId !== suggestion.contextWorkId) ||
-			(!purgedOccurrenceIds.has(suggestion.targetItemId) &&
-				occurrenceById.get(suggestion.targetItemId)?.workId !== suggestion.targetWorkId)
+			!v.safeParse(EmergenceSuggestionSchema, s).success ||
+			(!workById.has(s.contextWorkId) && !purgedWorkIds.has(s.contextWorkId)) ||
+			(!workById.has(s.targetWorkId) && !purgedWorkIds.has(s.targetWorkId)) ||
+			(!purgedOccurrenceIds.has(s.contextItemId) &&
+				occurrenceById.get(s.contextItemId)?.workId !== s.contextWorkId) ||
+			(!purgedOccurrenceIds.has(s.targetItemId) &&
+				occurrenceById.get(s.targetItemId)?.workId !== s.targetWorkId)
 		) {
-			throw new Error(`Invalid Emergence Suggestion: ${suggestion?.id}`);
+			throw new Error(`Invalid Emergence Suggestion: ${s?.id}`);
 		}
 	}
 }
 
 function validateSavedRuleQueries(savedRuleQueries: readonly SavedRuleQuery[]): void {
-	for (const query of savedRuleQueries) {
-		const parsed = v.safeParse(SavedRuleQuerySchema, query);
-		if (!parsed.success) {
-			throw new Error(`Invalid Saved Rule Query: ${query?.id}`);
+	for (const q of savedRuleQueries) {
+		if (!v.safeParse(SavedRuleQuerySchema, q).success) {
+			throw new Error(`Invalid Saved Rule Query: ${q?.id}`);
 		}
 	}
 }
 
 function validatePurgeManifests(purgeManifests: readonly PurgeManifest[]): void {
-	for (const manifest of purgeManifests) {
-		const parsed = v.safeParse(PurgeManifestSchema, manifest);
-		if (!parsed.success) {
-			throw new Error(`Invalid Purge Manifest: ${manifest?.id}`);
+	for (const m of purgeManifests) {
+		if (!v.safeParse(PurgeManifestSchema, m).success) {
+			throw new Error(`Invalid Purge Manifest: ${m?.id}`);
 		}
 	}
 }
@@ -378,13 +371,12 @@ function validateBookmarks(
 	workById: ReadonlyMap<string, Work>,
 	occurrenceById: ReadonlyMap<string, Occurrence>,
 ): void {
-	for (const bookmark of bookmarks) {
-		const occurrence = occurrenceById.get(bookmark.occurrenceId);
-		const parsed = v.safeParse(BookmarkSchema, bookmark);
+	for (const b of bookmarks) {
+		const occ = occurrenceById.get(b.occurrenceId);
 		if (
-			!parsed.success || !workById.has(bookmark.workId) || occurrence?.workId !== bookmark.workId
+			!v.safeParse(BookmarkSchema, b).success || !workById.has(b.workId) || occ?.workId !== b.workId
 		) {
-			throw new Error(`Invalid Bookmark: ${bookmark?.id}`);
+			throw new Error(`Invalid Bookmark: ${b?.id}`);
 		}
 	}
 }
@@ -395,11 +387,10 @@ function validateResumePosition(
 	occurrenceById: ReadonlyMap<string, Occurrence>,
 ): void {
 	if (!resumePosition) return;
-	const occurrence = occurrenceById.get(resumePosition.occurrenceId);
-	const parsed = v.safeParse(ResumePositionSchema, resumePosition);
+	const occ = occurrenceById.get(resumePosition.occurrenceId);
 	if (
-		!parsed.success || !workById.has(resumePosition.workId) ||
-		occurrence?.workId !== resumePosition.workId ||
+		!v.safeParse(ResumePositionSchema, resumePosition).success ||
+		!workById.has(resumePosition.workId) || occ?.workId !== resumePosition.workId ||
 		resumePosition.caretOffset < 0
 	) {
 		throw new Error("Invalid Resume Position");
@@ -408,8 +399,7 @@ function validateResumePosition(
 
 function validateEmergenceFeedback(emergenceFeedback: Record<string, unknown>): void {
 	for (const action of Object.values(emergenceFeedback)) {
-		const parsed = v.safeParse(EmergenceActionSchema, action);
-		if (!parsed.success) {
+		if (!v.safeParse(EmergenceActionSchema, action).success) {
 			throw new Error("Invalid emergence feedback");
 		}
 	}
@@ -429,15 +419,26 @@ function uniqueById<T extends { id: string }>(
 
 function assertRevisionDag(revisions: readonly Revision[]): void {
 	const parents = new Map(revisions.map((revision) => [revision.id, revision.parentRevisionIds]));
-	const complete = new Set<string>();
-	const visit = (id: string, path: Set<string>): void => {
-		if (complete.has(id)) return;
-		if (path.has(id)) throw new Error(`Revision cycle: ${id}`);
-		const nextPath = new Set(path).add(id);
-		for (const parent of parents.get(id) ?? []) visit(parent, nextPath);
-		complete.add(id);
-	};
-	for (const id of parents.keys()) visit(id, new Set());
+	const visiting = new Map<string, boolean>();
+	for (const startId of parents.keys()) {
+		if (visiting.has(startId)) continue;
+		visiting.set(startId, true);
+		const stack = [{ id: startId, parentIds: parents.get(startId) ?? [], index: 0 }];
+		while (stack.length > 0) {
+			const f = stack[stack.length - 1];
+			if (f.index >= f.parentIds.length) {
+				visiting.set(f.id, false);
+				stack.pop();
+				continue;
+			}
+			const pId = f.parentIds[f.index++];
+			if (visiting.get(pId) === true) throw new Error(`Revision cycle: ${pId}`);
+			if (!visiting.has(pId)) {
+				visiting.set(pId, true);
+				stack.push({ id: pId, parentIds: parents.get(pId) ?? [], index: 0 });
+			}
+		}
+	}
 }
 
 function validateLinkEndpoint(
@@ -447,10 +448,9 @@ function validateLinkEndpoint(
 	linkId: string,
 ): void {
 	if (!works.has(endpoint.workId)) throw new Error(`Invalid Link Work endpoint: ${linkId}`);
-	if (endpoint.scope === "revision") {
-		const revision = revisions.get(endpoint.revisionId);
-		if (!revision || revision.workId !== endpoint.workId) {
-			throw new Error(`Invalid Link Revision endpoint: ${linkId}`);
-		}
+	if (
+		endpoint.scope === "revision" && revisions.get(endpoint.revisionId)?.workId !== endpoint.workId
+	) {
+		throw new Error(`Invalid Link Revision endpoint: ${linkId}`);
 	}
 }
