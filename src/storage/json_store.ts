@@ -1,22 +1,23 @@
 import type { HistoricalTime } from "../domain/historical_time.ts";
-import type {
-	Bookmark,
-	Branch,
-	EmergenceAction,
-	EmergenceSuggestion,
-	Knot,
-	LinkType,
-	Occurrence,
-	OutlineLink,
-	PurgeManifest,
-	RecoverySnapshot,
-	RelationTypeDefinition,
-	ResumePosition,
-	Revision,
-	SavedRuleQuery,
-	SearchAlias,
-	Work,
-	WorkingCopy,
+import {
+	areKnotsEqual,
+	type Bookmark,
+	type Branch,
+	type EmergenceAction,
+	type EmergenceSuggestion,
+	type Knot,
+	type LinkType,
+	type Occurrence,
+	type OutlineLink,
+	type PurgeManifest,
+	type RecoverySnapshot,
+	type RelationTypeDefinition,
+	type ResumePosition,
+	type Revision,
+	type SavedRuleQuery,
+	type SearchAlias,
+	type Work,
+	type WorkingCopy,
 } from "../domain/models.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
 import { type GraphStateSnapshot, type MergeWorksInput, type WorkBundle } from "./graph_store.ts";
@@ -30,6 +31,8 @@ export type { JsonRestoreFileOperations } from "./json_persistence.ts";
 
 export class JsonGraphStore extends MemoryGraphStore {
 	private readonly persistence: JsonPersistence;
+	private knotsDirty = false;
+
 	constructor(
 		private readonly path: string | URL,
 		restoreFileOperations?: JsonRestoreFileOperations,
@@ -37,10 +40,25 @@ export class JsonGraphStore extends MemoryGraphStore {
 		super();
 		this.persistence = new JsonPersistence(path, {
 			capture: () => this.state.capture(),
-			rollback: (state) => this.state.rollback(state),
+			rollback: (state) => {
+				this.knotsDirty = false;
+				this.state.rollback(state);
+			},
 			exportGraphState: () => this.exportGraphState(),
 			restoreGraphState: (state) => super.restoreGraphState(state),
+			prepareSnapshot: () => this.prepareSnapshot(),
 		}, restoreFileOperations);
+	}
+
+	protected override afterOutlineStructureChanged(): void {
+		this.knotsDirty = true;
+	}
+
+	private prepareSnapshot(): void {
+		if (this.knotsDirty) {
+			this.reconcileOutlineKnots();
+			this.knotsDirty = false;
+		}
 	}
 
 	override async initialize(): Promise<void> {
@@ -58,7 +76,11 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	override batch<T>(operation: () => Promise<T>): Promise<T> {
-		return this.persistence.batch(() => super.batch(operation));
+		return this.persistence.batch(operation);
+	}
+
+	override close(): Promise<void> {
+		return this.persistence.close();
 	}
 
 	override async createWorkBundle(
@@ -214,6 +236,9 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	override async replaceKnots(knots: Knot[]): Promise<void> {
+		if (areKnotsEqual(this.state.knots, knots)) {
+			return;
+		}
 		await this.persistence.mutate(() => super.replaceKnots(knots));
 	}
 
