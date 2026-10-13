@@ -71,3 +71,33 @@ Deno.test("rankRecentEditedItems limits results to DEFAULT_RECENT_EDITED_LIMIT o
 	assertEquals(customRanked.length, 3);
 	assertEquals(customRanked.map((i: OutlineItem) => i.id), ["item-9", "item-8", "item-7"]);
 });
+
+Deno.test("rankRecentEditedItems handles 10,000 items in O(N) top-k selection accurately", () => {
+	const items = Array.from(
+		{ length: 10000 },
+		(_, i) =>
+			createItem(
+				`item-${String(i).padStart(5, "0")}`,
+				`work-${String(i % 500).padStart(3, "0")}`,
+				new Date(1700000000000 + i * 1000).toISOString(),
+			),
+	);
+
+	const ranked = rankRecentEditedItems({ items, limit: 6 });
+	assertEquals(ranked.length, 6);
+	// The most recent items should be the last ones with unique works
+	// item-09999 is work-499
+	// item-09998 is work-498
+	// item-09997 is work-497
+	// item-09996 is work-496
+	// item-09995 is work-495
+	// item-09994 is work-494
+	assertEquals(ranked.map((i) => i.id), [
+		"item-09999",
+		"item-09998",
+		"item-09997",
+		"item-09996",
+		"item-09995",
+		"item-09994",
+	]);
+});
