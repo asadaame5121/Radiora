@@ -75,9 +75,7 @@ export class NavigationService {
 	}
 
 	private async requireOccurrence(id: string): Promise<Occurrence> {
-		const occurrence = (await this.store.listOccurrences()).find((candidate) =>
-			candidate.id === id
-		);
+		const occurrence = await this.store.getOccurrence(id);
 		if (!occurrence) throw new Error(`Occurrence not found: ${id}`);
 		return occurrence;
 	}

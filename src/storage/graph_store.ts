@@ -63,9 +63,15 @@ export interface BackupStorePort {
 	restoreGraphState(state: GraphStateSnapshot): Promise<void>;
 }
 
-export interface OutlineStorePort {
+export interface BatchStorePort {
+	batch?<T>(operation: () => Promise<T>): Promise<T>;
+}
+
+export interface OutlineStorePort extends BatchStorePort {
 	listItems(): Promise<OutlineItem[]>;
+	getItem(id: string): Promise<OutlineItem | null>;
 	listOccurrences(includeDeletedWorks?: boolean): Promise<Occurrence[]>;
+	getOccurrence(id: string): Promise<Occurrence | null>;
 	createOccurrence(occurrence: Occurrence): Promise<void>;
 	updateOccurrence(occurrence: Occurrence): Promise<void>;
 	deleteOccurrence(id: string): Promise<void>;

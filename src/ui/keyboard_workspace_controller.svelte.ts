@@ -23,6 +23,7 @@ export class KeyboardWorkspaceController {
 			items(): readonly OutlineItem[];
 			clearTemporaryExpansion(): void;
 			setCollapsed(id: string, collapsed: boolean): Promise<void>;
+			setCollapsedBatch?(ids: readonly string[], collapsed: boolean): Promise<void>;
 			reload(): Promise<unknown>;
 		},
 	) {
@@ -66,12 +67,16 @@ export class KeyboardWorkspaceController {
 		const projection = this.ports.projection();
 		const items = projection.items.filter((item) => item.collapsed !== collapsed);
 		try {
-			// Sequential writes reuse the existing persistence boundary without concurrent store mutations.
-			for (const item of items) await this.ports.setCollapsed(item.id, collapsed);
+			if (this.ports.setCollapsedBatch && items.length > 0) {
+				await this.ports.setCollapsedBatch(items.map((item) => item.id), collapsed);
+			} else {
+				for (const item of items) await this.ports.setCollapsed(item.id, collapsed);
+			}
 		} finally {
 			this.ports.clearTemporaryExpansion();
 			await this.ports.reload();
 		}
+
 		const id = collapsed ? projection.rootOccurrenceIds[0] ?? null : this.ports.selectedId();
 		if (id && !this.ports.select(id)) return;
 		await focusOutlineEditor(id);

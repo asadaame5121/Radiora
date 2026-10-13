@@ -343,3 +343,201 @@ test("a failed disclosure click reports its cause without an unhandled rejection
 	expect(pageErrors).toEqual([]);
 	expect(reads).toBe(initialReads);
 });
+
+test("typing in an item updates only the matching branch placements and does not reload Outline or unrelated views", async ({ page }) => {
+	const items = [
+		item("A1", 10, "first placement"),
+		{
+			...item("A2", 20, "first placement"),
+			workId: "A1",
+			revisionSelector: { mode: "branch" as const, branchId: "A1-main" },
+		},
+		{
+			...item("A-pin", 30, "first placement"),
+			workId: "A1",
+			revisionSelector: { mode: "pinned" as const, revisionId: "rev-1" },
+		},
+		item("B", 40, "unrelated row"),
+	];
+	const reads = { outline: 0, tree: 0, bookmarks: 0 };
+	await page.route("**/api/rpc/listOutline", (route) => {
+		reads.outline++;
+		return route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } });
+	});
+	await page.route("**/api/rpc/listGlobalLineage", (route) => {
+		reads.tree++;
+		return route.continue();
+	});
+	await page.route("**/api/rpc/listBookmarks", (route) => {
+		reads.bookmarks++;
+		return route.continue();
+	});
+	await page.route("**/api/rpc/updateItemText", (route) => {
+		return route.fulfill({ json: { result: null } });
+	});
+	await page.goto("/", { waitUntil: "domcontentloaded" });
+
+	const unrelatedEditor = await page.locator('textarea[data-item-id="B"]').elementHandle();
+	const pinnedEditor = await page.locator('textarea[data-item-id="A-pin"]').elementHandle();
+	const unrelatedUpdates = await page.locator(".row").filter({
+		has: page.locator('textarea[data-item-id="B"]'),
+	}).evaluateHandle((row) => {
+		const records: MutationRecord[] = [];
+		const observer = new MutationObserver((changes) => {
+			records.push(
+				...changes.filter((change) =>
+					!(change.target instanceof Element && change.target.closest(".overtype-link-tooltip"))
+				),
+			);
+		});
+		observer.observe(row, {
+			attributes: true,
+			characterData: true,
+			childList: true,
+			subtree: true,
+		});
+		return { observer, records };
+	});
+
+	const initialReads = { ...reads };
+	const editorA1 = page.locator('textarea[data-item-id="A1"]');
+	await page.locator('.markdown-editor-host[data-editor-item-id="A1"]').click();
+	await editorA1.fill("first placement updated");
+
+	// Positive control: editorA1 has mutated text
+	await expect(editorA1).toHaveValue("first placement updated");
+	// Matching branch placement A2 also reflects the updated text
+	await expect(page.locator('textarea[data-item-id="A2"]')).toHaveValue("first placement updated");
+	// Pinned placement A-pin retains its pinned text
+	await expect(page.locator('textarea[data-item-id="A-pin"]')).toHaveValue("first placement");
+
+	// No Outline, Tree, or Bookmark reloads triggered by text input
+	expect(reads).toEqual(initialReads);
+	// Unrelated row B was not re-rendered / mutated
+	expect(await unrelatedUpdates.evaluate(({ records }) => records.length)).toBe(0);
+	expect(await unrelatedEditor?.evaluate((element) => element.isConnected)).toBe(true);
+	expect(await pinnedEditor?.evaluate((element) => element.isConnected)).toBe(true);
+
+	await unrelatedUpdates.evaluate(({ observer }) => observer.disconnect());
+	await unrelatedUpdates.dispose();
+});
+
+test("stale reload held by deferred does not overwrite fresh draft or input after release", async ({ page }) => {
+	const items = [
+		item("A1", 10, "initial"),
+		{
+			...item("A2", 20, "initial"),
+			workId: "A1",
+			revisionSelector: { mode: "branch" as const, branchId: "A1-main" },
+		},
+		{
+			...item("A-pin", 30, "initial"),
+			workId: "A1",
+			revisionSelector: { mode: "pinned" as const, revisionId: "rev-1" },
+		},
+		item("B", 40, "unrelated"),
+	];
+	const gate = deferred();
+	let reads = 0;
+	let holdNextRead = false;
+	let readWaiting = false;
+
+	await page.route("**/api/rpc/listOutline", async (route) => {
+		reads++;
+		if (holdNextRead) {
+			holdNextRead = false;
+			readWaiting = true;
+			await gate.promise;
+		}
+		// Return stale snapshot where text is still "initial"
+		await route.fulfill({
+			json: {
+				result: {
+					items: items.map((r) => ({ ...r, text: "initial" })),
+					links: [],
+					knots: [],
+					stashItemIds: [],
+				},
+			},
+		});
+	});
+	await page.route(
+		"**/api/rpc/createItem",
+		(route) => route.fulfill({ json: { result: item("new-root", 50, "") } }),
+	);
+	await page.route(
+		"**/api/rpc/updateItemText",
+		(route) => route.fulfill({ json: { result: null } }),
+	);
+
+	await page.goto("/", { waitUntil: "domcontentloaded" });
+	await expect(page.locator('textarea[data-item-id="A1"]')).toHaveValue("initial");
+	await expect(page.locator('textarea[data-item-id="A2"]')).toHaveValue("initial");
+
+	// Trigger a reload via createRoot and hold the listOutline read with deferred
+	holdNextRead = true;
+	await page.getByRole("button", { name: "＋ ルートに追加", exact: true }).click();
+	await expect.poll(() => readWaiting).toBe(true);
+	await expect(page.getByRole("status").filter({ hasText: "更新中…" })).toBeVisible();
+
+	// While reload is blocked, edit A1 (input / draft during read)
+	const editorA1 = page.locator('textarea[data-item-id="A1"]');
+	await page.locator('.markdown-editor-host[data-editor-item-id="A1"]').click();
+	await editorA1.fill("initial freshly typed during read");
+	await expect(editorA1).toHaveValue("initial freshly typed during read");
+	await expect(page.locator('textarea[data-item-id="A2"]')).toHaveValue(
+		"initial freshly typed during read",
+	);
+
+	// Release the deferred gate returning the stale "initial" snapshot
+	gate.release();
+	await expect(page.getByRole("status").filter({ hasText: "更新中…" })).toHaveCount(0);
+
+	// Verify that fresh input was not overwritten by stale response for matching branch placements
+	await expect(page.locator('textarea[data-item-id="A1"]')).toHaveValue(
+		"initial freshly typed during read",
+	);
+	await expect(page.locator('textarea[data-item-id="A2"]')).toHaveValue(
+		"initial freshly typed during read",
+	);
+	// Pinned placement retains its pinned text
+	await expect(page.locator('textarea[data-item-id="A-pin"]')).toHaveValue("initial");
+});
+
+test("caret movement and selection update saves only resume position without reloading Outline, Tree, or bookmarks", async ({ page }) => {
+	const items = [item("A", 10, "hello world"), item("B", 20, "second")];
+	const reads = { outline: 0, tree: 0, bookmarks: 0 };
+	let resumeSaved = 0;
+	await page.route("**/api/rpc/listOutline", (route) => {
+		reads.outline++;
+		return route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } });
+	});
+	await page.route("**/api/rpc/listGlobalLineage", (route) => {
+		reads.tree++;
+		return route.continue();
+	});
+	await page.route("**/api/rpc/listBookmarks", (route) => {
+		reads.bookmarks++;
+		return route.continue();
+	});
+	await page.route("**/api/rpc/saveResumePosition", (route) => {
+		resumeSaved++;
+		return route.fulfill({ json: { result: null } });
+	});
+	await page.goto("/", { waitUntil: "domcontentloaded" });
+	await expect(page.locator('.markdown-editor-host[data-editor-item-id="A"]')).toBeVisible();
+	await expect(page.locator('textarea[data-item-id="A"]')).toHaveValue("hello world");
+
+	const initialReads = { ...reads };
+	const editorA = page.locator('textarea[data-item-id="A"]');
+	await page.locator('.markdown-editor-host[data-editor-item-id="A"]').click();
+	await editorA.press("ArrowRight");
+	await editorA.press("ArrowRight");
+
+	// Switch focus to B to flush resume position
+	await page.locator('.markdown-editor-host[data-editor-item-id="B"]').click();
+	await expect.poll(() => resumeSaved).toBeGreaterThan(0);
+
+	// Ensure no reloads were triggered
+	expect(reads).toEqual(initialReads);
+});

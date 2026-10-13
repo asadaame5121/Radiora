@@ -1,5 +1,6 @@
 import type { BackupV8, StoredGraphV7 } from "./backup_migrations.ts";
 import type { GraphStateSnapshot } from "./graph_store.ts";
+import { InvocationQueue } from "./invocation_queue.ts";
 
 export interface JsonRestoreFileOperations {
 	writeTextFile(path: string | URL, data: string): Promise<void>;
@@ -22,6 +23,8 @@ const denoRestoreFileOperations: JsonRestoreFileOperations = {
 
 /** JSON-specific save guarantees; memory/domain operations remain owned by the store. */
 export class JsonPersistence {
+	private readonly queue = new InvocationQueue();
+	private batching = false;
 	constructor(
 		private readonly path: string | URL,
 		private readonly memory: JsonPersistenceMemory,
@@ -30,20 +33,42 @@ export class JsonPersistence {
 
 	/** Ordinary saves retain mutated memory when a direct write fails. */
 	async mutate<T>(operation: () => Promise<T>): Promise<T> {
-		const result = await operation();
-		await this.persist();
-		return result;
+		return await this.queue.run(async () => {
+			const result = await operation();
+			if (!this.batching) await this.persist();
+			return result;
+		});
 	}
 
 	/** Selected batch/domain operations roll back memory, but still write directly to disk. */
 	async mutateWithRollback(operation: () => Promise<void>): Promise<void> {
-		const before = this.memory.capture();
-		try {
-			await this.mutate(operation);
-		} catch (cause) {
-			this.memory.rollback(before);
-			throw cause;
-		}
+		await this.queue.run(async () => {
+			const before = this.memory.capture();
+			try {
+				await this.mutate(operation);
+			} catch (cause) {
+				this.memory.rollback(before);
+				throw cause;
+			}
+		});
+	}
+
+	async batch<T>(operation: () => Promise<T>): Promise<T> {
+		if (this.queue.isCurrent && this.batching) return await operation();
+		return await this.queue.run(async () => {
+			const before = this.memory.capture();
+			this.batching = true;
+			try {
+				const result = await operation();
+				await this.replaceFile(() => this.memory.rollback(before));
+				return result;
+			} catch (cause) {
+				this.memory.rollback(before);
+				throw cause;
+			} finally {
+				this.batching = false;
+			}
+		});
 	}
 
 	async persist(): Promise<void> {
@@ -52,19 +77,30 @@ export class JsonPersistence {
 		await Deno.writeTextFile(this.path, serializeBackup(data));
 	}
 
-	/** Restore alone replaces the file by rename and rolls memory back before cleanup. */
+	/** Restore and batches replace the file atomically and roll memory back on failure. */
 	async restoreGraphState(state: GraphStateSnapshot): Promise<void> {
-		const before = await this.memory.exportGraphState();
+		await this.queue.run(async () => {
+			const before = this.memory.capture();
+			try {
+				await this.memory.restoreGraphState(state);
+				if (!this.batching) await this.replaceFile(() => this.memory.rollback(before));
+			} catch (cause) {
+				this.memory.rollback(before);
+				throw cause;
+			}
+		});
+	}
+
+	private async replaceFile(rollback: () => void): Promise<void> {
 		const temporaryPath = typeof this.path === "string"
 			? `${this.path}.restore-${crypto.randomUUID()}.tmp`
 			: new URL(`${this.path.href}.restore-${crypto.randomUUID()}.tmp`);
 		try {
-			await this.memory.restoreGraphState(state);
 			const data = await this.memory.exportGraphState();
 			await this.restoreFiles.writeTextFile(temporaryPath, serializeBackup(data));
 			await this.restoreFiles.rename(temporaryPath, this.path);
 		} catch (cause) {
-			await this.memory.restoreGraphState(before);
+			rollback();
 			await this.cleanupTemporaryFile(temporaryPath);
 			throw cause;
 		}

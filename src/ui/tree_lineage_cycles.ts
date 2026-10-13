@@ -24,19 +24,33 @@ class LineageCycles {
 	}
 
 	private visit(id: string): void {
+		const frames = [this.enter(id)];
+		while (frames.length > 0) {
+			const frame = frames.at(-1);
+			if (!frame) break;
+			const next = frame.children.next();
+			if (next.done) {
+				frames.pop();
+				this.leave(frame.id, frames.at(-1)?.id);
+			} else if (!this.indexById.has(next.value)) {
+				frames.push(this.enter(next.value));
+			} else if (this.onStack.has(next.value)) {
+				this.lower(frame.id, this.indexById.get(next.value) ?? 0);
+			}
+		}
+	}
+
+	private leave(id: string, parentId?: string): void {
+		if (this.lowLinkById.get(id) === this.indexById.get(id)) this.finishComponent(id);
+		if (parentId !== undefined) this.lower(parentId, this.lowLinkById.get(id) ?? 0);
+	}
+
+	private enter(id: string) {
 		this.indexById.set(id, this.index);
 		this.lowLinkById.set(id, this.index++);
 		this.stack.push(id);
 		this.onStack.add(id);
-		for (const child of [...(this.children.get(id) ?? [])].sort()) {
-			if (!this.indexById.has(child)) {
-				this.visit(child);
-				this.lower(id, this.lowLinkById.get(child) ?? 0);
-			} else if (this.onStack.has(child)) {
-				this.lower(id, this.indexById.get(child) ?? 0);
-			}
-		}
-		if (this.lowLinkById.get(id) === this.indexById.get(id)) this.finishComponent(id);
+		return { id, children: [...(this.children.get(id) ?? [])].sort().values() };
 	}
 
 	private lower(id: string, index: number): void {

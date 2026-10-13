@@ -255,6 +255,9 @@ export class OutlineService {
 	setCollapsed(id: string, collapsed: boolean): Promise<void> {
 		return new OccurrenceOperations(this.store).setCollapsed(id, collapsed);
 	}
+	setCollapsedBatch(ids: readonly string[], collapsed: boolean): Promise<void> {
+		return new OccurrenceOperations(this.store).setCollapsedBatch(ids, collapsed);
+	}
 	setContextualHeading(id: string, contextualHeading?: string): Promise<void> {
 		return new OccurrenceOperations(this.store).setContextualHeading(id, contextualHeading);
 	}
@@ -263,6 +266,11 @@ export class OutlineService {
 	}
 	deleteItem(id: string): Promise<void> {
 		return new OccurrenceOperations(this.store).deleteItem(id);
+	}
+	discardEmptyItems(
+		ids: readonly string[],
+	): Promise<{ deletedIds: string[]; handledIds: string[] }> {
+		return new OccurrenceOperations(this.store).discardEmptyItems(ids);
 	}
 	trashWork(id: string): Promise<void> {
 		return new OccurrenceOperations(this.store).trashWork(id);

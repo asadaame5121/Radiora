@@ -47,7 +47,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		try {
 			const parsed: unknown = JSON.parse(await Deno.readTextFile(this.path));
 			const decoded = decodeJsonGraph(parsed);
-			this.state.restoreGraphState(decoded.data);
+			await super.restoreGraphState(decoded.data);
 			if (decoded.protectionVersion !== null) {
 				await this.protectVersionInput(decoded.protectionVersion);
 				await this.persistence.persist();
@@ -55,6 +55,10 @@ export class JsonGraphStore extends MemoryGraphStore {
 		} catch (cause) {
 			if (!(cause instanceof Deno.errors.NotFound)) throw cause;
 		}
+	}
+
+	override batch<T>(operation: () => Promise<T>): Promise<T> {
+		return this.persistence.batch(() => super.batch(operation));
 	}
 
 	override async createWorkBundle(

@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noMagicNumbers: Malformed numeric payloads and call counts are test inputs.
 import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import { BUILT_IN_RELATION_TYPES } from "../domain/relation_type.ts";
 import { OutlineService } from "../services/outline_service.ts";
@@ -253,4 +254,110 @@ Deno.test("desktop bindings validate user input payloads with Valibot schemas", 
 	await assertRejects(() =>
 		handlers.createLink({ fromId: "work-1", toId: "work-2", type: "invalid-type" as never })
 	);
+});
+
+Deno.test("desktop bindings validate setCollapsedBatch RPC inputs before delegation (C03)", async () => {
+	let serviceCalled = 0;
+	let delegatedIds: readonly string[] = [];
+	let delegatedCollapsed = false;
+
+	const mockService = {
+		setCollapsedBatch: (ids: readonly string[], collapsed: boolean) => {
+			serviceCalled++;
+			delegatedIds = ids;
+			delegatedCollapsed = collapsed;
+			return Promise.resolve();
+		},
+	} as unknown as OutlineService;
+
+	const ready: StartupStatus = { phase: "ready", message: "ready" };
+	const handlers = createBindingHandlers({
+		...operationLogBindingStub,
+		getService: () => mockService,
+		getStartupStatus: () => ready,
+		retryStartup: () => Promise.resolve(ready),
+		rewriteAsNewBranch: () => {
+			throw new Error("unreachable");
+		},
+	});
+
+	// Invalid inputs must reject and NOT call service
+	// 1. null / string as ids
+	assertThrows(() => handlers.setCollapsedBatch(null as unknown as string[], true));
+	assertEquals(serviceCalled, 0);
+
+	assertThrows(() => handlers.setCollapsedBatch("not-an-array" as unknown as string[], true));
+	assertEquals(serviceCalled, 0);
+
+	// 2. array with invalid ID (empty string or non-string)
+	assertThrows(() => handlers.setCollapsedBatch([""] as unknown as string[], true));
+	assertEquals(serviceCalled, 0);
+
+	assertThrows(() => handlers.setCollapsedBatch([123] as unknown as string[], true));
+	assertEquals(serviceCalled, 0);
+
+	// 3. invalid boolean (string / number / null)
+	assertThrows(() => handlers.setCollapsedBatch(["occ-1"], "true" as unknown as boolean));
+	assertEquals(serviceCalled, 0);
+
+	assertThrows(() => handlers.setCollapsedBatch(["occ-1"], null as unknown as boolean));
+	assertEquals(serviceCalled, 0);
+
+	// Valid inputs: empty array, valid array, duplicates
+	await handlers.setCollapsedBatch([], true);
+	assertEquals(serviceCalled, 1);
+	assertEquals(delegatedIds, []);
+	assertEquals(delegatedCollapsed, true);
+
+	await handlers.setCollapsedBatch(["occ-1", "occ-2"], false);
+	assertEquals(serviceCalled, 2);
+	assertEquals(delegatedIds, ["occ-1", "occ-2"]);
+	assertEquals(delegatedCollapsed, false);
+
+	await handlers.setCollapsedBatch(["occ-1", "occ-1"], true);
+	assertEquals(serviceCalled, 3);
+	assertEquals(delegatedIds, ["occ-1", "occ-1"]);
+	assertEquals(delegatedCollapsed, true);
+});
+
+Deno.test("register_bindings parses and validates discardEmptyItems input", async () => {
+	let delegatedIds: readonly string[] = [];
+	let serviceCalled = 0;
+
+	const dummyService = {
+		discardEmptyItems: (ids: readonly string[]) => {
+			serviceCalled++;
+			delegatedIds = ids;
+			return Promise.resolve({ deletedIds: ids.slice(), handledIds: ids.slice() });
+		},
+	};
+
+	const ready: StartupStatus = { phase: "ready", message: "ready" };
+	const handlers = createBindingHandlers({
+		...operationLogBindingStub,
+		getService: () => dummyService as unknown as OutlineService,
+		getStartupStatus: () => ready,
+		retryStartup: () => Promise.resolve(ready),
+		rewriteAsNewBranch: () => Promise.reject(new Error("unused")),
+	});
+
+	// 1. non-array throws
+	assertThrows(() => handlers.discardEmptyItems("not an array" as unknown as string[]));
+	assertEquals(serviceCalled, 0);
+
+	// 2. array with invalid ID (empty string or non-string) throws
+	assertThrows(() => handlers.discardEmptyItems([""] as unknown as string[]));
+	assertEquals(serviceCalled, 0);
+
+	assertThrows(() => handlers.discardEmptyItems([123] as unknown as string[]));
+	assertEquals(serviceCalled, 0);
+
+	// 3. valid inputs delegate to service
+	await handlers.discardEmptyItems([]);
+	assertEquals(serviceCalled, 1);
+	assertEquals(delegatedIds, []);
+
+	await handlers.discardEmptyItems(["occ-1", "occ-2"]);
+	assertEquals(serviceCalled, 2);
+	assertEquals(delegatedIds, ["occ-1", "occ-2"]);
 });

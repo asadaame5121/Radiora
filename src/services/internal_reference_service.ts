@@ -51,17 +51,43 @@ export interface InternalReferenceBacklink {
 	references: RadioraInternalReferenceCandidate[];
 }
 
+function groupReferencesByTarget(
+	references: RadioraInternalReferenceCandidate[],
+): Map<string, RadioraInternalReferenceCandidate[]> {
+	const grouped = new Map<string, RadioraInternalReferenceCandidate[]>();
+	for (const reference of references) {
+		const group = grouped.get(reference.id) ?? [];
+		group.push(reference);
+		grouped.set(reference.id, group);
+	}
+	return grouped;
+}
+
 export class InternalReferenceService {
 	constructor(private readonly store: InternalReferenceStore) {}
 
-	async listCompletions(query = "", limit = 50): Promise<InternalReferenceCompletion[]> {
-		const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
-		const [works, branches, copies, revisions] = await Promise.all([
+	private loadReferenceData() {
+		return Promise.all([
 			this.store.listWorks(),
 			this.store.listBranches(),
 			this.store.listWorkingCopies(),
 			this.store.listRevisions(),
 		]);
+	}
+
+	private async loadBacklinkContext() {
+		const [works, branches, copies, revisions] = await this.loadReferenceData();
+		const activeWorkIds = new Set(works.map((work) => work.id));
+		const activeBranches = new Set(
+			branches.filter((branch) => !branch.archivedAt && activeWorkIds.has(branch.workId))
+				.map((branch) => branch.id),
+		);
+		return { activeWorkIds, activeBranches, copies, revisions };
+	}
+
+	async listCompletions(query = "", limit = 50): Promise<InternalReferenceCompletion[]> {
+		const safeLimit = Math.max(1, Math.min(100, Math.floor(limit)));
+		const [works, branches, copies, revisions] = await this.loadReferenceData();
 		const activeWorkIds = new Set(works.map((work) => work.id));
 		const completions: InternalReferenceCompletion[] = works.map((work) => {
 			const displayName = activeMainTitle(work.id, branches, copies);
@@ -165,17 +191,7 @@ export class InternalReferenceService {
 		scope: RadioraReferenceScope,
 		id: string,
 	): Promise<InternalReferenceBacklink[]> {
-		const [works, branches, copies, revisions] = await Promise.all([
-			this.store.listWorks(),
-			this.store.listBranches(),
-			this.store.listWorkingCopies(),
-			this.store.listRevisions(),
-		]);
-		const activeWorkIds = new Set(works.map((work) => work.id));
-		const activeBranches = new Set(
-			branches.filter((branch) => !branch.archivedAt && activeWorkIds.has(branch.workId))
-				.map((branch) => branch.id),
-		);
+		const { activeWorkIds, activeBranches, copies, revisions } = await this.loadBacklinkContext();
 		const result: InternalReferenceBacklink[] = [];
 		for (const copy of copies) {
 			if (!activeBranches.has(copy.branchId)) continue;
@@ -213,6 +229,71 @@ export class InternalReferenceService {
 			left.displayName.localeCompare(right.displayName, "ja") ||
 			left.source.scope.localeCompare(right.source.scope)
 		);
+	}
+
+	async listAllBacklinks(
+		scope: RadioraReferenceScope,
+	): Promise<Map<string, InternalReferenceBacklink[]>> {
+		const { activeWorkIds, activeBranches, copies, revisions } = await this.loadBacklinkContext();
+		const byTargetId = new Map<string, InternalReferenceBacklink[]>();
+
+		const addBacklink = (targetId: string, backlink: InternalReferenceBacklink) => {
+			const list = byTargetId.get(targetId) ?? [];
+			list.push(backlink);
+			byTargetId.set(targetId, list);
+		};
+
+		for (const copy of copies) {
+			if (!activeBranches.has(copy.branchId)) continue;
+			const refs = parseMarkdownCandidates(copy.text).internalReferences.filter(
+				(r) => r.scope === scope,
+			);
+			if (refs.length === 0) continue;
+			const refsByTarget = groupReferencesByTarget(refs);
+			const displayName = titleFromText(copy.text) || EMPTY_WORK_DISPLAY_NAME;
+			for (const [targetId, matches] of refsByTarget.entries()) {
+				addBacklink(targetId, {
+					source: {
+						scope: "work",
+						workId: copy.workId,
+						branchId: copy.branchId,
+					},
+					displayName,
+					count: matches.length,
+					references: matches,
+				});
+			}
+		}
+
+		for (const revision of revisions) {
+			if (!activeWorkIds.has(revision.workId)) continue;
+			const refs = parseMarkdownCandidates(revision.text).internalReferences.filter(
+				(r) => r.scope === scope,
+			);
+			if (refs.length === 0) continue;
+			const refsByTarget = groupReferencesByTarget(refs);
+			const displayName = titleFromText(revision.text) || EMPTY_REVISION_DISPLAY_NAME;
+			for (const [targetId, matches] of refsByTarget.entries()) {
+				addBacklink(targetId, {
+					source: {
+						scope: "revision",
+						workId: revision.workId,
+						revisionId: revision.id,
+					},
+					displayName,
+					count: matches.length,
+					references: matches,
+				});
+			}
+		}
+
+		for (const list of byTargetId.values()) {
+			list.sort((left, right) =>
+				left.displayName.localeCompare(right.displayName, "ja") ||
+				left.source.scope.localeCompare(right.source.scope)
+			);
+		}
+		return byTargetId;
 	}
 
 	private completion(
@@ -279,9 +360,10 @@ function navigationTarget(
 		seen.add(parentId);
 		const parent = byId.get(parentId);
 		if (!parent) break;
-		ancestorOccurrenceIds.unshift(parent.id);
+		ancestorOccurrenceIds.push(parent.id);
 		parentId = parent.parentOccurrenceId;
 	}
+	ancestorOccurrenceIds.reverse();
 	return {
 		kind: "occurrence",
 		workId,

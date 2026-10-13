@@ -409,6 +409,8 @@
 		getSnapshot: () => snapshot,
 		flushAutosave: (workId) => editorController.flushAutosave(workId),
 		deleteItem: (id) => api.deleteItem(id),
+		discardEmptyItems: (ids) => api.discardEmptyItems(ids),
+		isEditing: (id) => outlineViewport.isEditing(id),
 		reload: (current) => load(undefined, current, current),
 		reportError: (cause) => error = errorMessage(cause),
 	});
@@ -438,6 +440,7 @@
 		items: () => snapshot.items,
 		clearTemporaryExpansion: () => outlineDisplay.setExpanded([]),
 		setCollapsed: (id, collapsed) => api.setCollapsed(id, collapsed),
+		setCollapsedBatch: (ids, collapsed) => api.setCollapsedBatch(ids, collapsed),
 		reload: () => load(),
 	});
 	const screenPresenter = new ScreenDestinationPresenter({ comparison, dates: dateProjectionController, work: workController, tags: tagController });

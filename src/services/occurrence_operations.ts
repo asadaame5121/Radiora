@@ -1,39 +1,44 @@
-import {
-	areKnotsEqual,
-	type CreateItemInput,
-	type CreateOccurrenceInput,
-	type Knot,
-	type MoveItemInput,
-	type OutlineItem,
-	type OutlineSnapshot,
-	type PurgeManifest,
-	type Revision,
-	type RevisionSelector,
-	type TrashEntry,
+import type {
+	CreateItemInput,
+	CreateOccurrenceInput,
+	Knot,
+	MoveItemInput,
+	OutlineItem,
+	OutlineSnapshot,
+	PurgeManifest,
+	Revision,
+	RevisionSelector,
+	TrashEntry,
 } from "../domain/models.ts";
 import type { OutlineStorePort, RelationStorePort, WorkStorePort } from "../storage/graph_store.ts";
 import { fetchActiveMergedLinks } from "./implicit_relation.ts";
-import { detectOutlineKnots, markRecursivePlacements } from "./occurrence_knot_detection.ts";
+import { markRecursivePlacements } from "./occurrence_knot_detection.ts";
 
 const ORDER_STEP = 1024;
 
 type OccurrenceStore = OutlineStorePort & RelationStorePort & WorkStorePort;
 
+function collapsedOccurrence(item: OutlineItem, collapsed: boolean) {
+	return {
+		id: item.id,
+		workId: item.workId,
+		parentOccurrenceId: item.parentId,
+		orderKey: item.orderKey,
+		collapsed,
+		revisionSelector: item.revisionSelector,
+		contextualHeading: item.contextualHeading,
+	};
+}
+
 /**
  * Store-port-backed operations for persistent Work and Occurrence state.
- * This class deliberately retains outline projection side effects: listing an
- * outline refreshes its persisted knot projection.
  */
 export class OccurrenceOperations {
 	constructor(private readonly store: OccurrenceStore) {}
 
 	async listOutline(): Promise<OutlineSnapshot> {
 		const items = await this.store.listItems();
-		const existingKnots = await this.store.listKnots();
-		const knots = this.detectKnots(items, existingKnots);
-		if (!areKnotsEqual(existingKnots, knots)) {
-			await this.store.replaceKnots(knots);
-		}
+		const knots = await this.store.listKnots();
 		const stashItemIds = [...new Set(knots.flatMap((knot) => knot.cycleIds))];
 		return {
 			items: this.markRecursivePlacements(items),
@@ -60,8 +65,8 @@ export class OccurrenceOperations {
 		const occurrence = {
 			id: occurrenceId,
 			workId,
-			parentOccurrenceId: input.parentId,
-			orderKey: this.orderAfter(items, input.parentId, input.afterId ?? null),
+			parentOccurrenceId: input.parentId ?? null,
+			orderKey: this.orderAfter(items, input.parentId ?? null, input.afterId ?? null),
 			collapsed: false,
 			revisionSelector: { mode: "branch" as const, branchId },
 		};
@@ -75,7 +80,7 @@ export class OccurrenceOperations {
 			id: occurrenceId,
 			workId,
 			text: input.text,
-			parentId: input.parentId,
+			parentId: input.parentId ?? null,
 			orderKey: occurrence.orderKey,
 			collapsed: false,
 			revisionSelector: occurrence.revisionSelector,
@@ -99,8 +104,8 @@ export class OccurrenceOperations {
 		const occurrence = {
 			id: crypto.randomUUID(),
 			workId: input.workId,
-			parentOccurrenceId: input.parentId,
-			orderKey: this.orderAfter(items, input.parentId, input.afterId ?? null),
+			parentOccurrenceId: input.parentId ?? null,
+			orderKey: this.orderAfter(items, input.parentId ?? null, input.afterId ?? null),
 			collapsed: false,
 			revisionSelector: structuredClone(source.revisionSelector),
 			contextualHeading: input.contextualHeading?.trim() || undefined,
@@ -131,15 +136,7 @@ export class OccurrenceOperations {
 
 	async setCollapsed(id: string, collapsed: boolean): Promise<void> {
 		const item = await this.requireItem(id);
-		await this.store.updateOccurrence({
-			id: item.id,
-			workId: item.workId,
-			parentOccurrenceId: item.parentId,
-			orderKey: item.orderKey,
-			collapsed,
-			revisionSelector: item.revisionSelector,
-			contextualHeading: item.contextualHeading,
-		});
+		await this.store.updateOccurrence(collapsedOccurrence(item, collapsed));
 	}
 
 	async setContextualHeading(id: string, contextualHeading?: string): Promise<void> {
@@ -194,32 +191,122 @@ export class OccurrenceOperations {
 		await this.store.updateOccurrence({
 			id: item.id,
 			workId: item.workId,
-			parentOccurrenceId: input.parentId,
+			parentOccurrenceId: input.parentId ?? null,
 			orderKey,
 			collapsed: item.collapsed,
 			revisionSelector: item.revisionSelector,
 			contextualHeading: item.contextualHeading,
 		});
-		await this.reconcileKnots();
+	}
+
+	async setCollapsedBatch(ids: readonly string[], collapsed: boolean): Promise<void> {
+		if (ids.length === 0) return;
+		const run = async () => {
+			const idSet = new Set(ids);
+			const items = (await this.store.listItems()).filter((item) => idSet.has(item.id));
+			for (const item of items) {
+				await this.store.updateOccurrence(collapsedOccurrence(item, collapsed));
+			}
+		};
+		if (this.store.batch) {
+			await this.store.batch(run);
+		} else {
+			await run();
+		}
 	}
 
 	async deleteItem(id: string): Promise<void> {
-		const items = await this.store.listItems();
-		const item = items.find((candidate) => candidate.id === id);
-		if (!item) return;
-		const children = items.filter((candidate) => candidate.parentId === id)
+		const run = async () => {
+			const items = await this.store.listItems();
+			const item = items.find((candidate) => candidate.id === id);
+			if (!item) return;
+			await this.deleteOccurrenceWithPromotion(item, items);
+			await this.trashBlankUnplacedWork(item.workId);
+		};
+
+		if (this.store.batch) {
+			await this.store.batch(run);
+		} else {
+			await run();
+		}
+	}
+
+	async discardEmptyItems(
+		ids: readonly string[],
+	): Promise<{ deletedIds: string[]; handledIds: string[] }> {
+		const uniqueIds = Array.from(new Set(ids));
+		if (uniqueIds.length === 0) {
+			return { deletedIds: [], handledIds: [] };
+		}
+		const run = async () => {
+			const items = await this.store.listItems();
+			const itemById = new Map(items.map((item) => [item.id, item]));
+			const parentIds = new Set(
+				items.map((item) => item.parentId).filter((id): id is string => id !== null),
+			);
+
+			const toDelete: OutlineItem[] = [];
+			for (const id of uniqueIds) {
+				const item = itemById.get(id);
+				if (!item) continue;
+				if (item.text.trim() !== "") continue;
+				if (parentIds.has(id)) continue;
+				toDelete.push(item);
+			}
+
+			const deletedIds: string[] = [];
+			const affectedWorkIds = new Set<string>();
+
+			for (const item of toDelete) {
+				await this.store.deleteOccurrence(item.id);
+				deletedIds.push(item.id);
+				affectedWorkIds.add(item.workId);
+			}
+
+			if (deletedIds.length > 0) {
+				for (const workId of affectedWorkIds) {
+					await this.trashBlankUnplacedWork(workId);
+				}
+			}
+
+			return { deletedIds, handledIds: uniqueIds };
+		};
+
+		if (this.store.batch) {
+			return await this.store.batch(run);
+		}
+		return await run();
+	}
+
+	private async deleteOccurrenceWithPromotion(
+		item: OutlineItem,
+		items: OutlineItem[],
+	): Promise<void> {
+		const children = items.filter((candidate) => candidate.parentId === item.id)
 			.sort((a, b) => a.orderKey - b.orderKey);
 		let afterId =
-			items.filter((candidate) => candidate.parentId === item.parentId && candidate.id !== id)
+			items.filter((candidate) => candidate.parentId === item.parentId && candidate.id !== item.id)
 				.sort((a, b) => a.orderKey - b.orderKey)
 				.filter((candidate) => candidate.orderKey < item.orderKey).at(-1)?.id ?? null;
+
+		const workingSiblings = items.filter(
+			(candidate) => candidate.parentId === item.parentId && candidate.id !== item.id,
+		);
 		for (const child of children) {
-			await this.moveItem({ id: child.id, parentId: item.parentId, afterId });
+			const orderKey = this.orderAfter(workingSiblings, item.parentId, afterId);
+			await this.store.updateOccurrence({
+				id: child.id,
+				workId: child.workId,
+				parentOccurrenceId: item.parentId,
+				orderKey,
+				collapsed: child.collapsed,
+				revisionSelector: child.revisionSelector,
+				contextualHeading: child.contextualHeading,
+			});
+			workingSiblings.push({ ...child, parentId: item.parentId, orderKey });
 			afterId = child.id;
 		}
-		await this.store.deleteOccurrence(id);
-		await this.reconcileKnots();
-		await this.trashBlankUnplacedWork(item.workId);
+		await this.store.deleteOccurrence(item.id);
 	}
 
 	async trashWork(id: string): Promise<void> {
@@ -293,7 +380,7 @@ export class OccurrenceOperations {
 	}
 
 	private async requireItem(id: string): Promise<OutlineItem> {
-		const item = (await this.store.listItems()).find((candidate) => candidate.id === id);
+		const item = await this.store.getItem(id);
 		if (!item) throw new Error(`Outline item not found: ${id}`);
 		return item;
 	}
@@ -333,20 +420,9 @@ export class OccurrenceOperations {
 		if (!siblings.length) return ORDER_STEP;
 		if (!afterId) return siblings[0].orderKey - ORDER_STEP;
 		const index = siblings.findIndex((item) => item.id === afterId);
-		if (index < 0 || index === siblings.length - 1) return siblings.at(-1)!.orderKey + ORDER_STEP;
+		const lastSibling = siblings.at(-1);
+		if (!lastSibling) return ORDER_STEP;
+		if (index < 0 || index === siblings.length - 1) return lastSibling.orderKey + ORDER_STEP;
 		return (siblings[index].orderKey + siblings[index + 1].orderKey) / 2;
-	}
-
-	private detectKnots(items: OutlineItem[], existingKnots?: readonly Knot[]): Knot[] {
-		return detectOutlineKnots(items, existingKnots);
-	}
-
-	private async reconcileKnots(): Promise<void> {
-		const items = await this.store.listItems();
-		const existingKnots = await this.store.listKnots();
-		const knots = this.detectKnots(items, existingKnots);
-		if (!areKnotsEqual(existingKnots, knots)) {
-			await this.store.replaceKnots(knots);
-		}
 	}
 }

@@ -145,11 +145,15 @@ export interface RadioraBindings {
 	setWorkHistoricalTime(workId: string, value: HistoricalTime | null): Promise<void>;
 	moveItem(input: MoveItemInput): Promise<void>;
 	deleteItem(id: string): Promise<void>;
+	discardEmptyItems(
+		ids: readonly string[],
+	): Promise<{ deletedIds: string[]; handledIds: string[] }>;
 	trashWork(id: string): Promise<void>;
 	listTrash(): Promise<TrashEntry[]>;
 	restoreWork(workId: string): Promise<void>;
 	purgeWork(workId: string): Promise<PurgeManifest>;
 	setCollapsed(id: string, collapsed: boolean): Promise<void>;
+	setCollapsedBatch(ids: readonly string[], collapsed: boolean): Promise<void>;
 	createLink(input: CreateLinkInput): Promise<void>;
 	resolveAdvancedLink(
 		input: string,

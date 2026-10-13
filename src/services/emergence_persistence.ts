@@ -22,7 +22,8 @@ type EmergencePersistenceStore =
 		| "resolveEmergenceSuggestion"
 		| "upsertEmergenceSuggestion"
 	>
-	& Partial<Pick<RelationTypeDefinitionStorePort, "listRelationTypeDefinitions">>;
+	& Partial<Pick<RelationTypeDefinitionStorePort, "listRelationTypeDefinitions">>
+	& Partial<import("../storage/graph_store.ts").BatchStorePort>;
 
 function statusFromFeedback(
 	feedback: "accept" | "dismiss" | "pin" | null,
@@ -63,14 +64,30 @@ export class EmergencePersistence {
 			) => [suggestion.id, suggestion]),
 		);
 		const visible: EmergenceSuggestion[] = [];
+		const toUpsert: EmergenceSuggestion[] = [];
+
 		for (const candidate of candidates) {
 			const existing = persisted.get(candidate.id);
 			const persistenceStatus = await this.#status(candidate, existing);
 			const materialized = materializedSuggestion(candidate, existing, persistenceStatus);
-			await this.store.upsertEmergenceSuggestion(materialized);
+			toUpsert.push(materialized);
 			if (persistenceStatus === "dismissed" || persistenceStatus === "accepted") continue;
 			visible.push(materialized);
 		}
+
+		if (toUpsert.length > 0) {
+			const run = async () => {
+				for (const item of toUpsert) {
+					await this.store.upsertEmergenceSuggestion(item);
+				}
+			};
+			if (this.store.batch) {
+				await this.store.batch(run);
+			} else {
+				await run();
+			}
+		}
+
 		return visible;
 	}
 
