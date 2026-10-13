@@ -201,9 +201,9 @@ export class OccurrenceOperations {
 
 	async setCollapsedBatch(ids: readonly string[], collapsed: boolean): Promise<void> {
 		if (ids.length === 0) return;
-		const idSet = new Set(ids);
-		const items = (await this.store.listItems()).filter((item) => idSet.has(item.id));
 		const run = async () => {
+			const idSet = new Set(ids);
+			const items = (await this.store.listItems()).filter((item) => idSet.has(item.id));
 			for (const item of items) {
 				await this.store.updateOccurrence(collapsedOccurrence(item, collapsed));
 			}
@@ -216,11 +216,10 @@ export class OccurrenceOperations {
 	}
 
 	async deleteItem(id: string): Promise<void> {
-		const items = await this.store.listItems();
-		const item = items.find((candidate) => candidate.id === id);
-		if (!item) return;
-
 		const run = async () => {
+			const items = await this.store.listItems();
+			const item = items.find((candidate) => candidate.id === id);
+			if (!item) return;
 			await this.deleteOccurrenceWithPromotion(item, items);
 			await this.trashBlankUnplacedWork(item.workId);
 		};

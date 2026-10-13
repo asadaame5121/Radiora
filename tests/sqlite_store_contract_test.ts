@@ -42,7 +42,7 @@ function createComplexSnapshot(): GraphStateSnapshot {
 		occurrences: [{
 			id: occId,
 			workId,
-			parentOccurrenceId: null,
+			parentOccurrenceId: occId,
 			orderKey: 1024,
 			collapsed: false,
 			revisionSelector: { mode: "branch", branchId },

@@ -88,7 +88,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 				if (metadata.schema_version === 1) await migrateSqliteHistoricalTime(db, this.path, state);
 				persistSqliteDiff(
 					{ ...state, relationTypeDefinitions: [] },
-					state,
+					await super.exportGraphState(),
 					db,
 				);
 			} else {
@@ -333,9 +333,15 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		return this.mutate(() => super.createRelationTypeDefinition(definition));
 	}
 
+	override batch<T>(operation: () => Promise<T>): Promise<T> {
+		if (this.isBatching) return super.batch(operation);
+		return this.mutate(() => super.batch(operation));
+	}
+
 	private async mutate<T>(operation: () => Promise<T>): Promise<T> {
 		this.assertInitialized();
 		if (this.closePromise) throw new Error("SqliteGraphStore is closing");
+		if (this.isBatching) return await operation();
 
 		const currentQueue = this.mutationQueue;
 		const gate = Promise.withResolvers<void>();
@@ -354,7 +360,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 				persistSqliteDiff(before, after, this.database());
 				return result;
 			} catch (cause) {
-				await super.restoreGraphState(before);
+				this.state.rollback(before);
 				throw cause;
 			}
 		} finally {

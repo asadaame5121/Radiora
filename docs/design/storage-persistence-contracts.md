@@ -20,8 +20,8 @@ tags:
 つのバックエンドにおける保存・復元経路、トランザクション保証、ロールバック挙動、
 および対応するテストを体系的に整理・対応付けた永続化契約の正本である。
 
-JSON の通常保存を SQLite と同等の ACID /
-キュー保証と仮定せず、各バックエンドが提供する固有の保証と制約を明確化する。
+JSON の通常保存を SQLite と同等の ACID
+保証と仮定せず、各バックエンドが提供する固有の保証と制約を明確化する。
 
 ---
 
@@ -107,7 +107,7 @@ JSON の通常保存を SQLite と同等の ACID /
   2. **ACID トランザクション**: `persistSqliteDiff` は単一の SQLite
      トランザクション内で実行され、成功時のみコミットされる。
   3. **自動ロールバック**: DB 書き込みが失敗した場合、`mutate()` の catch 節で直ちに直前の `before`
-     スナップショットへ `super.restoreGraphState(before)` を適用してインメモリ状態を巻き戻す。
+     スナップショットへ `MemoryStateContainer.rollback(before)` でインメモリ状態を巻き戻す。
   4. **クローズ待機**: `close()` 呼び出し時はキュー内の先行 mutation がすべて完了するのを待機し、WAL
      チェックポイント（`TRUNCATE`）および `journal_mode = DELETE` を実行して安全にファイルを閉じる。
 - **非保証**:
@@ -126,10 +126,12 @@ JSON の通常保存を SQLite と同等の ACID /
   3. **部分ロールバック**:
      `importWorkBundles`、`mergeWorks`、`createUnplacedWork`、`setWorkHistoricalTime`
      などの複合操作では、実行前に状態を capture し、失敗時に restore する。
+  4. **直列化キュー**: mutation・復元・バッチを同一キューで実行する。同じ非同期実行文脈の
+     内部呼び出しだけがキューを再利用し、独立した要求は先行操作の完了を待つ。
 - **非保証**:
-  - **通常保存時のトランザクション/排他キュー**: 通常の `persist()`
+  - **通常保存時のトランザクション**: 通常の `persist()`
     はファイルへの直接上書き（`Deno.writeTextFile`）であり、SQLite
-    のような非同期キューや排他ロック機構を持たない。
+    のようなDBトランザクションを持たない。
   - **部分ロールバックの網羅性**: 軽微な
     mutation（単一レコード追加・削除など）では、ファイル書き込み失敗時にメモリ内の配列操作が完全には巻き戻されない場合がある（S1
     で `MemoryStateContainer` を導入し、全 mutation
@@ -145,6 +147,25 @@ JSON の通常保存を SQLite と同等の ACID /
      の一意性、関係型定義の正当性などをメモリ上で即座に検証・拒否する。
 - **非保証**:
   - **永続性（Durability）**: プロセス終了時にデータは消失する。
+
+### 4.4 Outline バッチと Knot 投影（PR #335）
+
+2026-10-13、base は `main` の `6238bef`。以下は PR 上の契約で、main への反映はマージ後に確認する。
+
+- Memory は独立した `batch()` 呼び出しを直列化する。非同期実行文脈を追跡し、ネストした
+  呼び出しだけを現在のバッチへ参加させる。失敗時はバッチ開始前の全状態へ戻す。
+- SQLite はバッチ全体を既存 mutation キューに載せ、内部 mutation の個別保存を抑止する。
+  成功時の差分保存は単一トランザクション、失敗時はメモリとDBの両方を巻き戻す。
+- JSON は内部 mutation の個別保存を抑止し、成功時に一時ファイルを書き出して rename する。
+  保存失敗時はメモリを巻き戻してから一時ファイルを削除する。
+- Knot の正本は active Work の Occurrence 親関係。保存済み `knots` は派生投影として扱い、
+  初期化・復元時に再構築する。構造変更中は dirty を記録し、成功した外側バッチの最後に一度
+  再計算する。collapsed 更新は再計算を発生させず、`listOutline()` は書き込まない。
+- 同じ cycle の保存済み Knot は ID・createdAt・cycleIds の順序を保持する。復元時に新しく 検出した
+  Knot の createdAt は保存データの最新 Work 更新日時から決め、再読込で変化させない。
+  旧ストレージ移行のハッシュ照合も再構築後の snapshot を対象にする。
+- 回帰シナリオは `graph_batch_isolation_test.ts`（並行要求・ネスト・保存失敗・復元・初期化）と
+  `durable_knot_commit_test.ts`（100子の昇格時に再計算1回・SQLite transaction 1回）。
 
 ---
 

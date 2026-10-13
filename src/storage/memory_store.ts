@@ -56,7 +56,7 @@ import {
 	searchTerms,
 	titleOf,
 } from "../services/search_text.ts";
-import { detectOutlineKnots } from "../services/occurrence_knot_detection.ts";
+import { MemoryOutlineBatch, reconcileOutlineKnots } from "./memory_outline_batch.ts";
 
 import { MemoryStateContainer } from "./memory_state_container.ts";
 
@@ -67,25 +67,17 @@ export class MemoryGraphStore implements GraphStore {
 		this.state = state ?? new MemoryStateContainer();
 	}
 
+	private readonly outlineBatch = new MemoryOutlineBatch();
+
 	protected afterOutlineStructureChanged(): void {
-		this.reconcileOutlineKnots();
+		this.outlineBatch.structureChanged(() => this.reconcileOutlineKnots());
 	}
 
 	protected reconcileOutlineKnots(): void {
-		const activeWorkIds = new Set(
-			this.state.works
-				.filter((work) => !work.deletedAt && !work.mergedIntoWorkId)
-				.map((work) => work.id),
-		);
-		const items = this.state.occurrences
-			.filter((occurrence) => activeWorkIds.has(occurrence.workId))
-			.map((occurrence) => ({
-				id: occurrence.id,
-				parentId: occurrence.parentOccurrenceId,
-			}));
-		this.state.knots = detectOutlineKnots(items, this.state.knots);
+		reconcileOutlineKnots(this.state);
 	}
 	initialize(): Promise<void> {
+		reconcileOutlineKnots(this.state, true);
 		return Promise.resolve();
 	}
 
@@ -100,28 +92,19 @@ export class MemoryGraphStore implements GraphStore {
 	restoreGraphState(source: GraphStateSnapshot): Promise<void> {
 		try {
 			this.state.restoreGraphState(source);
+			reconcileOutlineKnots(this.state, true);
 			return Promise.resolve();
 		} catch (error) {
 			return Promise.reject(error);
 		}
 	}
 
-	protected isBatching = false;
+	protected get isBatching(): boolean {
+		return this.outlineBatch.isCurrent;
+	}
 
-	async batch<T>(operation: () => Promise<T>): Promise<T> {
-		if (this.isBatching) {
-			return await operation();
-		}
-		this.isBatching = true;
-		const before = this.state.exportGraphState();
-		try {
-			return await operation();
-		} catch (error) {
-			this.state.restoreGraphState(before);
-			throw error;
-		} finally {
-			this.isBatching = false;
-		}
+	batch<T>(operation: () => Promise<T>): Promise<T> {
+		return this.outlineBatch.run(this.state, operation, () => this.reconcileOutlineKnots());
 	}
 
 	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]> {

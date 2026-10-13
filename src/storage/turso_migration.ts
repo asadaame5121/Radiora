@@ -1,5 +1,6 @@
 import type { GraphStateSnapshot } from "./graph_store.ts";
 import { validatedGraphStateSnapshot } from "./graph_store.ts";
+import { reconcileOutlineKnots } from "./memory_outline_batch.ts";
 import {
 	copyStoragePath,
 	readStorageVersion,
@@ -151,6 +152,7 @@ export async function importGraphStateToTurso(
 	targetPath: string,
 ): Promise<{ snapshotHash: string }> {
 	const validated = validatedGraphStateSnapshot(snapshot);
+	reconcileOutlineKnots(validated, true);
 	const snapshotHash = await graphStateHash(validated);
 	if (await storagePathExists(targetPath)) {
 		throw new Error(`Turso import target already exists: ${targetPath}`);

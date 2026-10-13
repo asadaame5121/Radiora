@@ -24,7 +24,7 @@ Deno.test("A08 - OccurrenceOperations.listOutline is read-only (zero transaction
 	const counters = new PerformanceCounters();
 	const connector = createCountingSqliteConnector(counters);
 	const dbDir = await Deno.makeTempDir();
-	const dbPath = `${dbDir}\\test-list-outline.db`;
+	const dbPath = `${dbDir}/test-list-outline.db`;
 
 	const store = new SqliteGraphStore(dbPath, { connector });
 	await store.initialize();
@@ -49,7 +49,7 @@ Deno.test("A08 - OccurrenceOperations.listOutline is read-only (zero transaction
 			"listOutline must not start write transactions",
 		);
 		const knotInserts = counters.getSqlLog().filter((stmt) =>
-			stmt.toUpperCase().includes("INTO KNOTS") || stmt.toUpperCase().includes("DELETE FROM KNOTS")
+			stmt.toUpperCase().includes("INTO KNOT") || stmt.toUpperCase().includes("DELETE FROM KNOT")
 		);
 		assertEquals(knotInserts.length, 0, "listOutline must not modify knots in database");
 	} finally {
@@ -70,7 +70,7 @@ Deno.test("A08 - Promotion of 100 children triggers only 1 Knot reconciliation i
 	const counters = new PerformanceCounters();
 	const connector = createCountingSqliteConnector(counters);
 	const dbDir = await Deno.makeTempDir();
-	const dbPath = `${dbDir}\\test-100-promotion.db`;
+	const dbPath = `${dbDir}/test-100-promotion.db`;
 
 	const store = new CountingSqliteGraphStore(dbPath, { connector });
 	await store.initialize();
@@ -98,6 +98,7 @@ Deno.test("A08 - Promotion of 100 children triggers only 1 Knot reconciliation i
 			1,
 			"Promoting 100 children in batch must reconcile knots only once",
 		);
+		assertEquals(counters.snapshot().transaction, 1);
 	} finally {
 		await store.close();
 		await safeRemoveDir(dbDir);
@@ -116,7 +117,7 @@ Deno.test("A08 - Single collapse update triggers zero Knot reconciliations", asy
 	const counters = new PerformanceCounters();
 	const connector = createCountingSqliteConnector(counters);
 	const dbDir = await Deno.makeTempDir();
-	const dbPath = `${dbDir}\\test-collapse-reconcile.db`;
+	const dbPath = `${dbDir}/test-collapse-reconcile.db`;
 
 	const store = new CountingSqliteGraphStore(dbPath, { connector });
 	await store.initialize();
@@ -140,8 +141,8 @@ Deno.test("A08 - Single collapse update triggers zero Knot reconciliations", asy
 
 Deno.test("A08 - Memory, Json, and Sqlite produce identical knots across topologies", async () => {
 	const tempDir = await Deno.makeTempDir();
-	const jsonPath = `${tempDir}\\test.json`;
-	const sqlitePath = `${tempDir}\\test.db`;
+	const jsonPath = `${tempDir}/test.json`;
+	const sqlitePath = `${tempDir}/test.db`;
 
 	const memoryStore = new MemoryGraphStore();
 	const jsonStore = new JsonGraphStore(jsonPath);
