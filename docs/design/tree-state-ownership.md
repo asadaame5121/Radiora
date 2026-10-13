@@ -27,6 +27,8 @@ Viewはloading/errorを表示し、初回失敗と既存結果を保持した更
 公開時には取得時の世代とfilter keyを照合するため、取得中に変わった選択/filterの結果を
 現在の結果として扱わない。別の最新要求を古いreloadのcancelで失効させない。
 Outlineのdraft保持と選択補正は既存のApp/workspaceが担当する。
+Outlineの局所操作（collapseの切り替え、単一行の本文編集、caret移動等）ではTreeの`prepareRefresh`や`listGlobalLineage`は呼び出されず、Tree
+read modelは無駄に失効しない（P4境界）。
 
 Tree表示中のeffectはview・filter・選択Workだけを追跡し、`untrack`内で必要な取得を開始する。
 result/error/loadingへの書込でeffectを再発火させない。cleanupはControllerの要求を失効させる。

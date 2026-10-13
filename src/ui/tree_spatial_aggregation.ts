@@ -25,51 +25,218 @@ const CLUSTER_RADIUS_LOG_SCALE = 2;
  */
 export function lodForScreenCollisions(
 	screenPositions: ReadonlyArray<{ x: number; y: number }>,
+	onCollisionCheck?: () => void,
 ): TreeLod {
 	if (screenPositions.length === 0) return "detail";
-	let minX = Number.POSITIVE_INFINITY;
-	let minY = Number.POSITIVE_INFINITY;
-	for (const position of screenPositions) {
-		if (position.x < minX) minX = position.x;
-		if (position.y < minY) minY = position.y;
-	}
-	const cells = new Map<string, Array<{ x: number; y: number }>>();
-	for (const position of screenPositions) {
-		const key = cellKey(position.x - minX, position.y - minY);
-		const bucket = cells.get(key);
-		if (bucket) {
-			bucket.push(position);
-		} else {
-			cells.set(key, [position]);
-		}
-	}
+	const buckets = buildSpatialBuckets(screenPositions);
+	const bucketsByCell = new Map(
+		buckets.map((bucket) => [cellKey(bucket.cellX, bucket.cellY), bucket]),
+	);
 	const colliding = new Set<{ x: number; y: number }>();
-	for (const bucket of cells.values()) {
-		if (bucket.length >= MIN_COLLIDING_BUCKET_SIZE) {
-			for (const position of bucket) {
+	for (const bucket of buckets) {
+		if (bucket.values.length >= MIN_COLLIDING_BUCKET_SIZE) {
+			for (const position of bucket.values) {
+				onCollisionCheck?.();
 				colliding.add(position);
 			}
 		}
 	}
-	for (const [key, bucket] of cells) {
-		for (const position of bucket) {
-			if (colliding.has(position)) continue;
-			forEachNeighboringBucket(cells, key, (neighbor) => {
-				if (neighbor === bucket || colliding.has(position)) return;
-				for (const candidate of neighbor) {
-					if (positionsCollide(position, candidate)) {
-						colliding.add(position);
-						colliding.add(candidate);
-						break;
-					}
-				}
-			});
+	forEachNeighborBucketPair(buckets, bucketsByCell, (left, right, offsetX, offsetY) => {
+		const bridge = findCollisionBridge(left, right, offsetX, offsetY, onCollisionCheck);
+		if (bridge) {
+			colliding.add(bridge[0]);
+			colliding.add(bridge[1]);
 		}
-	}
+	});
 	const fraction = colliding.size / screenPositions.length;
 	if (fraction >= OVERVIEW_COLLISION_THRESHOLD) return "overview";
 	if (fraction > 0) return "context";
 	return "detail";
+}
+
+interface CollisionGraph {
+	collidingNodeIds: Set<string>;
+	adjacentNodeIds: Map<string, Set<string>>;
+}
+
+function addCollisionEdge(graph: CollisionGraph, leftId: string, rightId: string): void {
+	graph.collidingNodeIds.add(leftId);
+	graph.collidingNodeIds.add(rightId);
+	const left = graph.adjacentNodeIds.get(leftId) ?? new Set<string>();
+	const right = graph.adjacentNodeIds.get(rightId) ?? new Set<string>();
+	left.add(rightId);
+	right.add(leftId);
+	graph.adjacentNodeIds.set(leftId, left);
+	graph.adjacentNodeIds.set(rightId, right);
+}
+
+function connectBucketCollisions(
+	buckets: ReadonlyArray<SpatialBucket<TreeLayoutNode>>,
+	graph: CollisionGraph,
+	onCollisionCheck?: () => void,
+): void {
+	for (const bucket of buckets) {
+		if (bucket.values.length < MIN_COLLIDING_BUCKET_SIZE) continue;
+		const firstId = bucket.values[0].id;
+		for (let i = 1; i < bucket.values.length; i++) {
+			onCollisionCheck?.();
+			addCollisionEdge(graph, firstId, bucket.values[i].id);
+		}
+	}
+}
+
+function connectNeighborCollisions(
+	buckets: ReadonlyArray<SpatialBucket<TreeLayoutNode>>,
+	bucketsByCell: ReadonlyMap<string, SpatialBucket<TreeLayoutNode>>,
+	graph: CollisionGraph,
+	onCollisionCheck?: () => void,
+): void {
+	forEachNeighborBucketPair(buckets, bucketsByCell, (left, right, offsetX, offsetY) => {
+		const bridge = findCollisionBridge(left, right, offsetX, offsetY, onCollisionCheck);
+		if (bridge) addCollisionEdge(graph, bridge[0].id, bridge[1].id);
+	});
+}
+
+function buildCollisionGraph(
+	nodes: TreeLayoutNode[],
+	onCollisionCheck?: () => void,
+): CollisionGraph {
+	const buckets = buildSpatialBuckets(nodes);
+	const bucketsByCell = new Map(
+		buckets.map((bucket) => [cellKey(bucket.cellX, bucket.cellY), bucket]),
+	);
+	const graph: CollisionGraph = {
+		collidingNodeIds: new Set(),
+		adjacentNodeIds: new Map(),
+	};
+	connectBucketCollisions(buckets, graph, onCollisionCheck);
+	connectNeighborCollisions(buckets, bucketsByCell, graph, onCollisionCheck);
+	return graph;
+}
+
+function collisionComponent(
+	startId: string,
+	visited: Set<string>,
+	nodeById: ReadonlyMap<string, TreeLayoutNode>,
+	adjacentNodeIds: ReadonlyMap<string, Set<string>>,
+): TreeLayoutNode[] {
+	const component: TreeLayoutNode[] = [];
+	const pending = [startId];
+	while (pending.length > 0) {
+		const current = pending.pop();
+		if (current === undefined || visited.has(current)) continue;
+		visited.add(current);
+		const node = nodeById.get(current);
+		if (!node) throw new Error(`Missing spatial node ${current}`);
+		component.push(node);
+		for (const neighbor of adjacentNodeIds.get(current) ?? []) {
+			if (!visited.has(neighbor)) pending.push(neighbor);
+		}
+	}
+	return component;
+}
+
+function buildCollisionComponents(
+	nodes: TreeLayoutNode[],
+	graph: CollisionGraph,
+): TreeLayoutNode[][] {
+	const components: TreeLayoutNode[][] = [];
+	const visited = new Set<string>();
+	const nodeById = new Map(nodes.map((node) => [node.id, node]));
+	for (const id of [...graph.collidingNodeIds].sort()) {
+		if (!visited.has(id)) {
+			components.push(collisionComponent(id, visited, nodeById, graph.adjacentNodeIds));
+		}
+	}
+	for (const node of nodes) {
+		if (!graph.collidingNodeIds.has(node.id)) components.push([node]);
+	}
+	return components;
+}
+
+interface ClusterStats {
+	sumX: number;
+	sumY: number;
+	sumWorldX: number;
+	sumWorldY: number;
+	minLane: number;
+	minX: number;
+	minY: number;
+	maxX: number;
+	maxY: number;
+	hasKnot: boolean;
+	hasLineageKnot: boolean;
+}
+
+function includeClusterMember(stats: ClusterStats, node: TreeLayoutNode): void {
+	stats.sumX += node.x;
+	stats.sumY += node.y;
+	stats.sumWorldX += node.worldX;
+	stats.sumWorldY += node.worldY;
+	if (node.lane < stats.minLane) stats.minLane = node.lane;
+	if (node.worldX < stats.minX) stats.minX = node.worldX;
+	if (node.worldY < stats.minY) stats.minY = node.worldY;
+	if (node.worldX > stats.maxX) stats.maxX = node.worldX;
+	if (node.worldY > stats.maxY) stats.maxY = node.worldY;
+	if (node.isKnot) stats.hasKnot = true;
+	if (node.isLineageKnot) stats.hasLineageKnot = true;
+}
+
+function makeCluster(bucket: TreeLayoutNode[]): TreeLayoutNode {
+	const members = [...bucket].sort((a, b) =>
+		a.item.updatedAt.localeCompare(b.item.updatedAt) || a.id.localeCompare(b.id)
+	);
+	const itemIds = members.map((node) => node.id).sort();
+	const stats: ClusterStats = {
+		sumX: 0,
+		sumY: 0,
+		sumWorldX: 0,
+		sumWorldY: 0,
+		minLane: Number.POSITIVE_INFINITY,
+		minX: Number.POSITIVE_INFINITY,
+		minY: Number.POSITIVE_INFINITY,
+		maxX: Number.NEGATIVE_INFINITY,
+		maxY: Number.NEGATIVE_INFINITY,
+		hasKnot: false,
+		hasLineageKnot: false,
+	};
+	for (const member of members) includeClusterMember(stats, member);
+	const count = members.length;
+	return {
+		id: `cluster:${itemIds.join(":")}`,
+		item: members[count - 1].item,
+		itemIds,
+		x: stats.sumX / count,
+		y: stats.sumY / count,
+		worldX: stats.sumWorldX / count,
+		worldY: stats.sumWorldY / count,
+		lane: stats.minLane,
+		label: String(count),
+		labelLines: [String(count)],
+		labelWidth: 0,
+		radius: Math.min(
+			MAX_CLUSTER_RADIUS,
+			BASE_CLUSTER_RADIUS + Math.log2(count) * CLUSTER_RADIUS_LOG_SCALE,
+		),
+		count,
+		aggregate: true,
+		isKnot: stats.hasKnot,
+		isLineageKnot: stats.hasLineageKnot,
+		bounds: { minX: stats.minX, minY: stats.minY, maxX: stats.maxX, maxY: stats.maxY },
+	};
+}
+
+function aggregateComponents(
+	components: TreeLayoutNode[][],
+): { nodes: TreeLayoutNode[]; nodeByItemId: Map<string, TreeLayoutNode> } {
+	const aggregated: TreeLayoutNode[] = [];
+	const nodeByItemId = new Map<string, TreeLayoutNode>();
+	for (const component of components) {
+		const cluster = component.length === 1 ? component[0] : makeCluster(component);
+		aggregated.push(cluster);
+		for (const member of component) nodeByItemId.set(member.id, cluster);
+	}
+	return { nodes: aggregated, nodeByItemId };
 }
 
 export function aggregateScreenCells(
@@ -77,164 +244,16 @@ export function aggregateScreenCells(
 	edges: RawEdge[],
 	lod: TreeLod,
 	contentHeight: number,
+	onCollisionCheck?: () => void,
 ): TreeLayout {
-	let minX = Number.POSITIVE_INFINITY;
-	let minY = Number.POSITIVE_INFINITY;
-	for (const node of nodes) {
-		if (node.x < minX) minX = node.x;
-		if (node.y < minY) minY = node.y;
-	}
-	const buckets = new Map<string, TreeLayoutNode[]>();
-	for (const node of nodes) {
-		const key = cellKey(node.x - minX, node.y - minY);
-		const bucket = buckets.get(key);
-		if (bucket) {
-			bucket.push(node);
-		} else {
-			buckets.set(key, [node]);
-		}
-	}
-
-	const collidingNodeIds = new Set<string>();
-	const adjacentNodeIds = new Map<string, Set<string>>();
-	const connectNodes = (aId: string, bId: string) => {
-		collidingNodeIds.add(aId);
-		collidingNodeIds.add(bId);
-		let setA = adjacentNodeIds.get(aId);
-		if (!setA) {
-			setA = new Set();
-			adjacentNodeIds.set(aId, setA);
-		}
-		setA.add(bId);
-		let setB = adjacentNodeIds.get(bId);
-		if (!setB) {
-			setB = new Set();
-			adjacentNodeIds.set(bId, setB);
-		}
-		setB.add(aId);
-	};
-
-	for (const bucket of buckets.values()) {
-		if (bucket.length >= MIN_COLLIDING_BUCKET_SIZE) {
-			const firstId = bucket[0].id;
-			for (let i = 1; i < bucket.length; i++) {
-				connectNodes(firstId, bucket[i].id);
-			}
-		}
-	}
-
-	for (const [key, bucket] of buckets) {
-		forEachNeighboringBucket(buckets, key, (neighbor) => {
-			if (neighbor === bucket) return;
-			let connected = false;
-			for (const node of bucket) {
-				for (const candidate of neighbor) {
-					if (positionsCollide(node, candidate)) {
-						connectNodes(node.id, candidate.id);
-						connected = true;
-						break;
-					}
-				}
-				if (connected) break;
-			}
-		});
-	}
-
-	const components: TreeLayoutNode[][] = [];
-	const visited = new Set<string>();
-	const nodeById = new Map(nodes.map((node) => [node.id, node]));
-	for (const id of [...collidingNodeIds].sort()) {
-		if (visited.has(id)) continue;
-		const component: TreeLayoutNode[] = [];
-		const pending = [id];
-		while (pending.length > 0) {
-			const current = pending.pop()!;
-			if (visited.has(current)) continue;
-			visited.add(current);
-			component.push(nodeById.get(current)!);
-			for (const neighbor of adjacentNodeIds.get(current) ?? []) {
-				if (!visited.has(neighbor)) pending.push(neighbor);
-			}
-		}
-		components.push(component);
-	}
-	components.push(...nodes.filter((node) => !collidingNodeIds.has(node.id)).map((node) => [node]));
-
-	const aggregatedNodes: TreeLayoutNode[] = [];
-	const nodeByItemId = new Map<string, TreeLayoutNode>();
-	for (const bucket of components) {
-		if (bucket.length === 1) {
-			const single = bucket[0];
-			aggregatedNodes.push(single);
-			nodeByItemId.set(single.id, single);
-			continue;
-		}
-		const members = [...bucket].sort((a, b) =>
-			a.item.updatedAt.localeCompare(b.item.updatedAt) || a.id.localeCompare(b.id)
-		);
-		const itemIds = members.map((node) => node.id).sort();
-		let sumX = 0;
-		let sumY = 0;
-		let sumWorldX = 0;
-		let sumWorldY = 0;
-		let minLane = Number.POSITIVE_INFINITY;
-		let bMinX = Number.POSITIVE_INFINITY;
-		let bMinY = Number.POSITIVE_INFINITY;
-		let bMaxX = Number.NEGATIVE_INFINITY;
-		let bMaxY = Number.NEGATIVE_INFINITY;
-		let hasKnot = false;
-		let hasLineageKnot = false;
-		for (const node of members) {
-			sumX += node.x;
-			sumY += node.y;
-			sumWorldX += node.worldX;
-			sumWorldY += node.worldY;
-			if (node.lane < minLane) minLane = node.lane;
-			if (node.worldX < bMinX) bMinX = node.worldX;
-			if (node.worldY < bMinY) bMinY = node.worldY;
-			if (node.worldX > bMaxX) bMaxX = node.worldX;
-			if (node.worldY > bMaxY) bMaxY = node.worldY;
-			if (node.isKnot) hasKnot = true;
-			if (node.isLineageKnot) hasLineageKnot = true;
-		}
-		// The cluster id derives from sorted constituent item ids so panning or
-		// input reordering can never change it.
-		const cluster: TreeLayoutNode = {
-			id: `cluster:${itemIds.join(":")}`,
-			item: members[members.length - 1].item,
-			itemIds,
-			x: sumX / members.length,
-			y: sumY / members.length,
-			worldX: sumWorldX / members.length,
-			worldY: sumWorldY / members.length,
-			lane: minLane,
-			label: String(members.length),
-			labelLines: [String(members.length)],
-			labelWidth: 0,
-			radius: Math.min(
-				MAX_CLUSTER_RADIUS,
-				BASE_CLUSTER_RADIUS + Math.log2(members.length) * CLUSTER_RADIUS_LOG_SCALE,
-			),
-			count: members.length,
-			aggregate: true,
-			isKnot: hasKnot,
-			isLineageKnot: hasLineageKnot,
-			bounds: {
-				minX: bMinX,
-				minY: bMinY,
-				maxX: bMaxX,
-				maxY: bMaxY,
-			},
-		};
-		aggregatedNodes.push(cluster);
-		for (const node of members) nodeByItemId.set(node.id, cluster);
-	}
-
-	aggregatedNodes.sort((a, b) => a.x - b.x || a.y - b.y || a.id.localeCompare(b.id));
+	const graph = buildCollisionGraph(nodes, onCollisionCheck);
+	const components = buildCollisionComponents(nodes, graph);
+	const aggregate = aggregateComponents(components);
+	aggregate.nodes.sort((a, b) => a.x - b.x || a.y - b.y || a.id.localeCompare(b.id));
 	return {
 		lod,
-		nodes: aggregatedNodes,
-		edges: materializeEdges(edges, nodeByItemId),
+		nodes: aggregate.nodes,
+		edges: materializeEdges(edges, aggregate.nodeByItemId),
 		contentHeight,
 	};
 }
@@ -265,30 +284,141 @@ export function materializeEdges(
 	return [...grouped.values()];
 }
 
-function cellKey(relativeX: number, relativeY: number): string {
-	return `${Math.floor(relativeX / OVERVIEW_CELL_WIDTH)}:${
-		Math.floor(relativeY / OVERVIEW_CELL_HEIGHT)
-	}`;
+interface SpatialPoint {
+	readonly x: number;
+	readonly y: number;
 }
 
-function forEachNeighboringBucket<T>(
-	buckets: ReadonlyMap<string, T[]>,
-	key: string,
-	callback: (bucket: T[]) => void,
+interface SpatialBucket<T extends SpatialPoint> {
+	readonly cellX: number;
+	readonly cellY: number;
+	readonly values: T[];
+	minY: T;
+	maxY: T;
+}
+
+function spatialOrigin<T extends SpatialPoint>(
+	points: ReadonlyArray<T>,
+): { minX: number; minY: number } {
+	let minX = Number.POSITIVE_INFINITY;
+	let minY = Number.POSITIVE_INFINITY;
+	for (const point of points) {
+		if (point.x < minX) minX = point.x;
+		if (point.y < minY) minY = point.y;
+	}
+	return { minX, minY };
+}
+
+function addPointToBucket<T extends SpatialPoint>(
+	byCell: Map<string, SpatialBucket<T>>,
+	point: T,
+	minX: number,
+	minY: number,
 ): void {
-	const [x, y] = key.split(":").map(Number);
-	for (let offsetX = -1; offsetX <= 1; offsetX++) {
-		for (let offsetY = -1; offsetY <= 1; offsetY++) {
-			const bucket = buckets.get(`${x + offsetX}:${y + offsetY}`);
-			if (bucket) callback(bucket);
+	const cellX = Math.floor((point.x - minX) / OVERVIEW_CELL_WIDTH);
+	const cellY = Math.floor((point.y - minY) / OVERVIEW_CELL_HEIGHT);
+	const key = cellKey(cellX, cellY);
+	const bucket = byCell.get(key);
+	if (!bucket) {
+		byCell.set(key, { cellX, cellY, values: [point], minY: point, maxY: point });
+		return;
+	}
+	bucket.values.push(point);
+	if (point.y < bucket.minY.y) bucket.minY = point;
+	if (point.y > bucket.maxY.y) bucket.maxY = point;
+}
+
+function buildSpatialBuckets<T extends SpatialPoint>(points: ReadonlyArray<T>): SpatialBucket<T>[] {
+	if (points.length === 0) return [];
+	const { minX, minY } = spatialOrigin(points);
+	const byCell = new Map<string, SpatialBucket<T>>();
+	for (const point of points) addPointToBucket(byCell, point, minX, minY);
+	const buckets = [...byCell.values()];
+	for (const bucket of buckets) bucket.values.sort((a, b) => b.x - a.x);
+	return buckets.sort((a, b) => b.cellX - a.cellX || a.cellY - b.cellY);
+}
+
+function forEachNeighborBucketPair<T extends SpatialPoint>(
+	buckets: ReadonlyArray<SpatialBucket<T>>,
+	bucketsByCell: ReadonlyMap<string, SpatialBucket<T>>,
+	callback: (
+		left: SpatialBucket<T>,
+		right: SpatialBucket<T>,
+		offsetX: number,
+		offsetY: number,
+	) => void,
+): void {
+	for (const bucket of buckets) {
+		for (const [offsetX, offsetY] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+			const neighbor = bucketsByCell.get(cellKey(bucket.cellX + offsetX, bucket.cellY + offsetY));
+			if (neighbor) callback(bucket, neighbor, offsetX, offsetY);
 		}
 	}
 }
 
-function positionsCollide(
-	left: { x: number; y: number },
-	right: { x: number; y: number },
+function findDiagonalCollisionBridge<T extends SpatialPoint>(
+	left: SpatialBucket<T>,
+	right: SpatialBucket<T>,
+	offsetY: number,
+	onCollisionCheck?: () => void,
+): [T, T] | null {
+	let leftIndex = 0;
+	let extreme: T | null = null;
+	for (const rightNode of right.values) {
+		onCollisionCheck?.();
+		while (
+			leftIndex < left.values.length &&
+			rightNode.x - left.values[leftIndex].x < OVERVIEW_CELL_WIDTH
+		) {
+			onCollisionCheck?.();
+			const candidate = left.values[leftIndex++];
+			if (!extreme || (offsetY > 0 ? candidate.y > extreme.y : candidate.y < extreme.y)) {
+				extreme = candidate;
+			}
+		}
+		if (extreme && positionsCollideCounted(extreme, rightNode, onCollisionCheck)) {
+			return [extreme, rightNode];
+		}
+	}
+	return null;
+}
+
+function findCollisionBridge<T extends SpatialPoint>(
+	left: SpatialBucket<T>,
+	right: SpatialBucket<T>,
+	offsetX: number,
+	offsetY: number,
+	onCollisionCheck?: () => void,
+): [T, T] | null {
+	if (offsetX === 1 && offsetY === 0) {
+		const leftNode = left.values[0];
+		const rightNode = right.values[right.values.length - 1];
+		return positionsCollideCounted(leftNode, rightNode, onCollisionCheck)
+			? [leftNode, rightNode]
+			: null;
+	}
+	if (offsetX === 0) {
+		return positionsCollideCounted(left.maxY, right.minY, onCollisionCheck)
+			? [left.maxY, right.minY]
+			: null;
+	}
+	return findDiagonalCollisionBridge(left, right, offsetY, onCollisionCheck);
+}
+
+function cellKey(cellX: number, cellY: number): string {
+	return `${cellX}:${cellY}`;
+}
+
+function positionsCollideCounted(
+	left: SpatialPoint,
+	right: SpatialPoint,
+	onCollisionCheck?: () => void,
 ): boolean {
+	onCollisionCheck?.();
+	return positionsCollide(left, right);
+}
+
+function positionsCollide(left: SpatialPoint, right: SpatialPoint): boolean {
 	return Math.abs(left.x - right.x) < OVERVIEW_CELL_WIDTH &&
 		Math.abs(left.y - right.y) < OVERVIEW_CELL_HEIGHT;
 }
