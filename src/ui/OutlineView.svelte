@@ -12,6 +12,7 @@
 		OutlineRowHandlers,
 	} from "./outline_row_types.ts";
 	import OutlineRowItem from "./OutlineRowItem.svelte";
+	import { calculateVirtualOutlineWindow } from "./virtual_outline_viewport.ts";
 
 	let {
 		draggedId,
@@ -67,6 +68,64 @@
 		helpers: OutlineHelpers;
 	} = $props();
 
+	let rowsEl = $state<HTMLDivElement | null>(null);
+	let scrollTop = $state(0);
+	let viewportHeight = $state(0);
+
+	const normalRows = $derived.by(() => visibleRows.filter((row) => !row.stash));
+	const stashRows = $derived.by(() => visibleRows.filter((row) => row.stash));
+
+	const virtualWindow = $derived.by(() => {
+		const pinnedIndices: number[] = [];
+		if (selectedId) {
+			const selectedIndex = normalRows.findIndex((row) => row.item.id === selectedId);
+			if (selectedIndex >= 0) {
+				pinnedIndices.push(selectedIndex);
+			}
+		}
+		return calculateVirtualOutlineWindow({
+			totalRows: normalRows.length,
+			scrollTop,
+			viewportHeight,
+			pinnedIndices,
+		});
+	});
+
+	const renderedNormalRows = $derived.by(() =>
+		virtualWindow.renderedIndices.map((idx) => normalRows[idx]),
+	);
+
+	$effect(() => {
+		const el = rowsEl;
+		if (!el) return;
+		const scrollContainer = el.closest(".pane-body");
+		const updateViewportMetrics = () => {
+			if (scrollContainer && scrollContainer.clientHeight > 0) {
+				const containerRect = scrollContainer.getBoundingClientRect();
+				const rowsRect = el.getBoundingClientRect();
+				scrollTop = Math.max(0, containerRect.top - rowsRect.top);
+				viewportHeight = scrollContainer.clientHeight;
+			} else {
+				const rowsRect = el.getBoundingClientRect();
+				if (rowsRect.height > 0 && typeof window !== "undefined" && window.innerHeight > 0) {
+					scrollTop = Math.max(0, -rowsRect.top);
+					viewportHeight = window.innerHeight;
+				} else {
+					scrollTop = 0;
+					viewportHeight = 0;
+				}
+			}
+		};
+		updateViewportMetrics();
+		const target: EventTarget = scrollContainer ?? window;
+		target.addEventListener("scroll", updateViewportMetrics, { passive: true });
+		window.addEventListener("resize", updateViewportMetrics, { passive: true });
+		return () => {
+			target.removeEventListener("scroll", updateViewportMetrics);
+			window.removeEventListener("resize", updateViewportMetrics);
+		};
+	});
+
 	onMount(() => () => onDragEnd());
 </script>
 
@@ -82,7 +141,7 @@
 		{/if}
 		<h1>{outlineContextTitle}</h1>
 		<p class="outline-context__meta">
-			{visibleRows.filter((row) => !row.stash).length}件の{vocabulary.work} · 行をそのまま編集できます
+			{normalRows.length}件の{vocabulary.work} · 行をそのまま編集できます
 		</p>
 	</div>
 	<div class="section-title outline-actions">
@@ -103,16 +162,19 @@
 	{:else}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
+			bind:this={rowsEl}
 			class="rows"
 			role="tree"
 			aria-busy={loading}
 			aria-label={`${vocabulary.work}のアウトライン`}
 			tabindex="0"
+			style:padding-top={virtualWindow.paddingTop > 0 ? `${virtualWindow.paddingTop}px` : undefined}
+			style:padding-bottom={virtualWindow.paddingBottom > 0 ? `${virtualWindow.paddingBottom}px` : undefined}
 			onmousedown={(event) => {
 				if (event.target === event.currentTarget) handlers.deselectFromBlank(event);
 			}}
 		>
-			{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
+			{#each renderedNormalRows as row (row.item.id)}
 				<OutlineRowItem
 					{row}
 					{selectedId}
@@ -133,7 +195,7 @@
 	{#if stashItemIdsLength}
 		<div class="section-title stash-title"><span>Stash / Knots</span><small>{knotsLength} knot</small></div>
 		<div class="stash-list">
-			{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
+			{#each stashRows as row (row.item.id)}
 				<button
 					type="button"
 					class:selected={selectedId === row.item.id}
