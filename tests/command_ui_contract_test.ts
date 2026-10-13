@@ -13,7 +13,7 @@ Deno.test("App routes command buttons and global shortcuts through the command s
 	assert(adapter.includes("isEditableTarget(event.target)"));
 	assert(!app.includes('event.shiftKey && event.key.toLocaleLowerCase() === "l"'));
 	assert(adapter.includes("this.ports.chord.handle(event)"));
-	assert(app.includes("validateShortcuts(COMMAND_DEFINITIONS"));
+	assert(/validateShortcuts\(\s*COMMAND_DEFINITIONS/.test(app));
 	assert(adapter.includes('target.addEventListener("keydown", this.handle, true)'));
 	assert(adapter.includes('target.removeEventListener("keydown", this.handle, true)'));
 	for (

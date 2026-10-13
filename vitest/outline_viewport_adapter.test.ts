@@ -9,6 +9,12 @@ function setup() {
 		{ dataset: { paneId: "b" }, scrollTop: 250, scrollLeft: 24 },
 	];
 	const focus = vi.fn();
+	vi.stubGlobal("window", {
+		getComputedStyle: () => ({ overflowY: "auto" }),
+		scrollX: 0,
+		scrollY: 0,
+		scrollTo: vi.fn(),
+	});
 	vi.stubGlobal("document", {
 		querySelectorAll: () => panels,
 		querySelector: (selector: string) => selector === ".outline-panel" ? panels[0] : { focus },

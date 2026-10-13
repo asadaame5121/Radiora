@@ -88,6 +88,6 @@ Deno.test("reload delegates focus publication to the Outline owner with both rec
 	assertMatch(app, /selectionReceipt: \(\) => selectionWorkspace\.currentReceipt\(\)/);
 	assertMatch(
 		app,
-		/focus: \(id, reloadCurrent\) => selectOccurrence\(id, \(selectionCurrent\) => requestFocus\(id, undefined, \(\) => reloadCurrent\(\) && selectionCurrent\(\)\)\)/,
+		/focus:\s*\(id,\s*reloadCurrent\)\s*=>\s*selectOccurrence\(\s*id,\s*\(selectionCurrent\)\s*=>\s*requestFocus\(id,\s*undefined,\s*\(\)\s*=>\s*reloadCurrent\(\)\s*&&\s*selectionCurrent\(\)\),\s*\)/,
 	);
 });

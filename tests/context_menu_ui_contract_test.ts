@@ -50,10 +50,10 @@ Deno.test("context actions reuse commands and confirmation-gated destructive pat
 	}
 	assertMatch(menu, /"create-branch": "createBranch"/);
 	assertMatch(menu, /this\.ports\.execute\(command\)/);
-	assertMatch(app, /"trash-work": \(\) => commandExecution\.run\(trashSelectedWork\)/);
+	assertMatch(app, /"trash-work":\s*\(\)\s*=>\s*commandExecution\.run\(trashSelectedWork\)/);
 	assertMatch(
 		app,
-		/"export-selected": \(id\) => commandExecution\.execute\("exportMarkdown", \{ exportOccurrenceId: id \}\)/,
+		/"export-selected":\s*\(id\)\s*=>\s*commandExecution\.execute\("exportMarkdown",\s*\{\s*exportOccurrenceId:\s*id\s*\}\)/,
 	);
 	assertMatch(app, /bookmarkController\.bookmarks\.some/);
 });

@@ -1,54 +1,62 @@
 <script lang="ts">
-	import type { RelationTypeDefinition } from "../domain/models.ts";
-	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
-	import type { VisibleRow } from "./outline_view_model.ts";
-	import type {
-		InlineLinkCompletionState,
-		InternalReferenceCompletionState,
+import type { RelationTypeDefinition } from "../domain/models.ts";
+import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
+import type { VisibleRow } from "./outline_view_model.ts";
+import type {
+	InlineLinkCompletionState,
+	InternalReferenceCompletionState,
 } from "./editor_completion_controller.svelte.ts";
-	import type {
-		OutlineHelpers,
-		OutlineRowHandlers,
-	} from "./outline_row_types.ts";
-	import IconButton from "./primitives/IconButton.svelte";
-	import MarkdownEditor from "./MarkdownEditor.svelte";
-	import InternalReferenceCompletion from "./InternalReferenceCompletion.svelte";
-	import InlineLinkCompletion from "./InlineLinkCompletion.svelte";
+import type { OutlineHelpers, OutlineRowHandlers } from "./outline_row_types.ts";
+import IconButton from "./primitives/IconButton.svelte";
+import MarkdownEditor from "./MarkdownEditor.svelte";
+import InternalReferenceCompletion from "./InternalReferenceCompletion.svelte";
+import InlineLinkCompletion from "./InlineLinkCompletion.svelte";
 
-	let {
-		row,
-		selectedId,
-		draggedId,
-		vocabulary,
-		internalReferenceCompletion,
-		inlineLinkCompletion,
-		relationTypeDefinitions,
-		handlers,
-		helpers,
-		onDragStart,
-		onDragEnd,
-	}: {
-		row: VisibleRow;
-		selectedId: string | null;
-		draggedId: string | null;
-		vocabulary: UiVocabulary;
-		internalReferenceCompletion: InternalReferenceCompletionState | null;
-		inlineLinkCompletion: InlineLinkCompletionState | null;
-		relationTypeDefinitions?: readonly RelationTypeDefinition[];
-		handlers: OutlineRowHandlers;
-		helpers: OutlineHelpers;
-		onDragStart: (id: string) => void;
-		onDragEnd: () => void;
-	} = $props();
+let {
+	row,
+	selectedId,
+	draggedId,
+	vocabulary,
+	internalReferenceCompletion,
+	inlineLinkCompletion,
+	relationTypeDefinitions,
+	handlers,
+	helpers,
+	onDragStart,
+	onDragEnd,
+	onRowElement = () => undefined,
+}: {
+	row: VisibleRow;
+	selectedId: string | null;
+	draggedId: string | null;
+	vocabulary: UiVocabulary;
+	internalReferenceCompletion: InternalReferenceCompletionState | null;
+	inlineLinkCompletion: InlineLinkCompletionState | null;
+	relationTypeDefinitions?: readonly RelationTypeDefinition[];
+	handlers: OutlineRowHandlers;
+	helpers: OutlineHelpers;
+	onDragStart: (id: string) => void;
+	onDragEnd: () => void;
+	onRowElement?: (id: string, element: HTMLElement | null) => void;
+} = $props();
 
-	const REFERENCE_PREFIX_LENGTH = 8;
+let rowElement = $state<HTMLElement | null>(null);
+const REFERENCE_PREFIX_LENGTH = 8;
 
-	const inlineLinks = $derived(helpers.inlineSemanticLinksFor(row.item.text));
-	const annotations = $derived(helpers.semanticLinkAnnotationsFor(row.item.id));
-	const rowBody = $derived(helpers.bodyFor(row.item));
+const inlineLinks = $derived(helpers.inlineSemanticLinksFor(row.item.text));
+const annotations = $derived(helpers.semanticLinkAnnotationsFor(row.item.id));
+const rowBody = $derived(helpers.bodyFor(row.item));
+
+$effect(() => {
+	const id = row.item.id;
+	onRowElement(id, rowElement);
+	return () => onRowElement(id, null);
+});
 </script>
 
 <div
+	bind:this={rowElement}
+	data-outline-row-id={row.item.id}
 	class:selected={selectedId === row.item.id}
 	class:dragging={draggedId === row.item.id}
 	class="row"
@@ -168,148 +176,148 @@
 </div>
 
 <style>
-	.row {
-		--indent: calc(var(--depth) * 24px);
-		position: relative;
-		display: grid;
-		grid-template-columns: 22px 20px 1fr 26px;
-		align-items: start;
-		padding: 3px 4px 3px var(--indent);
-		border-radius: 5px;
-	}
-	.row:hover,
-	.row.selected {
-		background: var(--surface-hover);
-	}
-	.row.selected {
-		background: rgb(37 198 209 / 7%);
-		box-shadow: inset 2px 0 var(--cyan);
-	}
-	.row:focus-within {
-		background: var(--surface-hover);
-		outline: 1px solid var(--border-bright);
-		outline-offset: -1px;
-	}
-	.row.dragging {
-		opacity: .5;
-		box-shadow: inset 2px 0 var(--amber);
-	}
-	.internal-reference-editor {
-		position: relative;
-		min-width: 0;
-	}
-	.row-body-preview {
-		margin: 2px 0 0;
-		color: var(--muted);
-		font-size: 11px;
-		line-height: 1.4;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-	.internal-reference-chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-		padding: 0 4px 4px;
-	}
-	.internal-reference-chips button {
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		padding: 2px 7px;
-		color: var(--cyan);
-		background: var(--surface-raised);
-		font-size: 10px;
-		cursor: pointer;
-	}
-	.inline-semantic-links {
-		display: grid;
-		gap: 4px;
-		margin: 4px 4px 0;
-	}
-	.inline-semantic-links .inline-candidate-btn {
-		display: flex;
-		flex-direction: column;
-		width: 100%;
-		gap: 2px;
-		padding: 5px 7px;
-		background: var(--surface-raised);
-		color: var(--text);
-		border: 1px solid var(--border);
-		border-radius: 5px;
-		text-align: left;
-		font-size: 10px;
-		cursor: pointer;
-	}
-	.inline-semantic-links .inline-candidate-btn:hover {
-		border-color: var(--cyan);
-		background: var(--surface-hover);
-	}
-	.inline-semantic-links small,
-	.inline-semantic-link-error {
-		color: var(--muted);
-		font-size: 10px;
-	}
-	.inline-semantic-link-error {
-		margin: 0;
-		padding: 6px 8px;
-		border-left: 2px solid var(--amber);
-		background: var(--surface-hover);
-	}
-	.semantic-link-annotations {
-		display: grid;
-		gap: 2px;
-		margin: 4px 4px 0;
-		padding-left: 8px;
-		border-left: 1px dashed var(--border-bright);
-	}
-	.semantic-link-annotations p {
-		display: flex;
-		align-items: baseline;
-		flex-wrap: wrap;
-		gap: 5px;
-		margin: 0;
-		color: var(--muted);
-		font-size: 10px;
-		line-height: 1.5;
-	}
-	.semantic-link-annotations strong {
-		color: var(--cyan-soft);
-		font-size: 9px;
-		font-weight: 600;
-	}
-	.semantic-link-annotations small {
-		font-style: italic;
-		color: var(--theme-muted, #9aaeb7);
-	}
-	:global(.disclosure) {
-		border: 0;
-		background: transparent;
-		color: var(--muted);
-		cursor: pointer;
-		padding: 5px;
-		font-size: 18px;
-		line-height: 20px;
-	}
-	:global(.disclosure.hidden) {
-		visibility: hidden;
-	}
-	.reference-stub {
-		color: var(--cyan);
-		font-size: 0.75rem;
-		line-height: 1;
-	}
-	.bullet {
-		color: var(--cyan);
-		padding: 4px 0 0;
-		font-size: 20px;
-		line-height: 20px;
-		cursor: grab;
-		border: 0;
-		background: transparent;
-	}
-	.bullet:focus-visible {
-		outline: 1px solid var(--cyan);
-		border-radius: 4px;
-	}
+.row {
+	--indent: calc(var(--depth) * 24px);
+	position: relative;
+	display: grid;
+	grid-template-columns: 22px 20px 1fr 26px;
+	align-items: start;
+	padding: 3px 4px 3px var(--indent);
+	border-radius: 5px;
+}
+.row:hover,
+.row.selected {
+	background: var(--surface-hover);
+}
+.row.selected {
+	background: rgb(37 198 209 / 7%);
+	box-shadow: inset 2px 0 var(--cyan);
+}
+.row:focus-within {
+	background: var(--surface-hover);
+	outline: 1px solid var(--border-bright);
+	outline-offset: -1px;
+}
+.row.dragging {
+	opacity: .5;
+	box-shadow: inset 2px 0 var(--amber);
+}
+.internal-reference-editor {
+	position: relative;
+	min-width: 0;
+}
+.row-body-preview {
+	margin: 2px 0 0;
+	color: var(--muted);
+	font-size: 11px;
+	line-height: 1.4;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.internal-reference-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 0 4px 4px;
+}
+.internal-reference-chips button {
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	padding: 2px 7px;
+	color: var(--cyan);
+	background: var(--surface-raised);
+	font-size: 10px;
+	cursor: pointer;
+}
+.inline-semantic-links {
+	display: grid;
+	gap: 4px;
+	margin: 4px 4px 0;
+}
+.inline-semantic-links .inline-candidate-btn {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	gap: 2px;
+	padding: 5px 7px;
+	background: var(--surface-raised);
+	color: var(--text);
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	text-align: left;
+	font-size: 10px;
+	cursor: pointer;
+}
+.inline-semantic-links .inline-candidate-btn:hover {
+	border-color: var(--cyan);
+	background: var(--surface-hover);
+}
+.inline-semantic-links small,
+.inline-semantic-link-error {
+	color: var(--muted);
+	font-size: 10px;
+}
+.inline-semantic-link-error {
+	margin: 0;
+	padding: 6px 8px;
+	border-left: 2px solid var(--amber);
+	background: var(--surface-hover);
+}
+.semantic-link-annotations {
+	display: grid;
+	gap: 2px;
+	margin: 4px 4px 0;
+	padding-left: 8px;
+	border-left: 1px dashed var(--border-bright);
+}
+.semantic-link-annotations p {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 5px;
+	margin: 0;
+	color: var(--muted);
+	font-size: 10px;
+	line-height: 1.5;
+}
+.semantic-link-annotations strong {
+	color: var(--cyan-soft);
+	font-size: 9px;
+	font-weight: 600;
+}
+.semantic-link-annotations small {
+	font-style: italic;
+	color: var(--theme-muted, #9aaeb7);
+}
+:global(.disclosure) {
+	border: 0;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+	padding: 5px;
+	font-size: 18px;
+	line-height: 20px;
+}
+:global(.disclosure.hidden) {
+	visibility: hidden;
+}
+.reference-stub {
+	color: var(--cyan);
+	font-size: 0.75rem;
+	line-height: 1;
+}
+.bullet {
+	color: var(--cyan);
+	padding: 4px 0 0;
+	font-size: 20px;
+	line-height: 20px;
+	cursor: grab;
+	border: 0;
+	background: transparent;
+}
+.bullet:focus-visible {
+	outline: 1px solid var(--cyan);
+	border-radius: 4px;
+}
 </style>
