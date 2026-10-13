@@ -132,12 +132,17 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		setWorkHistoricalTime: (workId, value) => service().setWorkHistoricalTime(workId, value),
 		moveItem: async (input) => service().moveItem(v.parse(MoveItemInputSchema, input)),
 		deleteItem: (id) => service().deleteItem(id),
+		discardEmptyItems: (ids) => service().discardEmptyItems(v.parse(v.array(IdSchema), ids)),
 		trashWork: (id) => service().trashWork(id),
 		listTrash: () => service().listTrash(),
 		restoreWork: (workId) => service().restoreWork(workId),
 		purgeWork: (workId) => service().purgeWork(workId),
 		setCollapsed: (id, collapsed) => service().setCollapsed(id, collapsed),
-		setCollapsedBatch: (ids, collapsed) => service().setCollapsedBatch(ids, collapsed),
+		setCollapsedBatch: (ids, collapsed) =>
+			service().setCollapsedBatch(
+				v.parse(v.array(IdSchema), ids),
+				v.parse(v.boolean(), collapsed),
+			),
 		createLink: async (input) => service().createLink(v.parse(CreateLinkInputSchema, input)),
 		resolveAdvancedLink: (input, selections) => service().resolveAdvancedLink(input, selections),
 		listInternalReferenceCompletions: (query, limit) =>

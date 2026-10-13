@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noMagicNumbers: Caret offsets are exact persisted values under test.
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import type { Bookmark, Occurrence } from "../domain/models.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
@@ -138,3 +139,28 @@ async function occurrence(
 	await store.createOccurrence(value);
 	return id;
 }
+
+Deno.test("NavigationService uses single occurrence read and avoids listOccurrences for saveResumePosition and createBookmark", async () => {
+	const store = new MemoryGraphStore();
+	const occurrenceId = await bundle(store, "work-nav", "nav text", null, 1, false);
+	const service = new NavigationService(store, () => "bookmark", () => NOW);
+
+	// Spy: listOccurrences を呼んだら例外を投げる
+	store.listOccurrences = () => {
+		throw new Error(
+			"listOccurrences must not be called during saveResumePosition / createBookmark",
+		);
+	};
+
+	const position = await service.saveResumePosition(occurrenceId, 3);
+	assertEquals(position.occurrenceId, occurrenceId);
+	assertEquals(position.caretOffset, 3);
+
+	const bookmark = await service.createBookmark(occurrenceId);
+	assertEquals(bookmark.occurrenceId, occurrenceId);
+
+	delete (store as unknown as Record<string, unknown>).listOccurrences;
+	const stored = await store.getResumePosition();
+	assertEquals(stored?.occurrenceId, occurrenceId);
+	assertEquals(stored?.caretOffset, 3);
+});

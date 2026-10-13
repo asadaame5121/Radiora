@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noMagicNumbers: Body and history sizes define independent test axes.
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
@@ -354,4 +355,108 @@ Deno.test("occurrence operations listOutline efficiently handles deep tree perfo
 	assertEquals(snapshot.items.length, topicCount);
 	assertEquals(snapshot.knots.length, 0);
 	assertEquals(elapsed < maxElapsedMs, true);
+});
+
+Deno.test("occurrence operations uses single item read and avoids listItems for point updates", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new OccurrenceOperations(store);
+	const created = await operations.createItem({ text: "initial text", parentId: null });
+
+	// Spy: listItems を呼んだら例外を投げる
+	store.listItems = () => {
+		throw new Error("listItems must not be called during point updates");
+	};
+
+	// 1. 本文更新 (updateItemText)
+	await operations.updateItemText(created.id, "updated text");
+	// 2. 折りたたみ (setCollapsed)
+	await operations.setCollapsed(created.id, true);
+	// 3. contextualHeading (setContextualHeading)
+	await operations.setContextualHeading(created.id, "heading");
+
+	// スパイを解除して結果確認
+	delete (store as unknown as Record<string, unknown>).listItems;
+	const item = await store.getItem(created.id);
+	assertEquals(item?.text, "updated text");
+	assertEquals(item?.collapsed, true);
+	assertEquals(item?.contextualHeading, "heading");
+});
+
+Deno.test("point updates with large irrelevant works do not touch other working copies", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new OccurrenceOperations(store);
+	for (let i = 0; i < 20; i++) {
+		await operations.createItem({ text: "x".repeat(2048), parentId: null });
+	}
+	const target = await operations.createItem({ text: "target initial", parentId: null });
+
+	// listItems呼び出しを遮断
+	store.listItems = () => {
+		throw new Error("listItems must not be called");
+	};
+
+	await operations.updateItemText(target.id, "target updated");
+	await operations.setCollapsed(target.id, true);
+
+	delete (store as unknown as Record<string, unknown>).listItems;
+	const targetItem = await store.getItem(target.id);
+	assertEquals(targetItem?.text, "target updated");
+	assertEquals(targetItem?.collapsed, true);
+});
+
+Deno.test("discardEmptyItems removes only empty leaf items atomically", async () => {
+	const store = new MemoryGraphStore();
+	const operations = new OccurrenceOperations(store);
+
+	// 1. empty leaf (削除対象)
+	const emptyLeaf1 = await operations.createItem({ text: "   ", parentId: null });
+	const emptyLeaf2 = await operations.createItem({ text: "", parentId: null });
+	// 2. non-empty leaf (非空: 削除されない)
+	const nonEmptyLeaf = await operations.createItem({ text: "not empty", parentId: null });
+	// 3. empty parent with children (子あり: 削除されない)
+	const emptyParent = await operations.createItem({ text: "", parentId: null });
+	const childOfParent = await operations.createItem({ text: "child", parentId: emptyParent.id });
+	// 4. missing ID (存在しないID)
+	const missingId = "non-existent-id";
+
+	// 重複IDも含めて渡す
+	const inputIds = [
+		emptyLeaf1.id,
+		emptyLeaf1.id,
+		emptyLeaf2.id,
+		nonEmptyLeaf.id,
+		emptyParent.id,
+		missingId,
+	];
+
+	const result = await operations.discardEmptyItems(inputIds);
+
+	// handledIds は重複排除された全入力ID
+	assertEquals(
+		result.handledIds.sort(),
+		[
+			emptyLeaf1.id,
+			emptyLeaf2.id,
+			nonEmptyLeaf.id,
+			emptyParent.id,
+			missingId,
+		].sort(),
+	);
+
+	// deletedIds は空かつ子なしの leaf のみ
+	assertEquals(result.deletedIds.sort(), [emptyLeaf1.id, emptyLeaf2.id].sort());
+
+	// 実際にストアから削除されたことを確認
+	assertEquals(await store.getItem(emptyLeaf1.id), null);
+	assertEquals(await store.getItem(emptyLeaf2.id), null);
+	assertEquals((await store.getItem(nonEmptyLeaf.id))?.text, "not empty");
+	assertEquals((await store.getItem(emptyParent.id)) !== null, true);
+	assertEquals((await store.getItem(childOfParent.id)) !== null, true);
+
+	// emptyLeaf1, emptyLeaf2 の work は blank unplaced work として trash に移動していること
+	const trash = await operations.listTrash();
+	const trashedWorkIds = trash.map((t) => t.work.id);
+	assertEquals(trashedWorkIds.includes(emptyLeaf1.workId), true);
+	assertEquals(trashedWorkIds.includes(emptyLeaf2.workId), true);
+	assertEquals(trashedWorkIds.includes(emptyParent.workId), false);
 });

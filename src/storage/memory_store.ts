@@ -44,7 +44,11 @@ import {
 	applyRecoverySnapshotRestore,
 	validateAndCreateRecoverySnapshot,
 } from "./memory_recovery_operations.ts";
-import { applyMergeWorks, projectOutlineItems } from "./memory_store_operations.ts";
+import {
+	applyMergeWorks,
+	projectOutlineItems,
+	projectSingleOutlineItem,
+} from "./memory_store_operations.ts";
 import { applyWorkPurge, applyWorkRestore, applyWorkTrash } from "./memory_work_lifecycle.ts";
 import {
 	countOccurrences,
@@ -52,6 +56,7 @@ import {
 	searchTerms,
 	titleOf,
 } from "../services/search_text.ts";
+import { detectOutlineKnots } from "../services/occurrence_knot_detection.ts";
 
 import { MemoryStateContainer } from "./memory_state_container.ts";
 
@@ -60,6 +65,25 @@ export class MemoryGraphStore implements GraphStore {
 
 	constructor(state?: MemoryStateContainer) {
 		this.state = state ?? new MemoryStateContainer();
+	}
+
+	protected afterOutlineStructureChanged(): void {
+		this.reconcileOutlineKnots();
+	}
+
+	protected reconcileOutlineKnots(): void {
+		const activeWorkIds = new Set(
+			this.state.works
+				.filter((work) => !work.deletedAt && !work.mergedIntoWorkId)
+				.map((work) => work.id),
+		);
+		const items = this.state.occurrences
+			.filter((occurrence) => activeWorkIds.has(occurrence.workId))
+			.map((occurrence) => ({
+				id: occurrence.id,
+				parentId: occurrence.parentOccurrenceId,
+			}));
+		this.state.knots = detectOutlineKnots(items, this.state.knots);
 	}
 	initialize(): Promise<void> {
 		return Promise.resolve();
@@ -84,20 +108,20 @@ export class MemoryGraphStore implements GraphStore {
 
 	protected isBatching = false;
 
-	batch<T>(operation: () => Promise<T>): Promise<T> {
+	async batch<T>(operation: () => Promise<T>): Promise<T> {
 		if (this.isBatching) {
-			return operation();
+			return await operation();
 		}
 		this.isBatching = true;
 		const before = this.state.exportGraphState();
-		return operation()
-			.catch((error) => {
-				this.state.restoreGraphState(before);
-				throw error;
-			})
-			.finally(() => {
-				this.isBatching = false;
-			});
+		try {
+			return await operation();
+		} catch (error) {
+			this.state.restoreGraphState(before);
+			throw error;
+		} finally {
+			this.isBatching = false;
+		}
 	}
 
 	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]> {
@@ -122,6 +146,22 @@ export class MemoryGraphStore implements GraphStore {
 		return Promise.resolve(structuredClone(this.projectItems(false)));
 	}
 
+	getItem(id: string): Promise<OutlineItem | null> {
+		const occurrence = this.state.occurrences.find((candidate) => candidate.id === id);
+		if (!occurrence) return Promise.resolve(null);
+		const work = this.state.works.find((w) => w.id === occurrence.workId);
+		if (!work || work.deletedAt) return Promise.resolve(null);
+		const selector = occurrence.revisionSelector;
+		const text = selector.mode === "branch"
+			? this.state.workingCopies.find(
+				(copy) => copy.branchId === selector.branchId,
+			)?.text ?? ""
+			: this.state.revisions.find(
+				(revision) => revision.id === selector.revisionId,
+			)?.text ?? "";
+		return Promise.resolve(projectSingleOutlineItem(occurrence, work, text));
+	}
+
 	listWorks(includeDeleted = false): Promise<Work[]> {
 		return Promise.resolve(structuredClone(
 			this.state.works.filter((work) =>
@@ -141,8 +181,17 @@ export class MemoryGraphStore implements GraphStore {
 		));
 	}
 
+	getOccurrence(id: string): Promise<Occurrence | null> {
+		const occurrence = this.state.occurrences.find((candidate) => candidate.id === id);
+		if (!occurrence) return Promise.resolve(null);
+		const work = this.state.works.find((w) => w.id === occurrence.workId);
+		if (!work || work.deletedAt || work.mergedIntoWorkId) return Promise.resolve(null);
+		return Promise.resolve(structuredClone(occurrence));
+	}
+
 	async mergeWorks(input: MergeWorksInput): Promise<void> {
 		applyMergeWorks(this.state, input);
+		this.afterOutlineStructureChanged();
 	}
 
 	listBranches(workId?: string): Promise<Branch[]> {
@@ -199,6 +248,7 @@ export class MemoryGraphStore implements GraphStore {
 		this.state.branches.push(structuredClone(branch));
 		this.state.workingCopies.push(structuredClone(workingCopy));
 		this.state.occurrences.push(structuredClone(occurrence));
+		this.afterOutlineStructureChanged();
 		return Promise.resolve();
 	}
 
@@ -229,6 +279,9 @@ export class MemoryGraphStore implements GraphStore {
 			...this.state.occurrences,
 			...bundles.map((bundle) => structuredClone(bundle.occurrence)),
 		];
+		if (bundles.length > 0) {
+			this.afterOutlineStructureChanged();
+		}
 		return Promise.resolve();
 	}
 
@@ -265,6 +318,7 @@ export class MemoryGraphStore implements GraphStore {
 
 	createOccurrence(occurrence: Occurrence): Promise<void> {
 		this.state.occurrences.push(structuredClone(occurrence));
+		this.afterOutlineStructureChanged();
 		return Promise.resolve();
 	}
 
@@ -404,30 +458,45 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	updateOccurrence(occurrence: Occurrence): Promise<void> {
+		const previous = this.state.occurrences.find((candidate) => candidate.id === occurrence.id);
 		this.state.occurrences = this.state.occurrences.map((candidate) =>
 			candidate.id === occurrence.id ? structuredClone(occurrence) : candidate
 		);
+		const structureChanged = previous !== undefined && (
+			previous.parentOccurrenceId !== occurrence.parentOccurrenceId ||
+			previous.workId !== occurrence.workId
+		);
+		if (structureChanged) {
+			this.afterOutlineStructureChanged();
+		}
 		return Promise.resolve();
 	}
 
 	deleteOccurrence(id: string): Promise<void> {
+		const existed = this.state.occurrences.some((occurrence) => occurrence.id === id);
 		this.state.occurrences = this.state.occurrences.filter((occurrence) => occurrence.id !== id);
+		if (existed) {
+			this.afterOutlineStructureChanged();
+		}
 		return Promise.resolve();
 	}
 
 	trashWork(workId: string, deletedAt: string): Promise<void> {
 		applyWorkTrash(this.state, workId, deletedAt);
+		this.afterOutlineStructureChanged();
 		return Promise.resolve();
 	}
 
 	restoreWork(workId: string): Promise<void> {
 		applyWorkRestore(this.state, workId);
+		this.afterOutlineStructureChanged();
 		return Promise.resolve();
 	}
 
 	purgeWork(workId: string): Promise<PurgeManifest> {
 		try {
 			const manifest = applyWorkPurge(this.state, workId);
+			this.afterOutlineStructureChanged();
 			return Promise.resolve(structuredClone(manifest));
 		} catch (error) {
 			return Promise.reject(error);

@@ -267,6 +267,11 @@ export class OutlineService {
 	deleteItem(id: string): Promise<void> {
 		return new OccurrenceOperations(this.store).deleteItem(id);
 	}
+	discardEmptyItems(
+		ids: readonly string[],
+	): Promise<{ deletedIds: string[]; handledIds: string[] }> {
+		return new OccurrenceOperations(this.store).discardEmptyItems(ids);
+	}
 	trashWork(id: string): Promise<void> {
 		return new OccurrenceOperations(this.store).trashWork(id);
 	}

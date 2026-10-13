@@ -57,10 +57,11 @@ export function applyMergeWorks(
 	rewireMergedLinks(next.links, input, state.relationTypeDefinitions);
 	rewireSystemRelations(next.systemRelations, input);
 	updateMergedWorks(next.works, input);
-	if (input.alias) {
+	const alias = input.alias;
+	if (alias) {
 		next.aliases = [
-			...next.aliases.filter((alias) => alias.id !== input.alias!.id),
-			structuredClone(input.alias),
+			...next.aliases.filter((existing) => existing.id !== alias.id),
+			structuredClone(alias),
 		];
 	}
 
@@ -164,14 +165,15 @@ export function validateMergeInput(
 	if (!Number.isFinite(parsed) || new Date(parsed).toISOString() !== input.mergedAt) {
 		throw new Error("Duplicate merge requires a valid ISO instant");
 	}
-	if (input.alias) {
-		if (!input.alias.id || !input.alias.canonical.trim() || input.alias.variants.length === 0) {
+	const alias = input.alias;
+	if (alias) {
+		if (!alias.id || !alias.canonical.trim() || alias.variants.length === 0) {
 			throw new Error("Duplicate merge alias requires a non-empty old name");
 		}
-		const collidingAlias = aliases.find((alias) =>
-			alias.id === input.alias!.id && alias.canonical !== input.alias!.canonical
+		const collidingAlias = aliases.find((existingAlias) =>
+			existingAlias.id === alias.id && existingAlias.canonical !== alias.canonical
 		);
-		if (collidingAlias) throw new Error(`Search Alias ID collision: ${input.alias.id}`);
+		if (collidingAlias) throw new Error(`Search Alias ID collision: ${alias.id}`);
 	}
 }
 
@@ -222,6 +224,26 @@ export function retractDuplicateActiveLinks(
 	}
 }
 
+export function projectSingleOutlineItem(
+	occurrence: Occurrence,
+	work: Work,
+	text: string,
+): OutlineItem {
+	return {
+		id: occurrence.id,
+		workId: occurrence.workId,
+		text,
+		parentId: occurrence.parentOccurrenceId,
+		orderKey: occurrence.orderKey,
+		collapsed: occurrence.collapsed,
+		revisionSelector: structuredClone(occurrence.revisionSelector),
+		contextualHeading: occurrence.contextualHeading,
+		createdAt: work.createdAt,
+		...(work.historicalTime ? { historicalTime: structuredClone(work.historicalTime) } : {}),
+		updatedAt: work.updatedAt,
+	};
+}
+
 export function projectOutlineItems(
 	works: readonly Work[],
 	workingCopies: readonly WorkingCopy[],
@@ -240,18 +262,6 @@ export function projectOutlineItems(
 		const text = occurrence.revisionSelector.mode === "branch"
 			? copyByBranchId.get(occurrence.revisionSelector.branchId)?.text ?? ""
 			: revisionById.get(occurrence.revisionSelector.revisionId)?.text ?? "";
-		return [{
-			id: occurrence.id,
-			workId: occurrence.workId,
-			text,
-			parentId: occurrence.parentOccurrenceId,
-			orderKey: occurrence.orderKey,
-			collapsed: occurrence.collapsed,
-			revisionSelector: structuredClone(occurrence.revisionSelector),
-			contextualHeading: occurrence.contextualHeading,
-			createdAt: work.createdAt,
-			...(work.historicalTime ? { historicalTime: structuredClone(work.historicalTime) } : {}),
-			updatedAt: work.updatedAt,
-		}];
+		return [projectSingleOutlineItem(occurrence, work, text)];
 	});
 }

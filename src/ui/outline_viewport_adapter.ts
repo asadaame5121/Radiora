@@ -44,6 +44,15 @@ export class OutlineViewportAdapter {
 		await this.restorePanels(current);
 	}
 
+	isEditing(id: string): boolean {
+		const active = typeof document !== "undefined" ? document.activeElement : null;
+		if (active instanceof HTMLTextAreaElement) {
+			if (active.dataset.itemId === id) return true;
+			if (active.matches(".long-form-textarea") && this.focusedItem === id) return true;
+		}
+		return false;
+	}
+
 	track(itemId: string, hoistId: string | null, textarea: HTMLTextAreaElement): void {
 		this.focusedItem = itemId;
 		this.focusedPosition = captureEditorPosition(itemId, hoistId, textarea);

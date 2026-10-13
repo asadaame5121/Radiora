@@ -145,6 +145,9 @@ export interface RadioraBindings {
 	setWorkHistoricalTime(workId: string, value: HistoricalTime | null): Promise<void>;
 	moveItem(input: MoveItemInput): Promise<void>;
 	deleteItem(id: string): Promise<void>;
+	discardEmptyItems(
+		ids: readonly string[],
+	): Promise<{ deletedIds: string[]; handledIds: string[] }>;
 	trashWork(id: string): Promise<void>;
 	listTrash(): Promise<TrashEntry[]>;
 	restoreWork(workId: string): Promise<void>;

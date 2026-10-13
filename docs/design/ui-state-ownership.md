@@ -86,6 +86,27 @@ state自体を永続化しないという意味で、元データのDB保存と�
 | bookmarks / API read model                                                | 現状Appの`bookmarks`                                                                       | `load`、add/remove後の再読込、WorkControllerのreloadBookmarks port                       | TopBar/Inspector/menu                             | App                                     | bookmark API。配列自身の保存なし                                      | mutation後再読込。現在はreload全体の世代保護なし                         |
 | confirmation・keyboard chord・menu・modal・notice / 操作session           | `ConfirmationController`、`KeyboardController`、Appのcontext menu/licences/notices、各View | request/submit/finish/reset、keyboard cancel、open/close、対応操作                       | dialog、Toast、shell                              | 表示/操作session。Controllerの格納はApp | 保存なし                                                              | close/完了/失敗/対象変更。DOM listenerやtimerは接続ownerが解放           |
 
+## P4: 操作別再読込・失効境界（性能改修）
+
+2026-10-13。性能改修に伴う操作別再読込・失効規則。不要な全画面reloadや無関係なDOM/データ構造の再構築を抑止し、変更の種別に応じて最小限の範囲のみ更新・失効する。
+
+| 変更             | 更新/失効対象                                                                | 原則再利用するもの（API/再計算なし）                                 |
+| ---------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| caret / 選択移動 | resume保存（`saveResumePosition`）                                           | Outline構造、Tree、bookmarks（read増加0、全reload抑止）              |
+| collapsed        | 該当配置と可視行（`prepareCollapsed`）                                       | Knot、親子index、GlobalLineage、bookmarks（read増加0、全reload抑止） |
+| 本文入力         | 同branchの配置、表示名、最近編集（O(k)）、本文参照/補完（in-place text更新） | 親子index、Knot、無関係な行のDOM、bookmarks、Tree                    |
+| 移動/追加/削除   | 親子/兄弟、可視行、Knot、暗黙link、選択補正                                  | 無関係本文parse、bookmarks（参照削除等があれば失効）                 |
+| link/履歴/年代   | 対応注釈、Tree投影、対象履歴等                                               | 影響のないOutline構造                                                |
+
+### 世代保護とdraft保持
+
+- **stale reload耐性**:
+  リロード中（`listOutline`等の保留中）にユーザーが入力・自動保存した場合、`readEdits`および`overlayDrafts`により最新の入力/draftが保護され、古いバックエンドレスポンスで上書きされない。
+- **配置モードの尊重**:
+  本文変更は同一branchの全配置（`branchId`一致）に即時反映される一方、別branchおよびpinned配置（`mode: "pinned"`）は独立して保護され、不用意に書き換えられない。
+- **無関係Viewの更新抑止**:
+  collapseや単一行の本文変更において、無関係な行のDOM（MutationObserver検証）および非同期API（Tree/bookmarks）の再読込は0回に保たれる。
+
 ## 選択writerとcommitの権限
 
 決定: `selectedId`の格納はAppの一箇所に維持する。#298では既存commit境界を
@@ -731,8 +752,8 @@ PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存して
 
 ## 入力時の関係注釈の更新伝播（2026-10-12、ローカル実装）
 
-- `SemanticLinkAnnotationsController`はApp寿命の読み取り専用描画モデルを所有する。
-  Outline snapshotと関係型定義のowner・writerは変更せず、Viewには既存の取得callbackで
+- `SemanticLinkAnnotationsController`はApp寿命の読み取り専用描画モデルを所有する。 Outline
+  snapshotと関係型定義のowner・writerは変更せず、Viewには既存の取得callbackで
   配置IDに対応する注釈を渡す。DBアクセス、保存、副作用の`$effect`は追加しない。
 - Workの表示名と配置・関係構造の派生を分ける。代表配置は既存と同じ作成日・ID順、
   表示名はその配置のcontextual heading優先・本文の最初の非空行とする。
@@ -748,8 +769,7 @@ PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存して
   試験時のHTTP応答に限定し、productionには入れない。値・参照の契約はVitestで確認する。
 - 残る範囲: 実効表示名の確認では代表配置の選択・表示名を再計算する。表示名が変われば
   全注釈を再投影して参照を再利用するため、影響関係だけを計算する完全な増分投影ではない。
-  最近編集ランキング、linkableWorks、同branch配置の探索、仮想化は今回の対象外。
-  main反映は未確認。
+  最近編集ランキング、linkableWorks、同branch配置の探索、仮想化は今回の対象外。 main反映は未確認。
 
 ## 単一配置の折りたたみ局所公開（2026-10-12、ローカル実装）
 
@@ -758,8 +778,8 @@ PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存して
   `.svelte` Viewからsnapshotへ直接書き込まない。
 - 保存成功時にのみ一時展開を解除する。保存失敗時はsnapshotと一時展開を維持し、既存の呼出し元へ
   原因を伝える。同一配置の保存中の連打は重複保存せず、成功・失敗後に再操作できる。
-- live snapshotや無関係なitemの同一性を保ち、Outline・Tree・栞を再取得しない。
-  保存済みstartup cache側にも開閉状態を反映するが、Editor draftは保存済み本文へ混ぜない。
+- live snapshotや無関係なitemの同一性を保ち、Outline・Tree・栞を再取得しない。 保存済みstartup
+  cache側にも開閉状態を反映するが、Editor draftは保存済み本文へ混ぜない。
 - 読込開始後に成功した局所公開は、その読込の古い開閉状態より優先する。
   保存済み配置の補正は選択・focusの公開と異なる内部権限とし、新しい読込やnavigationにも
   保存成功を引き継ぐ。現在の描画cacheと進行中の正式読込へ反映するが、読込世代を変更せず、
@@ -768,9 +788,8 @@ PR base: main `6a9089c`（PR #322反映済み）。 `App.svelte` に残存して
 - 一時展開の解除権限は`OutlineDisplayController.prepareClearExpansion`が捕捉する。
   保存中に新たに設定された展開状態は消さず、同じID列の再調停では権限を失効させない。
 - 回帰証拠: `tests/ui/outline-operations.spec.ts`で開閉後のOutline・Tree・栞の追加読込が0回、
-  無関係なeditor DOMが同じままであることを確認。無関係な行のDOM変更も監視するが、OverTypeが
-  document clickで行うtooltip非表示処理は除く。Controller試験でdraft維持、読込中の開閉、
+  無関係なeditor DOMが同じままであることを確認。無関係な行のDOM変更も監視するが、OverTypeが document
+  clickで行うtooltip非表示処理は除く。Controller試験でdraft維持、読込中の開閉、
   失効、保存失敗、連打と再試行を検証する。
 - 残る範囲: 可視行配列の再構築、startup cache保存、全配置開閉、構造編集時の全reload、
-  入力時の更新伝播、仮想化。全コンポーネントの再描画問題が解消したとは扱わない。
-  main反映は未確認。
+  入力時の更新伝播、仮想化。全コンポーネントの再描画問題が解消したとは扱わない。 main反映は未確認。
