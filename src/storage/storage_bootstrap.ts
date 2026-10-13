@@ -59,26 +59,9 @@ export async function bootstrapStorage(
 			const targetPath = `${tursoDir}\\radiora.db`;
 			const surrealDir = `${dataDir}\\surreal`;
 			const sourcePath = `${surrealDir}\\main.db`;
-			const markerPath = `${targetPath}.migration.json`;
 
 			await Deno.mkdir(tursoDir, { recursive: true });
-
-			if (await storagePathExists(sourcePath)) {
-				const marker = await readMigrationMarker(markerPath);
-				const targetExists = await storagePathExists(targetPath);
-				if (!marker || marker.sourcePath !== sourcePath || !targetExists) {
-					const reason = !targetExists
-						? "migrated SQLite database is missing"
-						: !marker
-						? "migration completion marker is missing"
-						: "migration marker sourcePath does not match the legacy source";
-					throw new Error(
-						`Legacy SurrealDB data detected at ${sourcePath}: ${reason}. ` +
-							`For first-time migration, close older versions of Radiora and run 'deno task storage:migrate:legacy'. ` +
-							`If SQLite already exists, preserve both databases and restore the matching migration marker or SQLite from backup; do not overwrite existing data.`,
-					);
-				}
-			}
+			await requireCompletedLegacyMigration(sourcePath, targetPath);
 
 			nextStore = new SqliteGraphStore(targetPath);
 		} else {
@@ -96,4 +79,25 @@ export async function bootstrapStorage(
 		await stop();
 		throw cause;
 	}
+}
+
+async function requireCompletedLegacyMigration(
+	sourcePath: string,
+	targetPath: string,
+): Promise<void> {
+	if (!(await storagePathExists(sourcePath))) return;
+	const marker = await readMigrationMarker(`${targetPath}.migration.json`);
+	const targetExists = await storagePathExists(targetPath);
+	if (marker && marker.sourcePath === sourcePath && targetExists) return;
+
+	const reason = !targetExists
+		? "migrated SQLite database is missing"
+		: !marker
+		? "migration completion marker is missing"
+		: "migration marker sourcePath does not match the legacy source";
+	throw new Error(
+		`Legacy SurrealDB data detected at ${sourcePath}: ${reason}. ` +
+			`For first-time migration, close older versions of Radiora and run 'deno task storage:migrate:legacy'. ` +
+			`If SQLite already exists, preserve both databases and restore the matching migration marker or SQLite from backup; do not overwrite existing data.`,
+	);
 }
