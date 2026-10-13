@@ -118,6 +118,31 @@ Deno.test("outline view model is read-only and ignores missing projection roots"
 	assertStrictEquals(result[0].item, snapshot.items[0]);
 });
 
+Deno.test("outline view model handles deep trees without call stack overflow", () => {
+	const depth = 10_000;
+	const items: OutlineItem[] = [];
+	for (let i = 0; i < depth; i++) {
+		items.push(item(`node-${i}`, i === 0 ? null : `node-${i - 1}`, i + 1));
+	}
+	const snapshot = outline(items);
+	const res = rows(snapshot);
+	assertEquals(res.length, depth);
+	assertEquals(res[0].item.id, "node-0");
+	assertEquals(res[depth - 1].item.id, `node-${depth - 1}`);
+	assertEquals(res[depth - 1].depth, depth - 1);
+});
+
+Deno.test("outline view model efficiently handles 5,000 root items", () => {
+	const count = 5_000;
+	const items: OutlineItem[] = [];
+	for (let i = 0; i < count; i++) {
+		items.push(item(`root-${i}`, null, i + 1));
+	}
+	const snapshot = outline(items);
+	const res = rows(snapshot);
+	assertEquals(res.length, count);
+});
+
 function rows(
 	snapshot: OutlineSnapshot,
 	options: {

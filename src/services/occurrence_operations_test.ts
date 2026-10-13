@@ -2,6 +2,7 @@ import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { OccurrenceOperations } from "./occurrence_operations.ts";
 import { StubService } from "./stub_service.ts";
+import { createPerformanceFixture } from "../../scripts/performance_fixture.ts";
 
 for (const level of ["root", "child"]) {
 	Deno.test(`occurrence operations inserts between existing ${level} siblings`, async () => {
@@ -331,4 +332,26 @@ Deno.test("occurrence operations maintains trash guards and counts", async () =>
 	);
 	await operations.restoreWork(item.workId);
 	assertEquals(await operations.listTrash(), []);
+});
+
+Deno.test("occurrence operations listOutline efficiently handles deep tree performance fixture", async () => {
+	const store = new MemoryGraphStore();
+	const topicCount = 1_000;
+	const fixtureSeed = 42;
+	const maxElapsedMs = 1_000;
+	const { state } = createPerformanceFixture({
+		profile: "deep-tree",
+		topicCount,
+		seed: fixtureSeed,
+	});
+	await store.restoreGraphState(state);
+	const operations = new OccurrenceOperations(store);
+
+	const startTime = performance.now();
+	const snapshot = await operations.listOutline();
+	const elapsed = performance.now() - startTime;
+
+	assertEquals(snapshot.items.length, topicCount);
+	assertEquals(snapshot.knots.length, 0);
+	assertEquals(elapsed < maxElapsedMs, true);
 });

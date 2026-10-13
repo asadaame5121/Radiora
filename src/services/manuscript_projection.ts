@@ -16,6 +16,44 @@ export interface ManuscriptSection {
 	revisionSelector: RevisionSelector;
 }
 
+function childrenByParent(items: readonly OutlineItem[]): Map<string, OutlineItem[]> {
+	const childrenByParent = new Map<string, OutlineItem[]>();
+	for (const item of items) {
+		if (!item.parentId) continue;
+		const children = childrenByParent.get(item.parentId) ?? [];
+		children.push(item);
+		childrenByParent.set(item.parentId, children);
+	}
+	for (const children of childrenByParent.values()) {
+		children.sort((left, right) =>
+			left.orderKey - right.orderKey || left.id.localeCompare(right.id)
+		);
+	}
+	return childrenByParent;
+}
+
+function collectSections(
+	root: OutlineItem,
+	childrenByParent: ReadonlyMap<string, OutlineItem[]>,
+): ManuscriptSection[] {
+	const sections: ManuscriptSection[] = [];
+	const visited = new Set<string>();
+	const stack: Array<{ item: OutlineItem; depth: number }> = [{ item: root, depth: 0 }];
+	while (stack.length > 0) {
+		const entry = stack.pop();
+		if (!entry || visited.has(entry.item.id)) continue;
+		const { item, depth } = entry;
+		visited.add(item.id);
+		sections.push(manuscriptSectionFromItem(item, depth));
+		if (item.referenceStub) continue;
+		const children = childrenByParent.get(item.id) ?? [];
+		for (let i = children.length - 1; i >= 0; i--) {
+			if (!visited.has(children[i].id)) stack.push({ item: children[i], depth: depth + 1 });
+		}
+	}
+	return sections;
+}
+
 /**
  * Projects one Occurrence subtree into ordered manuscript sections.
  * Text is deliberately taken from listItems(), whose store implementation has
@@ -28,30 +66,7 @@ export class ManuscriptProjectionService {
 		const items = await this.source.listItems();
 		const root = items.find((item) => item.id === rootOccurrenceId);
 		if (!root) throw new Error(`Manuscript root Occurrence not found: ${rootOccurrenceId}`);
-		const childrenByParent = new Map<string, OutlineItem[]>();
-		for (const item of items) {
-			if (!item.parentId) continue;
-			const children = childrenByParent.get(item.parentId) ?? [];
-			children.push(item);
-			childrenByParent.set(item.parentId, children);
-		}
-		for (const children of childrenByParent.values()) {
-			children.sort((left, right) =>
-				left.orderKey - right.orderKey || left.id.localeCompare(right.id)
-			);
-		}
-
-		const sections: ManuscriptSection[] = [];
-		const visited = new Set<string>();
-		const visit = (item: OutlineItem, depth: number): void => {
-			if (visited.has(item.id)) return;
-			visited.add(item.id);
-			sections.push(manuscriptSectionFromItem(item, depth));
-			if (item.referenceStub) return;
-			for (const child of childrenByParent.get(item.id) ?? []) visit(child, depth + 1);
-		};
-		visit(root, 0);
-		return sections;
+		return collectSections(root, childrenByParent(items));
 	}
 }
 
