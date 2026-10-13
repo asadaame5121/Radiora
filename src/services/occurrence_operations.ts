@@ -203,6 +203,30 @@ export class OccurrenceOperations {
 		await this.reconcileKnots();
 	}
 
+	async setCollapsedBatch(ids: readonly string[], collapsed: boolean): Promise<void> {
+		if (ids.length === 0) return;
+		const idSet = new Set(ids);
+		const items = (await this.store.listItems()).filter((item) => idSet.has(item.id));
+		const run = async () => {
+			for (const item of items) {
+				await this.store.updateOccurrence({
+					id: item.id,
+					workId: item.workId,
+					parentOccurrenceId: item.parentId,
+					orderKey: item.orderKey,
+					collapsed,
+					revisionSelector: item.revisionSelector,
+					contextualHeading: item.contextualHeading,
+				});
+			}
+		};
+		if (this.store.batch) {
+			await this.store.batch(run);
+		} else {
+			await run();
+		}
+	}
+
 	async deleteItem(id: string): Promise<void> {
 		const items = await this.store.listItems();
 		const item = items.find((candidate) => candidate.id === id);
@@ -213,13 +237,35 @@ export class OccurrenceOperations {
 			items.filter((candidate) => candidate.parentId === item.parentId && candidate.id !== id)
 				.sort((a, b) => a.orderKey - b.orderKey)
 				.filter((candidate) => candidate.orderKey < item.orderKey).at(-1)?.id ?? null;
-		for (const child of children) {
-			await this.moveItem({ id: child.id, parentId: item.parentId, afterId });
-			afterId = child.id;
+
+		const run = async () => {
+			const workingSiblings = items.filter(
+				(candidate) => candidate.parentId === item.parentId && candidate.id !== id,
+			);
+			for (const child of children) {
+				const orderKey = this.orderAfter(workingSiblings, item.parentId, afterId);
+				await this.store.updateOccurrence({
+					id: child.id,
+					workId: child.workId,
+					parentOccurrenceId: item.parentId,
+					orderKey,
+					collapsed: child.collapsed,
+					revisionSelector: child.revisionSelector,
+					contextualHeading: child.contextualHeading,
+				});
+				workingSiblings.push({ ...child, parentId: item.parentId, orderKey });
+				afterId = child.id;
+			}
+			await this.store.deleteOccurrence(id);
+			await this.reconcileKnots();
+			await this.trashBlankUnplacedWork(item.workId);
+		};
+
+		if (this.store.batch) {
+			await this.store.batch(run);
+		} else {
+			await run();
 		}
-		await this.store.deleteOccurrence(id);
-		await this.reconcileKnots();
-		await this.trashBlankUnplacedWork(item.workId);
 	}
 
 	async trashWork(id: string): Promise<void> {

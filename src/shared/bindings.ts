@@ -150,6 +150,7 @@ export interface RadioraBindings {
 	restoreWork(workId: string): Promise<void>;
 	purgeWork(workId: string): Promise<PurgeManifest>;
 	setCollapsed(id: string, collapsed: boolean): Promise<void>;
+	setCollapsedBatch(ids: readonly string[], collapsed: boolean): Promise<void>;
 	createLink(input: CreateLinkInput): Promise<void>;
 	resolveAdvancedLink(
 		input: string,

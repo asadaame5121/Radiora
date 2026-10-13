@@ -42,6 +42,7 @@ export class StubService {
 			this.store.listWorkingCopies(),
 		]);
 		const references = new InternalReferenceService(this.store);
+		const backlinksByTarget = await references.listAllBacklinks("work");
 		const entries: StubListEntry[] = [];
 		for (const work of works) {
 			if (!work.stub) continue;
@@ -59,9 +60,10 @@ export class StubService {
 				createdAt: work.stub.createdAt,
 				createdVia: work.stub.createdVia,
 				...(work.stub.context ? { context: work.stub.context } : {}),
-				backlinks: await references.listBacklinks("work", work.id),
+				backlinks: backlinksByTarget.get(work.id) ?? [],
 			});
 		}
+
 		return entries.sort((left, right) =>
 			right.createdAt.localeCompare(left.createdAt) || left.workId.localeCompare(right.workId)
 		);

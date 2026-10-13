@@ -137,6 +137,7 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		restoreWork: (workId) => service().restoreWork(workId),
 		purgeWork: (workId) => service().purgeWork(workId),
 		setCollapsed: (id, collapsed) => service().setCollapsed(id, collapsed),
+		setCollapsedBatch: (ids, collapsed) => service().setCollapsedBatch(ids, collapsed),
 		createLink: async (input) => service().createLink(v.parse(CreateLinkInputSchema, input)),
 		resolveAdvancedLink: (input, selections) => service().resolveAdvancedLink(input, selections),
 		listInternalReferenceCompletions: (query, limit) =>

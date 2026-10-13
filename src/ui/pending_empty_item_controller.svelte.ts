@@ -72,8 +72,40 @@ export function createPendingEmptyItemController(ports: {
 	}
 
 	async function discardRestored(current = () => true): Promise<boolean> {
+		if (pendingIds.size === 0) return current();
+		let deletedAny = false;
 		for (const id of [...pendingIds]) {
-			if (!await discard(id, current)) return false;
+			if (!current()) return false;
+			if (!pendingIds.has(id)) continue;
+			const item = ports.getSnapshot().items.find((candidate) => candidate.id === id);
+			if (!item || item.text.trim()) {
+				forget(id);
+				continue;
+			}
+			try {
+				await ports.flushAutosave(item.workId);
+			} catch (cause) {
+				if (current()) ports.reportError(cause);
+				return false;
+			}
+			if (!current()) return false;
+			if (!pendingIds.has(id)) continue;
+			if (!isEmptyLeaf(id)) {
+				forget(id);
+				continue;
+			}
+			try {
+				await ports.deleteItem(id);
+			} catch (cause) {
+				if (current()) ports.reportError(cause);
+				return false;
+			}
+			forget(id);
+			deletedAny = true;
+		}
+		if (deletedAny) {
+			if (!current()) return false;
+			return await ports.reload(current) !== false;
 		}
 		return current();
 	}

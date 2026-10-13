@@ -67,8 +67,18 @@ export class QuickCaptureService {
 		}
 		if (staleBlankWorkIds.length) {
 			const trashedAt = this.now();
-			await Promise.all(staleBlankWorkIds.map((workId) => this.store.trashWork(workId, trashedAt)));
+			const run = async () => {
+				for (const workId of staleBlankWorkIds) {
+					await this.store.trashWork(workId, trashedAt);
+				}
+			};
+			if (this.store.batch) {
+				await this.store.batch(run);
+			} else {
+				await run();
+			}
 		}
+
 		return entries
 			.sort((left, right) =>
 				right.createdAt.localeCompare(left.createdAt) || left.workId.localeCompare(right.workId)

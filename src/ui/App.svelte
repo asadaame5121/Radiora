@@ -438,6 +438,7 @@
 		items: () => snapshot.items,
 		clearTemporaryExpansion: () => outlineDisplay.setExpanded([]),
 		setCollapsed: (id, collapsed) => api.setCollapsed(id, collapsed),
+		setCollapsedBatch: (ids, collapsed) => api.setCollapsedBatch(ids, collapsed),
 		reload: () => load(),
 	});
 	const screenPresenter = new ScreenDestinationPresenter({ comparison, dates: dateProjectionController, work: workController, tags: tagController });

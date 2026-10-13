@@ -138,3 +138,36 @@ test("failed startup cleanup remains retryable with its pending ID retained", as
 	expect(await controller.discardRestored()).toBe(true);
 	expect(saved.get("radiora.pendingEmptyItemIds")).toBe("[]");
 });
+
+test("multiple restored empty items are all deleted before a single reload", async () => {
+	const saved = new Map<string, string>();
+	vi.stubGlobal("localStorage", {
+		getItem: (key: string) => saved.get(key) ?? null,
+		setItem: (key: string, value: string) => saved.set(key, value),
+	});
+	const snapshot = {
+		items: [
+			{ id: "empty-1", text: "", workId: "work-1", parentId: null },
+			{ id: "empty-2", text: "", workId: "work-2", parentId: null },
+		],
+		links: [],
+		knots: [],
+		stashItemIds: [],
+	} as OutlineSnapshot;
+	const ports = {
+		getSnapshot: () => snapshot,
+		flushAutosave: vi.fn().mockResolvedValue(undefined),
+		deleteItem: vi.fn().mockResolvedValue(undefined),
+		reload: vi.fn().mockResolvedValue(true),
+		reportError: vi.fn(),
+	};
+
+	const controller = createPendingEmptyItemController(ports);
+	controller.track("empty-1");
+	controller.track("empty-2");
+	await createPendingEmptyItemController(ports).discardRestored();
+
+	expect(ports.deleteItem).toHaveBeenCalledTimes(2);
+	expect(ports.reload).toHaveBeenCalledOnce();
+	expect(saved.get("radiora.pendingEmptyItemIds")).toBe("[]");
+});

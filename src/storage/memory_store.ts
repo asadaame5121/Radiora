@@ -82,6 +82,24 @@ export class MemoryGraphStore implements GraphStore {
 		}
 	}
 
+	protected isBatching = false;
+
+	batch<T>(operation: () => Promise<T>): Promise<T> {
+		if (this.isBatching) {
+			return operation();
+		}
+		this.isBatching = true;
+		const before = this.state.exportGraphState();
+		return operation()
+			.catch((error) => {
+				this.state.restoreGraphState(before);
+				throw error;
+			})
+			.finally(() => {
+				this.isBatching = false;
+			});
+	}
+
 	listRelationTypeDefinitions(): Promise<RelationTypeDefinition[]> {
 		return Promise.resolve(structuredClone(this.state.relationTypeDefinitions));
 	}
