@@ -11,18 +11,35 @@ export function buildLaneOrder(snapshot: OutlineSnapshot): Map<string, number> {
 	const itemById = new Map(snapshot.items.map((item) => [item.id, item]));
 	const adjacency = buildAdjacency(snapshot);
 	const compare = compareByOrderKeyThenId(itemById);
-	const components = connectedComponents([...itemById.keys()], adjacency);
-	const first = (members: string[]) => [...members].sort(compare)[0];
-	components.sort((a, b) => compare(first(a), first(b)));
+	const components = connectedComponents([...itemById.keys()], adjacency).map((members) => {
+		let firstId = members[0];
+		for (let i = 1; i < members.length; i++) {
+			if (compare(members[i], firstId) < 0) {
+				firstId = members[i];
+			}
+		}
+		return { members, firstId };
+	});
+	components.sort((a, b) => compare(a.firstId, b.firstId));
 	const order = new Map<string, number>();
-	for (const members of components) {
-		const visit = (id: string): void => {
-			if (order.has(id)) return;
-			order.set(id, order.size);
-			for (const neighbor of orderedNeighbors(id, adjacency, itemById, compare)) visit(neighbor);
+	for (const { members, firstId } of components) {
+		const visitFrom = (startId: string): void => {
+			if (order.has(startId)) return;
+			const stack = [startId];
+			while (stack.length > 0) {
+				const id = stack.pop()!;
+				if (order.has(id)) continue;
+				order.set(id, order.size);
+				const neighbors = orderedNeighbors(id, adjacency, itemById, compare);
+				for (let i = neighbors.length - 1; i >= 0; i--) {
+					if (!order.has(neighbors[i])) {
+						stack.push(neighbors[i]);
+					}
+				}
+			}
 		};
-		visit(first(members));
-		for (const id of members) visit(id);
+		visitFrom(firstId);
+		for (const id of members) visitFrom(id);
 	}
 	return order;
 }
@@ -66,11 +83,17 @@ function orderedNeighbors(
 	compare: Compare,
 ): string[] {
 	const current = requireItem(itemById, id);
-	const neighbors = [...(adjacency.get(id) ?? [])];
-	const outline = neighbors.filter((neighbor) =>
-		itemById.get(neighbor)?.parentId === id || current.parentId === neighbor
-	).sort(compare);
-	const linked = neighbors.filter((neighbor) => !outline.includes(neighbor)).sort(compare);
+	const outline: string[] = [];
+	const linked: string[] = [];
+	for (const neighbor of adjacency.get(id) ?? []) {
+		if (itemById.get(neighbor)?.parentId === id || current.parentId === neighbor) {
+			outline.push(neighbor);
+		} else {
+			linked.push(neighbor);
+		}
+	}
+	outline.sort(compare);
+	linked.sort(compare);
 	return [...outline, ...linked];
 }
 

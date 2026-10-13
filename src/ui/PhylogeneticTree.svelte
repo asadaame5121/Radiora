@@ -8,7 +8,8 @@
 	import { buildTreeHighlightSet, resolveTreeSelectionId } from "./tree_highlight";
 	import {
 		calculateLineageProjection,
-		calculateTreeLayout,
+		calculateTreeWorldLayout,
+		applyTreeCamera,
 		type TreeLayoutEdge,
 		type TreeLayoutNode,
 		type TreeProjection,
@@ -79,15 +80,12 @@
 			.domain(lineageDomainMax === 0 ? [-.5, .5] : [-.15, lineageDomainMax + .15])
 			.range([70, Math.max(71, width - 70)]),
 	);
-	const layout = $derived.by(() => calculateTreeLayout(snapshot, {
-		width,
-		height,
-		projection,
+	const worldLayout = $derived.by(() => calculateTreeWorldLayout(snapshot, {
+		height, projection, zoom: transform.k, relationTypeDefinitions,
 		projectX: (timestamp) => chronologyBaseScale(new Date(timestamp)),
 		projectGeneration: (generation) => lineageBaseScale(generation),
-		camera: { k: transform.k, x: transform.x, y: transform.y },
-		relationTypeDefinitions,
 	}));
+	const layout = $derived.by(() => applyTreeCamera(worldLayout, transform));
 	const axisMarks = $derived.by(() => {
 		if (projection === "chronology") {
 			return chronologyScreenScale

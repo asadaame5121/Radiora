@@ -4,10 +4,16 @@ import type {
 	OutlineSnapshot,
 	RelationTypeDefinition,
 } from "../domain/models.ts";
-import { calculateLineageProjection } from "./tree_lineage_projection.ts";
+import { calculateLineageProjection, type LineageProjection } from "./tree_lineage_projection.ts";
 import { buildLaneOrder } from "./tree_lane_order.ts";
+import {
+	aggregateScreenCells,
+	lodForScreenCollisions,
+	materializeEdges,
+} from "./tree_spatial_aggregation.ts";
 export { calculateLineageProjection, type LineageProjection } from "./tree_lineage_projection.ts";
 export { buildLaneOrder } from "./tree_lane_order.ts";
+export { lodForScreenCollisions } from "./tree_spatial_aggregation.ts";
 
 export type TreeLod = "detail" | "context" | "overview";
 export type TreeLinkType = LinkType;
@@ -65,6 +71,27 @@ export interface TreeLayout {
 	contentHeight: number;
 }
 
+export interface TreeWorldLayoutNode extends Omit<TreeLayoutNode, "x" | "y"> {}
+
+export interface TreeWorldLayout {
+	nodes: TreeWorldLayoutNode[];
+	rawEdges: RawEdge[];
+	contentHeight: number;
+	zoom: number;
+	lineage?: LineageProjection | null;
+}
+
+export interface TreeWorldLayoutOptions {
+	height: number;
+	/** World-space X for a Chronology timestamp. */
+	projectX: (timestamp: number) => number;
+	projection?: TreeProjection;
+	/** World-space X for a Lineage generation. */
+	projectGeneration?: (generation: number) => number;
+	zoom?: number;
+	relationTypeDefinitions?: readonly RelationTypeDefinition[];
+}
+
 export interface TreeLayoutOptions {
 	width: number;
 	height: number;
@@ -78,7 +105,7 @@ export interface TreeLayoutOptions {
 	relationTypeDefinitions?: readonly RelationTypeDefinition[];
 }
 
-interface RawEdge {
+export interface RawEdge {
 	sourceId: string;
 	targetId: string;
 	type: TreeLinkType;
@@ -89,20 +116,22 @@ const OVERVIEW_CELL_HEIGHT = 36;
 const NODE_GAP = 12;
 const LANE_SPACING = 44;
 
-export function calculateTreeLayout(
+export function calculateTreeWorldLayout(
 	snapshot: OutlineSnapshot,
-	options: TreeLayoutOptions,
-): TreeLayout {
+	options: TreeWorldLayoutOptions,
+): TreeWorldLayout {
 	if (snapshot.items.length === 0) {
 		return {
-			lod: "detail",
 			nodes: [],
-			edges: [],
+			rawEdges: [],
 			contentHeight: options.height,
+			zoom: options.zoom ?? 1,
+			lineage: null,
 		};
 	}
 
-	const camera = options.camera ?? IDENTITY_CAMERA;
+	const zoom = options.zoom ?? 1;
+	const dummyCamera = { k: zoom, x: 0, y: 0 };
 	const lineage = options.projection === "lineage"
 		? calculateLineageProjection(snapshot, options.relationTypeDefinitions)
 		: null;
@@ -120,10 +149,33 @@ export function calculateTreeLayout(
 		projected,
 		snapshot,
 		options.height,
-		camera,
+		dummyCamera,
 		lineage?.knotWorkIds,
 	);
-	const screenNodes = laidOut.nodes.map((node) => ({
+
+	return {
+		nodes: laidOut.nodes,
+		rawEdges: rawEdges(snapshot),
+		contentHeight: laidOut.contentHeight,
+		zoom,
+		lineage,
+	};
+}
+
+export function applyTreeCamera(
+	worldLayout: TreeWorldLayout,
+	camera: TreeCamera,
+): TreeLayout {
+	if (worldLayout.nodes.length === 0) {
+		return {
+			lod: "detail",
+			nodes: [],
+			edges: [],
+			contentHeight: worldLayout.contentHeight,
+		};
+	}
+
+	const screenNodes = worldLayout.nodes.map((node) => ({
 		...node,
 		x: node.worldX * camera.k + camera.x,
 		y: node.worldY * camera.k + camera.y,
@@ -135,54 +187,30 @@ export function calculateTreeLayout(
 			lod,
 			nodes: screenNodes,
 			edges: materializeEdges(
-				rawEdges(snapshot),
+				worldLayout.rawEdges,
 				new Map(screenNodes.map((node) => [node.id, node])),
 			),
-			contentHeight: laidOut.contentHeight,
+			contentHeight: worldLayout.contentHeight,
 		};
 	}
 
-	return aggregateScreenCells(screenNodes, rawEdges(snapshot), lod, laidOut.contentHeight);
+	return aggregateScreenCells(screenNodes, worldLayout.rawEdges, lod, worldLayout.contentHeight);
 }
 
-/**
- * Decides the LOD from screen-space collisions instead of a density proxy.
- * A 48x36px spatial hash finds nodes that can collide; their actual screen
- * distance determines the collision fraction used by the shared
- * Chronology/Lineage LOD scale.
- *
- * Cells are indexed relative to the bounding-box origin so a pure pan never
- * changes collision groups (only zoom does).
- */
-export function lodForScreenCollisions(
-	screenPositions: ReadonlyArray<{ x: number; y: number }>,
-): TreeLod {
-	if (screenPositions.length === 0) return "detail";
-	const minX = Math.min(...screenPositions.map((position) => position.x));
-	const minY = Math.min(...screenPositions.map((position) => position.y));
-	const cells = new Map<string, Array<{ x: number; y: number }>>();
-	for (const position of screenPositions) {
-		const key = cellKey(position.x - minX, position.y - minY);
-		const bucket = cells.get(key) ?? [];
-		bucket.push(position);
-		cells.set(key, bucket);
-	}
-	const colliding = new Set<{ x: number; y: number }>();
-	for (const [key, bucket] of cells) {
-		forEachNeighboringBucket(cells, key, (neighbor) => {
-			for (const position of bucket) {
-				for (const candidate of neighbor) {
-					if (position === candidate || !positionsCollide(position, candidate)) continue;
-					colliding.add(position);
-					colliding.add(candidate);
-				}
-			}
-		});
-	}
-	const fraction = colliding.size / screenPositions.length;
-	if (fraction >= .5) return "overview";
-	if (fraction > 0) return "context";
-	return "detail";
+export function calculateTreeLayout(
+	snapshot: OutlineSnapshot,
+	options: TreeLayoutOptions,
+): TreeLayout {
+	const camera = options.camera ?? IDENTITY_CAMERA;
+	const worldLayout = calculateTreeWorldLayout(snapshot, {
+		height: options.height,
+		projectX: options.projectX,
+		projection: options.projection,
+		projectGeneration: options.projectGeneration,
+		zoom: camera.k,
+		relationTypeDefinitions: options.relationTypeDefinitions,
+	});
+	return applyTreeCamera(worldLayout, camera);
 }
 
 export function labelForItem(text: string): { label: string; lines: string[] } {
@@ -231,10 +259,15 @@ function assignLanes(
 		a.item.id.localeCompare(b.item.id)
 	);
 	const baseLaneCount = Math.min(10, Math.max(1, Math.ceil(Math.sqrt(sorted.length))));
-	const laneEnds: number[] = Array.from(
-		{ length: baseLaneCount },
-		() => Number.NEGATIVE_INFINITY,
-	);
+	const binaryTreeFactor = 2;
+	let usedLaneCount = baseLaneCount;
+	let treeCap = 1;
+	const maxPossibleLanes = Math.max(baseLaneCount, sorted.length, binaryTreeFactor);
+	while (treeCap < maxPossibleLanes) {
+		treeCap <<= 1;
+	}
+	const minTree = new Float64Array(treeCap * binaryTreeFactor).fill(Number.NEGATIVE_INFINITY);
+
 	const pending: Array<Omit<TreeLayoutNode, "x" | "y" | "worldY">> = [];
 	// Nodes and labels retain their screen-pixel dimensions as the camera zooms,
 	// so reserve their horizontal footprint in layout (world) coordinates.
@@ -252,18 +285,26 @@ function assignLanes(
 		// horizontal extent here, otherwise nearby Chronology nodes can share a
 		// lane even though their text overlaps.
 		const intervalEnd = worldX + (radius + 12 + labelWidth) * screenToWorld;
-		let lane = -1;
-		for (let candidate = 0; candidate < laneEnds.length; candidate++) {
-			if (laneEnds[candidate] + NODE_GAP * screenToWorld <= intervalStart) {
-				lane = candidate;
-				break;
-			}
+		const threshold = intervalStart - NODE_GAP * screenToWorld;
+
+		let treeNode = 1;
+		while (treeNode < treeCap) {
+			const leftChild = treeNode * binaryTreeFactor;
+			treeNode = minTree[leftChild] <= threshold ? leftChild : leftChild + 1;
 		}
-		if (lane === -1) {
-			lane = laneEnds.length;
-			laneEnds.push(Number.NEGATIVE_INFINITY);
+		const lane = treeNode - treeCap;
+		if (lane >= usedLaneCount) {
+			usedLaneCount = lane + 1;
 		}
-		laneEnds[lane] = intervalEnd;
+		let idx = treeCap + lane;
+		minTree[idx] = intervalEnd;
+		for (idx >>= 1; idx >= 1; idx >>= 1) {
+			const leftChild = idx * binaryTreeFactor;
+			const left = minTree[leftChild];
+			const right = minTree[leftChild + 1];
+			minTree[idx] = left < right ? left : right;
+		}
+
 		pending.push({
 			id: item.id,
 			item,
@@ -281,147 +322,13 @@ function assignLanes(
 		});
 	}
 
-	const occupiedHeight = Math.max(0, laneEnds.length - 1) * LANE_SPACING;
+	const occupiedHeight = Math.max(0, usedLaneCount - 1) * LANE_SPACING;
 	const top = Math.max(60, (height - occupiedHeight) / 2);
 	const contentHeight = Math.max(height, top + occupiedHeight + 60);
 	return {
 		nodes: pending.map((node) => ({ ...node, worldY: top + node.lane * LANE_SPACING })),
 		contentHeight,
 	};
-}
-
-function aggregateScreenCells(
-	nodes: TreeLayoutNode[],
-	edges: RawEdge[],
-	lod: TreeLod,
-	contentHeight: number,
-): TreeLayout {
-	const minX = Math.min(...nodes.map((node) => node.x));
-	const minY = Math.min(...nodes.map((node) => node.y));
-	const buckets = new Map<string, TreeLayoutNode[]>();
-	for (const node of nodes) {
-		const key = cellKey(node.x - minX, node.y - minY);
-		const bucket = buckets.get(key) ?? [];
-		bucket.push(node);
-		buckets.set(key, bucket);
-	}
-
-	const collidingNodeIds = new Set<string>();
-	const adjacentNodeIds = new Map<string, Set<string>>();
-	for (const [key, bucket] of buckets) {
-		forEachNeighboringBucket(buckets, key, (neighbor) => {
-			for (const node of bucket) {
-				for (const candidate of neighbor) {
-					if (node === candidate || !positionsCollide(node, candidate)) continue;
-					collidingNodeIds.add(node.id);
-					collidingNodeIds.add(candidate.id);
-					(adjacentNodeIds.get(node.id) ?? adjacentNodeIds.set(node.id, new Set()).get(node.id)!)
-						.add(candidate.id);
-					(adjacentNodeIds.get(candidate.id) ??
-						adjacentNodeIds.set(candidate.id, new Set()).get(candidate.id)!).add(node.id);
-				}
-			}
-		});
-	}
-
-	const components: TreeLayoutNode[][] = [];
-	const visited = new Set<string>();
-	const nodeById = new Map(nodes.map((node) => [node.id, node]));
-	for (const id of [...collidingNodeIds].sort()) {
-		if (visited.has(id)) continue;
-		const component: TreeLayoutNode[] = [];
-		const pending = [id];
-		while (pending.length > 0) {
-			const current = pending.pop()!;
-			if (visited.has(current)) continue;
-			visited.add(current);
-			component.push(nodeById.get(current)!);
-			for (const neighbor of adjacentNodeIds.get(current) ?? []) {
-				if (!visited.has(neighbor)) pending.push(neighbor);
-			}
-		}
-		components.push(component);
-	}
-	components.push(...nodes.filter((node) => !collidingNodeIds.has(node.id)).map((node) => [node]));
-
-	const aggregatedNodes: TreeLayoutNode[] = [];
-	const nodeByItemId = new Map<string, TreeLayoutNode>();
-	for (const bucket of components) {
-		if (bucket.length === 1) {
-			const single = bucket[0];
-			aggregatedNodes.push(single);
-			nodeByItemId.set(single.id, single);
-			continue;
-		}
-		const members = [...bucket].sort((a, b) =>
-			a.item.updatedAt.localeCompare(b.item.updatedAt) || a.id.localeCompare(b.id)
-		);
-		const itemIds = members.map((node) => node.id).sort();
-		// The cluster id derives from sorted constituent item ids so panning or
-		// input reordering can never change it.
-		const cluster: TreeLayoutNode = {
-			id: `cluster:${itemIds.join(":")}`,
-			item: members[members.length - 1].item,
-			itemIds,
-			x: members.reduce((total, node) => total + node.x, 0) / members.length,
-			y: members.reduce((total, node) => total + node.y, 0) / members.length,
-			worldX: members.reduce((total, node) => total + node.worldX, 0) / members.length,
-			worldY: members.reduce((total, node) => total + node.worldY, 0) / members.length,
-			lane: Math.min(...members.map((node) => node.lane)),
-			label: String(members.length),
-			labelLines: [String(members.length)],
-			labelWidth: 0,
-			radius: Math.min(16, 8 + Math.log2(members.length) * 2),
-			count: members.length,
-			aggregate: true,
-			isKnot: members.some((node) => node.isKnot),
-			isLineageKnot: members.some((node) => node.isLineageKnot),
-			bounds: {
-				minX: Math.min(...members.map((node) => node.worldX)),
-				minY: Math.min(...members.map((node) => node.worldY)),
-				maxX: Math.max(...members.map((node) => node.worldX)),
-				maxY: Math.max(...members.map((node) => node.worldY)),
-			},
-		};
-		aggregatedNodes.push(cluster);
-		for (const node of members) nodeByItemId.set(node.id, cluster);
-	}
-
-	aggregatedNodes.sort((a, b) => a.x - b.x || a.y - b.y || a.id.localeCompare(b.id));
-	return {
-		lod,
-		nodes: aggregatedNodes,
-		edges: materializeEdges(edges, nodeByItemId),
-		contentHeight,
-	};
-}
-
-function cellKey(relativeX: number, relativeY: number): string {
-	return `${Math.floor(relativeX / OVERVIEW_CELL_WIDTH)}:${
-		Math.floor(relativeY / OVERVIEW_CELL_HEIGHT)
-	}`;
-}
-
-function forEachNeighboringBucket<T>(
-	buckets: ReadonlyMap<string, T[]>,
-	key: string,
-	callback: (bucket: T[]) => void,
-): void {
-	const [x, y] = key.split(":").map(Number);
-	for (let offsetX = -1; offsetX <= 1; offsetX++) {
-		for (let offsetY = -1; offsetY <= 1; offsetY++) {
-			const bucket = buckets.get(`${x + offsetX}:${y + offsetY}`);
-			if (bucket) callback(bucket);
-		}
-	}
-}
-
-function positionsCollide(
-	left: { x: number; y: number },
-	right: { x: number; y: number },
-): boolean {
-	return Math.abs(left.x - right.x) < OVERVIEW_CELL_WIDTH &&
-		Math.abs(left.y - right.y) < OVERVIEW_CELL_HEIGHT;
 }
 
 function rawEdges(snapshot: OutlineSnapshot): RawEdge[] {
@@ -448,32 +355,6 @@ function rawEdges(snapshot: OutlineSnapshot): RawEdge[] {
 
 function compareProjectionOccurrence(a: OutlineItem, b: OutlineItem): number {
 	return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
-}
-
-function materializeEdges(
-	edges: RawEdge[],
-	nodeByItemId: Map<string, TreeLayoutNode>,
-): TreeLayoutEdge[] {
-	const grouped = new Map<string, TreeLayoutEdge>();
-	for (const edge of edges) {
-		const source = nodeByItemId.get(edge.sourceId);
-		const target = nodeByItemId.get(edge.targetId);
-		if (!source || !target || source.id === target.id) continue;
-		const key = `${source.id}:${target.id}:${edge.type}`;
-		const existing = grouped.get(key);
-		if (existing) {
-			existing.count++;
-		} else {
-			grouped.set(key, {
-				id: key,
-				source,
-				target,
-				type: edge.type,
-				count: 1,
-			});
-		}
-	}
-	return [...grouped.values()];
 }
 
 function parseTimestamp(value: string): number {

@@ -3,8 +3,10 @@ import { calculateLineageProjection } from "../src/ui/tree_lineage_projection.ts
 import { assert, assertEquals, assertGreater } from "jsr:@std/assert@1";
 import type { OutlineItem, OutlineSnapshot } from "../src/domain/models.ts";
 import {
+	applyTreeCamera,
 	buildDirectNeighborSet,
 	calculateTreeLayout,
+	calculateTreeWorldLayout,
 	labelForItem,
 	lodForScreenCollisions,
 } from "../src/ui/tree_layout.ts";
@@ -554,4 +556,99 @@ Deno.test("buildLaneOrder keeps unlinked items in stable orderKey sequence", () 
 	const order = buildLaneOrder(data);
 	assertEquals(order.get("a"), 0);
 	assertEquals(order.get("z"), 1);
+});
+
+Deno.test("calculateTreeWorldLayout separates world layout from camera pan", () => {
+	const data = snapshot([
+		item("n1", "2026-01-01T00:00:00.000Z"),
+		item("n2", "2026-01-02T00:00:00.000Z", "n1"),
+		item("n3", "2026-01-03T00:00:00.000Z", "n1"),
+	]);
+	data.links.push(link("n1", "n2", "FROM"));
+
+	const worldLayout = calculateTreeWorldLayout(data, {
+		height: 400,
+		projection: "lineage",
+		projectX: (t: number) => t / 1000,
+		projectGeneration: (g: number) => g * 100 + 50,
+		zoom: 1,
+	});
+
+	assertEquals(worldLayout.nodes.length, 3);
+
+	// Pan 1
+	const screen1 = applyTreeCamera(worldLayout, { k: 1, x: 100, y: 50 });
+	assertEquals(screen1.nodes.map((n) => n.x), worldLayout.nodes.map((n) => n.worldX + 100));
+	assertEquals(screen1.nodes.map((n) => n.y), worldLayout.nodes.map((n) => n.worldY + 50));
+
+	// Pan 2 (pure pan does not recompute lanes or generations)
+	const screen2 = applyTreeCamera(worldLayout, { k: 1, x: -200, y: 300 });
+	assertEquals(screen2.nodes.map((n) => n.x), worldLayout.nodes.map((n) => n.worldX - 200));
+	assertEquals(screen2.nodes.map((n) => n.y), worldLayout.nodes.map((n) => n.worldY + 300));
+
+	// All world positions match exactly
+	assertEquals(screen1.nodes.map((n) => n.worldX), screen2.nodes.map((n) => n.worldX));
+	assertEquals(screen1.nodes.map((n) => n.worldY), screen2.nodes.map((n) => n.worldY));
+	assertEquals(screen1.nodes.map((n) => n.lane), screen2.nodes.map((n) => n.lane));
+
+	// Backward-compatible calculateTreeLayout produces matching screen coordinates
+	const fullLayout = calculateTreeLayout(data, {
+		width: 600,
+		height: 400,
+		projection: "lineage",
+		projectX: (t: number) => t / 1000,
+		projectGeneration: (g: number) => g * 100 + 50,
+		camera: { k: 1, x: 100, y: 50 },
+	});
+	assertEquals(fullLayout.nodes.map((n) => n.x), screen1.nodes.map((n) => n.x));
+	assertEquals(fullLayout.nodes.map((n) => n.y), screen1.nodes.map((n) => n.y));
+});
+
+Deno.test("P6b: calculateTreeWorldLayout handles deep 6,000-node FROM chain without stack overflow", () => {
+	const count = 6000;
+	const items = Array.from(
+		{ length: count },
+		(_, i) => item(`w-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? `w-${i - 1}` : null),
+	);
+	const data = snapshot(items);
+	for (let i = 0; i < count - 1; i++) {
+		data.links.push(link(`w-${i}`, `w-${i + 1}`, "FROM"));
+	}
+
+	const worldLayout = calculateTreeWorldLayout(data, {
+		height: 600,
+		projection: "lineage",
+		projectX: () => 0,
+		projectGeneration: (g: number) => g * 80,
+		zoom: 1,
+	});
+	assertEquals(worldLayout.nodes.length, count);
+	assertEquals(worldLayout.lineage?.maxGeneration, count - 1);
+});
+
+Deno.test("P6b: calculateTreeLayout handles dense simultaneous hub nodes without quadratic blowup", () => {
+	const count = 2000;
+	const items = Array.from(
+		{ length: count },
+		(_, i) => item(`hub-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? "hub-0" : null),
+	);
+	const data = snapshot(items);
+	for (let i = 1; i < count; i++) {
+		data.links.push(link("hub-0", `hub-${i}`, "FROM"));
+	}
+
+	const start = performance.now();
+	const layout = calculateTreeLayout(data, {
+		width: 800,
+		height: 600,
+		projection: "chronology",
+		projectX: () => 100, // all at same timestamp X
+		camera: { k: 0.01, x: 0, y: 0 }, // zoomed out so all 2,000 nodes fall into the same screen cell bucket
+	});
+	const elapsed = performance.now() - start;
+
+	assertEquals(layout.lod, "overview");
+	assertEquals(layout.nodes.length, 1);
+	assertEquals(layout.nodes[0].count, count);
+	assertEquals(elapsed < 2000, true, `Expected < 2000ms, got ${elapsed}ms`);
 });
