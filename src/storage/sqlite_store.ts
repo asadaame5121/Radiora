@@ -1,4 +1,5 @@
 import type { HistoricalTime } from "../domain/historical_time.ts";
+import { areKnotsEqual } from "../domain/models.ts";
 import type {
 	Bookmark,
 	Branch,
@@ -20,6 +21,7 @@ import type {
 } from "../domain/models.ts";
 import type { GraphStateSnapshot, MergeWorksInput, WorkBundle } from "./graph_store.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
+import { SqlitePersistence } from "./sqlite_persistence.ts";
 import { migrateSqliteHistoricalTime } from "./sqlite_historical_migration.ts";
 import { SQLITE_SCHEMA_SQL, SQLITE_STORAGE_SCHEMA_VERSION } from "./sqlite_schema.ts";
 import {
@@ -30,6 +32,12 @@ import {
 	type SqliteDatabase,
 	type SqliteDatabaseTransaction,
 } from "./sqlite_records.ts";
+import {
+	planTargetedBranchWorkingCopyUpdate,
+	planTargetedOccurrenceUpdate,
+	planTargetedResumePositionClear,
+	planTargetedResumePositionSet,
+} from "./sqlite_targeted_mutations.ts";
 
 export type { SqliteDatabase, SqliteDatabaseTransaction };
 
@@ -51,8 +59,8 @@ export class SqliteGraphStore extends MemoryGraphStore {
 	private db: SqliteDatabase | null = null;
 	private initialized = false;
 	private readonly connector: SqliteDatabaseConnector;
-	private mutationQueue: Promise<void> = Promise.resolve();
-	private closePromise: Promise<void> | null = null;
+	private readonly persistence: SqlitePersistence;
+	private knotsDirty = false;
 
 	constructor(
 		private readonly path: string,
@@ -60,6 +68,32 @@ export class SqliteGraphStore extends MemoryGraphStore {
 	) {
 		super();
 		this.connector = options.connector ?? defaultSqliteConnector;
+		this.persistence = new SqlitePersistence(() => this.database(), {
+			exportGraphState: () => this.exportGraphState(),
+			restoreGraphState: (state) => super.restoreGraphState(state),
+			prepareSnapshot: () => {
+				if (this.knotsDirty) this.reconcileOutlineKnots();
+				this.knotsDirty = false;
+			},
+			clearPendingProjection: () => {
+				this.knotsDirty = false;
+			},
+		});
+	}
+
+	protected override afterOutlineStructureChanged(): void {
+		this.knotsDirty = true;
+	}
+
+	private planOccurrenceUpdate(occurrence: Occurrence) {
+		const step = planTargetedOccurrenceUpdate(this.state, occurrence);
+		return {
+			...step,
+			execute: async () => {
+				await step.execute();
+				if (step.affectsOutlineStructure) this.afterOutlineStructureChanged();
+			},
+		};
 	}
 
 	override async initialize(): Promise<void> {
@@ -88,7 +122,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 				if (metadata.schema_version === 1) await migrateSqliteHistoricalTime(db, this.path, state);
 				persistSqliteDiff(
 					{ ...state, relationTypeDefinitions: [] },
-					await super.exportGraphState(),
+					state,
 					db,
 				);
 			} else {
@@ -114,33 +148,26 @@ export class SqliteGraphStore extends MemoryGraphStore {
 	}
 
 	override close(): Promise<void> {
-		this.closePromise ??= this.closeDatabase();
-		return this.closePromise;
-	}
-
-	private async closeDatabase(): Promise<void> {
-		// biome-ignore lint/plugin/noSwallowedRejection: Close must proceed even if a prior mutation in queue failed.
-		await this.mutationQueue.catch(() => {
-			// Prior mutation error is already returned to its caller.
+		return this.persistence.close(() => {
+			const db = this.db;
+			this.db = null;
+			this.initialized = false;
+			if (!db) return;
+			try {
+				db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+				db.exec("PRAGMA journal_mode = DELETE");
+			} finally {
+				db.close();
+			}
 		});
-		const db = this.db;
-		this.db = null;
-		this.initialized = false;
-		if (!db) return;
-		try {
-			db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-			db.exec("PRAGMA journal_mode = DELETE");
-		} finally {
-			db.close();
-		}
 	}
 
 	override restoreGraphState(state: GraphStateSnapshot): Promise<void> {
-		return this.mutate(() => super.restoreGraphState(state));
+		return this.persistence.mutate(() => super.restoreGraphState(state));
 	}
 
 	override mergeWorks(input: MergeWorksInput): Promise<void> {
-		return this.mutate(() => super.mergeWorks(input));
+		return this.persistence.mutate(() => super.mergeWorks(input));
 	}
 
 	override createWorkBundle(
@@ -149,23 +176,21 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		workingCopy: WorkingCopy,
 		occurrence: Occurrence,
 	): Promise<void> {
-		return this.mutate(() => super.createWorkBundle(work, branch, workingCopy, occurrence));
+		return this.persistence.mutate(() =>
+			super.createWorkBundle(work, branch, workingCopy, occurrence)
+		);
 	}
 
 	override importWorkBundles(bundles: readonly WorkBundle[]): Promise<void> {
-		return this.mutate(() => super.importWorkBundles(bundles));
+		return this.persistence.mutate(() => super.importWorkBundles(bundles));
 	}
 
-	override createUnplacedWork(
-		work: Work,
-		branch: Branch,
-		workingCopy: WorkingCopy,
-	): Promise<void> {
-		return this.mutate(() => super.createUnplacedWork(work, branch, workingCopy));
+	override createUnplacedWork(work: Work, branch: Branch, workingCopy: WorkingCopy): Promise<void> {
+		return this.persistence.mutate(() => super.createUnplacedWork(work, branch, workingCopy));
 	}
 
 	override resolveWorkStub(workId: string, updatedAt: string): Promise<void> {
-		return this.mutate(() => super.resolveWorkStub(workId, updatedAt));
+		return this.persistence.mutate(() => super.resolveWorkStub(workId, updatedAt));
 	}
 
 	override setWorkHistoricalTime(
@@ -173,35 +198,136 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		value: HistoricalTime | null,
 		updatedAt: string,
 	): Promise<void> {
-		return this.mutate(() => super.setWorkHistoricalTime(workId, value, updatedAt));
+		return this.persistence.mutate(() => super.setWorkHistoricalTime(workId, value, updatedAt));
 	}
 
 	override createOccurrence(occurrence: Occurrence): Promise<void> {
-		return this.mutate(() => super.createOccurrence(occurrence));
+		return this.persistence.mutate(() => super.createOccurrence(occurrence));
 	}
 
 	override createBookmark(bookmark: Bookmark): Promise<void> {
-		return this.mutate(() => super.createBookmark(bookmark));
+		return this.persistence.mutate(() => super.createBookmark(bookmark));
 	}
 
 	override deleteBookmark(id: string): Promise<void> {
-		return this.mutate(() => super.deleteBookmark(id));
-	}
-
-	override setResumePosition(position: ResumePosition): Promise<void> {
-		return this.mutate(() => super.setResumePosition(position));
-	}
-
-	override clearResumePosition(): Promise<void> {
-		return this.mutate(() => super.clearResumePosition());
+		return this.persistence.mutate(() => super.deleteBookmark(id));
 	}
 
 	override createBranch(branch: Branch, workingCopy: WorkingCopy): Promise<void> {
-		return this.mutate(() => super.createBranch(branch, workingCopy));
+		return this.persistence.mutate(() => super.createBranch(branch, workingCopy));
 	}
 
 	override updateBranch(branch: Branch): Promise<void> {
-		return this.mutate(() => super.updateBranch(branch));
+		return this.persistence.mutate(() => super.updateBranch(branch));
+	}
+
+	override createRevision(revision: Revision, branchId: string): Promise<void> {
+		return this.persistence.mutate(() => super.createRevision(revision, branchId));
+	}
+
+	override createRecoverySnapshot(snapshot: RecoverySnapshot): Promise<void> {
+		return this.persistence.mutate(() => super.createRecoverySnapshot(snapshot));
+	}
+
+	override restoreRecoverySnapshot(
+		snapshotId: string,
+		beforeRestore: RecoverySnapshot,
+		updatedAt: string,
+	): Promise<void> {
+		return this.persistence.mutate(() =>
+			super.restoreRecoverySnapshot(snapshotId, beforeRestore, updatedAt)
+		);
+	}
+
+	override promoteRecoverySnapshot(
+		snapshotId: string,
+		revision: Revision,
+		branchId: string,
+		protectedAt: string,
+	): Promise<void> {
+		return this.persistence.mutate(() =>
+			super.promoteRecoverySnapshot(snapshotId, revision, branchId, protectedAt)
+		);
+	}
+
+	override deleteOccurrence(id: string): Promise<void> {
+		return this.persistence.mutate(() => super.deleteOccurrence(id));
+	}
+
+	override trashWork(workId: string, deletedAt: string): Promise<void> {
+		return this.persistence.mutate(() => super.trashWork(workId, deletedAt));
+	}
+
+	override restoreWork(workId: string): Promise<void> {
+		return this.persistence.mutate(() => super.restoreWork(workId));
+	}
+
+	override purgeWork(workId: string): Promise<PurgeManifest> {
+		return this.persistence.mutate(() => super.purgeWork(workId));
+	}
+
+	override createLink(link: OutlineLink): Promise<void> {
+		return this.persistence.mutate(() => super.createLink(link));
+	}
+
+	override deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
+		return this.persistence.mutate(() => super.deleteLink(fromId, toId, type));
+	}
+
+	override upsertAlias(alias: SearchAlias): Promise<void> {
+		return this.persistence.mutate(() => super.upsertAlias(alias));
+	}
+
+	override deleteAlias(id: string): Promise<void> {
+		return this.persistence.mutate(() => super.deleteAlias(id));
+	}
+
+	override setEmergenceFeedback(
+		id: string,
+		action: "accept" | "dismiss" | "pin",
+	): Promise<void> {
+		return this.persistence.mutate(() => super.setEmergenceFeedback(id, action));
+	}
+
+	override upsertEmergenceSuggestion(suggestion: EmergenceSuggestion): Promise<void> {
+		return this.persistence.mutate(() => super.upsertEmergenceSuggestion(suggestion));
+	}
+
+	override resolveEmergenceSuggestion(
+		id: string,
+		action: EmergenceAction,
+		link?: OutlineLink,
+		reason?: string,
+	): Promise<void> {
+		return this.persistence.mutate(() =>
+			super.resolveEmergenceSuggestion(id, action, link, reason)
+		);
+	}
+
+	override upsertSavedRuleQuery(query: SavedRuleQuery): Promise<void> {
+		return this.persistence.mutate(() => super.upsertSavedRuleQuery(query));
+	}
+
+	override deleteSavedRuleQuery(id: string): Promise<void> {
+		return this.persistence.mutate(() => super.deleteSavedRuleQuery(id));
+	}
+
+	override createRelationTypeDefinition(definition: RelationTypeDefinition): Promise<void> {
+		return this.persistence.mutate(() => super.createRelationTypeDefinition(definition));
+	}
+
+	override updateOccurrence(occurrence: Occurrence): Promise<void> {
+		return this.persistence.mutateTargeted(() => this.planOccurrenceUpdate(occurrence));
+	}
+
+	override setResumePosition(position: ResumePosition): Promise<void> {
+		return this.persistence.mutateTargeted(() =>
+			planTargetedResumePositionSet(this.state, position)
+		);
+	}
+
+	override clearResumePosition(): Promise<void> {
+		return this.persistence.mutateTargeted(() => planTargetedResumePositionClear(this.state));
 	}
 
 	override updateBranchWorkingCopy(
@@ -209,29 +335,23 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		text: string,
 		updatedAt: string,
 	): Promise<void> {
-		return this.mutate(() => super.updateBranchWorkingCopy(branchId, text, updatedAt));
+		return this.persistence.mutateTargeted(() =>
+			planTargetedBranchWorkingCopyUpdate(this.state, branchId, text, updatedAt)
+		);
 	}
 
 	override updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
-		return this.mutate(() => {
+		return this.persistence.mutateTargeted(() => {
 			const main = this.state.branches.find((branch) =>
 				branch.workId === workId && branch.name === "main"
 			);
-			if (!main) return Promise.reject(new Error(`Main Branch not found for Work: ${workId}`));
-			return super.updateBranchWorkingCopy(main.id, text, updatedAt);
+			if (!main) throw new Error(`Main Branch not found for Work: ${workId}`);
+			return planTargetedBranchWorkingCopyUpdate(this.state, main.id, text, updatedAt);
 		});
 	}
 
-	override createRevision(revision: Revision, branchId: string): Promise<void> {
-		return this.mutate(() => super.createRevision(revision, branchId));
-	}
-
-	override createRecoverySnapshot(snapshot: RecoverySnapshot): Promise<void> {
-		return this.mutate(() => super.createRecoverySnapshot(snapshot));
-	}
-
 	override applyRecoverySnapshot(snapshotId: string, updatedAt: string): Promise<void> {
-		return this.mutate(() => {
+		return this.persistence.mutate(() => {
 			const snapshot = this.state.recoverySnapshots.find((candidate) =>
 				candidate.id === snapshotId
 			);
@@ -242,130 +362,19 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		});
 	}
 
-	override restoreRecoverySnapshot(
-		snapshotId: string,
-		beforeRestore: RecoverySnapshot,
-		updatedAt: string,
-	): Promise<void> {
-		return this.mutate(() => super.restoreRecoverySnapshot(snapshotId, beforeRestore, updatedAt));
-	}
-
-	override promoteRecoverySnapshot(
-		snapshotId: string,
-		revision: Revision,
-		branchId: string,
-		protectedAt: string,
-	): Promise<void> {
-		return this.mutate(() =>
-			super.promoteRecoverySnapshot(snapshotId, revision, branchId, protectedAt)
-		);
-	}
-
-	override updateOccurrence(occurrence: Occurrence): Promise<void> {
-		return this.mutate(() => super.updateOccurrence(occurrence));
-	}
-
-	override deleteOccurrence(id: string): Promise<void> {
-		return this.mutate(() => super.deleteOccurrence(id));
-	}
-
-	override trashWork(workId: string, deletedAt: string): Promise<void> {
-		return this.mutate(() => super.trashWork(workId, deletedAt));
-	}
-
-	override restoreWork(workId: string): Promise<void> {
-		return this.mutate(() => super.restoreWork(workId));
-	}
-
-	override purgeWork(workId: string): Promise<PurgeManifest> {
-		return this.mutate(() => super.purgeWork(workId));
-	}
-
-	override createLink(link: OutlineLink): Promise<void> {
-		return this.mutate(() => super.createLink(link));
-	}
-
-	override deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
-		return this.mutate(() => super.deleteLink(fromId, toId, type));
-	}
-
-	override replaceKnots(knots: Knot[]): Promise<void> {
-		return this.mutate(() => super.replaceKnots(knots));
-	}
-
-	override upsertAlias(alias: SearchAlias): Promise<void> {
-		return this.mutate(() => super.upsertAlias(alias));
-	}
-
-	override deleteAlias(id: string): Promise<void> {
-		return this.mutate(() => super.deleteAlias(id));
-	}
-
-	override setEmergenceFeedback(
-		id: string,
-		action: "accept" | "dismiss" | "pin",
-	): Promise<void> {
-		return this.mutate(() => super.setEmergenceFeedback(id, action));
-	}
-
-	override upsertEmergenceSuggestion(suggestion: EmergenceSuggestion): Promise<void> {
-		return this.mutate(() => super.upsertEmergenceSuggestion(suggestion));
-	}
-
-	override resolveEmergenceSuggestion(
-		id: string,
-		action: EmergenceAction,
-		link?: OutlineLink,
-		reason?: string,
-	): Promise<void> {
-		return this.mutate(() => super.resolveEmergenceSuggestion(id, action, link, reason));
-	}
-
-	override upsertSavedRuleQuery(query: SavedRuleQuery): Promise<void> {
-		return this.mutate(() => super.upsertSavedRuleQuery(query));
-	}
-
-	override deleteSavedRuleQuery(id: string): Promise<void> {
-		return this.mutate(() => super.deleteSavedRuleQuery(id));
-	}
-
-	override createRelationTypeDefinition(definition: RelationTypeDefinition): Promise<void> {
-		return this.mutate(() => super.createRelationTypeDefinition(definition));
+	override async replaceKnots(knots: Knot[]): Promise<void> {
+		if (this.persistence.inBatch()) {
+			if (!areKnotsEqual(this.state.knots, knots)) await super.replaceKnots(knots);
+			return;
+		}
+		return await this.persistence.enqueue(() => {
+			if (areKnotsEqual(this.state.knots, knots)) return Promise.resolve();
+			return this.persistence.commitFullMutation(() => super.replaceKnots(knots));
+		});
 	}
 
 	override batch<T>(operation: () => Promise<T>): Promise<T> {
-		if (this.isBatching) return super.batch(operation);
-		return this.mutate(() => super.batch(operation));
-	}
-
-	private async mutate<T>(operation: () => Promise<T>): Promise<T> {
-		this.assertInitialized();
-		if (this.closePromise) throw new Error("SqliteGraphStore is closing");
-		if (this.isBatching) return await operation();
-
-		const currentQueue = this.mutationQueue;
-		const gate = Promise.withResolvers<void>();
-		this.mutationQueue = gate.promise;
-
-		// biome-ignore lint/plugin/noSwallowedRejection: Prior mutation failure must not block execution of subsequent queued mutations.
-		await currentQueue.catch(() => {
-			// Prior mutation error is already returned to its caller.
-		});
-		try {
-			this.assertInitialized();
-			const before = await super.exportGraphState();
-			try {
-				const result = await operation();
-				const after = await super.exportGraphState();
-				persistSqliteDiff(before, after, this.database());
-				return result;
-			} catch (cause) {
-				this.state.rollback(before);
-				throw cause;
-			}
-		} finally {
-			gate.resolve();
-		}
+		return this.persistence.batch(operation);
 	}
 
 	private readState(): GraphStateSnapshot {
@@ -375,9 +384,5 @@ export class SqliteGraphStore extends MemoryGraphStore {
 	private database(): SqliteDatabase {
 		if (!this.db || !this.initialized) throw new Error("SqliteGraphStore is not initialized");
 		return this.db;
-	}
-
-	private assertInitialized(): void {
-		this.database();
 	}
 }

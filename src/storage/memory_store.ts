@@ -1,4 +1,5 @@
 import type { HistoricalTime } from "../domain/historical_time.ts";
+import { hasOccurrenceStructureChanged } from "../domain/occurrence_structure.ts";
 import { resolveWorkStub, updateHistoricalTime } from "./memory_work_metadata.ts";
 import type {
 	Bookmark,
@@ -445,11 +446,7 @@ export class MemoryGraphStore implements GraphStore {
 		this.state.occurrences = this.state.occurrences.map((candidate) =>
 			candidate.id === occurrence.id ? structuredClone(occurrence) : candidate
 		);
-		const structureChanged = previous !== undefined && (
-			previous.parentOccurrenceId !== occurrence.parentOccurrenceId ||
-			previous.workId !== occurrence.workId
-		);
-		if (structureChanged) {
+		if (hasOccurrenceStructureChanged(previous, occurrence)) {
 			this.afterOutlineStructureChanged();
 		}
 		return Promise.resolve();

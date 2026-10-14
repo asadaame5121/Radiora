@@ -1,5 +1,10 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert";
-import { parseStoredRecord, validateStoredPayload } from "../src/storage/sqlite_records.ts";
+import {
+	calculateSqliteDiff,
+	parseStoredRecord,
+	validateStoredPayload,
+} from "../src/storage/sqlite_records.ts";
+import type { GraphStateSnapshot } from "../src/storage/graph_store.ts";
 
 const VALID_UUID = "12345678-1234-4234-8234-1234567890ab";
 const VALID_UUID_2 = "87654321-4321-4321-9321-ba0987654321";
@@ -125,4 +130,53 @@ Deno.test("parseStoredRecord validates payload structure and rejects invalid pay
 		Error,
 		"Invalid SQLite work payload",
 	);
+});
+
+function emptySnapshot(): GraphStateSnapshot {
+	return {
+		works: [],
+		branches: [],
+		workingCopies: [],
+		occurrences: [],
+		links: [],
+		systemRelations: [],
+		knots: [],
+		aliases: [],
+		emergenceFeedback: {},
+		emergenceSuggestions: [],
+		savedRuleQueries: [],
+		purgeManifests: [],
+		revisions: [],
+		recoverySnapshots: [],
+		bookmarks: [],
+		resumePosition: null,
+	};
+}
+
+Deno.test("calculateSqliteDiff accurately calculates emergence_feedback adds, updates, reorders and deletes", () => {
+	const before = emptySnapshot();
+	before.emergenceFeedback = {
+		fb1: "accept",
+		fb2: "dismiss",
+		fb3: "pin",
+	};
+
+	const after = emptySnapshot();
+	after.emergenceFeedback = {
+		fb3: "pin", // reordered to pos 0
+		fb2: "accept", // modified action
+		fb4: "dismiss", // newly added
+		// fb1 deleted
+	};
+
+	const diff = calculateSqliteDiff(before, after);
+	const feedbackUpserts = diff.upserts.filter((u) => u.table === "emergence_feedback");
+	const feedbackDeletes = diff.deletes.filter((d) => d.table === "emergence_feedback");
+
+	assertEquals(feedbackDeletes, [{ table: "emergence_feedback", id: "fb1" }]);
+	assertEquals(feedbackUpserts, [
+		{ table: "emergence_feedback", id: "fb3", position: 0, payload: "pin" },
+		{ table: "emergence_feedback", id: "fb2", position: 1, payload: "accept" },
+		{ table: "emergence_feedback", id: "fb4", position: 2, payload: "dismiss" },
+	]);
 });
