@@ -8,10 +8,18 @@ export interface RankRecentEditedItemsOptions {
 	readonly limit?: number;
 }
 
+function normalizeLimit(rawLimit?: number): number {
+	if (rawLimit === undefined) return DEFAULT_RECENT_EDITED_LIMIT;
+	if (Number.isNaN(rawLimit) || rawLimit <= 0) return 0;
+	if (!Number.isFinite(rawLimit)) return Number.MAX_SAFE_INTEGER;
+	return Math.floor(rawLimit);
+}
+
 export function rankRecentEditedItems(options: RankRecentEditedItemsOptions): OutlineItem[] {
 	const stashedIds = new Set(options.stashItemIds ?? []);
 	const seenWorkIds = new Set<string>();
-	const limit = options.limit ?? DEFAULT_RECENT_EDITED_LIMIT;
+	const limit = normalizeLimit(options.limit);
+	if (limit === 0) return [];
 
 	return [...options.items]
 		.filter((item) => !stashedIds.has(item.id))
