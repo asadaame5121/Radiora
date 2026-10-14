@@ -555,3 +555,47 @@ Deno.test("buildLaneOrder keeps unlinked items in stable orderKey sequence", () 
 	assertEquals(order.get("a"), 0);
 	assertEquals(order.get("z"), 1);
 });
+
+Deno.test("P6 characterization: camera pan preserves world geometry and lane assignment", () => {
+	const data = snapshot([
+		item("n1", "2026-01-01T00:00:00.000Z"),
+		item("n2", "2026-01-02T00:00:00.000Z", "n1"),
+		item("n3", "2026-01-03T00:00:00.000Z", "n1"),
+	]);
+	data.links.push(link("n1", "n2", "FROM"));
+	const options = {
+		width: 600,
+		height: 400,
+		projection: "lineage" as const,
+		projectX: (t: number) => t / 1000,
+		projectGeneration: (g: number) => g * 100 + 50,
+	};
+	const first = calculateTreeLayout(data, { ...options, camera: { k: 1, x: 100, y: 50 } });
+	const second = calculateTreeLayout(data, { ...options, camera: { k: 1, x: -200, y: 300 } });
+	assertEquals(
+		first.nodes.map((n) => [n.id, n.worldX, n.worldY, n.lane]),
+		second.nodes.map((n) => [n.id, n.worldX, n.worldY, n.lane]),
+	);
+	assertEquals(first.nodes.map((n) => [n.x - 300, n.y + 250]), second.nodes.map((n) => [n.x, n.y]));
+	assertEquals(first.edges.map((e) => e.id), second.edges.map((e) => e.id));
+});
+
+Deno.test("P6 characterization: Lineage generations are independent of item and link order", () => {
+	const data = snapshot(
+		Array.from(
+			{ length: 120 },
+			(_, i) => item(`n${i}`, "2026-01-01T00:00:00.000Z", i ? `n${i - 1}` : null),
+		),
+	);
+	for (let i = 1; i < 120; i++) data.links.push(link(`n${i}`, `n${i - 1}`, "FROM"));
+	const expected = calculateLineageProjection(data);
+	const reversed = calculateLineageProjection({
+		...data,
+		items: [...data.items].reverse(),
+		links: [...data.links].reverse(),
+	});
+	assertEquals(expected.maxGeneration, 119);
+	assertEquals(reversed.generationByWorkId, expected.generationByWorkId);
+	assertEquals(reversed.knotWorkIds, expected.knotWorkIds);
+	assertEquals(buildLaneOrder({ ...data, items: [...data.items].reverse() }), buildLaneOrder(data));
+});
