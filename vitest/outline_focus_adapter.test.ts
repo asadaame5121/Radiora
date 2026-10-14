@@ -89,3 +89,29 @@ it("preserves a zero caret offset when a newer request replaces an earlier row",
 	expect(query).toHaveBeenCalledWith('.markdown-editor-host[data-editor-item-id="new"]');
 	expect(dispatch.mock.calls[0][0]).toMatchObject({ detail: { caretOffset: 0 } });
 });
+
+it("waits for the virtual row to mount and rechecks the request before focusing", async () => {
+	let current = true;
+	let mounted: (value: boolean) => void = () => undefined;
+	const host = new EventTarget();
+	const dispatch = vi.fn();
+	host.addEventListener("radiora:focus-editor", dispatch);
+	vi.stubGlobal("document", { querySelector: () => host });
+	vi.stubGlobal("CSS", { escape: (value: string) => value });
+	const adapter = new OutlineFocusAdapter({
+		context: () => ({ pane: "a", origin: 1 }),
+		canFocus: () => true,
+		ensureMounted: () =>
+			new Promise((resolve) => {
+				mounted = resolve;
+			}),
+	});
+	adapter.request("row-99", 5, () => current);
+	vi.runAllTimers();
+	expect(dispatch).not.toHaveBeenCalled();
+	current = false;
+	mounted(true);
+	await Promise.resolve();
+	expect(dispatch).not.toHaveBeenCalled();
+	adapter.dispose();
+});

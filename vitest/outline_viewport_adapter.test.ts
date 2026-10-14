@@ -5,13 +5,19 @@ afterEach(() => vi.unstubAllGlobals());
 
 function setup() {
 	let panels = [
-		{ dataset: { paneId: "a" }, scrollTop: 125, scrollLeft: 12 },
-		{ dataset: { paneId: "b" }, scrollTop: 250, scrollLeft: 24 },
+		{ dataset: { paneId: "a" }, scrollTop: 125, scrollLeft: 12, parentElement: null },
+		{ dataset: { paneId: "b" }, scrollTop: 250, scrollLeft: 24, parentElement: null },
 	];
 	const focus = vi.fn();
 	vi.stubGlobal("document", {
 		querySelectorAll: () => panels,
 		querySelector: (selector: string) => selector === ".outline-panel" ? panels[0] : { focus },
+	});
+	vi.stubGlobal("window", {
+		getComputedStyle: () => ({ overflowY: "auto" }),
+		scrollX: 0,
+		scrollY: 0,
+		scrollTo: vi.fn(),
 	});
 	return {
 		adapter: new OutlineViewportAdapter(),
