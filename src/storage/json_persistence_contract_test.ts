@@ -1,11 +1,81 @@
 import { assertEquals, assertRejects, assertStrictEquals } from "jsr:@std/assert@1";
-import type { RecoverySnapshot } from "../domain/models.ts";
+import type { Knot, RecoverySnapshot } from "../domain/models.ts";
 import type { GraphStateSnapshot, WorkBundle } from "./graph_store.ts";
 import { JsonGraphStore, type JsonRestoreFileOperations } from "./json_store.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
 
 const NOW = "2026-10-01T00:00:00.000Z";
 const EXTERNAL_MUTATION_WAIT_MS = 30;
+
+Deno.test("JSON close drains accepted mutations and batches while rejecting new writes", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	try {
+		const store = new JsonGraphStore(path);
+		await seed(store);
+		const first = store.updateWorkingCopy("one", "first", NOW);
+		const second = store.updateWorkingCopy("one", "second", NOW);
+		const batch = store.batch(async () => {
+			await store.updateWorkingCopy("one", "last", NOW);
+		});
+		const closed = store.close();
+		await assertRejects(() => store.updateWorkingCopy("one", "rejected", NOW), Error, "closing");
+		await Promise.all([first, second, batch, closed]);
+		assertEquals((await store.listWorkingCopies("one"))[0].text, "last");
+		const reopened = new JsonGraphStore(path);
+		await reopened.initialize();
+		assertEquals((await reopened.listWorkingCopies("one"))[0].text, "last");
+		await reopened.close();
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("JSON nested rollback preserves pending Knot reconciliation", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	try {
+		const store = new JsonGraphStore(path);
+		await seed(store);
+		await store.batch(async () => {
+			await store.updateOccurrence({ ...bundle("one").occurrence, parentOccurrenceId: "two" });
+			await store.updateOccurrence({ ...bundle("two").occurrence, parentOccurrenceId: "one" });
+			await assertRejects(() => store.importWorkBundles([bundle("one")]), Error);
+		});
+		const knots = await store.listKnots();
+		assertEquals(knots.length, 1);
+		assertEquals([...knots[0].cycleIds].sort(), ["one", "two"]);
+		const disk: GraphStateSnapshot = JSON.parse(await Deno.readTextFile(path)).data;
+		assertEquals(disk.knots, knots);
+		const reopened = new JsonGraphStore(path);
+		await reopened.initialize();
+		assertEquals(await reopened.listKnots(), knots);
+		await reopened.close();
+		await store.close();
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("JSON queued Knot replacements honor the last request", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	try {
+		const store = new JsonGraphStore(path);
+		await seed(store);
+		const original = await store.listKnots();
+		const replacement: Knot[] = [{ id: "knot", cycleIds: ["one", "two"], createdAt: NOW }];
+		const first = store.replaceKnots(replacement);
+		const last = store.replaceKnots(original);
+		await Promise.all([first, last]);
+		assertEquals(await store.listKnots(), original);
+		const disk: GraphStateSnapshot = JSON.parse(await Deno.readTextFile(path)).data;
+		assertEquals(disk.knots, original);
+		await store.close();
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
 
 function bundle(id: string): WorkBundle {
 	return {

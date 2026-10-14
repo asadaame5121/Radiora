@@ -108,6 +108,12 @@ deno task storage:migrate:legacy
 このタスクは既存の `%LOCALAPPDATA%\RadioraV2\surreal\main.db`
 を変更せずにコールドバックアップ（`%LOCALAPPDATA%\RadioraV2\turso\migration-backups`）を作成し、SQLite（`%LOCALAPPDATA%\RadioraV2\turso\radiora.db`）へ安全に移行します。未移行のSurrealDBデータが存在する場合、通常起動は安全のために明示的なメッセージで起動を停止します。
 
+移行完了後はSQLiteを正本とします。有効な移行完了マーカーとSQLiteが存在する場合、通常起動は
+保管された旧SurrealDBの内容や`LOCK`、旧スキーママーカーを再読取りしません。旧版で移行後に
+行った編集は自動では取り込まれません。旧DB・バックアップ・移行マーカーは変更せず保管します。
+マーカーの欠損・不正・移行元の不一致、またはSQLiteの欠損では起動を停止します。
+移行タスクは引き続き移行元の変更を検査し、既存SQLiteへの上書きを拒否します。
+
 ### 起動できない場合
 
 1. `deno task desktop:preflight` を実行し、表示される問題を確認します。

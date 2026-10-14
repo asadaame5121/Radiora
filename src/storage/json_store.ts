@@ -20,7 +20,7 @@ import {
 	type WorkingCopy,
 } from "../domain/models.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
-import { type GraphStateSnapshot, type MergeWorksInput, type WorkBundle } from "./graph_store.ts";
+import type { GraphStateSnapshot, MergeWorksInput, WorkBundle } from "./graph_store.ts";
 import { decodeJsonGraph } from "./json_graph_codec.ts";
 
 import { JsonPersistence, type JsonRestoreFileOperations } from "./json_persistence.ts";
@@ -29,8 +29,13 @@ export { migrateBackupV0 } from "./backup_migrations.ts";
 
 export type { JsonRestoreFileOperations } from "./json_persistence.ts";
 
+interface JsonStoreSavepoint {
+	state: GraphStateSnapshot;
+	knotsDirty: boolean;
+}
+
 export class JsonGraphStore extends MemoryGraphStore {
-	private readonly persistence: JsonPersistence;
+	private readonly persistence: JsonPersistence<JsonStoreSavepoint>;
 	private knotsDirty = false;
 
 	constructor(
@@ -39,10 +44,10 @@ export class JsonGraphStore extends MemoryGraphStore {
 	) {
 		super();
 		this.persistence = new JsonPersistence(path, {
-			capture: () => this.state.capture(),
-			rollback: (state) => {
-				this.knotsDirty = false;
-				this.state.rollback(state);
+			capture: () => ({ state: this.state.capture(), knotsDirty: this.knotsDirty }),
+			rollback: (savepoint) => {
+				this.knotsDirty = savepoint.knotsDirty;
+				this.state.rollback(savepoint.state);
 			},
 			exportGraphState: () => this.exportGraphState(),
 			restoreGraphState: (state) => super.restoreGraphState(state),
@@ -236,10 +241,10 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	override async replaceKnots(knots: Knot[]): Promise<void> {
-		if (areKnotsEqual(this.state.knots, knots)) {
-			return;
-		}
-		await this.persistence.mutate(() => super.replaceKnots(knots));
+		await this.persistence.mutate(async () => {
+			if (areKnotsEqual(this.state.knots, knots)) return;
+			await super.replaceKnots(knots);
+		});
 	}
 
 	override async upsertAlias(alias: SearchAlias): Promise<void> {
