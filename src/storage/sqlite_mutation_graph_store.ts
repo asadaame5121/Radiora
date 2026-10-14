@@ -23,7 +23,11 @@ export abstract class SqliteMutationGraphStore extends MemoryGraphStore {
 	protected abstract mutate<T>(operation: () => Promise<T>): Promise<T>;
 
 	override restoreGraphState(state: GraphStateSnapshot): Promise<void> {
-		return this.mutate(() => super.restoreGraphState(state));
+		return this.mutate(() => this.restoreMemoryGraphState(state));
+	}
+
+	protected restoreMemoryGraphState(state: GraphStateSnapshot): Promise<void> {
+		return super.restoreGraphState(state);
 	}
 
 	override mergeWorks(input: MergeWorksInput): Promise<void> {

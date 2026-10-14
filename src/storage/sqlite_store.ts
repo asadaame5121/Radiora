@@ -1,9 +1,4 @@
-import {
-	areKnotsEqual,
-	type Knot,
-	type Occurrence,
-	type ResumePosition,
-} from "../domain/models.ts";
+import type { Knot, Occurrence, ResumePosition } from "../domain/models.ts";
 import type { GraphStateSnapshot } from "./graph_store.ts";
 import { SqliteMutationGraphStore } from "./sqlite_mutation_graph_store.ts";
 import { migrateSqliteHistoricalTime } from "./sqlite_historical_migration.ts";
@@ -70,7 +65,7 @@ export class SqliteGraphStore extends SqliteMutationGraphStore {
 			this.initialized = true;
 			const state = this.readState();
 			if (metadata !== undefined) {
-				await super.restoreGraphState(state);
+				await this.restoreMemoryGraphState(state);
 				if (metadata.schema_version === 1) await migrateSqliteHistoricalTime(db, this.path, state);
 				persistSqliteDiff(
 					{ ...state, relationTypeDefinitions: [] },
