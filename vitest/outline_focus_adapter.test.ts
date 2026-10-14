@@ -79,3 +79,13 @@ it("ignores a host removed before the timer fires", () => {
 	expect(() => vi.runAllTimers()).not.toThrow();
 	expect(dispatch).not.toHaveBeenCalled();
 });
+
+it("preserves a zero caret offset when a newer request replaces an earlier row", () => {
+	const { request, query, dispatch } = fixture();
+	request("old", 8);
+	request("new", 0);
+	vi.runAllTimers();
+	expect(query).toHaveBeenCalledOnce();
+	expect(query).toHaveBeenCalledWith('.markdown-editor-host[data-editor-item-id="new"]');
+	expect(dispatch.mock.calls[0][0]).toMatchObject({ detail: { caretOffset: 0 } });
+});
