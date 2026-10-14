@@ -55,3 +55,14 @@ test("stale or explicit navigation does not restore retained pane scroll", async
 	await s.adapter.restore({ ...viewport, restoreScroll: false }, () => true);
 	expect(s.panels().every((panel) => panel.scrollTop === 0)).toBe(true);
 });
+
+test("restoring panel scroll is cancelled while waiting for the render tick", async () => {
+	const s = setup();
+	s.adapter.capturePanels();
+	s.recreate();
+	let current = true;
+	const restore = s.adapter.restorePanels(() => current);
+	current = false;
+	await restore;
+	expect(s.panels().every((panel) => panel.scrollTop === 0 && panel.scrollLeft === 0)).toBe(true);
+});
