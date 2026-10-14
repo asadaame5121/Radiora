@@ -8,9 +8,9 @@ export interface JsonRestoreFileOperations {
 	remove(path: string | URL): Promise<void>;
 }
 
-interface JsonPersistenceMemory {
-	capture(): GraphStateSnapshot;
-	rollback(state: GraphStateSnapshot): void;
+interface JsonPersistenceMemory<Savepoint> {
+	capture(): Savepoint;
+	rollback(state: Savepoint): void;
 	exportGraphState(): Promise<GraphStateSnapshot>;
 	restoreGraphState(state: GraphStateSnapshot): Promise<void>;
 	prepareSnapshot?(): void;
@@ -30,14 +30,14 @@ export interface JsonPersistenceContext {
 }
 
 /** JSON-specific save guarantees; memory/domain operations remain owned by the store. */
-export class JsonPersistence {
+export class JsonPersistence<Savepoint = GraphStateSnapshot> {
 	private readonly context = new AsyncLocalStorage<JsonPersistenceContext>();
 	private mutationQueue: Promise<void> = Promise.resolve();
 	private closePromise: Promise<void> | null = null;
 
 	constructor(
 		private readonly path: string | URL,
-		private readonly memory: JsonPersistenceMemory,
+		private readonly memory: JsonPersistenceMemory<Savepoint>,
 		private readonly restoreFiles = denoRestoreFileOperations,
 	) {}
 
@@ -62,7 +62,6 @@ export class JsonPersistence {
 
 		await currentQueue.catch((cause) => cause);
 		try {
-			if (this.closePromise) throw new Error("JsonPersistence is closing");
 			return await task();
 		} finally {
 			gate.resolve();

@@ -1,7 +1,10 @@
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import { bootstrapStorage } from "../src/storage/storage_bootstrap.ts";
 import { SqliteGraphStore } from "../src/storage/sqlite_store.ts";
-import { migrateLegacyStorageToTurso } from "../src/storage/turso_migration.ts";
+import {
+	migrateLegacyStorageToTurso,
+	readMigrationMarker,
+} from "../src/storage/turso_migration.ts";
 import type { GraphStateSnapshot } from "../src/storage/graph_store.ts";
 import { validatedGraphStateSnapshot } from "../src/storage/graph_store.ts";
 
@@ -169,7 +172,7 @@ Deno.test("bootstrapStorage rejects startup with descriptive error when legacy S
 	}
 });
 
-Deno.test("bootstrapStorage opens SQLite normally when valid legacy migration marker exists, but rejects if source was modified after migration", async () => {
+Deno.test("bootstrapStorage keeps migrated SQLite authoritative after legacy source changes", async () => {
 	const root = await Deno.makeTempDir({ prefix: "radiora-boot-migrated-" });
 	const surrealDir = `${root}\\surreal`;
 	const sourceDbPath = `${surrealDir}\\main.db`;
@@ -205,25 +208,142 @@ Deno.test("bootstrapStorage opens SQLite normally when valid legacy migration ma
 		assertEquals(session.storageMode, "sqlite");
 		const exported = await session.store.exportGraphState();
 		assertEquals(exported.workingCopies[0].text, "Bootstrap storage text");
+		const updated = validatedGraphStateSnapshot({
+			...exported,
+			workingCopies: exported.workingCopies.map((copy) => ({
+				...copy,
+				text: "New SQLite edits",
+			})),
+		});
+		await session.store.restoreGraphState(updated);
 		await session.stop();
 
 		// 2. Modify legacy source after migration (simulating external update)
 		await Deno.writeTextFile(sourceDbPath, "modified legacy surreal payload");
+		await Deno.writeTextFile(sourceVersionPath, "7");
+		const markerBefore = await Deno.readTextFile(markerPath);
 
-		// Bootstrap must reject to prevent data loss or silent divergence
-		const err = await assertRejects(
-			() =>
-				bootstrapStorage({
-					dataDir: root,
-					storageMode: "sqlite",
-				}),
-			Error,
-		);
-		assert(err.message.includes("source fingerprint differs from migration marker"));
+		// Migration is an ownership handoff, not continuing synchronization.
+		const reopened = await bootstrapStorage({ dataDir: root, storageMode: "sqlite" });
+		try {
+			assertEquals(await reopened.store.exportGraphState(), updated);
+			assertEquals(await Deno.readTextFile(sourceDbPath), "modified legacy surreal payload");
+			assertEquals(await Deno.readTextFile(sourceVersionPath), "7");
+			assertEquals(await Deno.readTextFile(markerPath), markerBefore);
+		} finally {
+			await reopened.stop();
+		}
 	} finally {
 		await safeRemoveDir(root);
 	}
 });
+
+Deno.test("bootstrapStorage does not read a migrated legacy LOCK file", async () => {
+	const root = await Deno.makeTempDir({ prefix: "radiora-boot-locked-" });
+	const surrealDir = `${root}\\surreal`;
+	const sourcePath = `${surrealDir}\\main.db`;
+	const sourceVersionMarkerPath = `${surrealDir}\\storage-schema-version`;
+	const targetPath = `${root}\\turso\\radiora.db`;
+	const markerPath = `${targetPath}.migration.json`;
+	const lockPath = `${sourcePath}/LOCK`;
+	try {
+		await Deno.mkdir(sourcePath, { recursive: true });
+		await Deno.writeTextFile(lockPath, "");
+		await Deno.writeTextFile(sourceVersionMarkerPath, "6");
+		await migrateLegacyStorageToTurso({
+			sourcePath,
+			sourceVersionMarkerPath,
+			targetPath,
+			markerPath,
+			backupRoot: `${root}\\turso\\migration-backups`,
+			exportSnapshot: async () => createTestSnapshot(),
+		});
+		const readFile = Deno.readFile;
+		let lockReads = 0;
+		Deno.readFile = (path, options) => {
+			if (String(path) === lockPath) {
+				lockReads++;
+				return Promise.reject(new Error(`Sharing violation (os error 32): readfile '${lockPath}'`));
+			}
+			return readFile(path, options);
+		};
+		try {
+			const session = await bootstrapStorage({ dataDir: root });
+			try {
+				assertEquals(
+					(await session.store.exportGraphState()).workingCopies[0].text,
+					"Bootstrap storage text",
+				);
+				assertEquals(lockReads, 0);
+			} finally {
+				await session.stop();
+			}
+		} finally {
+			Deno.readFile = readFile;
+		}
+	} finally {
+		await safeRemoveDir(root);
+	}
+});
+
+for (
+	const failure of [
+		"missing target",
+		"missing marker",
+		"corrupt marker",
+		"wrong source",
+		"corrupt SQLite",
+	]
+) {
+	Deno.test(`bootstrapStorage refuses ${failure} without altering retained data`, async () => {
+		const root = await Deno.makeTempDir({ prefix: "radiora-boot-invalid-" });
+		const sourcePath = `${root}\\surreal\\main.db`;
+		const sourceVersionMarkerPath = `${root}\\surreal\\storage-schema-version`;
+		const targetPath = `${root}\\turso\\radiora.db`;
+		const markerPath = `${targetPath}.migration.json`;
+		try {
+			await Deno.mkdir(`${root}\\surreal`, { recursive: true });
+			await Deno.writeTextFile(sourcePath, "retained legacy data");
+			await Deno.writeTextFile(sourceVersionMarkerPath, "6");
+			await migrateLegacyStorageToTurso({
+				sourcePath,
+				sourceVersionMarkerPath,
+				targetPath,
+				markerPath,
+				backupRoot: `${root}\\turso\\migration-backups`,
+				exportSnapshot: async () => createTestSnapshot(),
+			});
+			if (failure === "missing target") await Deno.remove(targetPath);
+			if (failure === "missing marker") await Deno.remove(markerPath);
+			if (failure === "corrupt marker") await Deno.writeTextFile(markerPath, "{broken");
+			if (failure === "wrong source") {
+				const marker = await readMigrationMarker(markerPath);
+				assert(marker);
+				await Deno.writeTextFile(markerPath, JSON.stringify({ ...marker, sourcePath: "other.db" }));
+			}
+			if (failure === "corrupt SQLite") await Deno.writeTextFile(targetPath, "not a database");
+			const targetBefore = failure === "missing target" ? null : await Deno.readFile(targetPath);
+			const markerBefore = failure === "missing marker"
+				? null
+				: await Deno.readTextFile(markerPath);
+
+			await assertRejects(() => bootstrapStorage({ dataDir: root }), Error);
+			assertEquals(await Deno.readTextFile(sourcePath), "retained legacy data");
+			if (targetBefore) {
+				assertEquals(await Deno.readFile(targetPath), targetBefore);
+			} else {
+				await assertRejects(() => Deno.stat(targetPath), Deno.errors.NotFound);
+			}
+			if (markerBefore !== null) {
+				assertEquals(await Deno.readTextFile(markerPath), markerBefore);
+			} else {
+				await assertRejects(() => Deno.stat(markerPath), Deno.errors.NotFound);
+			}
+		} finally {
+			await safeRemoveDir(root);
+		}
+	});
+}
 
 Deno.test("bootstrapStorage session.stop properly closes active store and is idempotent", async () => {
 	const root = await Deno.makeTempDir({ prefix: "radiora-boot-stop-" });
