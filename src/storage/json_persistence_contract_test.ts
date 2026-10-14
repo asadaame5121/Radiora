@@ -5,6 +5,7 @@ import { JsonGraphStore, type JsonRestoreFileOperations } from "./json_store.ts"
 import { MemoryGraphStore } from "./memory_store.ts";
 
 const NOW = "2026-10-01T00:00:00.000Z";
+const EXTERNAL_MUTATION_WAIT_MS = 30;
 
 Deno.test("JSON close drains accepted mutations and batches while rejecting new writes", async () => {
 	const directory = await Deno.makeTempDir();
@@ -303,3 +304,246 @@ for (const useUrl of [false, true]) {
 		}
 	});
 }
+
+Deno.test("JsonGraphStore batch saves atomically via rename and avoids intermediate writes (C02)", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	const operationsCalled: { write: number; rename: number; remove: number } = {
+		write: 0,
+		rename: 0,
+		remove: 0,
+	};
+	const operations: JsonRestoreFileOperations = {
+		writeTextFile: async (p, d) => {
+			operationsCalled.write++;
+			await Deno.writeTextFile(p, d);
+		},
+		rename: async (oldP, newP) => {
+			operationsCalled.rename++;
+			await Deno.rename(oldP, newP);
+		},
+		remove: async (p) => {
+			operationsCalled.remove++;
+			await Deno.remove(p);
+		},
+	};
+
+	try {
+		const store = new JsonGraphStore(path, operations);
+		await seed(store);
+		operationsCalled.write = 0;
+		operationsCalled.rename = 0;
+		operationsCalled.remove = 0;
+
+		await store.batch(async () => {
+			await store.updateWorkingCopy("one", "updated batch text", NOW);
+			await store.updateOccurrence({
+				id: "one",
+				workId: "one",
+				parentOccurrenceId: null,
+				orderKey: 500,
+				collapsed: true,
+				revisionSelector: { mode: "branch", branchId: "one" },
+			});
+		});
+
+		assertEquals(operationsCalled.rename, 1);
+		assertEquals(operationsCalled.write, 1);
+
+		// Check memory
+		const occurrences = await store.listOccurrences();
+		assertEquals(occurrences.find((o) => o.id === "one")?.collapsed, true);
+
+		// Check disk on reopen
+		const reopened = new JsonGraphStore(path);
+		await reopened.initialize();
+		const diskOccurrences = await reopened.listOccurrences();
+		assertEquals(diskOccurrences.find((o) => o.id === "one")?.collapsed, true);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("JsonGraphStore batch rolls back memory and disk on thrown error", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	try {
+		const store = new JsonGraphStore(path);
+		await seed(store);
+		const beforeState = await store.exportGraphState();
+
+		await assertRejects(
+			() =>
+				store.batch(async () => {
+					await store.updateWorkingCopy("one", "should be rolled back", NOW);
+					throw new Error("simulated batch error");
+				}),
+			Error,
+			"simulated batch error",
+		);
+
+		assertEquals(await store.exportGraphState(), beforeState);
+
+		const reopened = new JsonGraphStore(path);
+		await reopened.initialize();
+		assertEquals(await reopened.exportGraphState(), beforeState);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("JsonGraphStore batch rolls back and cleans temporary file on temp write failure", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	let failWrite = false;
+	const operations: JsonRestoreFileOperations = {
+		writeTextFile: async (p, d) => {
+			if (failWrite) throw new Error("simulated temp write failure");
+			await Deno.writeTextFile(p, d);
+		},
+		rename: (oldP, newP) => Deno.rename(oldP, newP),
+		remove: (p) => Deno.remove(p),
+	};
+
+	try {
+		const store = new JsonGraphStore(path, operations);
+		await seed(store);
+		const beforeState = await store.exportGraphState();
+
+		failWrite = true;
+		await assertRejects(
+			() =>
+				store.batch(async () => {
+					await store.updateWorkingCopy("one", "write fail text", NOW);
+				}),
+			Error,
+			"simulated temp write failure",
+		);
+
+		assertEquals(await store.exportGraphState(), beforeState);
+		assertEquals(Array.from(Deno.readDirSync(directory), (entry) => entry.name), ["graph.json"]);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("JsonGraphStore batch rolls back and cleans temporary file on rename failure", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	let failRename = false;
+	const operations: JsonRestoreFileOperations = {
+		writeTextFile: (p, d) => Deno.writeTextFile(p, d),
+		rename: async (oldP, newP) => {
+			if (failRename) throw new Error("simulated rename failure");
+			await Deno.rename(oldP, newP);
+		},
+		remove: (p) => Deno.remove(p),
+	};
+
+	try {
+		const store = new JsonGraphStore(path, operations);
+		await seed(store);
+		const beforeState = await store.exportGraphState();
+
+		failRename = true;
+		await assertRejects(
+			() =>
+				store.batch(async () => {
+					await store.updateWorkingCopy("one", "rename fail text", NOW);
+				}),
+			Error,
+			"simulated rename failure",
+		);
+
+		assertEquals(await store.exportGraphState(), beforeState);
+		assertEquals(Array.from(Deno.readDirSync(directory), (entry) => entry.name), ["graph.json"]);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("JsonGraphStore nested batch shares batch context with single atomic rename", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	let renameCount = 0;
+	const operations: JsonRestoreFileOperations = {
+		writeTextFile: (p, d) => Deno.writeTextFile(p, d),
+		rename: async (oldP, newP) => {
+			renameCount++;
+			await Deno.rename(oldP, newP);
+		},
+		remove: (p) => Deno.remove(p),
+	};
+
+	try {
+		const store = new JsonGraphStore(path, operations);
+		await seed(store);
+		renameCount = 0;
+
+		await store.batch(async () => {
+			await store.updateWorkingCopy("one", "nested text 1", NOW);
+			await store.batch(async () => {
+				await store.updateWorkingCopy("two", "nested text 2", NOW);
+			});
+		});
+
+		assertEquals(renameCount, 1);
+
+		const reopened = new JsonGraphStore(path);
+		await reopened.initialize();
+		const diskState = await reopened.exportGraphState();
+		assertEquals(diskState.workingCopies.find((w) => w.workId === "one")?.text, "nested text 1");
+		assertEquals(diskState.workingCopies.find((w) => w.workId === "two")?.text, "nested text 2");
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("JsonGraphStore batch serializes concurrent external updates", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	try {
+		const store = new JsonGraphStore(path);
+		await seed(store);
+
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+
+		const batchPromise = store.batch(async () => {
+			await store.updateWorkingCopy("one", "batch update text", NOW);
+			entered.resolve();
+			await release.promise;
+		});
+
+		await entered.promise;
+
+		let externalSettled = false;
+		const externalPromise = store.updateWorkingCopy("two", "external concurrent text", NOW).then(
+			() => {
+				externalSettled = true;
+			},
+		);
+
+		await new Promise((resolve) => setTimeout(resolve, EXTERNAL_MUTATION_WAIT_MS));
+		assertEquals(externalSettled, false);
+
+		release.resolve();
+		await batchPromise;
+		await externalPromise;
+		assertEquals(externalSettled, true);
+
+		const reopened = new JsonGraphStore(path);
+		await reopened.initialize();
+		const diskState = await reopened.exportGraphState();
+		assertEquals(
+			diskState.workingCopies.find((w) => w.workId === "one")?.text,
+			"batch update text",
+		);
+		assertEquals(
+			diskState.workingCopies.find((w) => w.workId === "two")?.text,
+			"external concurrent text",
+		);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
