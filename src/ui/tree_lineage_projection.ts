@@ -56,15 +56,22 @@ function acyclicGenerations(
 ): Map<string, number> {
 	const generations = new Map<string, number>();
 	const indegree = new Map<string, number>();
+	const ready: string[] = [];
 	for (const id of workIds) {
 		if (knots.has(id)) continue;
-		indegree.set(id, [...(parents.get(id) ?? [])].filter((parent) => !knots.has(parent)).length);
+		let degree = 0;
+		for (const parent of parents.get(id) ?? []) {
+			if (!knots.has(parent)) degree++;
+		}
+		indegree.set(id, degree);
 		generations.set(id, 0);
+		if (degree === 0) {
+			ready.push(id);
+		}
 	}
-	const ready = [...indegree].filter(([, degree]) => degree === 0).map(([id]) => id).sort();
-	while (ready.length > 0) {
-		const parent = ready.shift();
-		if (parent === undefined) break;
+	let head = 0;
+	while (head < ready.length) {
+		const parent = ready[head++];
 		advanceChildren(parent, children, knots, { generations, indegree, ready });
 	}
 	return generations;
@@ -77,17 +84,17 @@ function advanceChildren(
 	state: { generations: Map<string, number>; indegree: Map<string, number>; ready: string[] },
 ): void {
 	const { generations, indegree, ready } = state;
-	for (const child of [...(children.get(parent) ?? [])].sort()) {
+	const parentGen = generations.get(parent) ?? 0;
+	for (const child of children.get(parent) ?? []) {
 		if (knots.has(child)) continue;
-		generations.set(
-			child,
-			Math.max(generations.get(child) ?? 0, (generations.get(parent) ?? 0) + 1),
-		);
+		const currentGen = generations.get(child) ?? 0;
+		if (parentGen + 1 > currentGen) {
+			generations.set(child, parentGen + 1);
+		}
 		const nextDegree = (indegree.get(child) ?? 0) - 1;
 		indegree.set(child, nextDegree);
 		if (nextDegree === 0) {
 			ready.push(child);
-			ready.sort();
 		}
 	}
 }

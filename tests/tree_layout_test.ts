@@ -599,3 +599,16 @@ Deno.test("P6 characterization: Lineage generations are independent of item and 
 	assertEquals(reversed.knotWorkIds, expected.knotWorkIds);
 	assertEquals(buildLaneOrder({ ...data, items: [...data.items].reverse() }), buildLaneOrder(data));
 });
+
+Deno.test("P6 graph traversal handles a 6,000-node FROM chain without recursion", () => {
+	const count = 6000;
+	const data = snapshot(
+		Array.from(
+			{ length: count },
+			(_, i) => item(`w-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? `w-${i - 1}` : null),
+		),
+	);
+	for (let i = 1; i < count; i++) data.links.push(link(`w-${i}`, `w-${i - 1}`, "FROM"));
+	assertEquals(buildLaneOrder(data).size, count);
+	assertEquals(calculateLineageProjection(data).maxGeneration, count - 1);
+});
