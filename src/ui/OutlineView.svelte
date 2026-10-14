@@ -1,25 +1,30 @@
 <script lang="ts">
-	import { onMount } from "svelte";
+	import { onMount, tick, untrack } from "svelte";
 	import type { OutlineItem, RelationTypeDefinition } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { VisibleRow } from "./outline_view_model.ts";
 	import type {
 		InlineLinkCompletionState,
 		InternalReferenceCompletionState,
-} from "./editor_completion_controller.svelte.ts";
-	import type {
-		OutlineHelpers,
-		OutlineRowHandlers,
-	} from "./outline_row_types.ts";
+	} from "./editor_completion_controller.svelte.ts";
+	import type { OutlineHelpers, OutlineRowHandlers } from "./outline_row_types.ts";
 	import OutlineRowItem from "./OutlineRowItem.svelte";
+	import { OUTLINE_PIXEL_TOLERANCE, type VirtualOutlineEntry } from "./virtual_outline_viewport.ts";
+	import type { OutlineVirtualViewportController } from "./outline_virtual_viewport_controller.svelte.ts";
+	import {
+		type EnsureOutlineRowMounted,
+		OutlineViewportAdapter,
+	} from "./outline_viewport_adapter.ts";
 
 	let {
+		viewport,
 		draggedId,
 		onDragStart,
 		onDragEnd,
 		outlineContextBreadcrumb,
 		outlineContextBreadcrumbItems,
 		outlineContextTitle,
+		registerEnsureMounted = () => () => undefined,
 		hoisted,
 		canClearHoist,
 		clearHoistReason,
@@ -40,12 +45,14 @@
 		handlers,
 		helpers,
 	}: {
+		viewport: OutlineVirtualViewportController;
 		draggedId: string | null;
 		onDragStart: (id: string) => void;
 		onDragEnd: () => void;
 		outlineContextBreadcrumb: string;
 		outlineContextBreadcrumbItems: readonly OutlineItem[];
 		outlineContextTitle: string;
+		registerEnsureMounted?: (port: EnsureOutlineRowMounted) => () => void;
 		hoisted: boolean;
 		canClearHoist: boolean;
 		clearHoistReason: string | undefined;
@@ -67,7 +74,118 @@
 		helpers: OutlineHelpers;
 	} = $props();
 
-	onMount(() => () => onDragEnd());
+	let rowsEl = $state<HTMLDivElement | null>(null);
+	const viewportAdapter = new OutlineViewportAdapter();
+	const rowElements = new Map<string, HTMLElement>();
+	const rowIdsByElement = new WeakMap<Element, string>();
+	let anchorFrame = 0;
+	const rowObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver((entries) => {
+		let changed = false;
+		for (const entry of entries) {
+			const id = rowIdsByElement.get(entry.target);
+			const height = entry.borderBoxSize?.[0]?.blockSize ??
+				entry.target.getBoundingClientRect().height;
+			if (id && viewport.reportHeight(id, height)) changed = true;
+		}
+		if (changed) scheduleAnchorAdjustment();
+	});
+
+	const normalRows = $derived.by(() => visibleRows.filter((row) => !row.stash));
+	const stashRows = $derived.by(() => visibleRows.filter((row) => row.stash));
+	const virtualWindow = $derived(viewport.window);
+	const renderedEntries = $derived.by(() =>
+		virtualWindow.entries.map((entry: VirtualOutlineEntry) => ({
+			...entry,
+			row: normalRows[entry.index],
+		}))
+	);
+
+	$effect.pre(() => {
+		const ids = normalRows.map((row) => row.item.id);
+		const protectedIds = [selectedId, draggedId].filter((id): id is string => Boolean(id));
+		untrack(() => {
+			viewport.setRows(ids);
+			viewport.setProtectedIds(protectedIds);
+			scheduleAnchorAdjustment();
+		});
+	});
+
+	$effect(() => {
+		const element = rowsEl;
+		if (!element) return;
+		return untrack(() =>
+			viewportAdapter.observeRows(element, (metrics) => {
+				viewport.setMetrics(metrics);
+				const visibleIds = viewport.window.entries.map((entry) => viewport.rowIds[entry.index]);
+				if (viewport.setWidth(element.clientWidth, visibleIds)) scheduleAnchorAdjustment();
+			})
+		);
+	});
+
+	onMount(() => {
+		const unregister = registerEnsureMounted(ensureMounted);
+		return () => {
+			unregister();
+			viewport.releaseProtectedRows();
+			if (anchorFrame) cancelAnimationFrame(anchorFrame);
+			rowObserver?.disconnect();
+			onDragEnd();
+		};
+	});
+
+	function connectRowElement(id: string, element: HTMLElement | null): void {
+		const previous = rowElements.get(id);
+		if (previous && previous !== element) {
+			rowObserver?.unobserve(previous);
+			rowIdsByElement.delete(previous);
+			rowElements.delete(id);
+		}
+		if (!element) return;
+		rowElements.set(id, element);
+		rowIdsByElement.set(element, id);
+		rowObserver?.observe(element);
+	}
+
+	function scheduleAnchorAdjustment(): void {
+		if (anchorFrame) cancelAnimationFrame(anchorFrame);
+		anchorFrame = requestAnimationFrame(() => {
+			anchorFrame = 0;
+			const element = rowsEl;
+			if (!element) return;
+			const delta = viewport.takeAnchorAdjustment();
+			if (Math.abs(delta) < OUTLINE_PIXEL_TOLERANCE) return;
+			viewportAdapter.adjustScroll(element, delta);
+			viewport.setMetrics({
+				scrollTop: viewport.metrics.scrollTop + delta,
+				viewportHeight: viewport.metrics.viewportHeight,
+			});
+		});
+	}
+
+	async function ensureMounted(id: string, current: () => boolean): Promise<boolean> {
+		const element = rowsEl;
+		if (!element || !current()) return false;
+		const target = viewport.scrollTopFor(id);
+		if (target === null) return false;
+		const metrics = viewport.metrics;
+		if (Math.abs(target - metrics.scrollTop) >= OUTLINE_PIXEL_TOLERANCE) {
+			viewportAdapter.scrollToLogical(element, target);
+			viewport.setMetrics({ scrollTop: target, viewportHeight: metrics.viewportHeight });
+		}
+		await tick();
+		return current() && rowElements.has(id);
+	}
+
+	function handleRootDrop(event: DragEvent): void {
+		viewportAdapter.dropOnVirtualGap(
+			event,
+			draggedId,
+			rowsEl,
+			viewport.layout,
+			normalRows,
+			(row) => handlers.dropOn(row.item),
+		);
+	}
 </script>
 
 <div class="outline-context">
@@ -82,7 +200,7 @@
 		{/if}
 		<h1>{outlineContextTitle}</h1>
 		<p class="outline-context__meta">
-			{visibleRows.filter((row) => !row.stash).length}件の{vocabulary.work} · 行をそのまま編集できます
+			{normalRows.length}件の{vocabulary.work} · 行をそのまま編集できます
 		</p>
 	</div>
 	<div class="section-title outline-actions">
@@ -99,22 +217,35 @@
 
 {#if !loading || hasSnapshot}
 	{#if snapshotItemsLength === 0}
-		<button type="button" class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
+		<button type="button" class="first-item"
+	onclick={createRoot}>最初の{vocabulary.work}を作る</button>
 	{:else}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="rows"
-			role="tree"
-			aria-busy={loading}
-			aria-label={`${vocabulary.work}のアウトライン`}
-			tabindex="0"
-			onmousedown={(event) => {
+	bind:this={rowsEl}
+	class="rows"
+	role="tree"
+	aria-busy={loading}
+	aria-label={`${vocabulary.work}のアウトライン`}
+	tabindex="0"
+	onfocusin={(event) => viewport.trackFocusIn(event.target)}
+	onfocusout={(event) => viewport.trackFocusOut(event.target, event.relatedTarget)}
+	oncompositionstart={(event) => viewport.trackCompositionStart(event.target)}
+	oncompositionend={(event) => viewport.trackCompositionEnd(event.target)}
+	ondragover={(event) => {
+				if (event.target === event.currentTarget || (event.target instanceof Element && event.target.closest(".virtual-gap"))) event.preventDefault();
+			}}
+	ondrop={handleRootDrop}
+	onmousedown={(event) => {
 				if (event.target === event.currentTarget) handlers.deselectFromBlank(event);
 			}}
-		>
-			{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
+>
+			{#each renderedEntries as entry (entry.row.item.id)}
+				{#if entry.gapBefore > 0}
+					<div class="virtual-gap" style:height={`${entry.gapBefore}px`} aria-hidden="true" role="presentation"></div>
+				{/if}
 				<OutlineRowItem
-					{row}
+					row={entry.row}
 					{selectedId}
 					{draggedId}
 					{vocabulary}
@@ -125,15 +256,20 @@
 					{helpers}
 					{onDragStart}
 					{onDragEnd}
+					onRowElement={connectRowElement}
 				/>
 			{/each}
+			{#if virtualWindow.trailingGap > 0}
+				<div class="virtual-gap" style:height={`${virtualWindow.trailingGap}px`} aria-hidden="true" role="presentation"></div>
+			{/if}
 		</div>
 	{/if}
 
 	{#if stashItemIdsLength}
-		<div class="section-title stash-title"><span>Stash / Knots</span><small>{knotsLength} knot</small></div>
+		<div
+	class="section-title stash-title"><span>Stash / Knots</span><small>{knotsLength} knot</small></div>
 		<div class="stash-list">
-			{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
+			{#each stashRows as row (row.item.id)}
 				<button
 					type="button"
 					class:selected={selectedId === row.item.id}
@@ -207,6 +343,7 @@
 	}
 	.rows {
 		max-width: 820px;
+		overflow-anchor: none;
 	}
 	.first-item {
 		margin: 80px auto;

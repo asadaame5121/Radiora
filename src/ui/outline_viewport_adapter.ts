@@ -1,6 +1,10 @@
 import { tick } from "svelte";
 import { captureEditorPosition, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
 import type { OutlineViewport } from "./outline_screen_state.svelte.ts";
+import {
+	virtualOutlineIndexAtOffset,
+	type VirtualOutlineLayout,
+} from "./virtual_outline_viewport.ts";
 
 export interface OutlineScrollMetrics {
 	scrollTop: number;
@@ -65,11 +69,6 @@ function calculateMetrics(
 	}
 	return { scrollTop: 0, viewportHeight: 0 };
 }
-
-import {
-	virtualOutlineIndexAtOffset,
-	type VirtualOutlineLayout,
-} from "./virtual_outline_viewport.ts";
 
 /** DOM identity is recreated after render; only coordinates and logical targets are retained. */
 export class OutlineViewportAdapter {
@@ -233,6 +232,7 @@ export class OutlineViewportAdapter {
 	}
 
 	async restorePane(itemId: string | null, current: () => boolean): Promise<void> {
+		if (itemId && !(await this.ensureMounted(itemId, current))) return;
 		if (!current()) return;
 		await focusOutlineEditor(itemId, undefined, current, false);
 		await this.restorePanels(current);
@@ -296,6 +296,7 @@ export class OutlineViewportAdapter {
 		current: () => boolean,
 	): Promise<boolean> {
 		const position = viewport.editorPosition;
+		if (position?.itemId && !(await this.ensureMounted(position.itemId, current))) return false;
 		if (!current()) return false;
 		await focusOutlineEditor(
 			position?.itemId ?? null,

@@ -116,6 +116,7 @@
 	import { OutlineController } from "./outline_controller.svelte.ts";
 	import { StartupController } from "./startup_controller.svelte.ts";
 	import { OutlineViewportAdapter } from "./outline_viewport_adapter.ts";
+	import { OutlineVirtualViewportController } from "./outline_virtual_viewport_controller.svelte.ts";
 	import { ScreenDestinationPresenter } from "./screen_destination_presenter.ts";
 	import { ScreenNavigationWorkspace } from "./screen_navigation_workspace.svelte.ts";
 	import { focusTreeSelection } from "./tree_focus_adapter.ts";
@@ -177,6 +178,7 @@
 	});
 	const longForm = $derived(longFormController.state);
 	const outlineViewport = new OutlineViewportAdapter();
+	const outlineVirtualViewport = new OutlineVirtualViewportController();
 	onMount(() => outlineViewport.connect());
 	const screenNavigation: ScreenNavigationWorkspace = new ScreenNavigationWorkspace({
 		outline: {
@@ -823,6 +825,7 @@
 	const outlineFocus = new OutlineFocusAdapter({
 		context: () => ({ pane: navigationController.browsing.activePaneId, origin: screenNavigation.origin }),
 		canFocus: (id) => viewMode === "outline" && selectedId === id,
+		ensureMounted: (id, current) => outlineViewport.ensureMounted(id, current),
 	});
 	onMount(() => () => outlineFocus.dispose());
 	function requestFocus(id: string, caretOffset?: number, current = selectionWorkspace.currentReceipt()): void {
@@ -1520,6 +1523,8 @@
 					{/if}
 				{:else}
 					<OutlineView
+						viewport={outlineVirtualViewport}
+						registerEnsureMounted={(port) => outlineViewport.registerEnsureMounted(port)}
 						draggedId={outlineDrag.draggedId}
 						onDragStart={outlineDrag.start}
 						onDragEnd={outlineDrag.end}
