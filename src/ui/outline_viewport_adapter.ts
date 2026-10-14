@@ -2,12 +2,144 @@ import { tick } from "svelte";
 import { captureEditorPosition, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
 import type { OutlineViewport } from "./outline_screen_state.svelte.ts";
 
+export interface OutlineScrollMetrics {
+	scrollTop: number;
+	viewportHeight: number;
+}
+
+function findScrollContainer(element: HTMLElement): HTMLElement | null {
+	let current: HTMLElement | null = element.parentElement;
+	while (current) {
+		if (typeof window !== "undefined") {
+			const style = window.getComputedStyle(current);
+			const overflowY = style.overflowY;
+			if (overflowY === "auto" || overflowY === "scroll") {
+				return current;
+			}
+		}
+		current = current.parentElement;
+	}
+	return null;
+}
+
+function scrollOwnerForPanel(panel: HTMLElement): HTMLElement | Window {
+	const overflowY = window.getComputedStyle(panel).overflowY;
+	if (overflowY === "auto" || overflowY === "scroll") return panel;
+	return findScrollContainer(panel) ?? window;
+}
+
+function readScroll(owner: HTMLElement | Window): { top: number; left: number } {
+	return "scrollTop" in owner
+		? { top: owner.scrollTop, left: owner.scrollLeft }
+		: { top: window.scrollY, left: window.scrollX };
+}
+
+function writeScroll(owner: HTMLElement | Window, top: number, left: number): void {
+	if ("scrollTop" in owner) {
+		owner.scrollTop = top;
+		owner.scrollLeft = left;
+	} else {
+		window.scrollTo(left, top);
+	}
+}
+
+function calculateMetrics(
+	rowsElement: HTMLElement,
+	container: HTMLElement | null,
+): OutlineScrollMetrics {
+	if (container) {
+		const containerRect = container.getBoundingClientRect();
+		const rowsRect = rowsElement.getBoundingClientRect();
+		const innerTop = containerRect.top + container.clientTop;
+		const scrollTop = Math.max(0, innerTop - rowsRect.top);
+		const viewportHeight = container.clientHeight;
+		return { scrollTop, viewportHeight };
+	}
+	if (typeof window !== "undefined") {
+		const rowsRect = rowsElement.getBoundingClientRect();
+		const scrollTop = Math.max(0, -rowsRect.top);
+		const viewportHeight = window.innerHeight;
+		return { scrollTop, viewportHeight };
+	}
+	return { scrollTop: 0, viewportHeight: 0 };
+}
+
 /** DOM identity is recreated after render; only coordinates and logical targets are retained. */
 export class OutlineViewportAdapter {
 	private paneScroll: NonNullable<OutlineViewport["paneScroll"]> = {};
 	private focusedItem: string | null = null;
 	private focusedPosition: ReturnType<typeof captureEditorPosition> | undefined;
 	private focus: OutlineViewport["focus"] = "rows";
+
+	observeRows(
+		rowsElement: HTMLElement,
+		publishMetrics: (metrics: OutlineScrollMetrics) => void,
+	): () => void {
+		let currentOwner: HTMLElement | null = null;
+		let disposed = false;
+		let observer: ResizeObserver | null = null;
+
+		const updateMetrics = () => {
+			if (disposed) return;
+			const metrics = calculateMetrics(rowsElement, currentOwner);
+			publishMetrics(metrics);
+		};
+
+		const detachOwner = () => {
+			if (currentOwner) {
+				currentOwner.removeEventListener("scroll", updateMetrics);
+				if (observer) {
+					observer.unobserve(currentOwner);
+				}
+			}
+		};
+
+		const attachOwner = (owner: HTMLElement | null) => {
+			currentOwner = owner;
+			if (currentOwner) {
+				currentOwner.addEventListener("scroll", updateMetrics, { passive: true });
+				if (observer) {
+					observer.observe(currentOwner);
+				}
+			}
+		};
+
+		const reResolve = () => {
+			if (disposed) return;
+			const nextOwner = findScrollContainer(rowsElement);
+			if (nextOwner !== currentOwner) {
+				detachOwner();
+				attachOwner(nextOwner);
+			}
+			updateMetrics();
+		};
+
+		if (typeof ResizeObserver !== "undefined") {
+			observer = new ResizeObserver(() => {
+				reResolve();
+			});
+			observer.observe(rowsElement);
+		}
+
+		attachOwner(findScrollContainer(rowsElement));
+		updateMetrics();
+
+		if (typeof window !== "undefined") {
+			window.addEventListener("resize", reResolve, { passive: true });
+		}
+
+		return () => {
+			disposed = true;
+			detachOwner();
+			if (observer) {
+				observer.disconnect();
+				observer = null;
+			}
+			if (typeof window !== "undefined") {
+				window.removeEventListener("resize", reResolve);
+			}
+		};
+	}
 
 	connect(): () => void {
 		const trackFocus = (event: FocusEvent) => {
