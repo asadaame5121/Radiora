@@ -4,6 +4,8 @@ import {
 	OutlineViewportAdapter,
 } from "../src/ui/outline_viewport_adapter.ts";
 
+import { buildVirtualOutlineLayout } from "../src/ui/virtual_outline_viewport.ts";
+
 class MockElement extends EventTarget {
 	parentElement: MockElement | null = null;
 	className = "";
@@ -372,4 +374,31 @@ describe("OutlineViewportAdapter.observeRows (U01)", () => {
 		expect(owner.scrollTop).toBe(430);
 		expect(owner.scrollLeft).toBe(12);
 	});
+});
+
+test("drops on the logical row under the pointer when it lands on the virtualized root gap", () => {
+	const adapter = new OutlineViewportAdapter();
+	const root = new MockElement();
+	root.rect.top = 10;
+	const event = {
+		target: root,
+		currentTarget: root,
+		clientY: 54,
+		preventDefault: vi.fn(),
+		stopPropagation: vi.fn(),
+	} as unknown as DragEvent;
+	const drop = vi.fn();
+
+	adapter.dropOnVirtualGap(
+		event,
+		"dragged",
+		root as unknown as HTMLElement,
+		buildVirtualOutlineLayout(3, () => 40),
+		["a", "b", "c"],
+		drop,
+	);
+
+	expect(drop).toHaveBeenCalledWith("b");
+	expect(event.preventDefault).toHaveBeenCalledOnce();
+	expect(event.stopPropagation).toHaveBeenCalledOnce();
 });

@@ -66,6 +66,11 @@ function calculateMetrics(
 	return { scrollTop: 0, viewportHeight: 0 };
 }
 
+import {
+	virtualOutlineIndexAtOffset,
+	type VirtualOutlineLayout,
+} from "./virtual_outline_viewport.ts";
+
 /** DOM identity is recreated after render; only coordinates and logical targets are retained. */
 export class OutlineViewportAdapter {
 	private paneScroll: NonNullable<OutlineViewport["paneScroll"]> = {};
@@ -85,6 +90,31 @@ export class OutlineViewportAdapter {
 		return current() && this.ensureMountedPort
 			? this.ensureMountedPort(id, current)
 			: Promise.resolve(false);
+	}
+
+	dropOnVirtualGap<T>(
+		event: DragEvent,
+		draggedId: string | null,
+		rowsElement: HTMLElement | null,
+		layout: VirtualOutlineLayout,
+		rows: readonly T[],
+		onDrop: (row: T) => void,
+	): void {
+		const target = event.target;
+		if (
+			!draggedId || !rowsElement ||
+			(target !== event.currentTarget &&
+				!(target instanceof Element && target.closest(".virtual-gap")))
+		) return;
+		const index = virtualOutlineIndexAtOffset(
+			layout,
+			event.clientY - rowsElement.getBoundingClientRect().top,
+		);
+		const row = index === null ? undefined : rows[index];
+		if (!row) return;
+		event.preventDefault();
+		event.stopPropagation();
+		onDrop(row);
 	}
 
 	adjustScroll(rowsElement: HTMLElement, delta: number): void {
