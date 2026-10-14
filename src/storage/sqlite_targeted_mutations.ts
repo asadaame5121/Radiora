@@ -8,6 +8,7 @@ import type {
 	WorkingCopy,
 } from "../domain/models.ts";
 import { type SqliteDiffOperations, validateStoredPayload } from "./sqlite_records.ts";
+import { hasOccurrenceStructureChanged } from "../domain/occurrence_structure.ts";
 
 export interface TargetedMutableState {
 	works: Work[];
@@ -20,6 +21,7 @@ export interface TargetedMutableState {
 }
 
 export interface TargetedMutationStep<T = void> {
+	affectsOutlineStructure?: boolean;
 	execute: () => Promise<T>;
 	rollback: () => void;
 	diff: SqliteDiffOperations;
@@ -82,6 +84,7 @@ export function planTargetedOccurrenceUpdate(
 	validateOccurrenceWorkChange(state, prevOccurrence, nextOccurrence);
 
 	return {
+		affectsOutlineStructure: hasOccurrenceStructureChanged(prevOccurrence, nextOccurrence),
 		execute: () => {
 			state.occurrences[occIndex] = nextOccurrence;
 			return Promise.resolve();
