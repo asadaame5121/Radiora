@@ -600,6 +600,242 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	assert((await store.listBookmarks()).some((bookmark) => bookmark.id === dependentBookmarkId));
 	await store.trashWork(dependent.work.id, DELETED_AT);
 	await store.purgeWork(dependent.work.id);
+
+	await assertPointReadContract(store);
+}
+
+async function assertPointReadContract(store: GraphStore): Promise<void> {
+	// 1. 通常ノード (normal node)
+	const normal = bundle("point-read normal text");
+	await store.createWorkBundle(normal.work, normal.branch, normal.copy, normal.occurrence);
+
+	const itemNormal = await store.getItem(normal.occurrence.id);
+	const listNormalItem = (await store.listItems()).find((i) => i.id === normal.occurrence.id);
+	assertEquals(itemNormal, listNormalItem);
+	assertEquals(itemNormal?.text, "point-read normal text");
+
+	const occNormal = await store.getOccurrence(normal.occurrence.id);
+	const listNormalOcc = (await store.listOccurrences()).find((o) => o.id === normal.occurrence.id);
+	assertEquals(occNormal, listNormalOcc);
+
+	// 2. 別branchノード (alternate branch)
+	const altBranch: Branch = {
+		id: crypto.randomUUID(),
+		workId: normal.work.id,
+		name: "alt-feature",
+		headRevisionId: null,
+		createdAt: CREATED_AT,
+	};
+	const altCopy: WorkingCopy = {
+		branchId: altBranch.id,
+		workId: normal.work.id,
+		text: "alt branch text",
+		updatedAt: UPDATED_AT,
+	};
+	const altOccurrence: Occurrence = {
+		id: crypto.randomUUID(),
+		workId: normal.work.id,
+		parentOccurrenceId: normal.occurrence.id,
+		orderKey: 1024,
+		collapsed: false,
+		revisionSelector: { mode: "branch", branchId: altBranch.id },
+	};
+	await store.createBranch(altBranch, altCopy);
+	await store.createOccurrence(altOccurrence);
+
+	const itemAlt = await store.getItem(altOccurrence.id);
+	const listAltItem = (await store.listItems()).find((i) => i.id === altOccurrence.id);
+	assertEquals(itemAlt, listAltItem);
+	assertEquals(itemAlt?.text, "alt branch text");
+
+	// 3. pinnedノード (pinned revision)
+	const pinnedRev: Revision = {
+		id: crypto.randomUUID(),
+		workId: normal.work.id,
+		text: "pinned revision text",
+		parentRevisionIds: [],
+		kind: "edition",
+		createdAt: CREATED_AT,
+	};
+	const pinnedOcc: Occurrence = {
+		id: crypto.randomUUID(),
+		workId: normal.work.id,
+		parentOccurrenceId: normal.occurrence.id,
+		orderKey: 2048,
+		collapsed: true,
+		revisionSelector: { mode: "pinned", revisionId: pinnedRev.id },
+		contextualHeading: "Pinned Heading",
+	};
+	await store.createRevision(pinnedRev, normal.branch.id);
+	await store.createOccurrence(pinnedOcc);
+
+	const itemPinned = await store.getItem(pinnedOcc.id);
+	const listPinnedItem = (await store.listItems()).find((i) => i.id === pinnedOcc.id);
+	assertEquals(itemPinned, listPinnedItem);
+	assertEquals(itemPinned?.text, "pinned revision text");
+	assertEquals(itemPinned?.contextualHeading, "Pinned Heading");
+
+	// 4. Stubノード (work with stub)
+	const stubWork: Work = {
+		id: crypto.randomUUID(),
+		createdAt: CREATED_AT,
+		updatedAt: CREATED_AT,
+		stub: {
+			createdVia: "stub-list",
+			createdAt: CREATED_AT,
+		},
+	};
+	const stubBranch: Branch = {
+		id: crypto.randomUUID(),
+		workId: stubWork.id,
+		name: "main",
+		headRevisionId: null,
+		createdAt: CREATED_AT,
+	};
+	const stubCopy: WorkingCopy = {
+		branchId: stubBranch.id,
+		workId: stubWork.id,
+		text: "stub text",
+		updatedAt: CREATED_AT,
+	};
+	const stubOcc: Occurrence = {
+		id: crypto.randomUUID(),
+		workId: stubWork.id,
+		parentOccurrenceId: null,
+		orderKey: 4096,
+		collapsed: false,
+		revisionSelector: { mode: "branch", branchId: stubBranch.id },
+	};
+	await store.createWorkBundle(stubWork, stubBranch, stubCopy, stubOcc);
+
+	const itemStub = await store.getItem(stubOcc.id);
+	const listStubItem = (await store.listItems()).find((i) => i.id === stubOcc.id);
+	assertEquals(itemStub, listStubItem);
+
+	const occStub = await store.getOccurrence(stubOcc.id);
+	const listStubOcc = (await store.listOccurrences()).find((o) => o.id === stubOcc.id);
+	assertEquals(occStub, listStubOcc);
+
+	// 5. 削除Work (trashWork)
+	const trashBundle = bundle("to be trashed");
+	await store.createWorkBundle(
+		trashBundle.work,
+		trashBundle.branch,
+		trashBundle.copy,
+		trashBundle.occurrence,
+	);
+	await store.trashWork(trashBundle.work.id, DELETED_AT);
+
+	assertEquals(await store.getItem(trashBundle.occurrence.id), null);
+	assertEquals(await store.getOccurrence(trashBundle.occurrence.id), null);
+	assertEquals(
+		(await store.listItems()).find((i) => i.id === trashBundle.occurrence.id),
+		undefined,
+	);
+	assertEquals(
+		(await store.listOccurrences(false)).find((o) => o.id === trashBundle.occurrence.id),
+		undefined,
+	);
+
+	// 6. merged Work
+	const survivorBundle = bundle("survivor text");
+	const sourceBundle = bundle("source text");
+	await store.createWorkBundle(
+		survivorBundle.work,
+		survivorBundle.branch,
+		survivorBundle.copy,
+		survivorBundle.occurrence,
+	);
+	await store.createWorkBundle(
+		sourceBundle.work,
+		sourceBundle.branch,
+		sourceBundle.copy,
+		sourceBundle.occurrence,
+	);
+	await store.mergeWorks({
+		sourceWorkId: sourceBundle.work.id,
+		survivorWorkId: survivorBundle.work.id,
+		mergedAt: UPDATED_AT,
+	});
+
+	// mergeWorks後はsourceのoccurrenceはsurvivorにrewireされている
+	const rewiredItem = await store.getItem(sourceBundle.occurrence.id);
+	const listRewiredItem = (await store.listItems()).find((i) =>
+		i.id === sourceBundle.occurrence.id
+	);
+	assertEquals(rewiredItem, listRewiredItem);
+	assertEquals(rewiredItem?.workId, survivorBundle.work.id);
+
+	const rewiredOcc = await store.getOccurrence(sourceBundle.occurrence.id);
+	const listRewiredOcc = (await store.listOccurrences()).find((o) =>
+		o.id === sourceBundle.occurrence.id
+	);
+	assertEquals(rewiredOcc, listRewiredOcc);
+	assertEquals(rewiredOcc?.workId, survivorBundle.work.id);
+
+	// 次に、mergedIntoWorkIdを持つWorkに直接紐づくOccurrenceが存在する状態（可視性差の検証）
+	const mergedWorkId = crypto.randomUUID();
+	const mergedBranchId = crypto.randomUUID();
+	const mergedOccId = crypto.randomUUID();
+	const snapshot = await store.exportGraphState();
+	snapshot.works.push({
+		id: mergedWorkId,
+		createdAt: CREATED_AT,
+		updatedAt: CREATED_AT,
+		mergedIntoWorkId: survivorBundle.work.id,
+		mergedAt: UPDATED_AT,
+	});
+	snapshot.branches.push({
+		id: mergedBranchId,
+		workId: mergedWorkId,
+		name: "main",
+		headRevisionId: null,
+		createdAt: CREATED_AT,
+	});
+	snapshot.workingCopies.push({
+		branchId: mergedBranchId,
+		workId: mergedWorkId,
+		text: "merged work text",
+		updatedAt: CREATED_AT,
+	});
+	snapshot.occurrences.push({
+		id: mergedOccId,
+		workId: mergedWorkId,
+		parentOccurrenceId: null,
+		orderKey: 5000,
+		collapsed: false,
+		revisionSelector: { mode: "branch", branchId: mergedBranchId },
+	});
+	await store.restoreGraphState(snapshot);
+
+	// listOccurrences(false) は mergedIntoWorkId を除外する
+	assertEquals((await store.listOccurrences(false)).find((o) => o.id === mergedOccId), undefined);
+	// getOccurrence も null を返す
+	assertEquals(await store.getOccurrence(mergedOccId), null);
+	// listItems(false) は mergedIntoWorkId を除外しない（!work.deletedAt のみ）
+	const listItemMerged = (await store.listItems()).find((i) => i.id === mergedOccId);
+	const itemMerged = await store.getItem(mergedOccId);
+	assertEquals(itemMerged, listItemMerged);
+	assertEquals(itemMerged?.text, "merged work text");
+
+	// 7. missing
+	assertEquals(await store.getItem("non-existent-id"), null);
+	assertEquals(await store.getOccurrence("non-existent-id"), null);
+
+	// 8. mutation 不透過性 (caller mutation does not affect store state)
+	const mutableItem = await store.getItem(normal.occurrence.id);
+	assert(mutableItem !== null);
+	mutableItem.text = "tampered text";
+	mutableItem.revisionSelector.mode = "pinned";
+	const freshItem = await store.getItem(normal.occurrence.id);
+	assertEquals(freshItem?.text, "point-read normal text");
+	assertEquals(freshItem?.revisionSelector.mode, "branch");
+
+	const mutableOcc = await store.getOccurrence(normal.occurrence.id);
+	assert(mutableOcc !== null);
+	mutableOcc.contextualHeading = "tampered heading";
+	const freshOcc = await store.getOccurrence(normal.occurrence.id);
+	assertEquals(freshOcc?.contextualHeading, undefined);
 }
 
 function blankUnplaced(stub?: Work["stub"]): { work: Work; branch: Branch; copy: WorkingCopy } {

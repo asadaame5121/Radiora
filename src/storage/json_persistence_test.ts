@@ -2,6 +2,8 @@ import { assertEquals, assertRejects, assertStrictEquals } from "jsr:@std/assert
 import { JsonPersistence } from "./json_persistence.ts";
 import { MemoryGraphStore } from "./memory_store.ts";
 
+const MUTATION_QUEUE_WAIT_MS = 30;
+
 function persistence(path: string, store: MemoryGraphStore): JsonPersistence {
 	return new JsonPersistence(path, {
 		capture: () => store.state.capture(),
@@ -69,3 +71,98 @@ for (const synchronous of [false, true]) {
 		});
 	}
 }
+
+Deno.test("JSON persistence supports nested mutations without deadlock and executes persist only once", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	try {
+		const store = new MemoryGraphStore();
+		const policy = persistence(path, store);
+
+		await policy.mutate(async () => {
+			await store.upsertAlias({
+				id: "alias-1",
+				canonical: "one",
+				variants: [],
+				createdAt: "2026-10-01",
+				updatedAt: "2026-10-01",
+			});
+			// nested mutate
+			await policy.mutate(async () => {
+				await store.upsertAlias({
+					id: "alias-2",
+					canonical: "two",
+					variants: [],
+					createdAt: "2026-10-01",
+					updatedAt: "2026-10-01",
+				});
+			});
+		});
+
+		const diskData = JSON.parse(await Deno.readTextFile(path)).data;
+		assertEquals(diskData.aliases.length, 2);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("JSON persistence serializes concurrent mutations in queue order", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	try {
+		const store = new MemoryGraphStore();
+		const policy = persistence(path, store);
+
+		const executionOrder: number[] = [];
+
+		const p1 = policy.mutate(async () => {
+			await new Promise((resolve) => setTimeout(resolve, MUTATION_QUEUE_WAIT_MS));
+			executionOrder.push(1);
+			await store.upsertAlias({
+				id: "alias-1",
+				canonical: "first",
+				variants: [],
+				createdAt: "2026-10-01",
+				updatedAt: "2026-10-01",
+			});
+		});
+
+		const p2 = policy.mutate(async () => {
+			executionOrder.push(2);
+			await store.upsertAlias({
+				id: "alias-2",
+				canonical: "second",
+				variants: [],
+				createdAt: "2026-10-01",
+				updatedAt: "2026-10-01",
+			});
+		});
+
+		await Promise.all([p1, p2]);
+		assertEquals(executionOrder, [1, 2]);
+
+		const diskData = JSON.parse(await Deno.readTextFile(path)).data;
+		assertEquals(diskData.aliases.length, 2);
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
+
+Deno.test("JSON persistence rejects nested restoreGraphState inside active mutation", async () => {
+	const directory = await Deno.makeTempDir();
+	const path = `${directory}/graph.json`;
+	try {
+		const store = new MemoryGraphStore();
+		const policy = persistence(path, store);
+
+		await policy.mutate(async () => {
+			await assertRejects(
+				() => policy.restoreGraphState(store.state.exportGraphState()),
+				Error,
+				"Cannot restoreGraphState from inside an active persistence operation",
+			);
+		});
+	} finally {
+		await Deno.remove(directory, { recursive: true });
+	}
+});
