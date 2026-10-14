@@ -191,7 +191,7 @@ Deno.test("A09 - rankRecentEditedItems exactly matches legacy oracle across comp
 		createItem("s2", "w2", "2026-01-02T00:00:00Z"),
 		createItem("s3", "w3", "2026-01-01T00:00:00Z"),
 	];
-	for (const testLimit of [0, 1.8, 2.2, Number.NaN, Number.POSITIVE_INFINITY, undefined]) {
+	for (const testLimit of [0, -5, 1.8, 2.2, Number.NaN, Number.POSITIVE_INFINITY, undefined]) {
 		const oracleLimit = legacyOracle(sample, { limit: testLimit });
 		const actualLimit = rankRecentEditedItems({ items: sample, limit: testLimit });
 		assertEquals(
@@ -214,4 +214,11 @@ Deno.test("recent ranking preserves stable locale ties after a Work winner chang
 	assertEquals(actual.map((entry) => entry.workId), ["w2", "w1"]);
 	assertEquals(items, before);
 	assertEquals(actual[0], items[1]);
+});
+
+Deno.test("recent ranking normalizes negative and sub-unit limits to an empty result", () => {
+	const items = [createItem("a", "w1", "2026-01-01T00:00:00Z")];
+	for (const limit of [-1, Number.NEGATIVE_INFINITY, 0.5]) {
+		assertEquals(rankRecentEditedItems({ items, limit }), []);
+	}
 });
