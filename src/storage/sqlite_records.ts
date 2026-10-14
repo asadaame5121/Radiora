@@ -322,13 +322,17 @@ function appendFeedbackDiff(
 ): void {
 	const beforeFeedback = before ? before.emergenceFeedback : {};
 	const afterFeedback = after.emergenceFeedback;
-	const beforeFeedbackKeys = new Set(Object.keys(beforeFeedback));
+	const beforeKeys = Object.keys(beforeFeedback);
+	const beforePosMap = new Map<string, number>();
+	for (let i = 0; i < beforeKeys.length; i++) {
+		beforePosMap.set(beforeKeys[i], i);
+	}
 	const afterFeedbackEntries = Object.entries(afterFeedback);
 	const afterFeedbackKeys = new Set(afterFeedbackEntries.map(([k]) => k));
 
 	for (const [pos, [id, action]] of afterFeedbackEntries.entries()) {
 		const beforeAction = beforeFeedback[id];
-		const beforePos = Object.keys(beforeFeedback).indexOf(id);
+		const beforePos = beforePosMap.get(id) ?? -1;
 		const json = JSON.stringify(action);
 		const beforeJson = beforeAction !== undefined ? JSON.stringify(beforeAction) : null;
 		if (beforeAction === undefined || beforePos !== pos || beforeJson !== json) {
@@ -336,7 +340,7 @@ function appendFeedbackDiff(
 		}
 	}
 
-	for (const id of beforeFeedbackKeys) {
+	for (const id of beforeKeys) {
 		if (!afterFeedbackKeys.has(id)) diff.deletes.push({ table: "emergence_feedback", id });
 	}
 }
@@ -380,14 +384,11 @@ export function calculateSqliteDiff(
 	return diff;
 }
 
-export function persistSqliteDiff(
-	before: GraphStateSnapshot | null,
-	after: GraphStateSnapshot,
+export function applySqliteDiffOperations(
+	diff: SqliteDiffOperations,
 	db: SqliteDatabase,
 ): void {
-	const validated = validatedGraphStateSnapshot(after);
-	const diff = calculateSqliteDiff(before, validated);
-	if (before !== null && diff.deletes.length === 0 && diff.upserts.length === 0) return;
+	if (diff.deletes.length === 0 && diff.upserts.length === 0) return;
 
 	db.transaction((txn) => {
 		for (const del of diff.deletes) {
@@ -411,6 +412,17 @@ export function persistSqliteDiff(
 			new Date().toISOString(),
 		);
 	});
+}
+
+export function persistSqliteDiff(
+	before: GraphStateSnapshot | null,
+	after: GraphStateSnapshot,
+	db: SqliteDatabase,
+): void {
+	const validated = validatedGraphStateSnapshot(after);
+	const diff = calculateSqliteDiff(before, validated);
+	if (before !== null && diff.deletes.length === 0 && diff.upserts.length === 0) return;
+	applySqliteDiffOperations(diff, db);
 }
 
 export function persistSqliteState(
