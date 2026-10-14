@@ -5,8 +5,9 @@
 base とする兄弟 PR であり、直列スタックではない。
 
 実際の PR refs を取得し、#343 と #342 をローカルで統合した worktree
-`/workspace/Radiora-review`、branch `review/p3-contract-fixes` で検証・修正した。 GitHub への
-push・PR 更新・merge は実施していない。
+`/workspace/Radiora-review`、branch `review/p3-contract-fixes` で検証・修正した。 反映先は実装修正
+#347、追加テスト #342、契約文書 #343 の既存 GitHub ブランチ。 #342 と #343 は更新した #347 を merge
+して追従し、履歴を保って通常の push で更新する。 GitHub 上の PR merge は今回の作業に含めない。
 
 ## 指摘ごとの判定
 
