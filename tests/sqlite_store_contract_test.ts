@@ -226,6 +226,16 @@ Deno.test("SqliteGraphStore statement trace proves single WorkingCopy update wri
 		assertEquals(modifiedSql.some((s) => s.includes("INSERT INTO knot ")), false);
 
 		await store.close();
+		executedStatements.length = 0;
+		const reopened = new SqliteGraphStore(dbPath, { connector });
+		await reopened.initialize();
+		assert(
+			executedStatements.every(({ sql }) =>
+				sql.includes("INSERT INTO relation_type_definition ") ||
+				sql.includes("INSERT INTO storage_metadata ")
+			),
+		);
+		await reopened.close();
 	} finally {
 		(rawDb as NodeSqliteDatabaseAdapter | null)?.close();
 		await safeRemoveDir(root);
