@@ -1,4 +1,3 @@
-import type { OutlineScrollMetrics } from "./outline_viewport_adapter.ts";
 import {
 	buildVirtualOutlineLayout,
 	calculateVirtualOutlineWindow,
@@ -12,6 +11,12 @@ function editorIdFromTarget(target: EventTarget | null): string | null {
 	return target instanceof Element
 		? target.closest<HTMLTextAreaElement>("textarea[data-item-id]")?.dataset.itemId ?? null
 		: null;
+}
+
+/** Scroll position and viewport size the measured layout is calculated from. */
+interface OutlineScrollMetrics {
+	scrollTop: number;
+	viewportHeight: number;
 }
 
 interface ScrollAnchor {
