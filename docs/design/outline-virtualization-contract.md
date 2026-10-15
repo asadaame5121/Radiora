@@ -35,11 +35,41 @@ mobileではpanel以外のscroll ownerも保存・復元する。
 
 次の項目も受入条件とする。
 
-- 仮想化後も `role="tree"` / `role="treeitem"` が件数・階層・位置を伝える。
-  `aria-setsize` / `aria-posinset` / `aria-level` を設定するか、窓外行の代替提示で同等の情報を伝える。
-- 折りたたみ・行削除でfocus対象行またはIME composition対象行が消えた場合に、focusを補正する先と決定規則を定める。
+- 仮想化後も `role="tree"` / `role="treeitem"` が件数・階層・位置を伝える。 `aria-setsize` /
+  `aria-posinset` / `aria-level` を設定するか、窓外行の代替提示で同等の情報を伝える。
+- 折りたたみ・行削除でfocus対象行またはIME
+  composition対象行が消えた場合に、focusを補正する先と決定規則を定める。
 
 各実装PRで先行回帰を再実行し、新APIの直接テストを接続する。最終配線では10,000行の
 desktop/mobile表示、2KB本文、anchor、IME・drag、仮想gapへのdropをブラウザで確認する。
 元PRの全面整形を取り込まず、追加・削除の合計をPRごとに原則500行程度までに分ける。 性能のrelease
 traceとmain/candidate比較はP7に残す。
+
+## レビュー対応後の境界と検証（#361〜#366）
+
+以下はスタック上の対応記録であり、mainへの反映完了ではない。比較baseは main
+`a5478fba`（#359/#360反映後）。
+
+- Controllerは構築時の論理行・保護IDの読み取りportを`refreshProjection`で再評価する。
+  Viewは他ownerの値をsetterで書き込めず、focus/IME通知はadapterが解決したIDだけを渡す。
+- `OutlineScrollAdapter`はowner解決・監視・scroll書込みを、`OutlineVirtualViewAdapter`は
+  行observer・rAF・mount待ちのView寿命を所有する。`OutlineViewportAdapter`は復帰文脈を扱う。
+- 高さの連続報告は最初の論理anchorへ集約し、ユーザーscrollは未適用補正を失効させる。
+  書込み後のmetricsは予測値ではなくDOMから再読込し、ブラウザのclampに従う。
+- focus/IME対象が消えた場合、表示中の選択を優先し、なければ旧indexに来た次行
+  （末尾では最後の行）を選択Workspaceへ要求する。通常のreceipt/origin確認後にfocusする。
+- mount不可と要求失効を区別する。前者はrows/first-itemへfocusしpane scrollを復元する。
+  後者からはfocusもscrollも公開しない。port登録前の要求は描画tick後に再確認する。
+- ARIAのlevel・posinset・setsizeはDOM窓でなく論理兄弟全体から算出する。
+
+回帰証拠: Controllerの複数高さ報告・介在scroll、DOMのclamp読戻し・frame取消、
+mount失敗と失効の区別を単体テストで固定。ブラウザでは10,000行の末尾が実viewport内に入ること、
+800pxで`.app-main`がscroll ownerであること、2KB編集中行の画面外mount保持、
+大規模OutlineのARIA/axeと折りたたみ後のfocus補正を確認する。
+
+全体verifyにはP5と独立した既存mainのブロッカーがある。
+`diagnostic_log_sink_test.ts`の`createDiagnosticLogSink`と
+`desktop_launcher_integrity_test.ts`の`prepareWindowsLaunchers`が未exportでTS2305になる。 mainのCI
+run `38656975234`でも同じ2件が失敗している。テストをskipしたり、
+desktopの仕様をP5へ混ぜて通すことはしない。別途解消後に全体verifyとマージ可否を再確認する。 release
+traceとmain/candidate比較は引き続きP7に残す。

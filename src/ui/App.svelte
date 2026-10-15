@@ -178,7 +178,11 @@
 	});
 	const longForm = $derived(longFormController.state);
 	const outlineViewport = new OutlineViewportAdapter();
-	const outlineVirtualViewport = new OutlineVirtualViewportController();
+	const outlineVirtualViewport = new OutlineVirtualViewportController({
+		rowIds: () => visibleRows.filter((row) => !row.stash).map((row) => row.item.id),
+		protectedIds: () => [selectedId, outlineDrag.draggedId].filter((id): id is string => Boolean(id)),
+		focusFallback: (id) => { selectOccurrence(id, (current) => requestFocus(id, undefined, current)); },
+	});
 	onMount(() => outlineViewport.connect());
 	const screenNavigation: ScreenNavigationWorkspace = new ScreenNavigationWorkspace({
 		outline: {

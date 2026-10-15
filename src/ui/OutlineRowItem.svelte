@@ -28,6 +28,7 @@
 		onDragStart,
 		onDragEnd,
 		onRowElement = () => undefined,
+		accessibility,
 	}: {
 		row: VisibleRow;
 		selectedId: string | null;
@@ -41,6 +42,7 @@
 		onDragStart: (id: string) => void;
 		onDragEnd: () => void;
 		onRowElement?: (id: string, element: HTMLElement | null) => void;
+		accessibility?: { level: number; position: number; size: number };
 	} = $props();
 
 	let rowElement = $state<HTMLElement | null>(null);
@@ -49,6 +51,7 @@
 	const inlineLinks = $derived(helpers.inlineSemanticLinksFor(row.item.text));
 	const annotations = $derived(helpers.semanticLinkAnnotationsFor(row.item.id));
 	const rowBody = $derived(helpers.bodyFor(row.item));
+	// Notify the observer of this row ID/DOM binding; cleanup unobserves replaced/unmounted rows.
 	$effect(() => {
 		const id = row.item.id;
 		onRowElement(id, rowElement);
@@ -69,6 +72,10 @@
 	}}
 	role="treeitem"
 	aria-selected={selectedId === row.item.id}
+	aria-level={accessibility?.level ?? row.depth + 1}
+	aria-posinset={accessibility?.position}
+	aria-setsize={accessibility?.size}
+	aria-expanded={row.hasChildren ? !row.item.collapsed : undefined}
 	tabindex="-1"
 	oncontextmenu={(event) => handlers.openOccurrenceContextMenu(row.item.id, "outline", event)}
 	onkeydown={(event) => handlers.handleOccurrenceContextMenuKeydown(row.item.id, "outline", event)}

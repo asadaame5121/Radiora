@@ -2,76 +2,16 @@ import { tick } from "svelte";
 import { captureEditorPosition, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
 import type { OutlineViewport } from "./outline_screen_state.svelte.ts";
 import {
-	virtualOutlineIndexAtOffset,
-	type VirtualOutlineLayout,
-} from "./virtual_outline_viewport.ts";
-
-export interface OutlineScrollMetrics {
-	scrollTop: number;
-	viewportHeight: number;
-}
-
+	OutlineScrollAdapter,
+	readScroll,
+	scrollOwnerForPanel,
+	writeScroll,
+} from "./outline_scroll_adapter.ts";
+export type { OutlineScrollMetrics } from "./outline_virtual_viewport_controller.svelte.ts";
 export type EnsureOutlineRowMounted = (id: string, current: () => boolean) => Promise<boolean>;
 
-function findScrollContainer(element: HTMLElement): HTMLElement | null {
-	let current: HTMLElement | null = element.parentElement;
-	while (current) {
-		if (typeof window !== "undefined") {
-			const style = window.getComputedStyle(current);
-			const overflowY = style.overflowY;
-			if (overflowY === "auto" || overflowY === "scroll") {
-				return current;
-			}
-		}
-		current = current.parentElement;
-	}
-	return null;
-}
-
-function scrollOwnerForPanel(panel: HTMLElement): HTMLElement | Window {
-	const overflowY = window.getComputedStyle(panel).overflowY;
-	if (overflowY === "auto" || overflowY === "scroll") return panel;
-	return findScrollContainer(panel) ?? window;
-}
-
-function readScroll(owner: HTMLElement | Window): { top: number; left: number } {
-	return "scrollTop" in owner
-		? { top: owner.scrollTop, left: owner.scrollLeft }
-		: { top: window.scrollY, left: window.scrollX };
-}
-
-function writeScroll(owner: HTMLElement | Window, top: number, left: number): void {
-	if ("scrollTop" in owner) {
-		owner.scrollTop = top;
-		owner.scrollLeft = left;
-	} else {
-		window.scrollTo(left, top);
-	}
-}
-
-function calculateMetrics(
-	rowsElement: HTMLElement,
-	container: HTMLElement | null,
-): OutlineScrollMetrics {
-	if (container) {
-		const containerRect = container.getBoundingClientRect();
-		const rowsRect = rowsElement.getBoundingClientRect();
-		const innerTop = containerRect.top + container.clientTop;
-		const scrollTop = Math.max(0, innerTop - rowsRect.top);
-		const viewportHeight = container.clientHeight;
-		return { scrollTop, viewportHeight };
-	}
-	if (typeof window !== "undefined") {
-		const rowsRect = rowsElement.getBoundingClientRect();
-		const scrollTop = Math.max(0, -rowsRect.top);
-		const viewportHeight = window.innerHeight;
-		return { scrollTop, viewportHeight };
-	}
-	return { scrollTop: 0, viewportHeight: 0 };
-}
-
 /** DOM identity is recreated after render; only coordinates and logical targets are retained. */
-export class OutlineViewportAdapter {
+export class OutlineViewportAdapter extends OutlineScrollAdapter {
 	private paneScroll: NonNullable<OutlineViewport["paneScroll"]> = {};
 	private focusedItem: string | null = null;
 	private focusedPosition: ReturnType<typeof captureEditorPosition> | undefined;
@@ -85,120 +25,11 @@ export class OutlineViewportAdapter {
 		};
 	}
 
-	ensureMounted(id: string, current: () => boolean): Promise<boolean> {
-		return current() && this.ensureMountedPort
-			? this.ensureMountedPort(id, current)
-			: Promise.resolve(false);
-	}
-
-	dropOnVirtualGap<T>(
-		event: DragEvent,
-		draggedId: string | null,
-		rowsElement: HTMLElement | null,
-		layout: VirtualOutlineLayout,
-		rows: readonly T[],
-		onDrop: (row: T) => void,
-	): void {
-		const target = event.target;
-		if (
-			!draggedId || !rowsElement ||
-			(target !== event.currentTarget &&
-				!(target instanceof Element && target.closest(".virtual-gap")))
-		) return;
-		const index = virtualOutlineIndexAtOffset(
-			layout,
-			event.clientY - rowsElement.getBoundingClientRect().top,
-		);
-		const row = index === null ? undefined : rows[index];
-		if (!row) return;
-		event.preventDefault();
-		event.stopPropagation();
-		onDrop(row);
-	}
-
-	adjustScroll(rowsElement: HTMLElement, delta: number): void {
-		if (!Number.isFinite(delta) || delta === 0) return;
-		const owner = findScrollContainer(rowsElement);
-		if (owner) owner.scrollTop += delta;
-		else if (typeof window !== "undefined") window.scrollBy(0, delta);
-	}
-
-	scrollToLogical(rowsElement: HTMLElement, top: number): void {
-		if (!Number.isFinite(top)) return;
-		const owner = findScrollContainer(rowsElement);
-		const rowsTop = rowsElement.getBoundingClientRect().top;
-		const ownerTop = owner ? owner.getBoundingClientRect().top + owner.clientTop : 0;
-		this.adjustScroll(rowsElement, rowsTop - ownerTop + Math.max(0, top));
-	}
-
-	observeRows(
-		rowsElement: HTMLElement,
-		publishMetrics: (metrics: OutlineScrollMetrics) => void,
-	): () => void {
-		let currentOwner: HTMLElement | null = null;
-		let disposed = false;
-		let observer: ResizeObserver | null = null;
-
-		const updateMetrics = () => {
-			if (disposed) return;
-			const metrics = calculateMetrics(rowsElement, currentOwner);
-			publishMetrics(metrics);
-		};
-
-		const detachOwner = () => {
-			if (currentOwner) {
-				currentOwner.removeEventListener("scroll", updateMetrics);
-				if (observer) {
-					observer.unobserve(currentOwner);
-				}
-			}
-		};
-
-		const attachOwner = (owner: HTMLElement | null) => {
-			currentOwner = owner;
-			if (currentOwner) {
-				currentOwner.addEventListener("scroll", updateMetrics, { passive: true });
-				if (observer) {
-					observer.observe(currentOwner);
-				}
-			}
-		};
-
-		const reResolve = () => {
-			if (disposed) return;
-			const nextOwner = findScrollContainer(rowsElement);
-			if (nextOwner !== currentOwner) {
-				detachOwner();
-				attachOwner(nextOwner);
-			}
-			updateMetrics();
-		};
-
-		if (typeof ResizeObserver !== "undefined") {
-			observer = new ResizeObserver(() => {
-				reResolve();
-			});
-			observer.observe(rowsElement);
-		}
-
-		attachOwner(findScrollContainer(rowsElement));
-		updateMetrics();
-
-		if (typeof window !== "undefined") {
-			window.addEventListener("resize", reResolve, { passive: true });
-		}
-
-		return () => {
-			disposed = true;
-			detachOwner();
-			if (observer) {
-				observer.disconnect();
-				observer = null;
-			}
-			if (typeof window !== "undefined") {
-				window.removeEventListener("resize", reResolve);
-			}
-		};
+	async ensureMounted(id: string, current: () => boolean): Promise<boolean> {
+		// A navigation commit may run before the View's onMount registers its port.
+		if (!this.ensureMountedPort) await tick();
+		if (!current()) return false;
+		return this.ensureMountedPort ? this.ensureMountedPort(id, current) : false;
 	}
 
 	connect(): () => void {
@@ -232,9 +63,10 @@ export class OutlineViewportAdapter {
 	}
 
 	async restorePane(itemId: string | null, current: () => boolean): Promise<void> {
-		if (itemId && !(await this.ensureMounted(itemId, current))) return;
+		const mounted = !itemId || await this.ensureMounted(itemId, current);
 		if (!current()) return;
-		await focusOutlineEditor(itemId, undefined, current, false);
+		if (mounted) await focusOutlineEditor(itemId, undefined, current, false);
+		else this.restoreOtherFocus({ focus: "rows" });
 		await this.restorePanels(current);
 	}
 
@@ -296,7 +128,11 @@ export class OutlineViewportAdapter {
 		current: () => boolean,
 	): Promise<boolean> {
 		const position = viewport.editorPosition;
-		if (position?.itemId && !(await this.ensureMounted(position.itemId, current))) return false;
+		if (position?.itemId && !(await this.ensureMounted(position.itemId, current))) {
+			if (!current()) return false;
+			this.restoreOtherFocus({ focus: "rows" });
+			return true;
+		}
 		if (!current()) return false;
 		await focusOutlineEditor(
 			position?.itemId ?? null,
@@ -307,16 +143,16 @@ export class OutlineViewportAdapter {
 		return true;
 	}
 
-	private restoreOtherFocus(viewport: OutlineViewport): void {
+	private restoreOtherFocus(viewport: Pick<OutlineViewport, "focus">): void {
 		document.querySelector<HTMLElement>(
 			viewport.focus === "first-item" ? ".first-item" : ".rows, .first-item",
 		)?.focus({ preventScroll: true });
 	}
 
-	private restoreFocus(
+	private async restoreFocus(
 		viewport: OutlineViewport,
 		current: () => boolean,
-	): Promise<boolean> | boolean {
+	): Promise<boolean> {
 		if (viewport.focus === "long-form") {
 			this.restoreLongForm(viewport.editorPosition);
 			return true;

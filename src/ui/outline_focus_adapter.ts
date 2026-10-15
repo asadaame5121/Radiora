@@ -13,29 +13,26 @@ export class OutlineFocusAdapter {
 		if (this.disposed) return;
 		if (this.timer !== undefined) clearTimeout(this.timer);
 		const context = this.ports.context();
+		const stillCurrent = () => {
+			const next = this.ports.context();
+			return !this.disposed && current() && context.pane === next.pane &&
+				context.origin === next.origin && this.ports.canFocus(id);
+		};
 		this.timer = setTimeout(() => {
 			this.timer = undefined;
 			const dispatch = () => {
-				const next = this.ports.context();
-				if (
-					this.disposed || !current() || context.pane !== next.pane ||
-					context.origin !== next.origin || !this.ports.canFocus(id)
-				) return;
+				if (!stillCurrent()) return;
 				document.querySelector<HTMLElement>(
 					`.markdown-editor-host[data-editor-item-id="${CSS.escape(id)}"]`,
 				)
 					?.dispatchEvent(new CustomEvent("radiora:focus-editor", { detail: { caretOffset } }));
 			};
-			const next = this.ports.context();
-			if (
-				this.disposed || !current() || context.pane !== next.pane ||
-				context.origin !== next.origin || !this.ports.canFocus(id)
-			) return;
+			if (!stillCurrent()) return;
 			if (!this.ports.ensureMounted) {
 				dispatch();
 				return;
 			}
-			void this.ports.ensureMounted(id, current).then((mounted) => {
+			void this.ports.ensureMounted(id, stillCurrent).then((mounted) => {
 				if (mounted) dispatch();
 			}).catch((cause) => {
 				console.error("Outlineの対象行をmountできませんでした", cause);

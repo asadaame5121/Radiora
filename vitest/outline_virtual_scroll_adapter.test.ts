@@ -1,3 +1,4 @@
+import type { VisibleRow } from "../src/ui/outline_view_model.ts";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	type OutlineScrollMetrics,
@@ -374,6 +375,29 @@ describe("OutlineViewportAdapter.observeRows (U01)", () => {
 		expect(owner.scrollTop).toBe(430);
 		expect(owner.scrollLeft).toBe(12);
 	});
+
+	test("observes window scrolling and releases its listener on owner switch and dispose", () => {
+		const rows = new MockElement();
+		const published: OutlineScrollMetrics[] = [];
+		const dispose = adapter.observeRows(rows as unknown as HTMLElement, (m) => published.push(m));
+		rows.rect.top = -100;
+		windowTarget.dispatchEvent(new Event("scroll"));
+		expect(published.at(-1)?.scrollTop).toBe(100);
+		const panel = new MockElement();
+		panel.style.overflowY = "auto";
+		rows.parentElement = panel;
+		windowTarget.dispatchEvent(new Event("resize"));
+		const count = published.length;
+		windowTarget.dispatchEvent(new Event("scroll"));
+		expect(published).toHaveLength(count);
+		panel.dispatchEvent(new Event("scroll"));
+		expect(published).toHaveLength(count + 1);
+		dispose();
+		panel.dispatchEvent(new Event("scroll"));
+		windowTarget.dispatchEvent(new Event("scroll"));
+		for (const callback of resizeObserverCallbacks) callback();
+		expect(published).toHaveLength(count + 1);
+	});
 });
 
 test("drops on the logical row under the pointer when it lands on the virtualized root gap", () => {
@@ -394,11 +418,11 @@ test("drops on the logical row under the pointer when it lands on the virtualize
 		"dragged",
 		root as unknown as HTMLElement,
 		buildVirtualOutlineLayout(3, () => 40),
-		["a", "b", "c"],
+		["a", "b", "c"].map((id) => ({ item: { id } }) as VisibleRow),
 		drop,
 	);
 
-	expect(drop).toHaveBeenCalledWith("b");
+	expect(drop).toHaveBeenCalledWith({ item: { id: "b" } });
 	expect(event.preventDefault).toHaveBeenCalledOnce();
 	expect(event.stopPropagation).toHaveBeenCalledOnce();
 });

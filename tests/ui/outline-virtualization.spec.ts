@@ -154,6 +154,25 @@ for (const width of [1440, 800]) {
 		);
 		await scrollOwnerToBottom(page);
 		await expect(page.locator('[data-outline-row-id="outline-9999"]')).toBeVisible();
+		await expect.poll(() =>
+			page.locator('[data-outline-row-id="outline-9999"]').evaluate((row) => {
+				let owner = row.parentElement;
+				while (owner && !["auto", "scroll"].includes(getComputedStyle(owner).overflowY)) {
+					owner = owner.parentElement;
+				}
+				if (!owner) return false;
+				const rect = row.getBoundingClientRect();
+				const top = owner.getBoundingClientRect().top + owner.clientTop;
+				return rect.top >= top - 1 && rect.bottom <= top + owner.clientHeight + 1 &&
+					owner.scrollTop > 0;
+			})
+		).toBe(true);
+		if (width === 800) {
+			expect(await page.locator(".app-main").evaluate((owner) => owner.scrollTop)).toBeGreaterThan(
+				0,
+			);
+			expect(await page.locator(".outline-panel").evaluate((panel) => panel.scrollTop)).toBe(0);
+		}
 	});
 }
 
@@ -182,6 +201,16 @@ test("mounts a 2 KB editor at a middle index without expanding the rendered wind
 	await scrollOwnerToOffset(page, 2_048 * 44);
 	const editor = page.locator('textarea[data-item-id="outline-2048"]');
 	await expect(editor).toHaveValue("x".repeat(2_048));
+	await page.locator('[data-outline-row-id="outline-2048"] .markdown-editor-host').dispatchEvent(
+		"click",
+	);
+	await expect(editor).toBeFocused();
+	const original = await editor.elementHandle();
+	await scrollOwnerToBottom(page);
+	expect(await original?.evaluate((element) => element.isConnected)).toBe(true);
+	await expect(editor).toBeFocused();
+	const box = await editor.boundingBox();
+	expect(box?.y).toBeLessThan(0);
 	expect(await page.locator(".rows [role=treeitem]").count()).toBeLessThanOrEqual(
 		await mountedLimit(page),
 	);

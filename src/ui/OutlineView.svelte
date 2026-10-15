@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, tick, untrack } from "svelte";
+	import { onMount, untrack } from "svelte";
 	import type { OutlineItem, RelationTypeDefinition } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { VisibleRow } from "./outline_view_model.ts";
@@ -9,12 +9,11 @@
 	} from "./editor_completion_controller.svelte.ts";
 	import type { OutlineHelpers, OutlineRowHandlers } from "./outline_row_types.ts";
 	import OutlineRowItem from "./OutlineRowItem.svelte";
-	import { OUTLINE_PIXEL_TOLERANCE, type VirtualOutlineEntry } from "./virtual_outline_viewport.ts";
+	import type { VirtualOutlineEntry } from "./virtual_outline_viewport.ts";
 	import type { OutlineVirtualViewportController } from "./outline_virtual_viewport_controller.svelte.ts";
-	import {
-		type EnsureOutlineRowMounted,
-		OutlineViewportAdapter,
-	} from "./outline_viewport_adapter.ts";
+	import type { EnsureOutlineRowMounted } from "./outline_viewport_adapter.ts";
+	import { outlineEditorId, OutlineVirtualViewAdapter } from "./outline_virtual_view_adapter.ts";
+	import { outlineAccessibility } from "./outline_accessibility.ts";
 
 	let {
 		viewport,
@@ -75,23 +74,11 @@
 	} = $props();
 
 	let rowsEl = $state<HTMLDivElement | null>(null);
-	const viewportAdapter = new OutlineViewportAdapter();
-	const rowElements = new Map<string, HTMLElement>();
-	const rowIdsByElement = new WeakMap<Element, string>();
-	let anchorFrame = 0;
-	const rowObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver((entries) => {
-		let changed = false;
-		for (const entry of entries) {
-			const id = rowIdsByElement.get(entry.target);
-			const height = entry.borderBoxSize?.[0]?.blockSize ??
-				entry.target.getBoundingClientRect().height;
-			if (id && viewport.reportHeight(id, height)) changed = true;
-		}
-		if (changed) scheduleAnchorAdjustment();
-	});
+	const viewportAdapter = new OutlineVirtualViewAdapter();
 
 	const normalRows = $derived.by(() => visibleRows.filter((row) => !row.stash));
 	const stashRows = $derived.by(() => visibleRows.filter((row) => row.stash));
+	const accessibility = $derived(outlineAccessibility(normalRows));
 	const virtualWindow = $derived(viewport.window);
 	const renderedEntries = $derived.by(() =>
 		virtualWindow.entries.map((entry: VirtualOutlineEntry) => ({
@@ -100,81 +87,23 @@
 		}))
 	);
 
+	// Reconcile the injected projection/selection ports before rendering; no subscription to dispose.
 	$effect.pre(() => {
-		const ids = normalRows.map((row) => row.item.id);
-		const protectedIds = [selectedId, draggedId].filter((id): id is string => Boolean(id));
-		untrack(() => {
-			viewport.setRows(ids);
-			viewport.setProtectedIds(protectedIds);
-			scheduleAnchorAdjustment();
-		});
+		viewport.refreshProjection();
+		untrack(() => viewportAdapter.scheduleAnchorAdjustment());
 	});
 
+	// Bind only this rows DOM instance; cleanup releases observers, listeners, frames and pins.
 	$effect(() => {
 		const element = rowsEl;
 		if (!element) return;
-		return untrack(() =>
-			viewportAdapter.observeRows(element, (metrics) => {
-				viewport.setMetrics(metrics);
-				const visibleIds = viewport.window.entries.map((entry) => viewport.rowIds[entry.index]);
-				if (viewport.setWidth(element.clientWidth, visibleIds)) scheduleAnchorAdjustment();
-			})
-		);
+		return untrack(() => viewportAdapter.connectViewport(element, viewport));
 	});
 
 	onMount(() => {
-		const unregister = registerEnsureMounted(ensureMounted);
-		return () => {
-			unregister();
-			viewport.releaseProtectedRows();
-			if (anchorFrame) cancelAnimationFrame(anchorFrame);
-			rowObserver?.disconnect();
-			onDragEnd();
-		};
+		const unregister = registerEnsureMounted((id, current) => viewportAdapter.ensureMounted(id, current));
+		return () => { unregister(); onDragEnd(); };
 	});
-
-	function connectRowElement(id: string, element: HTMLElement | null): void {
-		const previous = rowElements.get(id);
-		if (previous && previous !== element) {
-			rowObserver?.unobserve(previous);
-			rowIdsByElement.delete(previous);
-			rowElements.delete(id);
-		}
-		if (!element) return;
-		rowElements.set(id, element);
-		rowIdsByElement.set(element, id);
-		rowObserver?.observe(element);
-	}
-
-	function scheduleAnchorAdjustment(): void {
-		if (anchorFrame) cancelAnimationFrame(anchorFrame);
-		anchorFrame = requestAnimationFrame(() => {
-			anchorFrame = 0;
-			const element = rowsEl;
-			if (!element) return;
-			const delta = viewport.takeAnchorAdjustment();
-			if (Math.abs(delta) < OUTLINE_PIXEL_TOLERANCE) return;
-			viewportAdapter.adjustScroll(element, delta);
-			viewport.setMetrics({
-				scrollTop: viewport.metrics.scrollTop + delta,
-				viewportHeight: viewport.metrics.viewportHeight,
-			});
-		});
-	}
-
-	async function ensureMounted(id: string, current: () => boolean): Promise<boolean> {
-		const element = rowsEl;
-		if (!element || !current()) return false;
-		const target = viewport.scrollTopFor(id);
-		if (target === null) return false;
-		const metrics = viewport.metrics;
-		if (Math.abs(target - metrics.scrollTop) >= OUTLINE_PIXEL_TOLERANCE) {
-			viewportAdapter.scrollToLogical(element, target);
-			viewport.setMetrics({ scrollTop: target, viewportHeight: metrics.viewportHeight });
-		}
-		await tick();
-		return current() && rowElements.has(id);
-	}
 
 	function handleRootDrop(event: DragEvent): void {
 		viewportAdapter.dropOnVirtualGap(
@@ -217,32 +146,31 @@
 
 {#if !loading || hasSnapshot}
 	{#if snapshotItemsLength === 0}
-		<button type="button" class="first-item"
-	onclick={createRoot}>最初の{vocabulary.work}を作る</button>
+		<button type="button" class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
 	{:else}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-	bind:this={rowsEl}
-	class="rows"
-	role="tree"
-	aria-busy={loading}
-	aria-label={`${vocabulary.work}のアウトライン`}
-	tabindex="0"
-	onfocusin={(event) => viewport.trackFocusIn(event.target)}
-	onfocusout={(event) => viewport.trackFocusOut(event.target, event.relatedTarget)}
-	oncompositionstart={(event) => viewport.trackCompositionStart(event.target)}
-	oncompositionend={(event) => viewport.trackCompositionEnd(event.target)}
-	ondragover={(event) => {
-				if (event.target === event.currentTarget || (event.target instanceof Element && event.target.closest(".virtual-gap"))) event.preventDefault();
+			bind:this={rowsEl}
+			class="rows"
+			role="tree"
+			aria-busy={loading}
+			aria-label={`${vocabulary.work}のアウトライン`}
+			tabindex="0"
+			onfocusin={(event) => viewport.trackFocusIn(outlineEditorId(event.target))}
+			onfocusout={(event) => viewport.trackFocusOut(outlineEditorId(event.target), outlineEditorId(event.relatedTarget))}
+			oncompositionstart={(event) => viewport.trackCompositionStart(outlineEditorId(event.target))}
+			oncompositionend={(event) => viewport.trackCompositionEnd(outlineEditorId(event.target), outlineEditorId(document.activeElement))}
+			ondragover={(event) => {
+				if (event.target === event.currentTarget || (event.target instanceof Element && event.target.closest("[data-virtual-gap]"))) event.preventDefault();
 			}}
-	ondrop={handleRootDrop}
-	onmousedown={(event) => {
+			ondrop={handleRootDrop}
+			onmousedown={(event) => {
 				if (event.target === event.currentTarget) handlers.deselectFromBlank(event);
 			}}
->
+		>
 			{#each renderedEntries as entry (entry.row.item.id)}
 				{#if entry.gapBefore > 0}
-					<div class="virtual-gap" style:height={`${entry.gapBefore}px`} aria-hidden="true" role="presentation"></div>
+					<div class="virtual-gap" data-virtual-gap style:height={`${entry.gapBefore}px`} aria-hidden="true" role="presentation"></div>
 				{/if}
 				<OutlineRowItem
 					row={entry.row}
@@ -256,18 +184,18 @@
 					{helpers}
 					{onDragStart}
 					{onDragEnd}
-					onRowElement={connectRowElement}
+					onRowElement={(id, element) => viewportAdapter.connectRow(id, element)}
+					accessibility={accessibility[entry.index]}
 				/>
 			{/each}
 			{#if virtualWindow.trailingGap > 0}
-				<div class="virtual-gap" style:height={`${virtualWindow.trailingGap}px`} aria-hidden="true" role="presentation"></div>
+				<div class="virtual-gap" data-virtual-gap style:height={`${virtualWindow.trailingGap}px`} aria-hidden="true" role="presentation"></div>
 			{/if}
 		</div>
 	{/if}
 
 	{#if stashItemIdsLength}
-		<div
-	class="section-title stash-title"><span>Stash / Knots</span><small>{knotsLength} knot</small></div>
+		<div class="section-title stash-title"><span>Stash / Knots</span><small>{knotsLength} knot</small></div>
 		<div class="stash-list">
 			{#each stashRows as row (row.item.id)}
 				<button
