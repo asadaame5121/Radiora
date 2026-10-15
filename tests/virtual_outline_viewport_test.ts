@@ -22,11 +22,7 @@ Deno.test("calculateVirtualOutlineWindow limits an unmeasured large dataset to t
 		scrollTop: 0,
 		viewportHeight: 0,
 	});
-	assertEquals(win.startIndex, 0);
-	assertEquals(win.endIndex, 12);
-	assertEquals(win.renderedIndices.length, 13);
-	assertEquals(win.paddingTop, 0);
-	assertEquals(win.paddingBottom, 87 * 44);
+	assertEquals(win.entries.map((entry) => entry.index), Array.from({ length: 13 }, (_, i) => i));
 	assertEquals(win.trailingGap, 87 * 44);
 	assertEquals(win.entries[0], { index: 0, gapBefore: 0 });
 });
@@ -37,11 +33,8 @@ Deno.test("calculateVirtualOutlineWindow returns all rows for small datasets <= 
 		scrollTop: 100,
 		viewportHeight: 600,
 	});
-	assertEquals(win.startIndex, 0);
-	assertEquals(win.endIndex, 29);
-	assertEquals(win.renderedIndices.length, 30);
-	assertEquals(win.paddingTop, 0);
-	assertEquals(win.paddingBottom, 0);
+	assertEquals(win.entries, Array.from({ length: 30 }, (_, index) => ({ index, gapBefore: 0 })));
+	assertEquals(win.trailingGap, 0);
 });
 
 Deno.test("calculateVirtualOutlineWindow keeps small datasets rendered before viewport measurement", () => {
@@ -51,7 +44,7 @@ Deno.test("calculateVirtualOutlineWindow keeps small datasets rendered before vi
 		viewportHeight: 0,
 	});
 
-	assertEquals(win.renderedIndices.length, 30);
+	assertEquals(win.entries, Array.from({ length: 30 }, (_, index) => ({ index, gapBefore: 0 })));
 	assertEquals(win.trailingGap, 0);
 });
 
@@ -67,16 +60,16 @@ Deno.test("calculateVirtualOutlineWindow constrains rendered rows to viewport + 
 	// row 100 is at top, viewport fits 10 rows (100..110)
 	// overscan 10 above => startIndex 90
 	// overscan 10 below => endIndex 120
-	assertEquals(win.startIndex, 90);
-	assertEquals(win.endIndex, 120);
-	assertEquals(win.renderedIndices.length, 31);
+	assertEquals(
+		win.entries.map((entry) => entry.index),
+		Array.from({ length: 31 }, (_, i) => i + 90),
+	);
 
-	// Padding keeps the scrollable document height accurate
-	assertEquals(win.paddingTop, 90 * 44);
-	assertEquals(win.paddingBottom, (10000 - 121) * 44);
-	assertEquals(win.totalHeight, 10000 * 44);
-	assertEquals(win.paddingTop + 31 * 44 + win.paddingBottom, win.totalHeight);
-	assertEquals(win.entries.length, win.renderedIndices.length);
+	// Gaps and rendered rows keep the scrollable document height accurate.
+	assertEquals(
+		win.entries.reduce((sum, entry) => sum + entry.gapBefore + 44, win.trailingGap),
+		10000 * 44,
+	);
 	assertEquals(win.entries[0], { index: 90, gapBefore: 90 * 44 });
 	assertEquals(win.trailingGap, (10000 - 121) * 44);
 });
@@ -92,11 +85,13 @@ Deno.test("calculateVirtualOutlineWindow preserves pinned editing row even when 
 	});
 
 	// Main window is rows 0..15
-	assertEquals(win.startIndex, 0);
-	assertEquals(win.endIndex, 15);
-	// Pinned row 5000 must be included in renderedIndices to preserve DOM/IME focus
-	assert(win.renderedIndices.includes(5000));
-	assertEquals(win.renderedIndices.length, 17); // 16 window rows + 1 pinned
+	assertEquals(
+		win.entries.slice(0, 16).map((entry) => entry.index),
+		Array.from({ length: 16 }, (_, i) => i),
+	);
+	// Pinned row 5000 must be rendered to preserve DOM/IME focus.
+	assert(win.entries.some((entry) => entry.index === 5000));
+	assertEquals(win.entries.length, 17); // 16 window rows + 1 pinned
 });
 
 Deno.test("calculateVirtualOutlineWindow uses a precomputed layout and accounts for gaps around pins", () => {
@@ -117,7 +112,6 @@ Deno.test("calculateVirtualOutlineWindow uses a precomputed layout and accounts 
 	const win = calculateVirtualOutlineWindow(options);
 
 	assertEquals(heightReads, 0);
-	assertEquals(win.renderedIndices, [0, 1, 50]);
 	assertEquals(win.entries, [
 		{ index: 0, gapBefore: 0 },
 		{ index: 1, gapBefore: 0 },
@@ -143,10 +137,12 @@ Deno.test("calculateVirtualOutlineWindow clamps beyond-end scrolling and respect
 		layout,
 	});
 
-	assertEquals(win.startIndex, 97);
-	assertEquals(win.endIndex, 99);
+	assertEquals(win.entries, [
+		{ index: 97, gapBefore: layout.offsets[97] },
+		{ index: 98, gapBefore: 0 },
+		{ index: 99, gapBefore: 0 },
+	]);
 	assertEquals(win.trailingGap, 0);
-	assertEquals(win.totalHeight, layout.offsets[100]);
 
 	const boundary = calculateVirtualOutlineWindow({
 		totalRows: 100,
@@ -154,8 +150,10 @@ Deno.test("calculateVirtualOutlineWindow clamps beyond-end scrolling and respect
 		viewportHeight: 44,
 		overscan: 0,
 	});
-	assertEquals(boundary.startIndex, 10);
-	assertEquals(boundary.endIndex, 11);
+	assertEquals(boundary.entries, [
+		{ index: 10, gapBefore: 440 },
+		{ index: 11, gapBefore: 0 },
+	]);
 });
 
 Deno.test("virtualOutlineIndexAtOffset maps row offsets with variable heights and clamps edges", () => {

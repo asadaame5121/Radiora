@@ -21,13 +21,9 @@ export interface VirtualOutlineEntry {
 }
 
 export interface VirtualOutlineWindow {
-	readonly startIndex: number;
-	readonly endIndex: number;
-	readonly paddingTop: number;
-	readonly paddingBottom: number;
-	readonly totalHeight: number;
-	readonly renderedIndices: readonly number[];
+	/** Sorted rendered rows, including pins, with space for every omitted row before them. */
 	readonly entries: readonly VirtualOutlineEntry[];
+	/** Space for omitted rows after the last rendered entry. */
 	readonly trailingGap: number;
 }
 
@@ -76,12 +72,6 @@ export function buildVirtualOutlineLayout(
 
 function emptyWindow(): VirtualOutlineWindow {
 	return {
-		startIndex: 0,
-		endIndex: -1,
-		paddingTop: 0,
-		paddingBottom: 0,
-		totalHeight: 0,
-		renderedIndices: [],
 		entries: [],
 		trailingGap: 0,
 	};
@@ -179,16 +169,5 @@ export function calculateVirtualOutlineWindow(
 		}
 	}
 	const indices = renderedIndices(startIndex, endIndex, rowCount, pinnedIndices);
-	const { entries, trailingGap } = entriesAndTrailingGap(offsets, totalHeight, indices);
-
-	return {
-		startIndex,
-		endIndex,
-		paddingTop: offsets[startIndex],
-		paddingBottom: totalHeight - offsets[endIndex + 1],
-		totalHeight,
-		renderedIndices: indices,
-		entries,
-		trailingGap,
-	};
+	return entriesAndTrailingGap(offsets, totalHeight, indices);
 }
