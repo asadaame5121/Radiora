@@ -33,6 +33,12 @@ pinの前後のgapも含めて全体高さを保存し、スクロールで最�
 測定高さの変化や行削除では論理行と行内offsetをanchorとして保ち、幅変更で古い高さを失効させる。
 mobileではpanel以外のscroll ownerも保存・復元する。
 
+次の項目も受入条件とする。
+
+- 仮想化後も `role="tree"` / `role="treeitem"` が件数・階層・位置を伝える。
+  `aria-setsize` / `aria-posinset` / `aria-level` を設定するか、窓外行の代替提示で同等の情報を伝える。
+- 折りたたみ・行削除でfocus対象行またはIME composition対象行が消えた場合に、focusを補正する先と決定規則を定める。
+
 各実装PRで先行回帰を再実行し、新APIの直接テストを接続する。最終配線では10,000行の
 desktop/mobile表示、2KB本文、anchor、IME・drag、仮想gapへのdropをブラウザで確認する。
 元PRの全面整形を取り込まず、追加・削除の合計をPRごとに原則500行程度までに分ける。 性能のrelease
