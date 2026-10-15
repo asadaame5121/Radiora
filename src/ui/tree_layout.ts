@@ -4,16 +4,15 @@ import type {
 	OutlineSnapshot,
 	RelationTypeDefinition,
 } from "../domain/models.ts";
-import { calculateLineageProjection } from "./tree_lineage_projection.ts";
+import { calculateLineageProjection, type LineageProjection } from "./tree_lineage_projection.ts";
 import { buildLaneOrder } from "./tree_lane_order.ts";
-export { calculateLineageProjection, type LineageProjection } from "./tree_lineage_projection.ts";
-export { buildLaneOrder } from "./tree_lane_order.ts";
-
 import {
 	aggregateScreenCells,
 	lodForScreenCollisions,
 	materializeEdges,
 } from "./tree_spatial_aggregation.ts";
+export { calculateLineageProjection, type LineageProjection } from "./tree_lineage_projection.ts";
+export { buildLaneOrder } from "./tree_lane_order.ts";
 export { lodForScreenCollisions } from "./tree_spatial_aggregation.ts";
 
 export type TreeLod = "detail" | "context" | "overview";
@@ -72,6 +71,27 @@ export interface TreeLayout {
 	contentHeight: number;
 }
 
+export interface TreeWorldLayoutNode extends Omit<TreeLayoutNode, "x" | "y"> {}
+
+export interface TreeWorldLayout {
+	nodes: TreeWorldLayoutNode[];
+	rawEdges: RawEdge[];
+	contentHeight: number;
+	zoom: number;
+	lineage?: LineageProjection | null;
+}
+
+export interface TreeWorldLayoutOptions {
+	height: number;
+	/** World-space X for a Chronology timestamp. */
+	projectX: (timestamp: number) => number;
+	projection?: TreeProjection;
+	/** World-space X for a Lineage generation. */
+	projectGeneration?: (generation: number) => number;
+	zoom?: number;
+	relationTypeDefinitions?: readonly RelationTypeDefinition[];
+}
+
 export interface TreeLayoutOptions {
 	width: number;
 	height: number;
@@ -91,23 +111,27 @@ export interface RawEdge {
 	type: TreeLinkType;
 }
 
+const OVERVIEW_CELL_WIDTH = 48;
+const OVERVIEW_CELL_HEIGHT = 36;
 const NODE_GAP = 12;
 const LANE_SPACING = 44;
 
-export function calculateTreeLayout(
+export function calculateTreeWorldLayout(
 	snapshot: OutlineSnapshot,
-	options: TreeLayoutOptions,
-): TreeLayout {
+	options: TreeWorldLayoutOptions,
+): TreeWorldLayout {
 	if (snapshot.items.length === 0) {
 		return {
-			lod: "detail",
 			nodes: [],
-			edges: [],
+			rawEdges: [],
 			contentHeight: options.height,
+			zoom: options.zoom ?? 1,
+			lineage: null,
 		};
 	}
 
-	const camera = options.camera ?? IDENTITY_CAMERA;
+	const zoom = options.zoom ?? 1;
+	const dummyCamera = { k: zoom, x: 0, y: 0 };
 	const lineage = options.projection === "lineage"
 		? calculateLineageProjection(snapshot, options.relationTypeDefinitions)
 		: null;
@@ -125,10 +149,33 @@ export function calculateTreeLayout(
 		projected,
 		snapshot,
 		options.height,
-		camera,
+		dummyCamera,
 		lineage?.knotWorkIds,
 	);
-	const screenNodes = laidOut.nodes.map((node) => ({
+
+	return {
+		nodes: laidOut.nodes,
+		rawEdges: rawEdges(snapshot),
+		contentHeight: laidOut.contentHeight,
+		zoom,
+		lineage,
+	};
+}
+
+export function applyTreeCamera(
+	worldLayout: TreeWorldLayout,
+	camera: TreeCamera,
+): TreeLayout {
+	if (worldLayout.nodes.length === 0) {
+		return {
+			lod: "detail",
+			nodes: [],
+			edges: [],
+			contentHeight: worldLayout.contentHeight,
+		};
+	}
+
+	const screenNodes = worldLayout.nodes.map((node) => ({
 		...node,
 		x: node.worldX * camera.k + camera.x,
 		y: node.worldY * camera.k + camera.y,
@@ -140,14 +187,30 @@ export function calculateTreeLayout(
 			lod,
 			nodes: screenNodes,
 			edges: materializeEdges(
-				rawEdges(snapshot),
+				worldLayout.rawEdges,
 				new Map(screenNodes.map((node) => [node.id, node])),
 			),
-			contentHeight: laidOut.contentHeight,
+			contentHeight: worldLayout.contentHeight,
 		};
 	}
 
-	return aggregateScreenCells(screenNodes, rawEdges(snapshot), lod, laidOut.contentHeight);
+	return aggregateScreenCells(screenNodes, worldLayout.rawEdges, lod, worldLayout.contentHeight);
+}
+
+export function calculateTreeLayout(
+	snapshot: OutlineSnapshot,
+	options: TreeLayoutOptions,
+): TreeLayout {
+	const camera = options.camera ?? IDENTITY_CAMERA;
+	const worldLayout = calculateTreeWorldLayout(snapshot, {
+		height: options.height,
+		projectX: options.projectX,
+		projection: options.projection,
+		projectGeneration: options.projectGeneration,
+		zoom: camera.k,
+		relationTypeDefinitions: options.relationTypeDefinitions,
+	});
+	return applyTreeCamera(worldLayout, camera);
 }
 
 export function labelForItem(text: string): { label: string; lines: string[] } {
