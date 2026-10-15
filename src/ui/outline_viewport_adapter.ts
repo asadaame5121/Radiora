@@ -2,10 +2,8 @@ import { tick } from "svelte";
 import { captureEditorPosition, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
 import type { OutlineViewport } from "./outline_screen_state.svelte.ts";
 
-export interface OutlineScrollMetrics {
-	scrollTop: number;
-	viewportHeight: number;
-}
+import type { OutlineScrollMetrics } from "./outline_virtual_viewport_controller.svelte.ts";
+export type { OutlineScrollMetrics } from "./outline_virtual_viewport_controller.svelte.ts";
 
 function findScrollContainer(element: HTMLElement): HTMLElement | null {
 	let current: HTMLElement | null = element.parentElement;
@@ -86,22 +84,16 @@ export class OutlineViewportAdapter {
 		};
 
 		const detachOwner = () => {
-			if (currentOwner) {
-				currentOwner.removeEventListener("scroll", updateMetrics);
-				if (observer) {
-					observer.unobserve(currentOwner);
-				}
-			}
+			const target = currentOwner ?? (typeof window === "undefined" ? null : window);
+			target?.removeEventListener("scroll", updateMetrics);
+			if (observer && currentOwner) observer.unobserve(currentOwner);
 		};
 
 		const attachOwner = (owner: HTMLElement | null) => {
 			currentOwner = owner;
-			if (currentOwner) {
-				currentOwner.addEventListener("scroll", updateMetrics, { passive: true });
-				if (observer) {
-					observer.observe(currentOwner);
-				}
-			}
+			const target = owner ?? (typeof window === "undefined" ? null : window);
+			target?.addEventListener("scroll", updateMetrics, { passive: true });
+			if (observer && owner) observer.observe(owner);
 		};
 
 		const reResolve = () => {

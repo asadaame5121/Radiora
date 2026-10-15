@@ -192,4 +192,27 @@ describe("OutlineViewportAdapter.observeRows (U01)", () => {
 
 		dispose();
 	});
+
+	test("observes window scrolling and releases its listener on owner switch and dispose", () => {
+		const rows = new MockElement();
+		const published: OutlineScrollMetrics[] = [];
+		const dispose = adapter.observeRows(rows as unknown as HTMLElement, (m) => published.push(m));
+		rows.rect.top = -100;
+		windowTarget.dispatchEvent(new Event("scroll"));
+		expect(published.at(-1)?.scrollTop).toBe(100);
+		const panel = new MockElement();
+		panel.style.overflowY = "auto";
+		rows.parentElement = panel;
+		windowTarget.dispatchEvent(new Event("resize"));
+		const count = published.length;
+		windowTarget.dispatchEvent(new Event("scroll"));
+		expect(published).toHaveLength(count);
+		panel.dispatchEvent(new Event("scroll"));
+		expect(published).toHaveLength(count + 1);
+		dispose();
+		panel.dispatchEvent(new Event("scroll"));
+		windowTarget.dispatchEvent(new Event("scroll"));
+		for (const callback of resizeObserverCallbacks) callback();
+		expect(published).toHaveLength(count + 1);
+	});
 });
