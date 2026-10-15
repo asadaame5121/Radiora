@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 const isWindows = Deno.build.os === "windows";
 const platformLabel = isWindows ? "Windows" : "Linux";
 const outputDirName = isWindows ? "radiora-v2-windows" : "radiora-v2-linux";
@@ -25,6 +27,25 @@ export function resolveBackend(args: string[]): "cef" | "webview" {
 
 export function resolveBuildProfile(args: string[]): "development" | "release" {
 	return args.includes("--release") ? "release" : "development";
+}
+
+/** Normalize only root launchers; do not change nested CEF sandbox files or inherited ACLs. */
+export async function prepareWindowsLaunchers(bundleDir: URL): Promise<void> {
+	if (!isWindows) return;
+	for await (const entry of Deno.readDir(bundleDir)) {
+		if (!entry.isFile || !/\.(?:exe|bat)$/i.test(entry.name)) continue;
+		const path = fileURLToPath(new URL(encodeURIComponent(entry.name), bundleDir));
+		const result = await new Deno.Command("icacls.exe", {
+			args: [path, "/setintegritylevel", "M"],
+		}).output();
+		if (!result.success) {
+			throw new Error(
+				`Windows launcherの整合性レベルを設定できません: ${entry.name}: ${
+					new TextDecoder().decode(result.stderr)
+				}`,
+			);
+		}
+	}
 }
 
 export async function runDesktopBuild(args: string[] = Deno.args): Promise<void> {
@@ -87,6 +108,7 @@ export async function runDesktopBuild(args: string[] = Deno.args): Promise<void>
 	const status = await command.spawn().status;
 	if (!status.success) Deno.exit(status.code);
 	await Deno.copyFile(buildProfilePath, new URL("build-profile.txt", outputDir));
+	await prepareWindowsLaunchers(outputDir);
 }
 
 if (import.meta.main) {

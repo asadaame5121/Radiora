@@ -8,7 +8,7 @@ import {
 import { OutlineService } from "./services/outline_service.ts";
 import { RevisionService } from "./services/revision_service.ts";
 import { Logger, selectLogRecord } from "./services/logger.ts";
-import { DiagnosticLogFiles, OperationLog } from "./services/operation_log.ts";
+import { createDiagnosticLogSink, OperationLog } from "./services/operation_log.ts";
 import type { StartupStatus } from "./shared/bindings.ts";
 import type { GraphStore, RelationTypeDefinitionStorePort } from "./storage/graph_store.ts";
 import { bootstrapStorage, type StorageBootstrapSession } from "./storage/storage_bootstrap.ts";
@@ -37,7 +37,6 @@ const logPath = `${logDir}\\startup.log`;
 const startupSnapshotCachePath = `${dataDir}\\startup-snapshot.json`;
 const storageMode = Deno.env.get("RADIORA_STORAGE") ?? "sqlite";
 await Deno.mkdir(logDir, { recursive: true });
-const diagnosticFiles = new DiagnosticLogFiles(logDir);
 const operationLog = new OperationLog(logDir);
 const operationMethods: Record<string, string> = {
 	createItem: "work.create",
@@ -95,14 +94,7 @@ let lastView = "outline";
 
 const logger = new Logger({
 	selectRecord: (entry) => selectLogRecord(buildProfile, entry),
-	sink: (line) => {
-		try {
-			diagnosticFiles.write(line);
-			// biome-ignore lint/plugin/noSwallowedRejection: Logging falls back to stdout and must not prevent application startup.
-		} catch {
-			// Diagnostics must not change application behavior.
-		}
-	},
+	sink: createDiagnosticLogSink(logDir),
 	stdout: (line) => console.log(line),
 });
 const startupSnapshotCache = new StartupSnapshotCacheFile(startupSnapshotCachePath);
