@@ -190,3 +190,12 @@ export class DiagnosticLogFiles {
 		Deno.renameSync(path, archive);
 	}
 }
+
+/** Initialize diagnostic files inside Logger's isolated sink call, not during application startup. */
+export function createDiagnosticLogSink(dir: string): (line: string) => void {
+	let files: DiagnosticLogFiles | undefined;
+	return (line) => {
+		files ??= new DiagnosticLogFiles(dir);
+		files.write(line);
+	};
+}
