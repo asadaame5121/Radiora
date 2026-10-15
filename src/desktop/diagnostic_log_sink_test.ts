@@ -25,8 +25,29 @@ Deno.test("desktop logging survives denied rotation of an old startup log", () =
 		assertEquals(stdout.length, 1);
 		assertEquals(JSON.parse(stdout[0]).event, "desktop.runtime.initialized");
 		assertEquals(Deno.readTextFileSync(`${dir}/startup.log`), "old diagnostic\n");
+		Deno.renameSync = rename;
+		logger.info("desktop.runtime.recovered");
+		assertEquals(stdout.length, 2);
+		assertEquals(
+			JSON.parse(Deno.readTextFileSync(`${dir}/startup.log`)).event,
+			"desktop.runtime.recovered",
+		);
 	} finally {
 		Deno.renameSync = rename;
 		Deno.removeSync(dir, { recursive: true });
+	}
+});
+
+Deno.test("diagnostic sink initializes on first write and reuses its log files", () => {
+	const root = Deno.makeTempDirSync();
+	const dir = `${root}/logs`;
+	try {
+		const sink = createDiagnosticLogSink(dir);
+		assertEquals([...Deno.readDirSync(root)].length, 0);
+		sink("first");
+		sink("second");
+		assertEquals(Deno.readTextFileSync(`${dir}/startup.log`), "first\nsecond\n");
+	} finally {
+		Deno.removeSync(root, { recursive: true });
 	}
 });
