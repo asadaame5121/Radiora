@@ -1,301 +1,331 @@
 <script lang="ts">
-	import { nodeTitle } from "./tree_node_title.ts";
-	import { moveTreeFocus } from "./keyboard_controller.svelte.ts";
-	import { onMount, tick, untrack } from "svelte";
-	import HistoricalTimeline from "./HistoricalTimeline.svelte";
-	import * as d3 from "d3";
-	import type { OutlineSnapshot, RelationTypeDefinition } from "../domain/models";
-	import { buildTreeHighlightSet, resolveTreeSelectionId } from "./tree_highlight";
-	import {
-		calculateLineageProjection,
-		calculateTreeLayout,
-		type TreeLayoutEdge,
-		type TreeLayoutNode,
-		type TreeProjection,
-	} from "./tree_layout";
-	import { fitTreeBounds, fitTreeNodes, type TreeBounds } from "./tree_camera";
-	import { connectTreePointer } from "./tree_pointer_adapter.ts";
-	import { visibleContextLabels } from "./tree_label_visibility.ts";
+import { nodeTitle } from "./tree_node_title.ts";
+import { moveTreeFocus } from "./keyboard_controller.svelte.ts";
+import { onMount, tick, untrack } from "svelte";
+import HistoricalTimeline from "./HistoricalTimeline.svelte";
+import * as d3 from "d3";
+import type { OutlineSnapshot, RelationTypeDefinition } from "../domain/models";
+import { buildTreeHighlightSet, resolveTreeSelectionId } from "./tree_highlight";
+import {
+	applyTreeCamera,
+	calculateLineageProjection,
+	calculateTreeWorldLayout,
+	type TreeLayoutEdge,
+	type TreeLayoutNode,
+	type TreeProjection,
+} from "./tree_layout";
+import { fitTreeBounds, fitTreeNodes, type TreeBounds } from "./tree_camera";
+import { connectTreePointer } from "./tree_pointer_adapter.ts";
+import { visibleContextLabels } from "./tree_label_visibility.ts";
+import TreeToolbar from "./TreeToolbar.svelte";
 
-	let {
-		snapshot,
-		projection,
-		selectedId = null,
-		selectedWorkId = null,
-		relationTypeDefinitions,
-		onSelect,
-		onOpen,
-		onContextMenu,
-		onProjectionChange,
-		onInspectCluster,
-	}: {
-		snapshot: OutlineSnapshot;
-		projection: TreeProjection;
-		selectedId?: string | null;
-		selectedWorkId?: string | null;
-		relationTypeDefinitions?: readonly RelationTypeDefinition[];
-		onSelect: (id: string | null) => void;
-		onOpen: (id: string) => void;
-		onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
-		onProjectionChange: (projection: TreeProjection) => void;
-		onInspectCluster?: (cluster: TreeLayoutNode) => void;
-	} = $props();
+const ZOOM_IN_FACTOR = 1.4;
+const ZOOM_OUT_FACTOR = 0.7;
 
-	let svgElement: SVGSVGElement;
-	let width = $state(900);
-	let height = $state(700);
-	let transform = $state<d3.ZoomTransform>(d3.zoomIdentity);
-	let hoveredId = $state<string | null>(null);
-	let chronologyMode = $state<"created" | "historical">("created");
-	const historical = $derived(projection === "chronology" && chronologyMode === "historical");
-	let pointer: ReturnType<typeof connectTreePointer> | null = null;
+let {
+	snapshot,
+	projection,
+	selectedId = null,
+	selectedWorkId = null,
+	relationTypeDefinitions,
+	onSelect,
+	onOpen,
+	onContextMenu,
+	onProjectionChange,
+	onInspectCluster,
+}: {
+	snapshot: OutlineSnapshot;
+	projection: TreeProjection;
+	selectedId?: string | null;
+	selectedWorkId?: string | null;
+	relationTypeDefinitions?: readonly RelationTypeDefinition[];
+	onSelect: (id: string | null) => void;
+	onOpen: (id: string) => void;
+	onContextMenu: (id: string, event: MouseEvent | KeyboardEvent) => void;
+	onProjectionChange: (projection: TreeProjection) => void;
+	onInspectCluster?: (cluster: TreeLayoutNode) => void;
+} = $props();
 
-	const timeDomain = $derived.by((): [Date, Date] => {
-		const timestamps = snapshot.items
-			.map((item) => Date.parse(item.createdAt))
-			.filter(Number.isFinite);
-		if (timestamps.length === 0) {
-			const now = Date.now();
-			return [new Date(now - 86_400_000), new Date(now + 86_400_000)];
-		}
-		const min = Math.min(...timestamps);
-		const max = Math.max(...timestamps);
-		const span = Math.max(max - min, 86_400_000);
-		const padding = span * .08;
-		return [new Date(min - padding), new Date(max + padding)];
-	});
-	const chronologyBaseScale = $derived(
-		d3.scaleTime().domain(timeDomain).range([70, Math.max(71, width - 70)]),
-	);
-	const chronologyScreenScale = $derived(transform.rescaleX(chronologyBaseScale));
-	const lineageProjection = $derived.by(() =>
-		calculateLineageProjection(snapshot, relationTypeDefinitions)
-	);
-	const lineageDomainMax = $derived(
-		lineageProjection.knotGeneration ?? lineageProjection.maxGeneration,
-	);
-	const lineageBaseScale = $derived(
-		d3.scaleLinear()
-			.domain(lineageDomainMax === 0 ? [-.5, .5] : [-.15, lineageDomainMax + .15])
-			.range([70, Math.max(71, width - 70)]),
-	);
-	const layout = $derived.by(() => calculateTreeLayout(snapshot, {
-		width,
+let svgElement: SVGSVGElement;
+let width = $state(900);
+let height = $state(700);
+let transform = $state<d3.ZoomTransform>(d3.zoomIdentity);
+let hoveredId = $state<string | null>(null);
+let chronologyMode = $state<"created" | "historical">("created");
+const historical = $derived(projection === "chronology" && chronologyMode === "historical");
+const zoom = $derived(transform.k);
+let pointer: ReturnType<typeof connectTreePointer> | null = null;
+
+const timeDomain = $derived.by((): [Date, Date] => {
+	const timestamps = snapshot.items
+		.map((item) => Date.parse(item.createdAt))
+		.filter(Number.isFinite);
+	if (timestamps.length === 0) {
+		const now = Date.now();
+		return [new Date(now - 86_400_000), new Date(now + 86_400_000)];
+	}
+	const min = Math.min(...timestamps);
+	const max = Math.max(...timestamps);
+	const span = Math.max(max - min, 86_400_000);
+	const padding = span * .08;
+	return [new Date(min - padding), new Date(max + padding)];
+});
+const chronologyBaseScale = $derived(
+	d3.scaleTime().domain(timeDomain).range([70, Math.max(71, width - 70)]),
+);
+const chronologyScreenScale = $derived(transform.rescaleX(chronologyBaseScale));
+const lineageProjection = $derived.by(() =>
+	calculateLineageProjection(snapshot, relationTypeDefinitions)
+);
+const lineageDomainMax = $derived(
+	lineageProjection.knotGeneration ?? lineageProjection.maxGeneration,
+);
+const lineageBaseScale = $derived(
+	d3.scaleLinear()
+		.domain(lineageDomainMax === 0 ? [-.5, .5] : [-.15, lineageDomainMax + .15])
+		.range([70, Math.max(71, width - 70)]),
+);
+const worldLayout = $derived.by(() =>
+	calculateTreeWorldLayout(snapshot, {
 		height,
 		projection,
+		zoom,
+		relationTypeDefinitions,
 		projectX: (timestamp) => chronologyBaseScale(new Date(timestamp)),
 		projectGeneration: (generation) => lineageBaseScale(generation),
-		camera: { k: transform.k, x: transform.x, y: transform.y },
-		relationTypeDefinitions,
-	}));
-	const axisMarks = $derived.by(() => {
-		if (projection === "chronology") {
-			return chronologyScreenScale
-				.ticks(Math.max(2, Math.floor(width / 180)))
-				.map((tick) => ({
-					key: tick.toISOString(),
-					x: chronologyScreenScale(tick),
-					label: formatTick(tick),
-				}));
-		}
-		const count = lineageDomainMax + 1;
-		const stride = Math.max(1, Math.ceil(count / Math.max(2, Math.floor(width / 100))));
-		const marks: Array<{ key: string; x: number; label: string }> = [];
-		for (let generation = 0; generation <= lineageProjection.maxGeneration; generation += stride) {
-			marks.push({
-				key: `generation-${generation}`,
-				x: transform.applyX(lineageBaseScale(generation)),
-				label: `G${generation}`,
-			});
-		}
-		if (lineageProjection.knotGeneration !== null) {
-			marks.push({
-				key: "lineage-knot",
-				x: transform.applyX(lineageBaseScale(lineageProjection.knotGeneration)),
-				label: "Knot",
-			});
-		}
-		return marks;
-	});
-	const selectionId = $derived(resolveTreeSelectionId(snapshot, selectedId, selectedWorkId));
-	const focusId = $derived(hoveredId ?? selectionId);
-	const highlightedIds = $derived(buildTreeHighlightSet(snapshot, selectionId, hoveredId));
-	const contextLabelIds = $derived(visibleContextLabels(layout.nodes, highlightedIds, { width, height }));
-	const minZoom = $derived(Math.min(1, fitCamera().k));
-
-	onMount(() => {
-		pointer = connectTreePointer(svgElement, {
-			onTransform: (next) => transform = next,
-			onResize: (viewport) => { width = viewport.width; height = viewport.height; },
-			onBackgroundClick: () => { hoveredId = null; onSelect(null); },
-		}, minZoom);
-		return () => { pointer?.dispose(); pointer = null; };
-	});
-
-	$effect(() => {
-		if (!pointer) return;
-		// The minimum zoom must reach the whole-content fit view, so it follows
-		// the content bounds dynamically. d3 clamps gestures to this range.
-		pointer.setMinimumZoom(minZoom);
-	});
-
-	// Effect-local history avoids refitting on initial mount; it is not shared preference state.
-	let fittedProjection = untrack(() => projection);
-	$effect(() => {
-		const next = projection;
-		if (next === fittedProjection) return;
-		fittedProjection = next;
-		let cancelled = false;
-		// Wait for the controlled projection's layout; superseded/unmounted fits are cancelled.
-		void tick().then(() => { if (!cancelled) untrack(fitView); }).catch((cause) => {
-			if (!cancelled) console.error("Treeの投影変更後にカメラを合わせられませんでした", cause);
+	})
+);
+const layout = $derived.by(() => applyTreeCamera(worldLayout, transform));
+const axisMarks = $derived.by(() => {
+	if (projection === "chronology") {
+		return chronologyScreenScale
+			.ticks(Math.max(2, Math.floor(width / 180)))
+			.map((tick) => ({
+				key: tick.toISOString(),
+				x: chronologyScreenScale(tick),
+				label: formatTick(tick),
+			}));
+	}
+	const count = lineageDomainMax + 1;
+	const stride = Math.max(1, Math.ceil(count / Math.max(2, Math.floor(width / 100))));
+	const marks: Array<{ key: string; x: number; label: string }> = [];
+	for (let generation = 0; generation <= lineageProjection.maxGeneration; generation += stride) {
+		marks.push({
+			key: `generation-${generation}`,
+			x: transform.applyX(lineageBaseScale(generation)),
+			label: `G${generation}`,
 		});
-		return () => { cancelled = true; };
+	}
+	if (lineageProjection.knotGeneration !== null) {
+		marks.push({
+			key: "lineage-knot",
+			x: transform.applyX(lineageBaseScale(lineageProjection.knotGeneration)),
+			label: "Knot",
+		});
+	}
+	return marks;
+});
+const selectionId = $derived(resolveTreeSelectionId(snapshot, selectedId, selectedWorkId));
+const focusId = $derived(hoveredId ?? selectionId);
+const highlightedIds = $derived(buildTreeHighlightSet(snapshot, selectionId, hoveredId));
+const contextLabelIds = $derived(
+	visibleContextLabels(layout.nodes, highlightedIds, { width, height }),
+);
+const minZoom = $derived(Math.min(1, fitCamera().k));
+
+onMount(() => {
+	pointer = connectTreePointer(svgElement, {
+		onTransform: (next) => transform = next,
+		onResize: (viewport) => {
+			width = viewport.width;
+			height = viewport.height;
+		},
+		onBackgroundClick: () => {
+			hoveredId = null;
+			onSelect(null);
+		},
+	}, minZoom);
+	return () => {
+		pointer?.dispose();
+		pointer = null;
+	};
+});
+
+$effect(() => {
+	if (!pointer) return;
+	// The minimum zoom must reach the whole-content fit view, so it follows
+	// the content bounds dynamically. d3 clamps gestures to this range.
+	pointer.setMinimumZoom(minZoom);
+});
+
+// Effect-local history avoids refitting on initial mount; it is not shared preference state.
+let fittedProjection = untrack(() => projection);
+$effect(() => {
+	const next = projection;
+	if (next === fittedProjection) return;
+	fittedProjection = next;
+	let cancelled = false;
+	// Wait for the controlled projection's layout; superseded/unmounted fits are cancelled.
+	void tick().then(() => {
+		if (!cancelled) untrack(fitView);
+	}).catch((cause) => {
+		if (!cancelled) console.error("Treeの投影変更後にカメラを合わせられませんでした", cause);
 	});
+	return () => {
+		cancelled = true;
+	};
+});
 
-	function edgePath(edge: TreeLayoutEdge): string {
-		const sourceY = edge.source.y;
-		const targetY = edge.target.y;
-		const dx = edge.target.x - edge.source.x;
-		const dy = targetY - sourceY;
-		const distance = Math.max(1, Math.hypot(dx, dy));
-		const ux = dx / distance;
-		const uy = dy / distance;
-		const sourceClearance = edge.source.radius + 6;
-		const targetClearance = edge.target.radius + 6;
-		const sx = edge.source.x + ux * sourceClearance;
-		const sy = sourceY + uy * sourceClearance;
-		const tx = edge.target.x - ux * targetClearance;
-		const ty = targetY - uy * targetClearance;
-		const midpoint = (sx + tx) / 2;
-		return `M ${sx} ${sy} C ${midpoint} ${sy}, ${midpoint} ${ty}, ${tx} ${ty}`;
+function edgePath(edge: TreeLayoutEdge): string {
+	const sourceY = edge.source.y;
+	const targetY = edge.target.y;
+	const dx = edge.target.x - edge.source.x;
+	const dy = targetY - sourceY;
+	const distance = Math.max(1, Math.hypot(dx, dy));
+	const ux = dx / distance;
+	const uy = dy / distance;
+	const sourceClearance = edge.source.radius + 6;
+	const targetClearance = edge.target.radius + 6;
+	const sx = edge.source.x + ux * sourceClearance;
+	const sy = sourceY + uy * sourceClearance;
+	const tx = edge.target.x - ux * targetClearance;
+	const ty = targetY - uy * targetClearance;
+	const midpoint = (sx + tx) / 2;
+	return `M ${sx} ${sy} C ${midpoint} ${sy}, ${midpoint} ${ty}, ${tx} ${ty}`;
+}
+
+function edgeClass(edge: TreeLayoutEdge): string {
+	return `tree-edge type-${edge.type.toLowerCase()}`;
+}
+
+function nodeIsEmphasized(node: TreeLayoutNode): boolean {
+	if (!focusId) return true;
+	return node.itemIds.some((id) => highlightedIds.has(id));
+}
+
+function edgeIsEmphasized(edge: TreeLayoutEdge): boolean {
+	if (!focusId) return false;
+	const sourceFocused = edge.source.itemIds.some((id) => highlightedIds.has(id));
+	const targetFocused = edge.target.itemIds.some((id) => highlightedIds.has(id));
+	return sourceFocused || targetFocused;
+}
+
+function edgeIsVisible(edge: TreeLayoutEdge): boolean {
+	if (!edgeIsInViewport(edge)) {
+		return Boolean(focusId) && edgeIsEmphasized(edge);
 	}
-
-	function edgeClass(edge: TreeLayoutEdge): string {
-		return `tree-edge type-${edge.type.toLowerCase()}`;
+	if (layout.lod === "detail") return true;
+	if (layout.lod === "overview") return edge.type === "FROM";
+	if (Math.abs(edge.target.x - edge.source.x) > width * .48 && !edgeIsEmphasized(edge)) {
+		return false;
 	}
+	return edge.type === "FROM" || edgeIsEmphasized(edge);
+}
 
-	function nodeIsEmphasized(node: TreeLayoutNode): boolean {
-		if (!focusId) return true;
-		return node.itemIds.some((id) => highlightedIds.has(id));
+function edgeIsInViewport(edge: TreeLayoutEdge): boolean {
+	const padding = 120;
+	const sourceY = edge.source.y;
+	const targetY = edge.target.y;
+	return edge.source.x >= -padding &&
+		edge.source.x <= width + padding &&
+		edge.target.x >= -padding &&
+		edge.target.x <= width + padding &&
+		sourceY >= -padding &&
+		sourceY <= height + padding &&
+		targetY >= -padding &&
+		targetY <= height + padding;
+}
+
+function showLabel(node: TreeLayoutNode): boolean {
+	if (node.aggregate) return true;
+	if (layout.lod === "detail") return true;
+	if (layout.lod === "overview") return false;
+	return contextLabelIds.has(node.id);
+}
+
+function handleNodeClick(node: TreeLayoutNode): void {
+	if (node.aggregate) {
+		// Inspecting a cluster must not move the central camera.
+		onInspectCluster?.(node);
+		return;
 	}
+	onSelect(node.id);
+}
 
-	function edgeIsEmphasized(edge: TreeLayoutEdge): boolean {
-		if (!focusId) return false;
-		const sourceFocused = edge.source.itemIds.some((id) => highlightedIds.has(id));
-		const targetFocused = edge.target.itemIds.some((id) => highlightedIds.has(id));
-		return sourceFocused || targetFocused;
-	}
+function handleNodeDoubleClick(event: MouseEvent, node: TreeLayoutNode): void {
+	event.stopPropagation();
+	if (node.aggregate) return;
+	onOpen(node.id);
+}
 
-	function edgeIsVisible(edge: TreeLayoutEdge): boolean {
-		if (!edgeIsInViewport(edge)) {
-			return Boolean(focusId) && edgeIsEmphasized(edge);
-		}
-		if (layout.lod === "detail") return true;
-		if (layout.lod === "overview") return edge.type === "FROM";
-		if (Math.abs(edge.target.x - edge.source.x) > width * .48 && !edgeIsEmphasized(edge)) {
-			return false;
-		}
-		return edge.type === "FROM" || edgeIsEmphasized(edge);
-	}
-
-	function edgeIsInViewport(edge: TreeLayoutEdge): boolean {
-		const padding = 120;
-		const sourceY = edge.source.y;
-		const targetY = edge.target.y;
-		return edge.source.x >= -padding
-			&& edge.source.x <= width + padding
-			&& edge.target.x >= -padding
-			&& edge.target.x <= width + padding
-			&& sourceY >= -padding
-			&& sourceY <= height + padding
-			&& targetY >= -padding
-			&& targetY <= height + padding;
-	}
-
-	function showLabel(node: TreeLayoutNode): boolean {
-		if (node.aggregate) return true;
-		if (layout.lod === "detail") return true;
-		if (layout.lod === "overview") return false;
-		return contextLabelIds.has(node.id);
-	}
-
-	function handleNodeClick(node: TreeLayoutNode): void {
-		if (node.aggregate) {
-			// Inspecting a cluster must not move the central camera.
-			onInspectCluster?.(node);
-			return;
-		}
-		onSelect(node.id);
-	}
-
-	function handleNodeDoubleClick(event: MouseEvent, node: TreeLayoutNode): void {
-		event.stopPropagation();
-		if (node.aggregate) return;
-		onOpen(node.id);
-	}
-
-	function handleNodeKeydown(event: KeyboardEvent, node: TreeLayoutNode): void {
-		if (moveTreeFocus(event, svgElement)) return;
-		if (!node.aggregate && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) {
-			event.preventDefault();
-			onContextMenu(node.id, event);
-			return;
-		}
-		if (event.key !== "Enter" && event.key !== " ") return;
+function handleNodeKeydown(event: KeyboardEvent, node: TreeLayoutNode): void {
+	if (moveTreeFocus(event, svgElement)) return;
+	if (!node.aggregate && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) {
 		event.preventDefault();
-		handleNodeClick(node);
+		onContextMenu(node.id, event);
+		return;
 	}
+	if (event.key !== "Enter" && event.key !== " ") return;
+	event.preventDefault();
+	handleNodeClick(node);
+}
 
-	function zoomBy(factor: number): void {
-		const nextK = Math.max(minZoom, Math.min(24, transform.k * factor));
-		applyTransform(d3.zoomIdentity
+function zoomBy(factor: number): void {
+	const nextK = Math.max(minZoom, Math.min(24, transform.k * factor));
+	applyTransform(
+		d3.zoomIdentity
 			.translate(width / 2 - (width / 2 - transform.x) / transform.k * nextK, transform.y)
-			.scale(nextK));
-	}
+			.scale(nextK),
+	);
+}
 
-	function fitView(): void {
-		const fit = fitCamera();
-		applyTransform(d3.zoomIdentity
+function fitView(): void {
+	const fit = fitCamera();
+	applyTransform(
+		d3.zoomIdentity
 			.translate(fit.x, fit.y)
-			.scale(fit.k));
-	}
+			.scale(fit.k),
+	);
+}
 
-	/** Zooms the camera so the given world-space bounds fill the viewport. */
-	export function zoomToBounds(bounds: TreeBounds): void {
-		const fit = fitTransformFor(bounds);
-		applyTransform(d3.zoomIdentity
+/** Zooms the camera so the given world-space bounds fill the viewport. */
+export function zoomToBounds(bounds: TreeBounds): void {
+	const fit = fitTransformFor(bounds);
+	applyTransform(
+		d3.zoomIdentity
 			.translate(fit.x, fit.y)
-			.scale(fit.k));
+			.scale(fit.k),
+	);
+}
+
+function fitCamera(): { k: number; x: number; y: number } {
+	return fitTreeNodes(layout.nodes, { width, height });
+}
+
+function fitTransformFor(bounds: TreeBounds): { k: number; x: number; y: number } {
+	return fitTreeBounds(bounds, { width, height });
+}
+
+function selectProjection(next: TreeProjection): void {
+	if (projection === next) return;
+	onProjectionChange(next);
+}
+
+function applyTransform(next: d3.ZoomTransform): void {
+	if (!pointer) {
+		transform = next;
+		return;
 	}
+	pointer.applyTransform(next);
+}
 
-	function fitCamera(): { k: number; x: number; y: number } {
-		return fitTreeNodes(layout.nodes, { width, height });
-	}
-
-	function fitTransformFor(bounds: TreeBounds): { k: number; x: number; y: number } {
-		return fitTreeBounds(bounds, { width, height });
-	}
-
-	function selectProjection(next: TreeProjection): void {
-		if (projection === next) return;
-		onProjectionChange(next);
-	}
-
-	function applyTransform(next: d3.ZoomTransform): void {
-		if (!pointer) { transform = next; return; }
-		pointer.applyTransform(next);
-	}
-
-	function formatTick(tick: Date): string {
-		const span = chronologyScreenScale.domain()[1].getTime() -
-			chronologyScreenScale.domain()[0].getTime();
-		if (span > 1_000 * 60 * 60 * 24 * 730) return d3.timeFormat("%Y")(tick);
-		if (span > 1_000 * 60 * 60 * 24 * 60) return d3.timeFormat("%Y.%m")(tick);
-		return d3.timeFormat("%m/%d")(tick);
-	}
-
-
+function formatTick(tick: Date): string {
+	const span = chronologyScreenScale.domain()[1].getTime() -
+		chronologyScreenScale.domain()[0].getTime();
+	if (span > 1_000 * 60 * 60 * 24 * 730) return d3.timeFormat("%Y")(tick);
+	if (span > 1_000 * 60 * 60 * 24 * 60) return d3.timeFormat("%Y.%m")(tick);
+	return d3.timeFormat("%m/%d")(tick);
+}
 </script>
 
 <div class="tree-root">
@@ -394,243 +424,159 @@
 	</svg>
 
 	{#if historical}<HistoricalTimeline {snapshot} {selectedId} {selectedWorkId} {onSelect} {onOpen} {onContextMenu} />{/if}
-	<div class="tree-projection" aria-label="Treeの投影方法">
-		<button
-			class:active={projection === "chronology"}
-			aria-pressed={projection === "chronology"}
-			onclick={() => selectProjection("chronology")}
-		>Chronology</button>
-		{#if projection === "chronology"}
-			<button class:active={chronologyMode === "created"} aria-pressed={chronologyMode === "created"} onclick={() => chronologyMode = "created"}>作成日時</button>
-			<button class:active={chronologyMode === "historical"} aria-pressed={chronologyMode === "historical"} onclick={() => chronologyMode = "historical"}>年表</button>
-		{/if}
-		<button
-			class:active={projection === "lineage"}
-			aria-pressed={projection === "lineage"}
-			onclick={() => selectProjection("lineage")}
-		>Lineage</button>
-	</div>
-
-	<div class="tree-controls" style:visibility={historical ? "hidden" : "visible"}>
-		<button aria-label="ズームアウト" title="ズームアウト" onclick={() => zoomBy(.7)}>−</button>
-		<button aria-label="ズームイン" title="ズームイン" onclick={() => zoomBy(1.4)}>＋</button>
-		<button aria-label="全体を表示" title="全体を表示" onclick={fitView}>⌗</button>
-		<span><i></i>{layout.lod === "detail" ? "Detail" : layout.lod === "context" ? "Context" : "Overview"}</span>
-	</div>
+	<TreeToolbar
+		{projection}
+		{chronologyMode}
+		{historical}
+		lodLabel={layout.lod === "detail" ? "Detail" : layout.lod === "context" ? "Context" : "Overview"}
+		onProjectionChange={selectProjection}
+		onChronologyModeChange={(mode) => chronologyMode = mode}
+		onZoomOut={() => zoomBy(ZOOM_OUT_FACTOR)}
+		onZoomIn={() => zoomBy(ZOOM_IN_FACTOR)}
+		onFitView={fitView}
+	/>
 </div>
 
 <style>
-	.tree-root {
-		position: absolute;
-		inset: 0;
-		overflow: hidden;
-		background:
-			radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--cyan) 5%, transparent), transparent 44%),
-			var(--theme-bg, #050a10);
-	}
-	svg {
-		display: block;
-		width: 100%;
-		height: 100%;
-		cursor: grab;
-		touch-action: none;
-	}
-	svg:active {
-		cursor: grabbing;
-	}
-	.time-grid line {
-		stroke: var(--theme-border, #17313e);
-		stroke-width: 1;
-		stroke-dasharray: 3 5;
-		opacity: .65;
-	}
-	.time-grid text {
-		fill: var(--theme-muted, #657681);
-		font: 11px var(--font-ui);
-		letter-spacing: .08em;
-	}
-	.time-grid .knot-mark {
-		stroke: var(--red);
-	}
-	.tree-edge {
-		fill: none;
-		stroke: var(--cyan);
-		stroke-linecap: round;
-		stroke-linejoin: round;
-		opacity: .42;
-		transition: opacity .14s ease, filter .14s ease;
-	}
-	.tree-edge.type-like {
-		stroke: var(--violet);
-	}
-	.tree-edge.type-fix {
-		stroke: var(--amber);
-	}
-	.tree-edge.type-vs {
-		stroke: var(--red);
-	}
-	.tree-edge.type-in {
-		stroke: var(--theme-muted, #92a2ad);
-		stroke-dasharray: 5 5;
-	}
-	.tree-edge.dimmed {
-		opacity: .07;
-	}
-	.tree-edge.emphasized {
-		opacity: .96;
-		filter: drop-shadow(0 0 4px currentColor);
-	}
-	.tree-node {
-		cursor: pointer;
-		outline: none;
-		transition: opacity .14s ease;
-	}
-	.tree-node.dimmed {
-		opacity: .16;
-	}
-	.node-safety {
-		fill: var(--theme-bg, #050a10);
-		stroke: none;
-	}
-	.node-core {
-		fill: var(--cyan);
-		filter: drop-shadow(0 0 5px color-mix(in srgb, var(--cyan) 78%, transparent));
-	}
-	.node-selection {
-		fill: none;
-		stroke: transparent;
-		stroke-width: 2;
-	}
-	.tree-node:hover .node-core,
-	.tree-node:focus .node-core,
-	.tree-node.emphasized .node-core {
-		fill: var(--theme-text, #eafcfd);
-		filter: drop-shadow(0 0 7px var(--cyan));
-	}
-	.tree-node.selected .node-selection {
-		stroke: var(--amber);
-		filter: drop-shadow(0 0 6px color-mix(in srgb, var(--amber) 65%, transparent));
-	}
-	.node-knot-outer,
-	.node-knot-inner {
-		fill: var(--theme-bg, #050a10);
-		stroke: var(--red);
-		stroke-width: 2;
-		filter: drop-shadow(0 0 5px color-mix(in srgb, var(--red) 45%, transparent));
-	}
-	.node-knot-inner {
-		fill: color-mix(in srgb, var(--red) 28%, transparent);
-		stroke-width: 1;
-	}
-	.node-cluster {
-		fill: var(--theme-surface, #07121a);
-		stroke: var(--cyan);
-		stroke-width: 2;
-		filter: drop-shadow(0 0 6px color-mix(in srgb, var(--cyan) 55%, transparent));
-	}
-	.cluster-count {
-		fill: var(--theme-text, #eafcfd);
-		font: 10px var(--font-ui);
-		pointer-events: none;
-	}
-	.node-label {
-		fill: var(--text);
-		stroke: var(--theme-bg, #050a10);
-		stroke-width: 6px;
-		paint-order: stroke fill;
-		font: 12px var(--font-serif);
-		letter-spacing: .02em;
-		pointer-events: none;
-	}
-	.tree-controls {
-		position: absolute;
-		left: 22px;
-		bottom: 22px;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.tree-projection {
-		z-index: 1;
-		position: absolute;
-		top: 22px;
-		right: 22px;
-		display: flex;
-		padding: 3px;
-		border: 1px solid var(--border-bright);
-		border-radius: 7px;
-		background: var(--theme-lineage-overlay, rgb(5 10 16 / 88%));
-		box-shadow: 0 8px 22px rgb(0 0 0 / 28%);
-	}
-	.tree-projection button {
-		height: 30px;
-		padding: 0 12px;
-		border: 0;
-		border-radius: 4px;
-		background: transparent;
-		color: var(--theme-muted, #7f949e);
-		font: 11px var(--font-ui);
-		letter-spacing: .03em;
-		cursor: pointer;
-	}
-	.tree-projection button:hover {
-		color: var(--text);
-	}
-	.tree-projection button.active {
-		background: var(--theme-surface-raised, #12303d);
-		color: var(--theme-text, #eafcfd);
-		box-shadow: var(--control-active-shadow);
-	}
-	.tree-controls button,
-	.tree-controls span {
-		height: 36px;
-		border: 1px solid var(--border-bright);
-		border-radius: 6px;
-		background: var(--theme-lineage-overlay, rgb(5 10 16 / 88%));
-		color: var(--text);
-		box-shadow: 0 8px 22px rgb(0 0 0 / 28%);
-	}
-	.tree-controls button {
-		width: 40px;
-		font-size: 18px;
-		cursor: pointer;
-	}
-	.tree-controls button:hover {
-		border-color: var(--cyan);
-		background: var(--theme-surface-hover, #0c1c27);
-	}
-	.tree-controls span {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin-left: 10px;
-		padding: 0 12px;
-		color: var(--theme-muted, #b6c9d1);
-		font-size: 11px;
-	}
-	.tree-controls i {
-		width: 7px;
-		height: 7px;
-		border-radius: 50%;
-		background: var(--cyan);
-		box-shadow: 0 0 7px var(--cyan);
-	}
-	.tree-empty {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		display: grid;
-		place-content: center;
-		justify-items: center;
-		color: var(--theme-muted, #657681);
-		font-size: 12px;
-		pointer-events: none;
-	}
-	.tree-empty span {
-		width: 12px;
-		height: 12px;
-		border: 2px solid var(--cyan);
-		border-radius: 50%;
-		box-shadow: 0 0 16px var(--cyan);
-	}
+.tree-root {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	background:
+		radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--cyan) 5%, transparent), transparent
+		44%),
+		var(--theme-bg, #050a10);
+}
+svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+	cursor: grab;
+	touch-action: none;
+}
+svg:active {
+	cursor: grabbing;
+}
+.time-grid line {
+	stroke: var(--theme-border, #17313e);
+	stroke-width: 1;
+	stroke-dasharray: 3 5;
+	opacity: .65;
+}
+.time-grid text {
+	fill: var(--theme-muted, #657681);
+	font: 11px var(--font-ui);
+	letter-spacing: .08em;
+}
+.time-grid .knot-mark {
+	stroke: var(--red);
+}
+.tree-edge {
+	fill: none;
+	stroke: var(--cyan);
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	opacity: .42;
+	transition: opacity .14s ease, filter .14s ease;
+}
+.tree-edge.type-like {
+	stroke: var(--violet);
+}
+.tree-edge.type-fix {
+	stroke: var(--amber);
+}
+.tree-edge.type-vs {
+	stroke: var(--red);
+}
+.tree-edge.type-in {
+	stroke: var(--theme-muted, #92a2ad);
+	stroke-dasharray: 5 5;
+}
+.tree-edge.dimmed {
+	opacity: .07;
+}
+.tree-edge.emphasized {
+	opacity: .96;
+	filter: drop-shadow(0 0 4px currentColor);
+}
+.tree-node {
+	cursor: pointer;
+	outline: none;
+	transition: opacity .14s ease;
+}
+.tree-node.dimmed {
+	opacity: .16;
+}
+.node-safety {
+	fill: var(--theme-bg, #050a10);
+	stroke: none;
+}
+.node-core {
+	fill: var(--cyan);
+	filter: drop-shadow(0 0 5px color-mix(in srgb, var(--cyan) 78%, transparent));
+}
+.node-selection {
+	fill: none;
+	stroke: transparent;
+	stroke-width: 2;
+}
+.tree-node:hover .node-core,
+.tree-node:focus .node-core,
+.tree-node.emphasized .node-core {
+	fill: var(--theme-text, #eafcfd);
+	filter: drop-shadow(0 0 7px var(--cyan));
+}
+.tree-node.selected .node-selection {
+	stroke: var(--amber);
+	filter: drop-shadow(0 0 6px color-mix(in srgb, var(--amber) 65%, transparent));
+}
+.node-knot-outer,
+.node-knot-inner {
+	fill: var(--theme-bg, #050a10);
+	stroke: var(--red);
+	stroke-width: 2;
+	filter: drop-shadow(0 0 5px color-mix(in srgb, var(--red) 45%, transparent));
+}
+.node-knot-inner {
+	fill: color-mix(in srgb, var(--red) 28%, transparent);
+	stroke-width: 1;
+}
+.node-cluster {
+	fill: var(--theme-surface, #07121a);
+	stroke: var(--cyan);
+	stroke-width: 2;
+	filter: drop-shadow(0 0 6px color-mix(in srgb, var(--cyan) 55%, transparent));
+}
+.cluster-count {
+	fill: var(--theme-text, #eafcfd);
+	font: 10px var(--font-ui);
+	pointer-events: none;
+}
+.node-label {
+	fill: var(--text);
+	stroke: var(--theme-bg, #050a10);
+	stroke-width: 6px;
+	paint-order: stroke fill;
+	font: 12px var(--font-serif);
+	letter-spacing: .02em;
+	pointer-events: none;
+}
+.tree-empty {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	display: grid;
+	place-content: center;
+	justify-items: center;
+	color: var(--theme-muted, #657681);
+	font-size: 12px;
+	pointer-events: none;
+}
+.tree-empty span {
+	width: 12px;
+	height: 12px;
+	border: 2px solid var(--cyan);
+	border-radius: 50%;
+	box-shadow: 0 0 16px var(--cyan);
+}
 </style>
