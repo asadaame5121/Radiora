@@ -28,34 +28,38 @@ interface InspectorState {
 	targets: CdpTarget[];
 }
 
-if (Deno.args.includes("--help") || Deno.args.includes("-h")) {
-	printHelp();
-} else {
-	try {
-		const options = parseOptions(Deno.args);
-		const report = await runAudit(options);
-		if (options.output) {
-			await writeNewJsonFile(options.output, report);
-			console.log(JSON.stringify(
-				{
-					outputPath: options.output,
-					issueCount: report.issueCount,
-					trace: report.trace,
-				},
-				null,
-				2,
-			));
-		} else {
-			console.log(JSON.stringify(report, null, 2));
+if (import.meta.main) {
+	if (Deno.args.includes("--help") || Deno.args.includes("-h")) {
+		printHelp();
+	} else {
+		try {
+			const options = parseOptions(Deno.args);
+			const report = await runAudit(options);
+			if (options.output) {
+				await writeNewJsonFile(options.output, report);
+				console.log(JSON.stringify(
+					{
+						outputPath: options.output,
+						issueCount: report.issueCount,
+						trace: report.trace,
+					},
+					null,
+					2,
+				));
+			} else {
+				console.log(JSON.stringify(report, null, 2));
+			}
+			if (options.strict && report.issueCount > 0) Deno.exit(2);
+		} catch (cause) {
+			console.error(`Desktop CDP audit failed: ${asError(cause).message}`);
+			Deno.exit(1);
 		}
-		if (options.strict && report.issueCount > 0) Deno.exit(2);
-	} catch (cause) {
-		console.error(`Desktop CDP audit failed: ${asError(cause).message}`);
-		Deno.exit(1);
 	}
 }
 
-async function runAudit(options: AuditOptions): Promise<JsonRecord & { issueCount: number }> {
+export async function runAudit(
+	options: AuditOptions,
+): Promise<JsonRecord & { issueCount: number }> {
 	await Promise.all(
 		[options.trace, options.output]
 			.filter((path): path is string => path !== undefined)
@@ -330,7 +334,7 @@ function wait(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function writeNewJsonFile(path: string, value: unknown): Promise<void> {
+export async function writeNewJsonFile(path: string, value: unknown): Promise<void> {
 	const separator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
 	if (separator > 0) await Deno.mkdir(path.slice(0, separator), { recursive: true });
 	await Deno.writeTextFile(path, `${JSON.stringify(value, null, 2)}\n`, { createNew: true });

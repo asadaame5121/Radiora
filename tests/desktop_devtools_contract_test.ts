@@ -8,6 +8,9 @@ Deno.test("desktop DevTools inspection stays opt-in and exposes a CDP audit task
 	const audit = await Deno.readTextFile(
 		new URL("../scripts/desktop_cdp_audit.ts", import.meta.url),
 	);
+	const performanceCases = await Deno.readTextFile(
+		new URL("../scripts/desktop_cdp_audit/performance_cases.ts", import.meta.url),
+	);
 	const fixture = await Deno.readTextFile(
 		new URL("../scripts/performance_fixture.ts", import.meta.url),
 	);
@@ -30,4 +33,11 @@ Deno.test("desktop DevTools inspection stays opt-in and exposes a CDP audit task
 	assert(audit.includes('client.send("Tracing.start"'));
 	assert(audit.includes('client.on("Tracing.dataCollected"'));
 	assert(audit.includes("--trace <path>"));
+	assertEquals(
+		config.tasks["desktop:performance"],
+		"deno run -A scripts/desktop_cdp_audit/performance_cases.ts",
+	);
+	assert(performanceCases.includes("PERFORMANCE_SAMPLE_COUNT = 35"));
+	assert(performanceCases.includes("raf-proxy"));
+	assert(performanceCases.includes("Tree pan"));
 });

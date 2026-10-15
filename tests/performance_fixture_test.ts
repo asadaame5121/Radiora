@@ -26,6 +26,16 @@ for (const profile of PERFORMANCE_FIXTURE_PROFILES) {
 	});
 }
 
+for (const profile of PERFORMANCE_FIXTURE_PROFILES) {
+	Deno.test(`10,000-topic ${profile} fixture is deterministic and valid`, () => {
+		const options = { profile, topicCount: 10_000, seed: 42 } as const;
+		const fixture = createPerformanceFixture(options);
+		assertEquals(fixture.manifest.topicCount, 10_000);
+		assertEquals(validatePerformanceFixture(fixture).manifest, fixture.manifest);
+		assertEquals(createPerformanceFixture(options), fixture);
+	});
+}
+
 Deno.test("performance fixture rejects parent cycles", () => {
 	const fixture = structuredClone(
 		createPerformanceFixture({ profile: "baseline", topicCount: 1_000, seed: 42 }),
