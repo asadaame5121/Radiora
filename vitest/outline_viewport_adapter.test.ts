@@ -72,3 +72,34 @@ test("restoring panel scroll is cancelled while waiting for the render tick", as
 	await restore;
 	expect(s.panels().every((panel) => panel.scrollTop === 0 && panel.scrollLeft === 0)).toBe(true);
 });
+
+test("mount failure falls back to the rows and restores panels rather than silently losing restoration", async () => {
+	const s = setup();
+	s.adapter.capturePanels();
+	s.recreate();
+	s.adapter.registerEnsureMounted(async () => false);
+	await s.adapter.restorePane("missing-row", () => true);
+	expect(s.focus).toHaveBeenCalledOnce();
+	expect(s.panels()[1].scrollTop).toBe(125);
+});
+
+test("an expired mount wait publishes neither fallback focus nor panel scroll", async () => {
+	const s = setup();
+	s.adapter.capturePanels();
+	s.recreate();
+	let current = true;
+	s.adapter.registerEnsureMounted(async () => {
+		current = false;
+		return false;
+	});
+	await s.adapter.restorePane("stale-row", () => current);
+	expect(s.focus).not.toHaveBeenCalled();
+	expect(s.panels().every((panel) => panel.scrollTop === 0)).toBe(true);
+});
+
+test("a mount port registered during the render tick can serve a pending request", async () => {
+	const s = setup();
+	const pending = s.adapter.ensureMounted("new-row", () => true);
+	s.adapter.registerEnsureMounted(async () => true);
+	expect(await pending).toBe(true);
+});

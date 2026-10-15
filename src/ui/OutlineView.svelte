@@ -1,25 +1,29 @@
 <script lang="ts">
-	import { onMount } from "svelte";
+	import { onMount, untrack } from "svelte";
 	import type { OutlineItem, RelationTypeDefinition } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { VisibleRow } from "./outline_view_model.ts";
 	import type {
 		InlineLinkCompletionState,
 		InternalReferenceCompletionState,
-} from "./editor_completion_controller.svelte.ts";
-	import type {
-		OutlineHelpers,
-		OutlineRowHandlers,
-	} from "./outline_row_types.ts";
+	} from "./editor_completion_controller.svelte.ts";
+	import type { OutlineHelpers, OutlineRowHandlers } from "./outline_row_types.ts";
 	import OutlineRowItem from "./OutlineRowItem.svelte";
+	import type { VirtualOutlineEntry } from "./virtual_outline_viewport.ts";
+	import type { OutlineVirtualViewportController } from "./outline_virtual_viewport_controller.svelte.ts";
+	import type { EnsureOutlineRowMounted } from "./outline_viewport_adapter.ts";
+	import { outlineEditorId, OutlineVirtualViewAdapter } from "./outline_virtual_view_adapter.ts";
+	import { outlineAccessibility } from "./outline_accessibility.ts";
 
 	let {
+		viewport,
 		draggedId,
 		onDragStart,
 		onDragEnd,
 		outlineContextBreadcrumb,
 		outlineContextBreadcrumbItems,
 		outlineContextTitle,
+		registerEnsureMounted = () => () => undefined,
 		hoisted,
 		canClearHoist,
 		clearHoistReason,
@@ -40,12 +44,14 @@
 		handlers,
 		helpers,
 	}: {
+		viewport: OutlineVirtualViewportController;
 		draggedId: string | null;
 		onDragStart: (id: string) => void;
 		onDragEnd: () => void;
 		outlineContextBreadcrumb: string;
 		outlineContextBreadcrumbItems: readonly OutlineItem[];
 		outlineContextTitle: string;
+		registerEnsureMounted?: (port: EnsureOutlineRowMounted) => () => void;
 		hoisted: boolean;
 		canClearHoist: boolean;
 		clearHoistReason: string | undefined;
@@ -67,7 +73,48 @@
 		helpers: OutlineHelpers;
 	} = $props();
 
-	onMount(() => () => onDragEnd());
+	let rowsEl = $state<HTMLDivElement | null>(null);
+	const viewportAdapter = new OutlineVirtualViewAdapter();
+
+	const normalRows = $derived.by(() => visibleRows.filter((row) => !row.stash));
+	const stashRows = $derived.by(() => visibleRows.filter((row) => row.stash));
+	const accessibility = $derived(outlineAccessibility(normalRows));
+	const virtualWindow = $derived(viewport.window);
+	const renderedEntries = $derived.by(() =>
+		virtualWindow.entries.map((entry: VirtualOutlineEntry) => ({
+			...entry,
+			row: normalRows[entry.index],
+		}))
+	);
+
+	// Reconcile the injected projection/selection ports before rendering; no subscription to dispose.
+	$effect.pre(() => {
+		viewport.refreshProjection();
+		untrack(() => viewportAdapter.scheduleAnchorAdjustment());
+	});
+
+	// Bind only this rows DOM instance; cleanup releases observers, listeners, frames and pins.
+	$effect(() => {
+		const element = rowsEl;
+		if (!element) return;
+		return untrack(() => viewportAdapter.connectViewport(element, viewport));
+	});
+
+	onMount(() => {
+		const unregister = registerEnsureMounted((id, current) => viewportAdapter.ensureMounted(id, current));
+		return () => { unregister(); onDragEnd(); };
+	});
+
+	function handleRootDrop(event: DragEvent): void {
+		viewportAdapter.dropOnVirtualGap(
+			event,
+			draggedId,
+			rowsEl,
+			viewport.layout,
+			normalRows,
+			(row) => handlers.dropOn(row.item),
+		);
+	}
 </script>
 
 <div class="outline-context">
@@ -82,7 +129,7 @@
 		{/if}
 		<h1>{outlineContextTitle}</h1>
 		<p class="outline-context__meta">
-			{visibleRows.filter((row) => !row.stash).length}件の{vocabulary.work} · 行をそのまま編集できます
+			{normalRows.length}件の{vocabulary.work} · 行をそのまま編集できます
 		</p>
 	</div>
 	<div class="section-title outline-actions">
@@ -103,18 +150,30 @@
 	{:else}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
+			bind:this={rowsEl}
 			class="rows"
 			role="tree"
 			aria-busy={loading}
 			aria-label={`${vocabulary.work}のアウトライン`}
 			tabindex="0"
+			onfocusin={(event) => viewport.trackFocusIn(outlineEditorId(event.target))}
+			onfocusout={(event) => viewport.trackFocusOut(outlineEditorId(event.target), outlineEditorId(event.relatedTarget))}
+			oncompositionstart={(event) => viewport.trackCompositionStart(outlineEditorId(event.target))}
+			oncompositionend={(event) => viewport.trackCompositionEnd(outlineEditorId(event.target), outlineEditorId(document.activeElement))}
+			ondragover={(event) => {
+				if (event.target === event.currentTarget || (event.target instanceof Element && event.target.closest("[data-virtual-gap]"))) event.preventDefault();
+			}}
+			ondrop={handleRootDrop}
 			onmousedown={(event) => {
 				if (event.target === event.currentTarget) handlers.deselectFromBlank(event);
 			}}
 		>
-			{#each visibleRows.filter((row) => !row.stash) as row (row.item.id)}
+			{#each renderedEntries as entry (entry.row.item.id)}
+				{#if entry.gapBefore > 0}
+					<div class="virtual-gap" data-virtual-gap style:height={`${entry.gapBefore}px`} aria-hidden="true" role="presentation"></div>
+				{/if}
 				<OutlineRowItem
-					{row}
+					row={entry.row}
 					{selectedId}
 					{draggedId}
 					{vocabulary}
@@ -125,15 +184,20 @@
 					{helpers}
 					{onDragStart}
 					{onDragEnd}
+					onRowElement={(id, element) => viewportAdapter.connectRow(id, element)}
+					accessibility={accessibility[entry.index]}
 				/>
 			{/each}
+			{#if virtualWindow.trailingGap > 0}
+				<div class="virtual-gap" data-virtual-gap style:height={`${virtualWindow.trailingGap}px`} aria-hidden="true" role="presentation"></div>
+			{/if}
 		</div>
 	{/if}
 
 	{#if stashItemIdsLength}
 		<div class="section-title stash-title"><span>Stash / Knots</span><small>{knotsLength} knot</small></div>
 		<div class="stash-list">
-			{#each visibleRows.filter((row) => row.stash) as row (row.item.id)}
+			{#each stashRows as row (row.item.id)}
 				<button
 					type="button"
 					class:selected={selectedId === row.item.id}
@@ -207,6 +271,7 @@
 	}
 	.rows {
 		max-width: 820px;
+		overflow-anchor: none;
 	}
 	.first-item {
 		margin: 80px auto;
