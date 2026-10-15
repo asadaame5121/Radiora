@@ -1,3 +1,4 @@
+import { untrack } from "svelte";
 import {
 	buildVirtualOutlineLayout,
 	calculateVirtualOutlineWindow,
@@ -7,14 +8,14 @@ import {
 	type VirtualOutlineWindow,
 } from "./virtual_outline_viewport.ts";
 
-function editorIdFromTarget(target: EventTarget | null): string | null {
-	return target instanceof Element
-		? target.closest<HTMLTextAreaElement>("textarea[data-item-id]")?.dataset.itemId ?? null
-		: null;
+interface ViewportInputs {
+	rowIds(): readonly string[];
+	protectedIds(): readonly string[];
+	focusFallback(id: string): void;
 }
 
 /** Scroll position and viewport size the measured layout is calculated from. */
-interface OutlineScrollMetrics {
+export interface OutlineScrollMetrics {
 	scrollTop: number;
 	viewportHeight: number;
 }
@@ -56,6 +57,26 @@ export class OutlineVirtualViewportController {
 		});
 	});
 
+	constructor(private readonly inputs: ViewportInputs) {}
+
+	/** Reconcile the supplied projection; callers cannot write another owner's rows or selection. */
+	refreshProjection(): void {
+		const ids = this.inputs.rowIds();
+		const protectedIds = this.inputs.protectedIds();
+		untrack(() => {
+			const lostFocus = [...this.focusedIds, ...this.composingIds]
+				.find((id) => !ids.includes(id));
+			const oldIndex = lostFocus ? this.rowIndexById.get(lostFocus) ?? 0 : 0;
+			this.setRows(ids);
+			this.setProtectedIds(protectedIds);
+			if (lostFocus && ids.length) {
+				const target = protectedIds.find((id) => ids.includes(id)) ??
+					ids[Math.min(oldIndex, ids.length - 1)];
+				this.inputs.focusFallback(target);
+			}
+		});
+	}
+
 	get rowIds(): readonly string[] {
 		return this.liveRowIds;
 	}
@@ -91,7 +112,7 @@ export class OutlineVirtualViewportController {
 		return Math.min(Math.max(0, target), Math.max(0, this.layout.totalHeight - viewportHeight));
 	}
 
-	setRows(ids: readonly string[]): void {
+	private setRows(ids: readonly string[]): void {
 		if (
 			ids.length === this.liveRowIds.length &&
 			ids.every((id, index) => id === this.liveRowIds[index])
@@ -102,12 +123,14 @@ export class OutlineVirtualViewportController {
 		for (const id of this.measuredHeights.keys()) {
 			if (!nextIndices.has(id)) this.measuredHeights.delete(id);
 		}
+		for (const id of this.focusedIds) if (!nextIndices.has(id)) this.focusedIds.delete(id);
+		for (const id of this.composingIds) if (!nextIndices.has(id)) this.composingIds.delete(id);
 		this.rowIndexById = nextIndices;
 		this.liveRowIds = next;
 		this.heightVersion++;
 	}
 
-	setMetrics(metrics: OutlineScrollMetrics): void {
+	observeScroll(metrics: OutlineScrollMetrics): void {
 		const next = {
 			scrollTop: Number.isFinite(metrics.scrollTop) ? Math.max(0, metrics.scrollTop) : 0,
 			viewportHeight: Number.isFinite(metrics.viewportHeight)
@@ -123,7 +146,7 @@ export class OutlineVirtualViewportController {
 		if (!this.pendingAnchor) this.scrollAnchor = this.captureAnchor();
 	}
 
-	setProtectedIds(ids: readonly string[]): void {
+	private setProtectedIds(ids: readonly string[]): void {
 		const next = [...new Set(ids)];
 		if (
 			next.length === this.ownerProtectedIds.length &&
@@ -133,41 +156,37 @@ export class OutlineVirtualViewportController {
 		this.publishProtectedIds();
 	}
 
-	releaseProtectedRows(): void {
+	disconnect(): void {
 		this.ownerProtectedIds = [];
 		this.focusedIds.clear();
 		this.composingIds.clear();
 		this.publishProtectedIds();
 	}
 
-	trackFocusIn(target: EventTarget | null): void {
-		const id = editorIdFromTarget(target);
+	trackFocusIn(id: string | null): void {
 		if (id) this.focusedIds.add(id);
 		this.publishProtectedIds();
 	}
 
-	trackFocusOut(target: EventTarget | null, relatedTarget: EventTarget | null): void {
-		const id = editorIdFromTarget(target);
-		if (id && editorIdFromTarget(relatedTarget) !== id) this.focusedIds.delete(id);
+	trackFocusOut(id: string | null, nextId: string | null): void {
+		if (id && nextId !== id) this.focusedIds.delete(id);
 		this.publishProtectedIds();
 	}
 
-	trackCompositionStart(target: EventTarget | null): void {
-		const id = editorIdFromTarget(target);
+	trackCompositionStart(id: string | null): void {
 		if (id) this.composingIds.add(id);
 		this.publishProtectedIds();
 	}
 
-	trackCompositionEnd(target: EventTarget | null): void {
-		const id = editorIdFromTarget(target);
+	trackCompositionEnd(id: string | null, activeId: string | null): void {
 		if (id) {
 			this.composingIds.delete(id);
-			if (document.activeElement !== target) this.focusedIds.delete(id);
+			if (activeId !== id) this.focusedIds.delete(id);
 		}
 		this.publishProtectedIds();
 	}
 
-	reportHeight(id: string, height: number): boolean {
+	measureRow(id: string, height: number): boolean {
 		const index = this.rowIndexById.get(id);
 		if (index === undefined || !Number.isFinite(height) || height <= 0) return false;
 		const previousHeight = this.measuredHeights.get(id) ?? DEFAULT_OUTLINE_ROW_HEIGHT;
@@ -178,7 +197,7 @@ export class OutlineVirtualViewportController {
 		return true;
 	}
 
-	setWidth(width: number, visibleIds: readonly string[]): boolean {
+	observeWidth(width: number, visibleIds: readonly string[]): boolean {
 		if (!Number.isFinite(width) || width <= 0 || width === this.contentWidth) return false;
 		this.contentWidth = width;
 		const visible = new Set(visibleIds);
