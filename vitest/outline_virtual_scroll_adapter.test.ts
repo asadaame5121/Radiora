@@ -193,6 +193,186 @@ describe("OutlineViewportAdapter.observeRows (U01)", () => {
 		dispose();
 	});
 
+	test("dynamically switches owner when styles change on mobile switch", () => {
+		const container = new MockElement();
+		container.className = "app-main";
+		container.style.overflowY = "hidden";
+		container.clientHeight = 700;
+		container.rect = {
+			top: 0,
+			bottom: 700,
+			left: 0,
+			right: 800,
+			width: 800,
+			height: 700,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		};
+
+		const panel = new MockElement();
+		panel.className = "outline-panel";
+		panel.style.overflowY = "auto";
+		panel.parentElement = container;
+		panel.clientHeight = 600;
+		panel.rect = {
+			top: 0,
+			bottom: 600,
+			left: 0,
+			right: 800,
+			width: 800,
+			height: 600,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		};
+
+		const rows = new MockElement();
+		rows.className = "rows";
+		rows.parentElement = panel;
+		rows.rect = {
+			top: 0,
+			bottom: 1000,
+			left: 0,
+			right: 800,
+			width: 800,
+			height: 1000,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		};
+
+		const published: OutlineScrollMetrics[] = [];
+		const dispose = adapter.observeRows(rows as unknown as HTMLElement, (m) => published.push(m));
+		expect(published[0].viewportHeight).toBe(600);
+		expect(observedElements.has(panel)).toBe(true);
+
+		// Switch to mobile layout: panel visible, container scrollable
+		panel.style.overflowY = "visible";
+		container.style.overflowY = "auto";
+
+		// Trigger resize event
+		windowTarget.dispatchEvent(new Event("resize"));
+
+		expect(published.at(-1)?.viewportHeight).toBe(700);
+		expect(observedElements.has(container)).toBe(true);
+		expect(observedElements.has(panel)).toBe(false);
+
+		// Scrolling container updates metrics
+		rows.rect = {
+			top: -100,
+			bottom: 900,
+			left: 0,
+			right: 800,
+			width: 800,
+			height: 1000,
+			x: 0,
+			y: -100,
+			toJSON: () => ({}),
+		};
+		container.dispatchEvent(new Event("scroll"));
+
+		expect(published.at(-1)).toEqual({
+			scrollTop: 100,
+			viewportHeight: 700,
+		});
+
+		// Old panel scrolling should not trigger anything
+		const count = published.length;
+		panel.dispatchEvent(new Event("scroll"));
+		expect(published.length).toBe(count);
+
+		dispose();
+	});
+
+	test("disposer removes all event listeners and suppresses subsequent publications", () => {
+		const panel = new MockElement();
+		panel.style.overflowY = "auto";
+		const rows = new MockElement();
+		rows.parentElement = panel;
+
+		const published: OutlineScrollMetrics[] = [];
+		const dispose = adapter.observeRows(rows as unknown as HTMLElement, (m) => published.push(m));
+		expect(published.length).toBe(1);
+
+		dispose();
+
+		expect(observedElements.size).toBe(0);
+
+		panel.dispatchEvent(new Event("scroll"));
+		windowTarget.dispatchEvent(new Event("resize"));
+		for (const cb of resizeObserverCallbacks) cb();
+
+		expect(published.length).toBe(1);
+	});
+
+	test("falls back to window when no ancestor has scroll overflow", () => {
+		const rows = new MockElement();
+		rows.rect = {
+			top: -80,
+			bottom: 920,
+			left: 0,
+			right: 800,
+			width: 800,
+			height: 1000,
+			x: 0,
+			y: -80,
+			toJSON: () => ({}),
+		};
+
+		const published: OutlineScrollMetrics[] = [];
+		const dispose = adapter.observeRows(rows as unknown as HTMLElement, (m) => published.push(m));
+
+		expect(published[0]).toEqual({
+			scrollTop: 80,
+			viewportHeight: 768, // window.innerHeight
+		});
+
+		dispose();
+	});
+
+	test("adjusts the dynamically resolved owner and unregisters ensure-mounted ports", async () => {
+		const panel = new MockElement();
+		panel.style.overflowY = "auto";
+		const rows = new MockElement();
+		rows.parentElement = panel;
+		adapter.adjustScroll(rows as unknown as HTMLElement, 120);
+		expect(panel.scrollTop).toBe(120);
+		rows.rect = { ...rows.rect, top: 100 };
+		adapter.scrollToLogical(rows as unknown as HTMLElement, 200);
+		expect(panel.scrollTop).toBe(420);
+
+		const port = vi.fn(async () => true);
+		const unregister = adapter.registerEnsureMounted(port);
+		expect(await adapter.ensureMounted("row-9", () => true)).toBe(true);
+		expect(port).toHaveBeenCalledOnce();
+		unregister();
+		expect(await adapter.ensureMounted("row-9", () => true)).toBe(false);
+	});
+
+	test("captures and restores the actual mobile scroll owner for each pane", async () => {
+		const owner = new MockElement();
+		owner.className = "app-main";
+		owner.style.overflowY = "auto";
+		owner.scrollTop = 430;
+		owner.scrollLeft = 12;
+		const panel = new MockElement();
+		panel.className = "outline-panel";
+		panel.dataset.paneId = "pane-1";
+		panel.parentElement = owner;
+		vi.stubGlobal("document", {
+			querySelectorAll: () => [panel],
+			querySelector: () => panel,
+		});
+
+		adapter.capturePanels();
+		owner.scrollTop = 0;
+		owner.scrollLeft = 0;
+		await adapter.restorePanels(() => true);
+		expect(owner.scrollTop).toBe(430);
+		expect(owner.scrollLeft).toBe(12);
+	});
+
 	test("observes window scrolling and releases its listener on owner switch and dispose", () => {
 		const rows = new MockElement();
 		const published: OutlineScrollMetrics[] = [];
