@@ -612,3 +612,30 @@ Deno.test("P6 graph traversal handles a 6,000-node FROM chain without recursion"
 	assertEquals(buildLaneOrder(data).size, count);
 	assertEquals(calculateLineageProjection(data).maxGeneration, count - 1);
 });
+
+Deno.test("P6b: calculateTreeLayout handles dense simultaneous hub nodes without quadratic blowup", () => {
+	const count = 2000;
+	const items = Array.from(
+		{ length: count },
+		(_, i) => item(`hub-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? "hub-0" : null),
+	);
+	const data = snapshot(items);
+	for (let i = 1; i < count; i++) {
+		data.links.push(link("hub-0", `hub-${i}`, "FROM"));
+	}
+
+	const start = performance.now();
+	const layout = calculateTreeLayout(data, {
+		width: 800,
+		height: 600,
+		projection: "chronology",
+		projectX: () => 100, // all at same timestamp X
+		camera: { k: 0.01, x: 0, y: 0 }, // zoomed out so all 2,000 nodes fall into the same screen cell bucket
+	});
+	const elapsed = performance.now() - start;
+
+	assertEquals(layout.lod, "overview");
+	assertEquals(layout.nodes.length, 1);
+	assertEquals(layout.nodes[0].count, count);
+	assertEquals(elapsed < 2000, true, `Expected < 2000ms, got ${elapsed}ms`);
+});

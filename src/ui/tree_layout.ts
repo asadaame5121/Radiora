@@ -196,10 +196,15 @@ function assignLanes(
 		a.item.id.localeCompare(b.item.id)
 	);
 	const baseLaneCount = Math.min(10, Math.max(1, Math.ceil(Math.sqrt(sorted.length))));
-	const laneEnds: number[] = Array.from(
-		{ length: baseLaneCount },
-		() => Number.NEGATIVE_INFINITY,
-	);
+	const binaryTreeFactor = 2;
+	let usedLaneCount = baseLaneCount;
+	let treeCap = 1;
+	const maxPossibleLanes = Math.max(baseLaneCount, sorted.length, binaryTreeFactor);
+	while (treeCap < maxPossibleLanes) {
+		treeCap <<= 1;
+	}
+	const minTree = new Float64Array(treeCap * binaryTreeFactor).fill(Number.NEGATIVE_INFINITY);
+
 	const pending: Array<Omit<TreeLayoutNode, "x" | "y" | "worldY">> = [];
 	// Nodes and labels retain their screen-pixel dimensions as the camera zooms,
 	// so reserve their horizontal footprint in layout (world) coordinates.
@@ -217,18 +222,26 @@ function assignLanes(
 		// horizontal extent here, otherwise nearby Chronology nodes can share a
 		// lane even though their text overlaps.
 		const intervalEnd = worldX + (radius + 12 + labelWidth) * screenToWorld;
-		let lane = -1;
-		for (let candidate = 0; candidate < laneEnds.length; candidate++) {
-			if (laneEnds[candidate] + NODE_GAP * screenToWorld <= intervalStart) {
-				lane = candidate;
-				break;
-			}
+		const threshold = intervalStart - NODE_GAP * screenToWorld;
+
+		let treeNode = 1;
+		while (treeNode < treeCap) {
+			const leftChild = treeNode * binaryTreeFactor;
+			treeNode = minTree[leftChild] <= threshold ? leftChild : leftChild + 1;
 		}
-		if (lane === -1) {
-			lane = laneEnds.length;
-			laneEnds.push(Number.NEGATIVE_INFINITY);
+		const lane = treeNode - treeCap;
+		if (lane >= usedLaneCount) {
+			usedLaneCount = lane + 1;
 		}
-		laneEnds[lane] = intervalEnd;
+		let idx = treeCap + lane;
+		minTree[idx] = intervalEnd;
+		for (idx >>= 1; idx >= 1; idx >>= 1) {
+			const leftChild = idx * binaryTreeFactor;
+			const left = minTree[leftChild];
+			const right = minTree[leftChild + 1];
+			minTree[idx] = left < right ? left : right;
+		}
+
 		pending.push({
 			id: item.id,
 			item,
@@ -246,7 +259,7 @@ function assignLanes(
 		});
 	}
 
-	const occupiedHeight = Math.max(0, laneEnds.length - 1) * LANE_SPACING;
+	const occupiedHeight = Math.max(0, usedLaneCount - 1) * LANE_SPACING;
 	const top = Math.max(60, (height - occupiedHeight) / 2);
 	const contentHeight = Math.max(height, top + occupiedHeight + 60);
 	return {
