@@ -67,9 +67,13 @@ mount失敗と失効の区別を単体テストで固定。ブラウザでは10,
 800pxで`.app-main`がscroll ownerであること、2KB編集中行の画面外mount保持、
 大規模OutlineのARIA/axeと折りたたみ後のfocus補正を確認する。
 
-全体verifyにはP5と独立した既存mainのブロッカーがある。
+当初、全体verifyにはP5と独立した既存mainのブロッカーがあった。
 `diagnostic_log_sink_test.ts`の`createDiagnosticLogSink`と
-`desktop_launcher_integrity_test.ts`の`prepareWindowsLaunchers`が未exportでTS2305になる。 mainのCI
-run `38656975234`でも同じ2件が失敗している。テストをskipしたり、
-desktopの仕様をP5へ混ぜて通すことはしない。別途解消後に全体verifyとマージ可否を再確認する。 release
-traceとmain/candidate比較は引き続きP7に残す。
+`desktop_launcher_integrity_test.ts`の`prepareWindowsLaunchers`が未exportでTS2305になり、 mainのCI
+run `38656975234`でも同じ2件が失敗していた。
+
+別の前提修正PR #368で、Loggerの例外隔離内での診断ファイル初期化と、ビルド後のWindows
+launcher整合性レベル正常化を実装・本番へ接続した。P5先端へ取り込み後、Windowsで
+`deno task verify`が完走した（Deno 998件＋4 steps、unit 549件、lint/quality/format/check/build）。
+テストskip追加なし。各PRのGitHub CIとマージ状態はPRに記録し、このスタック上の証拠だけで
+main反映済みとは扱わない。release traceとmain/candidate比較は引き続きP7に残す。
