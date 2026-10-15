@@ -1,8 +1,11 @@
+import type { VisibleRow } from "../src/ui/outline_view_model.ts";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	type OutlineScrollMetrics,
 	OutlineViewportAdapter,
 } from "../src/ui/outline_viewport_adapter.ts";
+
+import { buildVirtualOutlineLayout } from "../src/ui/virtual_outline_viewport.ts";
 
 class MockElement extends EventTarget {
 	parentElement: MockElement | null = null;
@@ -395,4 +398,31 @@ describe("OutlineViewportAdapter.observeRows (U01)", () => {
 		for (const callback of resizeObserverCallbacks) callback();
 		expect(published).toHaveLength(count + 1);
 	});
+});
+
+test("drops on the logical row under the pointer when it lands on the virtualized root gap", () => {
+	const adapter = new OutlineViewportAdapter();
+	const root = new MockElement();
+	root.rect.top = 10;
+	const event = {
+		target: root,
+		currentTarget: root,
+		clientY: 54,
+		preventDefault: vi.fn(),
+		stopPropagation: vi.fn(),
+	} as unknown as DragEvent;
+	const drop = vi.fn();
+
+	adapter.dropOnVirtualGap(
+		event,
+		"dragged",
+		root as unknown as HTMLElement,
+		buildVirtualOutlineLayout(3, () => 40),
+		["a", "b", "c"].map((id) => ({ item: { id } }) as VisibleRow),
+		drop,
+	);
+
+	expect(drop).toHaveBeenCalledWith({ item: { id: "b" } });
+	expect(event.preventDefault).toHaveBeenCalledOnce();
+	expect(event.stopPropagation).toHaveBeenCalledOnce();
 });

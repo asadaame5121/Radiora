@@ -27,6 +27,7 @@
 		helpers,
 		onDragStart,
 		onDragEnd,
+		onRowElement = () => undefined,
 	}: {
 		row: VisibleRow;
 		selectedId: string | null;
@@ -39,16 +40,26 @@
 		helpers: OutlineHelpers;
 		onDragStart: (id: string) => void;
 		onDragEnd: () => void;
+		onRowElement?: (id: string, element: HTMLElement | null) => void;
 	} = $props();
 
+	let rowElement = $state<HTMLElement | null>(null);
 	const REFERENCE_PREFIX_LENGTH = 8;
 
 	const inlineLinks = $derived(helpers.inlineSemanticLinksFor(row.item.text));
 	const annotations = $derived(helpers.semanticLinkAnnotationsFor(row.item.id));
 	const rowBody = $derived(helpers.bodyFor(row.item));
+	// Notify the observer of this row ID/DOM binding; cleanup unobserves replaced/unmounted rows.
+	$effect(() => {
+		const id = row.item.id;
+		onRowElement(id, rowElement);
+		return () => onRowElement(id, null);
+	});
 </script>
 
 <div
+	bind:this={rowElement}
+	data-outline-row-id={row.item.id}
 	class:selected={selectedId === row.item.id}
 	class:dragging={draggedId === row.item.id}
 	class="row"

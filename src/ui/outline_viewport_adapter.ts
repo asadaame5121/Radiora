@@ -1,6 +1,11 @@
 import { tick } from "svelte";
 import { captureEditorPosition, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
 import type { OutlineViewport } from "./outline_screen_state.svelte.ts";
+import type { VisibleRow } from "./outline_view_model.ts";
+import {
+	virtualOutlineIndexAtOffset,
+	type VirtualOutlineLayout,
+} from "./virtual_outline_viewport.ts";
 
 import type { OutlineScrollMetrics } from "./outline_virtual_viewport_controller.svelte.ts";
 export type { OutlineScrollMetrics } from "./outline_virtual_viewport_controller.svelte.ts";
@@ -83,6 +88,31 @@ export class OutlineViewportAdapter {
 		return current() && this.ensureMountedPort
 			? this.ensureMountedPort(id, current)
 			: Promise.resolve(false);
+	}
+
+	dropOnVirtualGap(
+		event: DragEvent,
+		draggedId: string | null,
+		rowsElement: HTMLElement | null,
+		layout: VirtualOutlineLayout,
+		rows: readonly VisibleRow[],
+		onDrop: (row: VisibleRow) => void,
+	): void {
+		const target = event.target;
+		if (
+			!draggedId || !rowsElement ||
+			(target !== event.currentTarget &&
+				!(target instanceof Element && target.closest("[data-virtual-gap]")))
+		) return;
+		const index = virtualOutlineIndexAtOffset(
+			layout,
+			event.clientY - rowsElement.getBoundingClientRect().top,
+		);
+		const row = index === null ? undefined : rows[index];
+		if (!row) return;
+		event.preventDefault();
+		event.stopPropagation();
+		onDrop(row);
 	}
 
 	adjustScroll(rowsElement: HTMLElement, delta: number): void {
