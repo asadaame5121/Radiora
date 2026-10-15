@@ -1,3 +1,4 @@
+import type { VisibleRow } from "../src/ui/outline_view_model.ts";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	type OutlineScrollMetrics,
@@ -417,11 +418,11 @@ test("drops on the logical row under the pointer when it lands on the virtualize
 		"dragged",
 		root as unknown as HTMLElement,
 		buildVirtualOutlineLayout(3, () => 40),
-		["a", "b", "c"],
+		["a", "b", "c"].map((id) => ({ item: { id } }) as VisibleRow),
 		drop,
 	);
 
-	expect(drop).toHaveBeenCalledWith("b");
+	expect(drop).toHaveBeenCalledWith({ item: { id: "b" } });
 	expect(event.preventDefault).toHaveBeenCalledOnce();
 	expect(event.stopPropagation).toHaveBeenCalledOnce();
 });

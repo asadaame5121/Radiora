@@ -49,6 +49,7 @@
 	const inlineLinks = $derived(helpers.inlineSemanticLinksFor(row.item.text));
 	const annotations = $derived(helpers.semanticLinkAnnotationsFor(row.item.id));
 	const rowBody = $derived(helpers.bodyFor(row.item));
+	// Notify the observer of this row ID/DOM binding; cleanup unobserves replaced/unmounted rows.
 	$effect(() => {
 		const id = row.item.id;
 		onRowElement(id, rowElement);

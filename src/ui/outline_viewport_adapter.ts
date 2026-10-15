@@ -1,6 +1,11 @@
 import { tick } from "svelte";
 import { captureEditorPosition, focusOutlineEditor } from "./editor_return_controller.svelte.ts";
 import type { OutlineViewport } from "./outline_screen_state.svelte.ts";
+import type { VisibleRow } from "./outline_view_model.ts";
+import {
+	virtualOutlineIndexAtOffset,
+	type VirtualOutlineLayout,
+} from "./virtual_outline_viewport.ts";
 
 import type { OutlineScrollMetrics } from "./outline_virtual_viewport_controller.svelte.ts";
 export type { OutlineScrollMetrics } from "./outline_virtual_viewport_controller.svelte.ts";
@@ -64,11 +69,6 @@ function calculateMetrics(
 	return { scrollTop: 0, viewportHeight: 0 };
 }
 
-import {
-	virtualOutlineIndexAtOffset,
-	type VirtualOutlineLayout,
-} from "./virtual_outline_viewport.ts";
-
 /** DOM identity is recreated after render; only coordinates and logical targets are retained. */
 export class OutlineViewportAdapter {
 	private paneScroll: NonNullable<OutlineViewport["paneScroll"]> = {};
@@ -90,19 +90,19 @@ export class OutlineViewportAdapter {
 			: Promise.resolve(false);
 	}
 
-	dropOnVirtualGap<T>(
+	dropOnVirtualGap(
 		event: DragEvent,
 		draggedId: string | null,
 		rowsElement: HTMLElement | null,
 		layout: VirtualOutlineLayout,
-		rows: readonly T[],
-		onDrop: (row: T) => void,
+		rows: readonly VisibleRow[],
+		onDrop: (row: VisibleRow) => void,
 	): void {
 		const target = event.target;
 		if (
 			!draggedId || !rowsElement ||
 			(target !== event.currentTarget &&
-				!(target instanceof Element && target.closest(".virtual-gap")))
+				!(target instanceof Element && target.closest("[data-virtual-gap]")))
 		) return;
 		const index = virtualOutlineIndexAtOffset(
 			layout,
