@@ -57,6 +57,14 @@ export interface SqliteHost {
 	stop(): Promise<number | null>;
 }
 
+export interface CleanupHooks {
+	/**
+	 * Runs once per attempt, after every host stopped and before the owned root is removed.
+	 * Playwright's fixture uses it to collect the final backend logs while they still exist.
+	 */
+	readonly beforeRemove?: () => Promise<void> | void;
+}
+
 export interface SmokeAttempt {
 	readonly root: string;
 	readonly dataDir: string;
@@ -64,7 +72,8 @@ export interface SmokeAttempt {
 	/** Port the first host reported; restarts request it so a browser origin stays stable. */
 	readonly port: number | undefined;
 	start(distDir: string): Promise<SqliteHost>;
-	cleanup(): Promise<void>;
+	/** One closing rule for every caller; the first call's hooks run before root removal. */
+	cleanup(hooks?: CleanupHooks): Promise<void>;
 }
 
 interface ReadyInfo {
@@ -400,7 +409,7 @@ export async function createSmokeAttempt(label: string): Promise<SmokeAttempt> {
 			return host;
 		}
 
-		async function cleanupScope(): Promise<void> {
+		async function cleanupScope(beforeRemove?: () => Promise<void> | void): Promise<void> {
 			closing = true;
 			// A start still settling owns its host; let every one finish before stopping and removing.
 			await Promise.allSettled([...inFlight]);
@@ -408,6 +417,13 @@ export async function createSmokeAttempt(label: string): Promise<SmokeAttempt> {
 			for (const host of hosts.reverse()) {
 				try {
 					await host.stop();
+				} catch (cause) {
+					failure ??= cause;
+				}
+			}
+			if (beforeRemove) {
+				try {
+					await beforeRemove();
 				} catch (cause) {
 					failure ??= cause;
 				}
@@ -438,8 +454,8 @@ export async function createSmokeAttempt(label: string): Promise<SmokeAttempt> {
 				inFlight.add(run);
 				return run;
 			},
-			cleanup(): Promise<void> {
-				cleanupPromise ??= cleanupScope();
+			cleanup(hooks?: CleanupHooks): Promise<void> {
+				cleanupPromise ??= cleanupScope(hooks?.beforeRemove);
 				return cleanupPromise;
 			},
 		};

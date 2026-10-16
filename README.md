@@ -138,6 +138,21 @@ Deno/Vitestテスト、frontend buildを実行します。
 - `npm run storybook` / `npm run test:storybook` —
   UI状態カタログとそのrender・interaction・a11yテスト
 - `npm run test:ui` — App全体の操作回帰テスト（Outlineのdrag/drop・選択・取消）
+- `npm run test:smoke` — 実バックエンド（Deno + SQLite）を起動し、ブラウザUI→実RPC→SQLite→
+  バックエンド再起動→UI再読込 までを1本で確認するfull-stack smoke（`dist` のビルドを含む）。
+  - **Windows限定**: test
+    hostのデータ配置がバックスラッシュ前提のため、他OSでは明示的に失敗します（黙って skip
+    しません）。 前提は Node.js / Deno / Chromium（`npx playwright install chromium`）。
+  - 実行ごとに一意の一時 application-data ディレクトリと attempt 専用の loopback port を使い、
+    終了時に backend 停止とディレクトリ削除まで行います。`--workers` / `--repeat-each`
+    の並列・再実行でも DBや port を共有しません。
+  - backend は同じ一時 SQLite
+    のままプロセスを再起動し、保存した本文がUI再読込で戻ることを確認します。 test host は startup
+    snapshot cache を提供しないため、cache や in-memory で通ることはありません。
+  - 失敗時は `test-results/smoke/` に trace・screenshot と、backend の
+    stdout/stderr・診断log・操作logが残ります。
+  - 未保証: CEF/native window・自動更新・HMR・描画の挙動、および startup cache 挙動。 CI では
+    `fullstack-smoke` job（windows-latest）が同じコマンドを実行します。
 - `npm run test:visual` — 代表storyの画像差分
 - `npm run test:mutation:*` — Strykerによるmutation test（parsers / projections / domain / storage /
   controllers）
