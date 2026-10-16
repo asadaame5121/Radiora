@@ -1,0 +1,16 @@
+{
+	"name": "loro-undo-spike",
+	"private": true,
+	"type": "module",
+	"version": "0.0.0",
+	"description": "Throwaway PoC: Loro document store + built-in UndoManager for Radiora outline undo/redo",
+	"scripts": {
+		"test": "node loro_undo_test.ts",
+		"demo": "node loro_undo_demo.ts",
+		"demo:web": "vite",
+		"build:web": "vite build"
+	},
+	"dependencies": {
+		"loro-crdt": "1.16.4"
+	}
+}

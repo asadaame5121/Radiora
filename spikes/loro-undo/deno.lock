@@ -1,0 +1,18 @@
+{
+  "version": "5",
+  "specifiers": {
+    "npm:loro-crdt@1.16.4": "1.16.4"
+  },
+  "npm": {
+    "loro-crdt@1.16.4": {
+      "integrity": "sha512-UPufMpHSEMLRVjWfCjhVbOD8nkCDwxdfVk4Uer6xTEFAcNn+X+oGYWGgIIYuAgofc8UiI0ERZUIMnP7ib/kh6w=="
+    }
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:loro-crdt@1.16.4"
+      ]
+    }
+  }
+}
