@@ -11,8 +11,12 @@
 
 - Stage 1–6は親レビュー承認済みで、このthread/worktree内の作業が完了した。Stage 5ではtheme source
   suiteを assertion 40式 / effective execution 44件の対応台帳と代替coverage確認後に削除した。
-- Stage 6ではnative Outline blank-click coverage、全体の最終ゲート、文書確認を完了した。
-  main未反映・未commit/push。
+- Stage 6ではnative Outline blank-click
+  coverage、全体の最終ゲート、文書確認を完了した。完了時点では未commitで、その後 `gh stack`
+  で4層ブランチ（`issue-328/verification` → `issue-328/command-contracts` →
+  `issue-328/theme-contracts` → `issue-328/acceptance`）へ
+  commitし、mainへは未反映。以後の公開状況は stacked PR / stack で管理する。各stage記録の
+  「commit/pushなし」は当時の実行記録。
 - 優先command/theme source suiteは削除済み。残る19 UI source suitesは棚卸しのみ完了し、移行・削除は
   後続範囲。本Issueで一括移行・削除していない。
 - `blank_click_deselect_contract_test.ts` と `button_style_contract_test.ts` は除外対象として
