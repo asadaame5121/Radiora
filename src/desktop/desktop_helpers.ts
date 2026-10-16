@@ -46,3 +46,16 @@ export function missingAssetResponse(path: string): Response {
 		headers: { "content-type": "text/html; charset=utf-8" },
 	});
 }
+
+const ASSET_MIME_TYPES: Record<string, string> = {
+	".html": "text/html; charset=utf-8",
+	".js": "text/javascript; charset=utf-8",
+	".css": "text/css; charset=utf-8",
+	".svg": "image/svg+xml",
+};
+
+/** Content type for one built asset path; unknown extensions fall back to a byte stream. */
+export function assetMimeType(path: string): string {
+	const index = path.lastIndexOf(".");
+	return ASSET_MIME_TYPES[index < 0 ? "" : path.slice(index)] ?? "application/octet-stream";
+}
