@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte-vite";
-import { fn } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import OptionsView from "../src/ui/OptionsView.svelte";
 
 const callbacks = {
@@ -13,6 +13,7 @@ const callbacks = {
 	onNavigationCollapsedChange: fn(),
 	onInspectorCollapsedChange: fn(),
 	onInspectorWidthChange: fn(),
+	onThemePreferenceChange: fn(),
 	onPersistQuickCapturePreference: fn(),
 	onOpenTrash: fn(),
 	onOpenLicenses: fn(),
@@ -41,6 +42,7 @@ const meta = {
 		navCollapsed: false,
 		inspectorCollapsed: false,
 		inspectorWidth: 360,
+		themePreference: "auto",
 		...callbacks,
 	},
 } satisfies Meta<typeof OptionsView>;
@@ -48,7 +50,16 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+export const Default: Story = {
+	play: async ({ canvasElement, args }) => {
+		const select = within(canvasElement).getByLabelText("カラーテーマ");
+		await expect(select).toHaveValue("auto");
+		await userEvent.selectOptions(select, "light");
+		await expect(args.onThemePreferenceChange).toHaveBeenCalledOnce();
+		await expect(args.onThemePreferenceChange).toHaveBeenCalledWith("light");
+		// OptionsView is controlled; App synchronization is covered by tests/ui/theme.spec.ts.
+	},
+};
 
 export const DisabledAndNotices: Story = {
 	args: {
