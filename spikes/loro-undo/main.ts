@@ -23,7 +23,9 @@ const status = element<HTMLParagraphElement>("status");
 const remoteStatus = element<HTMLParagraphElement>("remote-status");
 const lastChange = { value: "(no change yet)" as string };
 
-let counter = 0;
+// Seed ids below use `work-1` / `item-1` / `item-2`, so generated ids must start beyond them
+// (insertItem() rejects a duplicate app item id).
+let counter = 2;
 const nextId = (prefix: string): string => {
 	counter += 1;
 	return `${prefix}-${counter}`;

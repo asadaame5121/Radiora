@@ -54,17 +54,23 @@ Undo/Redo を成立させられるか**を、製品コード非侵入の Throwaw
 | [`loro_outline_store.ts`](./loro_outline_store.ts) | Loro doc + `LoroTree` + `UndoManager` をまとめた store。これが「統合点」 |
 | [`loro_undo_test.ts`](./loro_undo_test.ts) | 挙動テスト 17 件 (node:test)。F1〜F12 の根拠 |
 | [`loro_undo_demo.ts`](./loro_undo_demo.ts) | 実行可能なトランスクリプト (`npm run demo`) |
-| [`index.html`](./index.html) / [`main.ts`](./main.ts) | ブラウザ確認用の最小デモ (`npm run demo:web`) |
-| [`package.json`](./package.json) | `loro-crdt` を exact pin。`npm test` / `npm run demo` |
+| [`index.html`](./index.html) / [`main.ts`](./main.ts) | ブラウザ確認用の最小デモ |
+| [`vite.config.ts`](./vite.config.ts) | **Vite dev で loro-crdt を動かすために必要な 2 設定** (理由はコメントと §7.1) |
+| [`browser_check.mjs`](./browser_check.mjs) | 実ブラウザ検証 (Playwright)。dev / preview 両方で 11 項目 |
+| [`package.json`](./package.json) | `loro-crdt` を exact pin。devDependency は `vite` のみ |
 | `package-lock.json` / `deno.lock` | npm と Deno それぞれの依存固定 (どちらも同じ 1.16.4) |
 
 ```bash
 cd spikes/loro-undo
-npm install                 # loro-crdt のみ (アプリの node_modules とは独立)
+npm install                 # loro-crdt + vite (アプリの node_modules とは独立)
 npm test                    # 17 tests
 npm run demo                # 挙動トランスクリプト
-npm i -D vite               # ブラウザデモを使う場合のみ
-npm run demo:web            # vite dev server
+
+# ブラウザ確認 (2 経路)
+npm run build:web && npm run preview:web     # 別シェルで
+npm run check:browser -- http://127.0.0.1:5200/
+npm run demo:web -- --port 5199              # 別シェルで
+npm run check:browser -- http://127.0.0.1:5199/
 ```
 
 型検査 (リポジトリの typescript を借りる):
@@ -146,6 +152,15 @@ node ../../../node_modules/typescript/bin/tsc --noEmit --strict --target es2022 
   `node loro_undo_demo.ts` と
   `deno run -A --node-modules-dir=auto loro_undo_demo.ts` (Deno 2.9.7) が同じ出力を出す。
   リポジトリの `deno test` 系に載せることも技術的には可能。
+- **F14. Vite は dev と build で別 entry を解決し、素の dev は動かない。** `vite build` は
+  `browser` entry (同期 XHR + `new URL(..., import.meta.url)`) でそのまま成功するが、`vite` (dev)
+  は `bundler` entry (裸の `.wasm` ESM import) に入り HTTP 500 になる。`resolve.conditions` の
+  `development` 除去 + `optimizeDeps.exclude` の 2 設定で dev も同じ entry になり動作する
+  (詳細と代替案は §7.1)。
+- **F15. 実ブラウザで undo/redo が動作する。** headless chromium で、初期描画 (wasm ロード)、
+  ローカル挿入 → undo → redo、undo ラベル表示、他ピア変更を取り込んだ後の undo が
+  ローカル操作だけを戻すこと、コンソールエラーなし、の 11 項目が dev / preview の両経路でパス。
+  ビルド出力は wasm 3,398.78 kB (gzip 1,130.46 kB) + JS 95.68 kB (gzip 15.96 kB)。
 
 ## 6. 判定
 
@@ -160,44 +175,66 @@ node ../../../node_modules/typescript/bin/tsc --noEmit --strict --target es2022 
 - **採用判断は未了。** 本 PoC は「undo が成立する」ことの証明であり、Loro をドキュメントの
   正本にするかどうか (SQLite/RPC の正本とどう折り合うか) は別の意思決定。ADR を書くなら
   その論点を主軸にすべきで、undo は従属的な論点である。
+- **導入コストとして確定したもの**: Vite では dev 用に 2 設定が必要 (F14)。また production の
+  `browser` entry は同期 XHR で wasm を読むため、Worker での利用とデスクトップ (CEF/Tauri) の
+  カスタムプロトコル配信は別途確認が要る。
 
-## 7. 未検証 / 本実装前の確認事項
+## 7. 統合時の確認事項
 
-1. **Vite バンドルとブラウザ実挙動はこの環境では実行できなかった。** `vite build` は Vite 7 が
-   Windows で実行する `net use` プローブ (`optimizeSafeRealPathSync`) を DSH サンドボックスが
-   EPERM で拒否するため、Loro とは無関係な理由で動かせない (同サンドボックスでは esbuild の
-   postinstall も EPERM になり `vite` を導入できない)。手元で `npm i -D vite && npm run demo:web`
-   を実行して確認する。
+### 7.1 Vite でのバンドル (実測済み。ただし設定が 2 つ必要)
 
-   **確認すべき統合点 (パッケージ同梱コードの読解に基づく整理、Vite 実行での検証は未了)**:
+`loro-crdt` は exports 条件で entry を切り替えるため、**dev と build で別のコードパスに入る**。
+実測した結果 (vite 7.3.7 / chromium headless):
 
-   | entry | 解決される条件 | WASM の読み込み方 | 留意点 |
-   | --- | --- | --- | --- |
-   | `bundler` | Vite dev (`browser.development`) | `import … from "./loro_wasm_bg.wasm"` + 動的 import + `fetch`/`instantiateStreaming` (top-level await) | dev の dep optimizer (esbuild) が裸の `.wasm` import を扱えるか要確認。だめなら `optimizeDeps.exclude: ["loro-crdt"]` |
-   | `browser` | Vite build (`browser.default`) | `new URL("./loro_wasm_bg.wasm", import.meta.url)` + **同期 XHR** + `new WebAssembly.Module` | バンドルは成立する想定だが、**同期 XHR なので Worker では動かず、初回ロードがブロッキング**。資産が同一オリジンで取得でき、MIME が `application/wasm` で返ることが前提 |
-   | `nodejs` | `node` 条件 (Node / Deno) | fs 読み込み | 本 PoC で実測どおり動作 |
-   | `web` (`loro-crdt/web`) | 明示 import | `fetch` + `instantiateStreaming` | Node では初期化できない (実測: `Cannot read properties of undefined (reading 'lorodoc_new')`) |
-   | `base64` (`loro-crdt/base64`) | 明示 import | wasm を base64 で同梱 (index.js ~4.6 MiB) | fetch も別アセットも不要。Tauri/CEF のカスタムプロトコルで同期 XHR が怪しい場合の退避策 |
+| 経路 | entry | 素の状態 | 必要な設定 |
+| --- | --- | --- | --- |
+| `vite build` (production) | `browser` (`browser.default`) | **そのまま動く** | なし |
+| `vite` (dev server) | `bundler` (`browser.development`) | **HTTP 500 で失敗** | 下記 2 設定 |
 
-   特に **`browser` entry の同期 XHR** は、デスクトップ (CEF/Tauri のカスタムプロトコル) と
-   Worker 利用の両方に効いてくる。デスクトップ配布の検証時はここを最優先で確認する。
-2. **永続化**: スナップショット (`Uint8Array`) を既存の SQLite / RPC 境界のどこに置くか。
+- dev の失敗 (実測): `"ESM integration proposal for Wasm" is not supported currently.
+  Use vite-plugin-wasm or other community plugins` — `bundler/index.js` が裸の
+  `import "./loro_wasm_bg.wasm"` を行うため。
+- `resolve.conditions` から `development` を外すと dev も `browser` entry を使うようになり、
+  dev と production で **wasm の読み込み経路が一致する** (検証済み)。
+- ただしそれだけでは `WebAssembly.Module(): expected magic word 00 61 73 6d, found 3c 21 64 6f`
+  で落ちる (実測)。dev の依存事前バンドル (`node_modules/.vite/deps/`) に取り込まれると
+  `new URL("./loro_wasm_bg.wasm", import.meta.url)` がバンドル隣を指し、SPA フォールバックの
+  HTML を同期 XHR が受け取るため。`optimizeDeps.exclude: ["loro-crdt"]` で解消する (検証済み)。
+- 検証済みの設定は [`vite.config.ts`](./vite.config.ts)。この組み合わせで dev / preview の両方に
+  おいてブラウザ検証 11 項目が全て通る。
+- **注意点**: `resolve.conditions` は client グラフ全体に効くため、`development` 条件に依存する
+  他依存 (React 系など) は production ビルドを受け取るようになる。Svelte 中心の現構成では影響は
+  見込まれないが、採用時は `vite-plugin-wasm` を使って条件を既定のままにし、
+  dev は非同期ロード (`bundler` entry)、production は同期 XHR (`browser` entry) という
+  **dev/prod 差を許容する**選択肢も比較したい (この代替案は本 PoC では未検証)。
+- **ビルド出力 (実測)**: `dist/assets/loro_wasm_bg-*.wasm` 3,398.78 kB (gzip 1,130.46 kB)、
+  `dist/assets/index-*.js` 95.68 kB (gzip 15.96 kB)、build 時間 1.2〜1.5 秒。
+  wasm は別アセットとして出力されるため、配信側で `application/wasm` を返す必要がある
+  (同期 XHR は `WebAssembly.Module(bytes)` に渡すので MIME 依存は弱いが、
+  デスクトップのカスタムプロトコルでは要確認)。
+- **ブラウザ検証 (実測)**: `browser_check.mjs` が preview / dev の両方で 11 項目パス。
+  内容は「初期描画 (wasm ロード成功)」「ローカル挿入 → undo → redo」「undo ラベルが UI に出る」
+  「他ピアの変更を取り込んだ後の undo がローカル操作だけを戻す」「コンソール/ページエラーなし」。
+
+### 7.2 その他の確認事項
+
+1. **永続化**: スナップショット (`Uint8Array`) を既存の SQLite / RPC 境界のどこに置くか。
    revision・occurrence・branch の既存モデルとの整合、マイグレーション手順、圧縮方針。
-3. **同期の運用**: peer id の発行と寿命 (ウィンドウ/セッションごと)、UndoManager の寿命と
+2. **同期の運用**: peer id の発行と寿命 (ウィンドウ/セッションごと)、UndoManager の寿命と
    peer 固定制約 (peer は UndoManager の生存中に変更できない)、切断中の更新のバッファリング。
-4. **選択・caret の復元**: `onPush` の `cursors` を使う余地。PoC では未実装。
-5. **タイトル以外の状態**: tag・relation・kind・branch を CRDT に載せるか、従来どおり DB 側に
+3. **選択・caret の復元**: `onPush` の `cursors` を使う余地。PoC では未実装。
+4. **タイトル以外の状態**: tag・relation・kind・branch を CRDT に載せるか、従来どおり DB 側に
    置くか。本 PoC はアウトライン (ツリー + タイトル) のみ。
-6. **性能**: `items()` は毎回 `toJSON()`。実装では diff 購読へ置き換える。大規模アウトラインでの
+5. **性能**: `items()` は毎回 `toJSON()`。実装では diff 購読へ置き換える。大規模アウトラインでの
    undo ステップのメモリ量、tombstone の蓄積 (F6 の再作成が繰り返されると削除済みノードが増える)。
-7. **所有契約**: 採用するなら [UI所有契約](../../docs/design/ui-state-ownership.md) に従い、
+6. **所有契約**: 採用するなら [UI所有契約](../../docs/design/ui-state-ownership.md) に従い、
    「Loro doc を正本とする state はどれか」「どの Controller が undo を所有するか」を先に決め、
    新 feature として分離するかどうかを判定する。スパイクはアプリコードに一切触れていない。
-8. **CI への組み込み**: `spikes/**` は biome / deno fmt / deno test / knip の対象外なので、
+7. **CI への組み込み**: `spikes/**` は biome / deno fmt / deno test / knip の対象外なので、
    この PoC は既存の検証ゲートに影響しない。採用時はテストを `vitest/**` か `src/**/*_test.ts`
    へ移し、依存をルートの `package.json` に移す必要がある。
 
-## 8. 検証ログ (この環境で実行した結果)
+## 8. 検証ログ (実行した結果)
 
 ```
 $ node loro_undo_test.ts
@@ -212,10 +249,18 @@ $ node ../../../node_modules/typescript/bin/tsc --noEmit --strict --target es202
 $ deno run -A --node-modules-dir=auto loro_undo_demo.ts    # Deno 2.9.7
 (Node と同じ出力)
 
-$ node loro_undo_demo.ts                                   # トランスクリプト
-(README F1〜F12 の数値はこの出力とテストから採取)
+$ npm run build:web                                        # vite 7.3.7
+dist/assets/loro_wasm_bg-*.wasm  3,398.78 kB │ gzip: 1,130.46 kB
+dist/assets/index-*.js              95.68 kB │ gzip:    15.96 kB
+✓ built in 1.22s
+
+$ npm run check:browser -- http://127.0.0.1:5200/          # vite preview (browser entry)
+PASS x11 → all browser checks passed
+
+$ npm run check:browser -- http://127.0.0.1:5199/          # vite dev (要 vite.config.ts)
+PASS x11 → all browser checks passed
 ```
 
-補足: このサンドボックスでは `node --test <file>` は子プロセスの pipe 生成が EPERM で拒否される
-ため、テストは `node <file>` の直接実行で動かしている (`npm test` も同じ)。通常環境では
-`node --test loro_undo_test.ts` でも同じ結果になる。
+補足: 検証時のサンドボックスでは `node --test <file>` (子プロセスの pipe 生成) と Vite/esbuild
+(Windows の `net use` プローブ) が EPERM で拒否されたため、テストは `node <file>` の直接実行、
+Vite は権限を広げた 1 回限りの実行で確認した。通常環境ではいずれも制約なく動く。

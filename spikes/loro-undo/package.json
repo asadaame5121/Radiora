@@ -8,9 +8,14 @@
 		"test": "node loro_undo_test.ts",
 		"demo": "node loro_undo_demo.ts",
 		"demo:web": "vite",
-		"build:web": "vite build"
+		"build:web": "vite build",
+		"preview:web": "vite preview --port 5200 --strictPort",
+		"check:browser": "node browser_check.mjs"
 	},
 	"dependencies": {
 		"loro-crdt": "1.16.4"
+	},
+	"devDependencies": {
+		"vite": "^7.3.7"
 	}
 }
