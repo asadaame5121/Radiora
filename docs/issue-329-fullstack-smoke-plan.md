@@ -2,8 +2,8 @@
 
 2026-10-16。照合基点は `main` `8dc2eb815ca889f87dcaf8862f8d534f5d1f07b3`。
 仕様の正本は、親threadが `gh issue view` で取得したGitHub Issue #329の本文である。
-Stage 1は親レビューで承認済み（`issue-329/rpc-boundary` tip `fe8abfbe17b65ddf80e0d2f9829092a8ece16ef2`。上位layerのbaseは`gh stack rebase --no-trunk --upstack`で更新済み）。
-Stage 2も親レビューで承認済みで、その7ファイルは `issue-329/sqlite-host` のtipとしてthread内にcommitする（main未反映）。
+**現在の状態**: Stage 1–3とも親レビューで承認済みで、このprivate stack（`issue-329/rpc-boundary` → `issue-329/sqlite-host` → `issue-329/fullstack-smoke`）内に実装済み。**mainには未反映**（公開PRはdraft、新設の`fullstack-smoke` jobのCI実行は未検証）。ローカル実行の実測結果は各Stage記録（§8/§10/§12）にあり、当時の未commit状態はその歴史として保持する。
+Stageのtip: Stage 1 `fe8abfbe17b65ddf80e0d2f9829092a8ece16ef2`、Stage 2 `2872159039d415b76b6bfbeb4457937714a0e4ee`、Stage 3はtop branchの最新commit。
 本書は計画と段階構成の記録であり、Stage 1ではtest host・Playwright設定・CI・npm scriptを実装しない。
 
 ## 1. 目的と受け入れ条件
@@ -186,3 +186,29 @@ globalなuncaughtException handlerでは握りつぶさない（再現済みbug�
   temp rootの孤児なし（実行前後で `%TEMP%\radiora-smoke-*` の集合が不変、denoプロセス0件）。
 - 実装で分かったこと: (a) `renderer.log` infoはproductionの記録selector（development/release両方）で落ちるため、hostのstdout証拠には使わない。(b) 終了済みchildへの `kill` は `TypeError`（"Child process has already terminated"）を投げるので、killは有界graceの結果として扱う。(c) Node 22では`.ts`実行に `--experimental-strip-types` を明示する（controllerはerasable syntaxのみ）。
 - 未保証: CEF shell・更新機構・HMR・描画、startup snapshot cache挙動、production asset route全体、Linux、Playwright spec/CI/README（Stage 3）。
+
+## 11. Stage 3 判定記録: 最小Playwright 1本＋fixture/command/CI/README
+
+- 追加: [playwright.smoke.config.ts](../playwright.smoke.config.ts)（`testMatch: /\.smoke\.spec\.ts$/`、`webServer`なし、trace/screenshotはretain-on-failure系）、[smoke_fixture.ts](../tests/smoke/smoke_fixture.ts#L29)（attempt scope＋実host、失敗時のbackend artifact添付）、[fullstack.smoke.spec.ts](../tests/smoke/fullstack.smoke.spec.ts#L49)（core scenario 1本）、`npm run test:smoke`（[package.json](../package.json#L21)、`npm run build`を包含）、[ci.yml](../.github/workflows/ci.yml#L167) の独立 `fullstack-smoke` job（windows-latest）、[README](../README.md#L141)。
+- 既存mock UI/a11y configは流用せず、`page.route`・`scripts/mock_ui_plugin.ts`・fake handler/service/storeを使わない。fixtureはStage 2のNode controllerを再利用し、第二のprocess controllerやDeno shimを作らない。
+- 作成はAppの実top-barクイック入力（Shift+Enter、destination既定root→`createItem`）、本文入力は実editor（`textarea[data-item-id]`）、保存は`updateItemText`の実responseで観測し、固定sleepを使わない。
+- 再起動は同じattempt（同じtemp SQLite・同じport）で前hostのgraceful stop（exit 0）を待ってから新hostを起動し、`page.reload`は同一originへ行う。
+- cache: test hostはstartup snapshot cache portを提供しないためcache fileは存在せず、reloadの表示はSQLiteのみを情報源とする。
+- `tests/smoke/node_controller_check.ts` は削除した（台帳）: Playwright fixtureが同じcontrollerをNodeで実行し、smokeがそのままNode実証を担うため、重複するstandalone scriptを残さない。Stage 2のNode 22/25実行証跡は本書§10の履歴として保持する。
+- Windows限定は fixture/README/CIで明示し、他OSではfixtureが明示的に失敗する（黙skip・曖昧成功なし）。
+
+## 12. Stage 3 実施記録（2026-10-16、親レビュー前）
+
+- 実Playwright: `npm run test:smoke` = build成功（vite、17.2s）＋ **1 passed**（test 4.4s）。復元後の最終確認も **1 passed**（3.0s）。
+- parallel/retry: `npx playwright test --config playwright.smoke.config.ts --repeat-each=2 --workers=2` → **2 passed**（実行中に並行する実host 2つ、attemptごとのtemp root/portは非共有）。
+- 収集範囲: smoke configは `--list` で **1 test / 1 file**（Deno統合testとfixtureは非収集）。既存configの影響は `playwright.ui.config.ts --list` = 119 tests / `playwright.a11y.config.ts --list` = 7 testsで確認（mock serverは起動せず）。
+- 失敗診断のlifecycle（最終）: artifact回収は `beforeRemove` hook の **post-stopで一度だけ**実行し（test成功/失敗を問わない）、body/setup failure時の先行回収は行わない（停止前snapshotでshutdown末尾logを落とす矛盾を解消）。cleanup失敗が後から加わった場合だけ再回収して `backend-lifecycle-error.log` へ追記する。artifactはtest output dirへファイルとして書き出してからattachし、CI artifactとreportが同一内容になる。fixtureはsetup/restart/cleanupの失敗を同log（controllerのcaptured stdout/stderr付きmessage）へ記録し、未起動時は `backend-stdout.log` = `[backend did not start]`。回収失敗はstderrと `backend-diagnostics-error.log` に残し、元causeを上書きしない。teardown失敗はbody/setupの失敗と並記し、どちらも隠さない。
+- 失敗artifact対照 3種: (a) 期待文字列不一致 → trace/screenshot＋backend stdout/stderr・log群（lifecycle logは無し）で、**on-disk `backend-stdout.log` に `test_host.shutdown.ready` 1件（`backend-startup.log` は2件）** が入ることを確認（post-stop回収の証拠）、(b) ready前の起動失敗（`RADIORA_DENO_BIN`を存在しないpathへprocess-local指定）→ `backend-lifecycle-error.log` に `[setup] ... spawn ... ENOENT` とcaptured section、`backend-stdout.log`=`[backend did not start]`、(c) teardown停止失敗（lifecycle境界の一時fake。実stopは実行）→ `smoke attempt cleanup failed: ...` に `[cause]` 付きで失敗し、`backend-lifecycle-error.log` に `[cleanup] forced teardown stop failure (control)` が残り、root削除は継続され子プロセス/root残存なし。
+- restart回帰の修正（親指摘）: 最終整理時に `restart()` の `host = await attempt.start(DIST_DIR)` の代入が欠落し、成功したrestart後も診断が停止済みの旧processを指す回帰があった（UIは同portへ接続するためsmoke本体はpassする）。代入を復元し、短い対照で確認: 欠落状態では一時controlが `control: fixture still points at stopped pid 42124 after restart` で失敗、修正後は `[control] current host pid=37316 ready pid=37316 exited=false` を一時観測して撤去。なおpid一致だけでは旧handle同士の比較でも成立するため、`exited === false`（current handleの生存）を併せて見る必要がある。
+- 小点: specの `exists()` はENOENTのみfalse、他はthrow（permission/IOエラーを『cacheなし』と誤判定しない）。fixtureのlog/file列挙もENOENTのみ『無し』とし、それ以外は `backend-diagnostics-error.log` とstderrに表面化させる（primary causeを置換しない）。
+- この修正はfixtureのみで、controller（Node/Deno共有module）とhostは未変更のため、関連backend testsの再実行は不要と判断（Deno統合7件は前回の結果を保持）。
+- 永続性negative control: restart時に一時SQLiteを退避するとreload assertが `element(s) not found` で失敗し、診断コード撤去後に復元pass（owned tempのみを変更、残存なし）。
+- 関連suite: Deno統合7件pass、Stage 1境界11+rpc_adapter 2=13件pass（`--node-modules-dir=manual --frozen`）、関連storage 37件pass。
+- 静的/品質: `deno fmt --check`（新規5ファイル）・`biome lint`（fixture/spec）・one-off `tsc --noEmit`（config+fixture+spec）・`npm run check` 0 errors・`deno task quality`（301 files）・magic-number ratchet（299/428）・`git diff --check` pass。
+- 孤児・root: Playwright実行後もdenoプロセス0件、`%TEMP%\radiora-smoke-*`は実行前後で不変、`deno.lock`は初期hashへ復元（package-lock/deno.json差分なし。package.jsonはscript追加のみ）。
+- 未検証/制約: CI jobはローカル実行不可のためYAML構造のみ検証（`yaml`でパースしjobsに`fullstack-smoke`/windows-latest/7 stepsを確認）。既存mock UI/a11y suiteは`--list`のみで実走していない（固定portの競合回避）。full verify・Git tempdir系は未実行。Node 22/Deno 2.9.3の完全一致環境はCIで検証される（ローカルはNode 25.2.1/Deno 2.9.7）。
