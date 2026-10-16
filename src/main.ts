@@ -5,6 +5,7 @@ import {
 	developmentUiOrigin,
 	missingAssetResponse,
 } from "./desktop/desktop_helpers.ts";
+import { createRpcHttpHandler, RPC_PATH_PREFIX } from "./desktop/rpc_http.ts";
 import { OutlineService } from "./services/outline_service.ts";
 import { RevisionService } from "./services/revision_service.ts";
 import { Logger, selectLogRecord } from "./services/logger.ts";
@@ -75,6 +76,13 @@ const releaseMethods = new Set([
 	"exportJsonBackup",
 	"restoreJsonBackup",
 	"restoreRecoverySnapshot",
+]);
+const maintenanceMethods = new Set([
+	"clearDiagnosticLogs",
+	"getOperationSummary",
+	"exportOperationLog",
+	"recordViewChange",
+	"recordClientOperation",
 ]);
 const views = new Set([
 	"outline",
@@ -218,6 +226,26 @@ const handlers = createBindingHandlers({
 		);
 	},
 });
+const rpcHttp = createRpcHttpHandler({
+	// RadioraBindings is an interface without an index signature; the transport takes a plain
+	// record of its own members.
+	handlers: { ...handlers },
+	recordOperation: ({ method, outcome, durationMs, errorName }) => {
+		const event = Object.hasOwn(operationMethods, method) ? operationMethods[method] : undefined;
+		if (!event) return;
+		if (buildProfile !== "development" && !releaseMethods.has(method)) return;
+		try {
+			operationLog.record(event, outcome, durationMs, errorName);
+		} catch (cause) {
+			logger.error("operation_log.write.failed", cause);
+		}
+	},
+	measureRequest: (method, invoke) =>
+		maintenanceMethods.has(method) ? invoke() : logger.timed("rpc.request", invoke, { method }),
+	onStartupStatusPoll: () => {
+		if (startupStatus.phase === "starting" && !bootstrapPromise) void bootstrap();
+	},
+});
 logger.info("desktop.runtime.initialized", { storageMode });
 
 const appWindow = new Deno.BrowserWindow();
@@ -244,55 +272,8 @@ const server = Deno.serve(async (request) => {
 		}
 		return new Response(null, { status: 204 });
 	}
-	if (url.pathname.startsWith("/api/rpc/")) {
-		const name = url.pathname.slice("/api/rpc/".length) as keyof typeof handlers;
-		if (name === "getStartupStatus" && startupStatus.phase === "starting" && !bootstrapPromise) {
-			void bootstrap();
-		}
-		const handler = handlers[name] as ((...args: unknown[]) => unknown) | undefined;
-		if (request.method !== "POST" || !Object.hasOwn(handlers, name) || !handler) {
-			return Response.json({ message: "Unknown API method." }, { status: 404 });
-		}
-		const operationEvent = Object.hasOwn(operationMethods, name)
-			? operationMethods[name]
-			: undefined;
-		const started = performance.now();
-		try {
-			const invoke = async () => {
-				const body = await request.json() as { args?: unknown[] };
-				return handler(...(body.args ?? []));
-			};
-			const maintenance = name === "clearDiagnosticLogs" || name === "getOperationSummary" ||
-				name === "exportOperationLog" || name === "recordViewChange" ||
-				name === "recordClientOperation";
-			const result = maintenance
-				? await invoke()
-				: await logger.timed("rpc.request", invoke, { method: name });
-			if (operationEvent && (buildProfile === "development" || releaseMethods.has(name))) {
-				try {
-					operationLog.record(operationEvent, "ok", performance.now() - started);
-				} catch (cause) {
-					logger.error("operation_log.write.failed", cause);
-				}
-			}
-			return Response.json({ result: result ?? null });
-		} catch (cause) {
-			if (operationEvent && (buildProfile === "development" || releaseMethods.has(name))) {
-				try {
-					operationLog.record(
-						operationEvent,
-						"error",
-						performance.now() - started,
-						cause instanceof Error ? cause.name : "UnknownError",
-					);
-				} catch (logCause) {
-					logger.error("operation_log.write.failed", logCause);
-				}
-			}
-			return Response.json({ message: cause instanceof Error ? cause.message : String(cause) }, {
-				status: 500,
-			});
-		}
+	if (url.pathname.startsWith(RPC_PATH_PREFIX)) {
+		return await rpcHttp(request);
 	}
 	if (hmrUiOrigin && (request.method === "GET" || request.method === "HEAD")) {
 		return Response.redirect(new URL(`${url.pathname}${url.search}`, hmrUiOrigin).href, 307);
