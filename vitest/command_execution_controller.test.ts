@@ -59,3 +59,51 @@ it("dispose rejects new work and suppresses a late error", async () => {
 	expect(error).not.toHaveBeenCalled();
 	expect(operation).toHaveBeenCalledOnce();
 });
+
+it("dispatches available command operations with explicit payloads and skips unavailable ones", async () => {
+	const operations = {
+		quickCapture: vi.fn(),
+		hoist: vi.fn(),
+		addBookmark: vi.fn(),
+		saveRevision: vi.fn(),
+		createLink: vi.fn(),
+	};
+	const unavailable = vi.fn();
+	const controller = new CommandExecutionController({
+		context: () => context,
+		operations,
+		reportError: vi.fn(),
+		reportUnavailable: unavailable,
+	});
+
+	await controller.execute("quickCapture");
+	await controller.execute("hoist");
+	await controller.execute("addBookmark");
+	await controller.execute("saveRevision");
+	await controller.execute("saveRevision", { snapshotId: "snapshot-7" });
+	await controller.execute("createLink", {
+		linkInput: { fromId: "from", toId: "to", type: "FROM" },
+	});
+
+	expect(operations.quickCapture).toHaveBeenCalledOnce();
+	expect(operations.hoist).toHaveBeenCalledOnce();
+	expect(operations.addBookmark).toHaveBeenCalledOnce();
+	expect(operations.saveRevision).toHaveBeenCalledOnce();
+	expect(operations.saveRevision).toHaveBeenCalledWith({ snapshotId: "snapshot-7" });
+	expect(operations.createLink).toHaveBeenCalledWith({
+		linkInput: { fromId: "from", toId: "to", type: "FROM" },
+	});
+	expect(unavailable).toHaveBeenCalledOnce();
+
+	const unavailableController = new CommandExecutionController({
+		context: () => ({ ...context, quickCaptureText: "", hasSelectedRecoverySnapshot: false }),
+		operations,
+		reportError: vi.fn(),
+		reportUnavailable: unavailable,
+	});
+	await unavailableController.execute("quickCapture");
+	await unavailableController.execute("saveRevision");
+	expect(unavailable).toHaveBeenCalledTimes(3);
+	expect(operations.quickCapture).toHaveBeenCalledOnce();
+	expect(operations.saveRevision).toHaveBeenCalledOnce();
+});

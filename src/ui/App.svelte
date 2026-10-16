@@ -126,7 +126,10 @@
 
 	import { CommandExecutionController } from "./command_execution_controller.ts";
 	import { GlobalKeyboardAdapter } from "./global_keyboard_adapter.ts";
-	import { PaletteFocusAdapter } from "./palette_focus_adapter.ts";
+	import {
+		PaletteFocusAdapter,
+		type PaletteFocusSession,
+	} from "./palette_focus_adapter.ts";
 	import { OccurrenceContextMenuController } from "./occurrence_context_menu_controller.svelte.ts";
 
 	const api = createRpcAdapter<RadioraBindings>();
@@ -1227,7 +1230,8 @@
 	function executeCommand(id: CommandId, snapshotId?: string, linkInput?: CreateLinkInput): Promise<void> {
 		return commandExecution.execute(id, { snapshotId, linkInput });
 	}
-	const paletteFocus = new PaletteFocusAdapter({ open: () => commandPaletteOpen, afterRender: tick });
+	const paletteFocus = new PaletteFocusAdapter({ open: () => commandPaletteOpen });
+	let paletteFocusSession = $state.raw<PaletteFocusSession | null>(null);
 	const globalKeyboard = new GlobalKeyboardAdapter({
 		chord: keyboard,
 		blocked: () => commandPaletteOpen || Boolean(confirmationController.pending) || licensesController.isOpen || Boolean(occurrenceContextMenu) || Boolean(document.querySelector('[role="dialog"], dialog[open]')),
@@ -1241,13 +1245,15 @@
 	async function openCommandPalette(): Promise<void> {
 		keyboard.cancel();
 		keyboardWorkspace.remember();
-		paletteFocus.remember();
+		const session = paletteFocus.remember();
+		paletteFocusSession = session;
 		paletteController.openCommandPalette();
 	}
 
 	async function closeCommandPalette(): Promise<void> {
+		const session = paletteFocusSession;
 		paletteController.closeCommandPalette();
-		await paletteFocus.restore();
+		if (session) await session.settled;
 	}
 
 	async function executeCommandPaletteItem(command: CommandPaletteItem): Promise<void> {
@@ -1421,8 +1427,12 @@
 	open={commandPaletteOpen}
 	commands={commandPaletteCommands}
 	{vocabulary}
+	focusSession={paletteFocusSession}
 	bind:query={() => paletteController.commandPaletteQuery, (value) => paletteController.setQuery(value)}
 	onClose={closeCommandPalette}
+	onCloseAutoFocus={paletteFocusSession
+		? paletteFocus.closeHandler(paletteFocusSession)
+		: undefined}
 	onExecute={executeCommandPaletteItem}
 />
 

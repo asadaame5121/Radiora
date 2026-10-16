@@ -2,6 +2,7 @@
 	import { Command, Dialog } from "bits-ui";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { CommandPaletteItem } from "./command_palette.ts";
+	import type { PaletteFocusSession } from "./palette_focus_adapter.ts";
 
 	let {
 		open,
@@ -9,6 +10,8 @@
 		vocabulary,
 		query = $bindable(""),
 		onClose,
+		focusSession,
+		onCloseAutoFocus,
 		onExecute,
 	}: {
 		open: boolean;
@@ -16,6 +19,8 @@
 		vocabulary: UiVocabulary;
 		query: string;
 		onClose: () => void | Promise<void>;
+		focusSession?: PaletteFocusSession | null;
+		onCloseAutoFocus?: (event: Event) => void;
 		onExecute: (command: CommandPaletteItem) => void | Promise<void>;
 	} = $props();
 
@@ -38,7 +43,11 @@
 				<div {...props} class="command-palette"></div>
 			{/snippet}
 		</Dialog.Overlay>
-		<Dialog.Content onOpenAutoFocus={handleOpenAutoFocus}>
+		{#key focusSession}
+			<Dialog.Content
+				onOpenAutoFocus={handleOpenAutoFocus}
+				onCloseAutoFocus={onCloseAutoFocus}
+			>
 			{#snippet child({ props: contentProps })}
 				<div
 					{...contentProps}
@@ -58,6 +67,7 @@
 									{#snippet child({ props: inputProps })}
 										<input
 											{...inputProps}
+											bind:value={query}
 											bind:this={commandPaletteInput}
 											class="command-palette__input"
 											aria-label={`${vocabulary.commandPalette}を検索`}
@@ -104,7 +114,8 @@
 					</Command.Root>
 				</div>
 			{/snippet}
-		</Dialog.Content>
+			</Dialog.Content>
+		{/key}
 	</Dialog.Portal>
 </Dialog.Root>
 

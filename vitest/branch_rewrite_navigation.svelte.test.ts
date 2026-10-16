@@ -30,7 +30,20 @@ for (const choice of ["save", "discard", "cancel"] as const) {
 		expect(f.selected()).toBe("source");
 		await f.guard.resolvePending(choice);
 		await pending;
+		expect(api.rewriteAsNewBranch).toHaveBeenCalledWith(
+			"branch-source",
+			"new",
+			"confirmed",
+		);
+		expect(api.createOccurrence).toHaveBeenCalledWith({
+			workId: "work-source",
+			branchId: "new",
+			parentId: null,
+			afterId: "source",
+			contextualHeading: undefined,
+		});
 		expect(f.navigation.view).toBe(choice === "cancel" ? "today" : "outline");
+		expect(f.selected()).toBe(choice === "cancel" ? "source" : f.created.id);
 		expect(refreshHistory).toHaveBeenCalledTimes(1);
 	});
 }
@@ -59,6 +72,12 @@ test("failed branch creation preserves the origin and Outline return state", asy
 			workId: "work-source",
 		}, "new"),
 	).rejects.toThrow("offline");
+	expect(api.rewriteAsNewBranch).toHaveBeenCalledWith(
+		"branch-source",
+		"new",
+		"confirmed",
+	);
+	expect(api.createOccurrence).not.toHaveBeenCalled();
 	await f.navigation.goBack();
 	expect(f.location().hoistOccurrenceId).toBe("source");
 });
@@ -92,6 +111,11 @@ test("a persisted rewrite refreshes history even when its navigation origin is s
 	finishCreation();
 	await rewriting;
 	expect(api.createOccurrence).toHaveBeenCalledTimes(1);
+	expect(api.rewriteAsNewBranch).toHaveBeenCalledWith(
+		"branch-source",
+		"new",
+		"confirmed",
+	);
 	expect(refreshHistory).toHaveBeenCalledWith("work-source");
 	expect(f.navigation.view).toBe("help");
 	expect(f.selected()).toBe("source");

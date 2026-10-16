@@ -59,10 +59,25 @@ export const Rewrite: Story = {
 			sourceBranchId: "branch-1",
 		},
 	},
-	play: async ({ canvasElement }) => {
+	play: async ({ canvasElement, args }) => {
 		const canvas = within(canvasElement.ownerDocument.body);
-		await expect(await canvas.findByRole("textbox", { name: `${DEFAULT_UI_VOCABULARY.branch}名` }))
-			.toHaveFocus();
+		const input = await canvas.findByRole("textbox", {
+			name: `${DEFAULT_UI_VOCABULARY.branch}名`,
+		});
+		const confirm = canvas.getByRole("button", { name: "新しい別稿を作る" });
+		await expect(input).toHaveFocus();
+		await expect(confirm).toBeDisabled();
+		await userEvent.keyboard("{Enter}");
+		await expect(args.onConfirm).not.toHaveBeenCalled();
+		await userEvent.type(input, "   ");
+		await expect(confirm).toBeDisabled();
+		await userEvent.keyboard("{Enter}");
+		await expect(args.onConfirm).not.toHaveBeenCalled();
+		await userEvent.clear(input);
+		await userEvent.type(input, "new branch");
+		await expect(confirm).toBeEnabled();
+		await userEvent.keyboard("{Enter}");
+		await expect(args.onConfirm).toHaveBeenCalledOnce();
 	},
 };
 
