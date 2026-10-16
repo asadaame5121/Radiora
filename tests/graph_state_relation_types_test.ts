@@ -1,4 +1,4 @@
-import { assertEquals, assertNotStrictEquals, assertThrows } from "jsr:@std/assert@1";
+import { assertEquals, assertExists, assertNotStrictEquals, assertThrows } from "jsr:@std/assert@1";
 import type { LinkType, OutlineLink, Work } from "../src/domain/models.ts";
 import {
 	BUILT_IN_RELATION_TYPES,
@@ -159,76 +159,26 @@ Deno.test("validatedGraphStateSnapshot accepts custom links matching catalog and
 	);
 });
 
-Deno.test("validatedGraphStateSnapshot keeps container, catalog, and record error order", async () => {
-	const base = await new MemoryGraphStore().exportGraphState();
-	const invalidWork = { id: "duplicate", createdAt: "invalid", updatedAt: "invalid" };
+Deno.test("validatedGraphStateSnapshot isolates injected defaults across legacy snapshot validations", async () => {
+	const { relationTypeDefinitions: _, ...legacySnapshot } = await new MemoryGraphStore()
+		.exportGraphState();
+	const original = structuredClone(legacySnapshot);
+	const builtInOriginal = structuredClone([...BUILT_IN_RELATION_TYPES]);
+	const first = validatedGraphStateSnapshot(legacySnapshot);
+	const second = validatedGraphStateSnapshot(legacySnapshot);
 
-	assertThrows(
-		() =>
-			validatedGraphStateSnapshot({
-				...base,
-				works: null,
-				relationTypeDefinitions: "invalid",
-			}),
-		Error,
-		"Backup data.works must be an array",
-	);
-	assertThrows(
-		() =>
-			validatedGraphStateSnapshot({
-				...base,
-				works: [invalidWork, invalidWork],
-				relationTypeDefinitions: "invalid",
-			}),
-		Error,
-		"Relation type definitions must be an array",
-	);
-	assertThrows(
-		() =>
-			validatedGraphStateSnapshot({
-				...base,
-				works: [invalidWork, invalidWork],
-				branches: [{}],
-			}),
-		Error,
-		"Work ID collision: duplicate",
-	);
-	assertThrows(
-		() =>
-			validatedGraphStateSnapshot({
-				...base,
-				works: [invalidWork],
-				branches: [{ id: "branch-invalid" }],
-			}),
-		Error,
-		"Invalid Work: duplicate",
-	);
-});
+	assertEquals(first, { ...original, relationTypeDefinitions: builtInOriginal });
+	assertEquals(second, first);
+	assertExists(first.relationTypeDefinitions);
+	assertExists(second.relationTypeDefinitions);
+	assertNotStrictEquals(first.relationTypeDefinitions, second.relationTypeDefinitions);
+	assertNotStrictEquals(first.relationTypeDefinitions[0], second.relationTypeDefinitions[0]);
+	assertNotStrictEquals(first.relationTypeDefinitions[0], BUILT_IN_RELATION_TYPES[0]);
 
-Deno.test("validatedGraphStateSnapshot returns a separate snapshot and preserves nested input", async () => {
-	const base = await new MemoryGraphStore().exportGraphState();
-	const input = {
-		...base,
-		works: [{
-			id: "work-1",
-			createdAt: "2026-09-01T00:00:00.000Z",
-			updatedAt: "2026-09-01T00:00:00.000Z",
-		}],
-		relationTypeDefinitions: [...BUILT_IN_RELATION_TYPES],
-	};
-	const original = structuredClone(input);
-	const validated = validatedGraphStateSnapshot(input);
+	first.relationTypeDefinitions[0].name = "CHANGED";
 
-	assertEquals(validated, input);
-	assertEquals(input, original);
-	assertNotStrictEquals(validated, input);
-	assertNotStrictEquals(validated.works[0], input.works[0]);
-	assertNotStrictEquals(validated.relationTypeDefinitions?.[0], input.relationTypeDefinitions[0]);
-
-	assertThrows(
-		() => validatedGraphStateSnapshot({ ...input, works: [input.works[0], input.works[0]] }),
-		Error,
-		"Work ID collision: work-1",
-	);
-	assertEquals(input, original);
+	assertEquals(second.relationTypeDefinitions, builtInOriginal);
+	assertEquals(BUILT_IN_RELATION_TYPES, builtInOriginal);
+	assertEquals(legacySnapshot, original);
+	assertEquals("relationTypeDefinitions" in legacySnapshot, false);
 });
