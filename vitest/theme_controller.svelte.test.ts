@@ -48,10 +48,15 @@ describe("theme controller", () => {
 		expect(storage.getItem("radiora.themePreference")).toBe("auto");
 	});
 
-	test("init applies initial theme and unsubscribes on cleanup", () => {
-		const storage = memoryStorage("light");
+	test("system changes reapply Auto only and cleanup unsubscribes", () => {
+		const storage = memoryStorage("auto");
 		const applyTheme = vi.fn();
-		const listenSystemChange = vi.fn(() => vi.fn());
+		let onSystemChange: ((prefersDark: boolean) => void) | undefined;
+		const unlisten = vi.fn();
+		const listenSystemChange = vi.fn((callback: (prefersDark: boolean) => void) => {
+			onSystemChange = callback;
+			return unlisten;
+		});
 
 		const controller = createThemeController({
 			storage,
@@ -60,11 +65,42 @@ describe("theme controller", () => {
 		});
 
 		const cleanup = controller.init();
-		expect(applyTheme).toHaveBeenCalledWith("light");
-		expect(listenSystemChange).toHaveBeenCalled();
+		expect(applyTheme).toHaveBeenCalledExactlyOnceWith("auto");
+		expect(listenSystemChange).toHaveBeenCalledOnce();
+		const systemChange = onSystemChange;
+		if (!systemChange) throw new Error("System change listener callback was not registered");
+		applyTheme.mockClear();
+		systemChange(true);
+		expect(applyTheme).toHaveBeenCalledExactlyOnceWith("auto");
 
+		applyTheme.mockClear();
+		controller.setPreference("dark");
+		onSystemChange?.(false);
+		expect(applyTheme).toHaveBeenCalledExactlyOnceWith("dark");
+
+		applyTheme.mockClear();
+		controller.setPreference("light");
+		applyTheme.mockClear();
+		onSystemChange?.(true);
+		expect(applyTheme).not.toHaveBeenCalled();
 		cleanup();
+		expect(unlisten).toHaveBeenCalledOnce();
 	});
+
+	for (const preference of ["dark", "light"] as const) {
+		test(`init applies stored ${preference} preference`, () => {
+			const applyTheme = vi.fn();
+			const controller = createThemeController({
+				storage: memoryStorage(preference),
+				applyTheme,
+			});
+			const cleanup = controller.init();
+
+			expect(applyTheme).toHaveBeenCalledOnce();
+			expect(applyTheme).toHaveBeenCalledWith(preference);
+			cleanup();
+		});
+	}
 
 	test("resolvedTheme resolves auto preference against system setting", () => {
 		const controller = createThemeController({
