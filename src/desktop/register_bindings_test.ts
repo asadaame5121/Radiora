@@ -5,7 +5,7 @@ import { OutlineService } from "../services/outline_service.ts";
 import { RevisionService } from "../services/revision_service.ts";
 import { MemoryGraphStore } from "../storage/memory_store.ts";
 import type { StartupStatus } from "../shared/bindings.ts";
-import { createBindingHandlers } from "./register_bindings.ts";
+import { createBindingHandlers, registerBindings } from "./register_bindings.ts";
 import { operationLogBindingStub } from "../../tests/operation_log_binding_stub.ts";
 
 Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end to end", async () => {
@@ -360,4 +360,32 @@ Deno.test("register_bindings parses and validates discardEmptyItems input", asyn
 	await handlers.discardEmptyItems(["occ-1", "occ-2"]);
 	assertEquals(serviceCalled, 2);
 	assertEquals(delegatedIds, ["occ-1", "occ-2"]);
+});
+
+Deno.test("registered rewrite binding forwards the confirmed request to desktop context", async () => {
+	const store = new MemoryGraphStore();
+	const service = new OutlineService(store);
+	const calls: unknown[][] = [];
+	const registered = new Map<string, unknown>();
+	registerBindings(
+		{
+			bind: (name: string, handler: unknown) => registered.set(name, handler),
+		} as unknown as Deno.BrowserWindow,
+		{
+			...operationLogBindingStub,
+			getService: () => service,
+			getStartupStatus: () => ({ phase: "ready", message: "ready" }),
+			retryStartup: () => Promise.resolve({ phase: "ready", message: "ready" }),
+			rewriteAsNewBranch: (sourceBranchId, name, confirmation) => {
+				calls.push([sourceBranchId, name, confirmation]);
+				return Promise.resolve({ status: "cancelled" });
+			},
+		},
+	);
+
+	const rewrite = registered.get("rewriteAsNewBranch");
+	if (typeof rewrite !== "function") throw new Error("rewriteAsNewBranch was not registered");
+	const result = await rewrite("source-branch", "new branch", "confirmed");
+	assertEquals(calls, [["source-branch", "new branch", "confirmed"]]);
+	assertEquals(result, { status: "cancelled" });
 });
