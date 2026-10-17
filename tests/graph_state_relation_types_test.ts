@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "jsr:@std/assert@1";
+import { assertEquals, assertExists, assertNotStrictEquals, assertThrows } from "jsr:@std/assert@1";
 import type { LinkType, OutlineLink, Work } from "../src/domain/models.ts";
 import {
 	BUILT_IN_RELATION_TYPES,
@@ -157,4 +157,28 @@ Deno.test("validatedGraphStateSnapshot accepts custom links matching catalog and
 		Error,
 		"Invalid Link: link-1",
 	);
+});
+
+Deno.test("validatedGraphStateSnapshot isolates injected defaults across legacy snapshot validations", async () => {
+	const { relationTypeDefinitions: _, ...legacySnapshot } = await new MemoryGraphStore()
+		.exportGraphState();
+	const original = structuredClone(legacySnapshot);
+	const builtInOriginal = structuredClone([...BUILT_IN_RELATION_TYPES]);
+	const first = validatedGraphStateSnapshot(legacySnapshot);
+	const second = validatedGraphStateSnapshot(legacySnapshot);
+
+	assertEquals(first, { ...original, relationTypeDefinitions: builtInOriginal });
+	assertEquals(second, first);
+	assertExists(first.relationTypeDefinitions);
+	assertExists(second.relationTypeDefinitions);
+	assertNotStrictEquals(first.relationTypeDefinitions, second.relationTypeDefinitions);
+	assertNotStrictEquals(first.relationTypeDefinitions[0], second.relationTypeDefinitions[0]);
+	assertNotStrictEquals(first.relationTypeDefinitions[0], BUILT_IN_RELATION_TYPES[0]);
+
+	first.relationTypeDefinitions[0].name = "CHANGED";
+
+	assertEquals(second.relationTypeDefinitions, builtInOriginal);
+	assertEquals(BUILT_IN_RELATION_TYPES, builtInOriginal);
+	assertEquals(legacySnapshot, original);
+	assertEquals("relationTypeDefinitions" in legacySnapshot, false);
 });
