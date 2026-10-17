@@ -30,7 +30,7 @@
 	"tasks": {
 		"build": "npm run build && deno task licenses",
 		"licenses": "deno run -A scripts/licenses.ts",
-		"lint": "npm exec -- biome lint",
+		"lint": "npm exec -- biome lint src scripts tests vitest stories .storybook",
 		"quality": "deno run --allow-read scripts/quality/implementation_lines.ts",
 		"quality:magic-numbers": "deno run -A scripts/quality/biome_diagnostic_ratchet.ts",
 		"duplicates": "npm exec -- jscpd src --reporters console",
