@@ -16,7 +16,7 @@ export default defineConfig({
 		viewport: { width: 1280, height: 800 },
 	},
 	webServer: {
-		command: "npm run storybook -- --ci --no-open",
+		command: "pnpm run storybook --ci --no-open",
 		url: "http://127.0.0.1:6006",
 		reuseExistingServer: !process.env.CI,
 		timeout: 120_000,

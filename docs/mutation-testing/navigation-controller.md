@@ -24,6 +24,6 @@ ID は完全一致する `pane-<number>` のみ採番元として扱うことも
 ## 確認コマンド
 
 ```sh
-npx vitest run --project unit vitest/navigation_controller.svelte.test.ts
-npm run test:mutation:controllers
+pnpm exec vitest run --project unit vitest/navigation_controller.svelte.test.ts
+pnpm run test:mutation:controllers
 ```

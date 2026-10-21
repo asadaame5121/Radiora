@@ -22,6 +22,6 @@ feature state の既定値、duplicate key
 ## 確認コマンド
 
 ```sh
-npx vitest run --project unit vitest/work_controller.svelte.test.ts
-npm run test:mutation:controllers
+pnpm exec vitest run --project unit vitest/work_controller.svelte.test.ts
+pnpm run test:mutation:controllers
 ```

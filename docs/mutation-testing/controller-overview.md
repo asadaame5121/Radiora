@@ -100,8 +100,8 @@ threshold が別途必要である。
 ## 再現コマンド
 
 ```sh
-npx vitest run --config vitest.stryker.config.ts
-npm run test:mutation:controllers
+pnpm exec vitest run --config vitest.stryker.config.ts
+pnpm run test:mutation:controllers
 ```
 
 mutation の integration coverage や実DB互換性を確認する場合は、この run とは分けて SurrealDB を使う
