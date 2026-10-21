@@ -3834,10 +3834,7 @@
         "npm:valibot@^1.4.2",
         "npm:vite@^7.3.6",
         "npm:vitest@^4.1.10"
-      ],
-      "overrides": {
-        "qs": "6.15.3"
-      }
+      ]
     }
   }
 }

@@ -21,12 +21,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v6
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Set up Deno
         uses: denoland/setup-deno@v2
@@ -35,7 +36,7 @@ jobs:
           cache: true
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Verify
         run: deno task verify
@@ -51,15 +52,16 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v6
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Set up Deno
         uses: denoland/setup-deno@v2
@@ -129,32 +131,33 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v6
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         id: dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install Chromium
         id: chromium
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Test application interactions
         id: ui
-        run: npm run test:ui
+        run: pnpm run test:ui
 
       - name: Audit the mock application
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.chromium.outcome == 'success' && (steps.ui.outcome == 'success' || steps.ui.outcome == 'failure') }}
-        run: npm run test:a11y
+        run: pnpm run test:a11y
 
       - name: Test component interactions (Storybook)
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.chromium.outcome == 'success' }}
-        run: npm run test:storybook
+        run: pnpm run test:storybook
 
       - name: Upload Playwright test results
         if: ${{ !cancelled() }}
@@ -174,14 +177,15 @@ jobs:
         batch: [parsers, projections, domain, storage, controllers]
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: npm
+          cache: pnpm
       - uses: denoland/setup-deno@v2
         with:
           deno-version: "2.9.3"
           cache: true
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       - name: Verify mutation batch wiring
-        run: npm run test:mutation:${{ matrix.batch }} -- --dryRunOnly
+        run: pnpm run test:mutation:${{ matrix.batch }} --dryRunOnly

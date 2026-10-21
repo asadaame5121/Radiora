@@ -17,12 +17,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v6
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Set up Deno
         uses: denoland/setup-deno@v2
@@ -31,7 +32,7 @@ jobs:
           cache: true
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build frontend
         run: deno task build
@@ -81,12 +82,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v6
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Set up Deno
         uses: denoland/setup-deno@v2
@@ -95,7 +97,7 @@ jobs:
           cache: true
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build frontend
         run: deno task build

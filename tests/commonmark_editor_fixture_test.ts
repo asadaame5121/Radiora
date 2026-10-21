@@ -1,5 +1,5 @@
 import { assertEquals, assertNotEquals } from "jsr:@std/assert@1";
-// commonmark 0.31.2 is an exact dev dependency verified through package-lock.json.
+// commonmark 0.31.2 is an exact dev dependency verified through pnpm-lock.yaml.
 import * as commonmark from "commonmark";
 import OverType from "overtype";
 

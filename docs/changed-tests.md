@@ -1,11 +1,11 @@
 # 日常の差分テスト
 
 ```sh
-npm run test:changed
+pnpm run test:changed
 deno task test:staged
 ```
 
-`deno task test:changed` / `npm run test:staged` も利用できます。初期導入は手動実行のみで、
+`deno task test:changed` / `pnpm run test:staged` も利用できます。初期導入は手動実行のみで、
 pre-commitには接続していません。
 
 ## 対象範囲とフォールバック
@@ -33,12 +33,12 @@ pre-commitには接続していません。
 Deno側は同名対応の規約であり、推移的な依存解析は行いません。差分テストはTDDの反復用です。
 共有モジュールの影響確認、PR前、依存関係や設定の変更後、lint・format・型検査・buildを含む
 最終確認には **`deno task verify`** を使ってください。Storybook・Playwrightの操作/a11y/
-画像差分は差分タスクの対象外です。必要な場合は `npm run test:storybook`、`npm run test:ui`、
-`npm run test:a11y`、`npm run test:visual` を実行します。
+画像差分は差分タスクの対象外です。必要な場合は `pnpm run test:storybook`、`pnpm run test:ui`、
+`pnpm run test:a11y`、`pnpm run test:visual` を実行します。
 
 ## 速度の測り方
 
-依存関係導入済み（`npm ci`）、Deno/Viteキャッシュがある状態で同じ差分を一度実行してから、
+依存関係導入済み（`pnpm install --frozen-lockfile`）、Deno/Viteキャッシュがある状態で同じ差分を一度実行してから、
 同じコマンドを3回測定し、中央値を使います。新しいプロセスの起動、Git検出、テスト選択、
 テスト実行、終了までを含めます。依存取得・初回変換を含むcold実行や、全体フォールバックは
 「代表的な小変更のwarm実行」と分けて記録してください。

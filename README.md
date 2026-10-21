@@ -74,17 +74,23 @@ Treeビューでは`Outline / Tree`で切り替えます。`Chronology`では`�
 
 ## 動作環境と実行
 
-Windows（x86_64）とLinux（x86_64）で動作します。前提はDeno 2.9以上とNode.js/npmです。
+Windows（x86_64）とLinux（x86_64）で動作します。前提はDeno 2.9以上とNode.jsとpnpm 12.14.0です。
 
 ```powershell
-npm ci
+pnpm install --frozen-lockfile
 deno task desktop
 ```
 
 ```sh
-npm ci
+pnpm install --frozen-lockfile
 deno task desktop
 ```
+
+pnpm未導入の場合は [公式の導入手順](https://pnpm.io/installation) を参照してください。
+依存のバージョンは `pnpm-lock.yaml`、pnpm本体は `package.json` で固定します。 新しいワークツリーでも
+`pnpm install --frozen-lockfile` を実行すると、同じドライブ上の
+共有ストアを再利用します。既存のnpm環境から切り替える際は、`node_modules` を削除してから
+導入してください。Denoは `nodeModulesDir: manual` のまま使い、依存管理はpnpmに任せます。
 
 `deno task desktop` は事前診断、フロントエンドビルド、bundle生成を行ってからアプリを起動します。
 生成済みbundleだけを再起動する場合は `deno task desktop:run` を使用します。アプリが起動したまま
@@ -133,14 +139,14 @@ deno task verify
 `verify`はBiome、実装行数・マジックナンバー・重複コードのbaseline ratchet、型検査、
 Deno/Vitestテスト、frontend buildを実行します。
 
-- `npm run dev:mock` — Desktop Backendを起動せず、固定の高密度グラフでUIを確認できます。 mock
+- `pnpm run dev:mock` — Desktop Backendを起動せず、固定の高密度グラフでUIを確認できます。 mock
   APIはViteの`mock`モードだけで有効になり、通常のDesktop起動と本番ビルドでは使用されません。
-- `npm run storybook` / `npm run test:storybook` —
+- `pnpm run storybook` / `pnpm run test:storybook` —
   UI状態カタログとそのrender・interaction・a11yテスト
-- `npm run test:ui` — App全体の操作回帰テスト（Outlineのdrag/drop・選択・取消）
-- `npm run test:visual` — 代表storyの画像差分
-- `npm run test:mutation:*` — Strykerによるmutation test（parsers / projections / domain / storage /
-  controllers）
+- `pnpm run test:ui` — App全体の操作回帰テスト（Outlineのdrag/drop・選択・取消）
+- `pnpm run test:visual` — 代表storyの画像差分
+- `pnpm run test:mutation:*` — Strykerによるmutation test（parsers / projections / domain / storage
+  / controllers）
 - `deno task desktop:inspect` + `deno task desktop:audit` — DevTools/CDP監査
 - `deno task performance:fixture --profile baseline --topic-count 10000 --seed 42 --database reports/performance/baseline.db`
   固定seedで1,000/10,000件の5プロファイルを生成・検証し、新規SQLite試験DBとマニフェストを保存します。生成・DB投入時間は計測値と分けて出力します。既存ファイルは上書きしません。

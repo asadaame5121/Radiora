@@ -64,7 +64,7 @@ Add-AppxPackage -Path dist-desktop\Radiora_0.6.0.0_x64.msix
 
 - Deno / Deno Desktop runtime は MIT、CEFはBSD-3-Clause系。
   CEFにはChromiumのライセンス条件も適用される（`chromium-LICENSE.txt`）。
-- npm依存は `package-lock.json` の実行時依存から `scripts/licenses.ts`
+- npm依存は `pnpm licenses list --prod --json` の一覧から `scripts/licenses.ts`
   が自動収集する。devDependencies（ビルドツール）は含まれない。
 - ライセンス表示はMSIX内の `Licenses/` と、アプリ内の 「Option →
   ライセンス」ダイアログ（`/licenses/` 配信）の両方で提供する。

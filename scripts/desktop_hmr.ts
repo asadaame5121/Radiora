@@ -7,9 +7,8 @@ const sharedEnvironment = {
 	...Deno.env.toObject(),
 	RADIORA_HMR_BRIDGE_FILE: bridgeFile,
 };
-const npmCommand = Deno.build.os === "windows" ? "npm.cmd" : "npm";
-const vite = new Deno.Command(npmCommand, {
-	args: ["run", "dev:web", "--", "--host", "127.0.0.1", "--port", String(vitePort), "--strictPort"],
+const vite = new Deno.Command("pnpm", {
+	args: ["run", "dev:web", "--host", "127.0.0.1", "--port", String(vitePort), "--strictPort"],
 	env: sharedEnvironment,
 	stdout: "inherit",
 	stderr: "inherit",

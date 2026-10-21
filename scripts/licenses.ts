@@ -1,24 +1,11 @@
+import { collectRuntimeDependencies } from "./license_dependencies.ts";
+
 const repoRoot = new URL("../", import.meta.url);
-const nodeModules = new URL("node_modules/", repoRoot);
 const docsLicenses = new URL("docs/licenses/", repoRoot);
 const outputs = [
 	new URL("dist-desktop/licenses/", repoRoot),
 	new URL("dist/licenses/", repoRoot),
 ];
-
-interface LockPackage {
-	name?: string;
-	version?: string;
-	license?: string | { type: string } | Array<{ type: string }>;
-	dependencies?: Record<string, string>;
-}
-
-function licenseLabel(license: LockPackage["license"]): string {
-	if (typeof license === "string") return license;
-	if (Array.isArray(license)) return license.map((item) => item.type).join(", ");
-	if (license && typeof license === "object") return license.type;
-	return "見つかりません";
-}
 
 async function existsUrl(url: URL): Promise<boolean> {
 	try {
@@ -27,53 +14,6 @@ async function existsUrl(url: URL): Promise<boolean> {
 	} catch {
 		return false;
 	}
-}
-
-function resolvePackageKey(
-	lock: Record<string, LockPackage>,
-	parentKey: string | null,
-	depName: string,
-): string | null {
-	const direct = parentKey ? `${parentKey}/node_modules/${depName}` : null;
-	if (direct && lock[direct]) return direct;
-	const cut = parentKey ? parentKey.lastIndexOf("/node_modules/") : -1;
-	if (parentKey && cut >= 0) {
-		const siblingRoot = parentKey.slice(0, cut);
-		const sibling = `${siblingRoot}/node_modules/${depName}`;
-		if (lock[sibling]) return sibling;
-	}
-	const root = `node_modules/${depName}`;
-	return lock[root] ? root : null;
-}
-
-function collectRuntimeDependencies(
-	lock: Record<string, LockPackage>,
-): { key: string; name: string; version: string; licenseLabel: string }[] {
-	const roots = lock[""]?.dependencies ?? {};
-	const visited = new Set<string>();
-	const entries: { key: string; name: string; version: string; licenseLabel: string }[] = [];
-	const queue: { name: string; parentKey: string | null }[] = Object.keys(roots).map((name) => ({
-		name,
-		parentKey: null,
-	}));
-	while (queue.length > 0) {
-		const { name, parentKey } = queue.shift()!;
-		const key = resolvePackageKey(lock, parentKey, name);
-		if (!key || visited.has(key)) continue;
-		visited.add(key);
-		const pkg = lock[key];
-		entries.push({
-			key,
-			name: pkg.name ?? name,
-			version: pkg.version ?? "",
-			licenseLabel: licenseLabel(pkg.license),
-		});
-		for (const dep of Object.keys(pkg.dependencies ?? {})) {
-			queue.push({ name: dep, parentKey: key });
-		}
-	}
-	entries.sort((a, b) => a.key.localeCompare(b.key));
-	return entries;
 }
 
 async function findLicenseFile(packageDir: URL): Promise<URL | null> {
@@ -125,14 +65,12 @@ const runtimeEntries: LicenseEntry[] = [
 ];
 
 async function main(): Promise<void> {
-	const lockText = await Deno.readTextFile(new URL("package-lock.json", repoRoot));
-	const lock = JSON.parse(lockText) as { packages: Record<string, LockPackage> };
-	const deps = collectRuntimeDependencies(lock.packages);
+	const deps = await collectRuntimeDependencies();
 
 	const npmEntries: LicenseEntry[] = [];
 	const copied: { file: string; source: URL }[] = [];
 	for (const dep of deps) {
-		const packageDir = new URL(`${dep.key.replace(/^node_modules\//, "")}/`, nodeModules);
+		const packageDir = dep.directory;
 		const licenseFile = await findLicenseFile(packageDir);
 		let file = null;
 		if (licenseFile) {

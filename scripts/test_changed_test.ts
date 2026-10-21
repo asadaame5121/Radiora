@@ -105,7 +105,8 @@ Deno.test("config, dependencies, assets and unknown changes fall back to both su
 	for (
 		const file of [
 			"deno.json",
-			"package-lock.json",
+			"pnpm-lock.yaml",
+			"pnpm-workspace.yaml",
 			"vite.config.ts",
 			"src/main.ts",
 			"public/icon.svg",
