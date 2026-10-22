@@ -1,6 +1,7 @@
 import { createBindingHandlers } from "./desktop/register_bindings.ts";
 import { StartupSnapshotCacheFile } from "./desktop/startup_snapshot_cache_file.ts";
 import {
+	assetMimeType,
 	backendOriginFromServeAddress,
 	developmentUiOrigin,
 	missingAssetResponse,
@@ -170,17 +171,6 @@ async function bootstrap(): Promise<StartupStatus> {
 }
 
 const distRoot = new URL("../dist/", import.meta.url);
-const mimeTypes: Record<string, string> = {
-	".html": "text/html; charset=utf-8",
-	".js": "text/javascript; charset=utf-8",
-	".css": "text/css; charset=utf-8",
-	".svg": "image/svg+xml",
-};
-
-function extension(path: string): string {
-	const index = path.lastIndexOf(".");
-	return index < 0 ? "" : path.slice(index);
-}
 
 const handlers = createBindingHandlers({
 	getOperationSummary: async () => operationLog.summary(),
@@ -288,7 +278,7 @@ const server = Deno.serve(async (request) => {
 			{ method: request.method, path: safePath },
 		);
 		return new Response(body, {
-			headers: { "content-type": mimeTypes[extension(safePath)] ?? "application/octet-stream" },
+			headers: { "content-type": assetMimeType(safePath) },
 		});
 	} catch {
 		if (safePath !== "index.html") return missingAssetResponse(safePath);
