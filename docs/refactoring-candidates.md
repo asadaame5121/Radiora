@@ -1,6 +1,6 @@
 # リファクタリング・バックログ
 
-更新日: 2026-10-09。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
+更新日: 2026-10-16。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
 に変更なし）。
 
 責務、state ownership、I/O、transaction の変更理由に沿って、挙動を維持したまま整理する計画。
@@ -115,6 +115,31 @@ P4は意味リンクdiagnosticsの条件付き抽出。現在の小さなparser�
 - [x] T4 の Sidebar/Inspector/Filter/Displayed 描画部分を分離。Tree 全体の状態整理は T3 に残す。
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
+
+## 今週の実績（2026-10-16、O2判断・G1）
+
+O1（Issue #256、PR #331）はmainへ反映済み。O2（Issue #257）を再確認した。
+`parseXmlDocument`がXML全体の構文検証、`parseOutlineNode`が階層・属性から`OpmlNode`への変換、
+`OpmlService.import`が保存用bundleの作成を担う。入力契約を固定したO1の後も独立した変更理由はなく、
+ファイル分割は見送る。新たな変更理由が出た場合に再評価する。
+
+G1（Issue #254）をmain `259bdb9` から `codex/weekly-graph-g1` で実施した。 既存のrelation
+type既定値テストを確認し、複数不正時のコンテナ→catalog→ID重複→record検証の
+エラー順、成功・失敗時の入力不変、返却値の入れ子object分離を2件の契約テストで補強した。 production
+code、保存形式、公開エラーは変更していない。変更前の対象20件は成功。
+変更後の対象22件、`deno task verify`（Deno全体1038件、Vitest549件、
+lint・品質・format・型チェック・build）が成功した。このbranchの完了とmainへの反映は区別する。
+次回はG2（Issue #255）の依存境界を確認する。
+
+PR #370のレビュー対応で、汎用の検証順・入力不変テストを
+`tests/graph_state_validation_test.ts`へ移し、エラー検証の重複をローカルhelperへ集約した。 relation
+type既定値は、補完後の返却値を変更しても別の検証結果・組み込み定義・元入力へ影響しない
+契約テストを追加した。失敗時は不正入力そのものの不変も確認する。
+2026-10-09の実績本文は当時の記録を保持し、O1のmain反映とO2の判断はこの実績に追記する。
+レビュー対応後の対象7件とformat確認が成功。Linuxでの`deno task verify`は
+lint・品質・型チェックを通過し、Denoは1035件成功・1件ignore、Windows固有処理を含む既存3件で停止した。
+修正前のPR head `bc58472`でも同じ3件の失敗を再現した。
+停止後のSvelte全549件とbuildは個別に実行して成功した。
 
 ## 今週の実績（2026-10-09、O1）
 
@@ -511,15 +536,15 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
       parser frameworkは追加していない。
 - [ ] **P4** — 難易度2、依存 P3: diagnostics
       の独立した変更理由が残る場合だけ抽出。公開位置・診断文言を維持。
-- [ ] **G1** — 難易度2: 既存 snapshot 検証テストに、複数不正時のエラー順・既定 relation
-      type・入力不変の不足ケースを補う。
+- [x] **G1** — 難易度2: 既存 snapshot 検証テストに、複数不正時のエラー順・既定 relation
+      type・入力不変の不足ケースを補う。2026-10-16にbranchで完了（main反映待ち）。
 - [ ] **G2** — 難易度3、依存 G1: schema の形状検査と参照/DAG
       不変条件の依存を確認し、必要な集合だけ抽出。 既存 record
       関数を一律に個別ファイル化しない。入口の検証順と返却値を固定する。
 - [x] **O1** — 難易度2: `opml_test.ts` の namespace/属性/入れ子/空要素/不正 XML
-      の不足を確認。2026-10-09にbranchで完了（main反映待ち）。
-- [ ] **O2** — 難易度3、依存 O1: element 走査と import model
-      変換の独立した変更理由がある場合に限定して抽出。
+      の不足を確認。2026-10-09完了、PR #331でmain反映済み。
+- [x] **O2** — 難易度3、依存 O1: element 走査と import model
+      変換の独立した変更理由がないため、2026-10-16にファイル分割を見送り。変更理由が生じたら再評価。
 
 ## C: Styles（全面移行から残存確認へ縮小）
 
