@@ -60,3 +60,41 @@ Deno.test("validatedGraphStateSnapshot returns a separate snapshot and preserves
 	assertEquals(invalidInput, invalidOriginal);
 	assertEquals(input, original);
 });
+
+Deno.test("snapshot revision validation keeps shape and parent errors ahead of DAG cycles", async () => {
+	const base = await new MemoryGraphStore().exportGraphState();
+	const now = "2026-09-01T00:00:00.000Z";
+	const work = { id: "work-1", createdAt: now, updatedAt: now };
+	const first = {
+		id: "r1",
+		workId: work.id,
+		text: "",
+		parentRevisionIds: ["r2"],
+		kind: "edition",
+		createdAt: now,
+	};
+	const second = { ...first, id: "r2", parentRevisionIds: ["r1"] };
+	const snapshot = { ...base, works: [work], revisions: [first, second] };
+	const original = structuredClone(snapshot);
+
+	assertThrows(
+		() =>
+			validatedGraphStateSnapshot({
+				...snapshot,
+				revisions: [{ ...first, kind: "invalid" }, second],
+			}),
+		Error,
+		"Invalid Revision: r1",
+	);
+	assertThrows(
+		() =>
+			validatedGraphStateSnapshot({
+				...snapshot,
+				revisions: [{ ...first, parentRevisionIds: ["missing"] }, second],
+			}),
+		Error,
+		"Invalid Revision parent: r1",
+	);
+	assertThrows(() => validatedGraphStateSnapshot(snapshot), Error, "Revision cycle: r1");
+	assertEquals(snapshot, original);
+});

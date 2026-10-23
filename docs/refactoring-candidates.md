@@ -1,6 +1,6 @@
 # リファクタリング・バックログ
 
-更新日: 2026-10-16。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
+更新日: 2026-10-23。実装棚卸し基点: `a74efc8`（2026-09-05の調査開始時点で working tree
 に変更なし）。
 
 責務、state ownership、I/O、transaction の変更理由に沿って、挙動を維持したまま整理する計画。
@@ -115,6 +115,22 @@ P4は意味リンクdiagnosticsの条件付き抽出。現在の小さなparser�
 - [x] T4 の Sidebar/Inspector/Filter/Displayed 描画部分を分離。Tree 全体の状態整理は T3 に残す。
 - [x] R5: `OutlineFilterBar.svelte` に Today/Unplaced の表示・入力を共有。
 - [x] S3 の旧版保護ファイル作成を `protectVersionInput` へ集約。
+
+## 今週の実績（2026-10-23、G2）
+
+G1（Issue #254、PR #370）はレビュー対応とCIを終えたがmain未反映。現行main
+`ef676b2`ではG2対象の検証処理に変更がなく、PR #370 head `4bf59cb`をbaseに
+`codex/weekly-graph-g2-verify`でG2（Issue #255）を進めた。PRの積み上げ上の完了とmain反映を区別する。
+
+`graph_state_validation.ts`では形状検査と親参照検査が各revisionの同じ順序に依存するため維持し、
+全record確認後に実行するDAG循環判定だけを`revision_dag_validation.ts`へ抽出した。
+schema不正→親参照不正→DAG循環のエラー順、入力不変、非循環・循環の直接契約をテストで確認した。
+公開API、保存形式、エラー文言は変更していない。
+
+検証: 変更前の対象8件、変更後の対象9件が成功。`deno task verify`はDeno全体1041件、
+Vitest549件、lint・品質・format・型チェック・buildまで成功した。Windowsの外部一時領域が
+esbuildに拒否されたため、TMP/TEMPを作業ツリー内へ指定して再実行した。 次回はPR
+#370のmain反映を確認し、G2のPRをmain向けに切り替える。C1はその後に着手する。
 
 ## 今週の実績（2026-10-16、O2判断・G1）
 
@@ -538,9 +554,9 @@ Surreal の repository 数を模倣せず、現在の GraphStore port と transa
       の独立した変更理由が残る場合だけ抽出。公開位置・診断文言を維持。
 - [x] **G1** — 難易度2: 既存 snapshot 検証テストに、複数不正時のエラー順・既定 relation
       type・入力不変の不足ケースを補う。2026-10-16にbranchで完了（main反映待ち）。
-- [ ] **G2** — 難易度3、依存 G1: schema の形状検査と参照/DAG
+- [x] **G2** — 難易度3、依存 G1: schema の形状検査と参照/DAG
       不変条件の依存を確認し、必要な集合だけ抽出。 既存 record
-      関数を一律に個別ファイル化しない。入口の検証順と返却値を固定する。
+      関数を一律に個別ファイル化しない。入口の検証順と返却値を固定した。2026-10-23にbranchで完了（main反映待ち）。
 - [x] **O1** — 難易度2: `opml_test.ts` の namespace/属性/入れ子/空要素/不正 XML
       の不足を確認。2026-10-09完了、PR #331でmain反映済み。
 - [x] **O2** — 難易度3、依存 O1: element 走査と import model
