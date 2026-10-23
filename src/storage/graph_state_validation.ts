@@ -39,6 +39,7 @@ import {
 	WorkSchema,
 } from "../domain/schemas.ts";
 import type { GraphStateSnapshot } from "./graph_store.ts";
+import { assertRevisionDag } from "./revision_dag_validation.ts";
 
 export function validatedGraphStateSnapshot(value: unknown): GraphStateSnapshot {
 	assertSnapshotContainer(value);
@@ -415,30 +416,6 @@ function uniqueById<T extends { id: string }>(
 		result.set(entry.id, entry);
 	}
 	return result;
-}
-
-function assertRevisionDag(revisions: readonly Revision[]): void {
-	const parents = new Map(revisions.map((revision) => [revision.id, revision.parentRevisionIds]));
-	const visiting = new Map<string, boolean>();
-	for (const startId of parents.keys()) {
-		if (visiting.has(startId)) continue;
-		visiting.set(startId, true);
-		const stack = [{ id: startId, parentIds: parents.get(startId) ?? [], index: 0 }];
-		while (stack.length > 0) {
-			const f = stack[stack.length - 1];
-			if (f.index >= f.parentIds.length) {
-				visiting.set(f.id, false);
-				stack.pop();
-				continue;
-			}
-			const pId = f.parentIds[f.index++];
-			if (visiting.get(pId) === true) throw new Error(`Revision cycle: ${pId}`);
-			if (!visiting.has(pId)) {
-				visiting.set(pId, true);
-				stack.push({ id: pId, parentIds: parents.get(pId) ?? [], index: 0 });
-			}
-		}
-	}
 }
 
 function validateLinkEndpoint(
