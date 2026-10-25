@@ -1,12 +1,19 @@
 # Tauri移行計画とTreeの責務分担
 
 作成日: 2026-10-11
-状態: 提案。移行先はユーザー指定のTauri。Rustへの移植範囲・レイアウト採用条件は本書の検証で確定する。
+状態: 移行計画。BackendのLoroをSSOT、SQLiteをsnapshot＋差分Updateの永続化先とする方針を追加。実装・性能・互換性は未検証。
 調査基点: ローカルHEAD `9f3dcaf`。開始時点の未コミット変更を含む作業ツリーを参照した。main反映や移行実装の完了を示す文書ではない。
+Loro追補の照合基点: `poc/loro-undo` HEAD `faa8c16`、ローカルmain `8acc2af`。詳細な根拠・障壁・先行PoC仕様は[Loro Backend移行調査](loro-backend-migration-research.md)に記録する。
 
 ## 1. 方針
 
-**Tauri 2 + Svelte 5を維持し、Rust/Petgraphがグラフの意味・構造を計算し、フロントが座標・表示・操作を担当する構成を推奨する。**
+**Tauri 2 + Svelte 5を維持し、BackendのLoroを保存対象データのSSOTとする。SQLiteにはLoroのsnapshotと差分Updateを永続化する。ControllerはBackend APIを通してアクセスする。**
+Rustのserviceが業務上の検証とLoro操作を所有し、Petgraphがグラフの構造計算、フロントが座標・表示・操作を担当する。UI draft・選択・focusまでLoroへ移さず、Loroの型をViewやIPCへ露出しない。SQLiteの検索索引等を追加する場合も、Loroから再生成できる派生データとする。
+
+製品モデルには[Topicルート/文書設計](topic-document-design.md)も適用する。最上位block＋子孫を文書とし、
+タイトルもblock、アウトライナー操作と内部block参照を維持する。Work/Occurrenceとの対応は未決定であり、
+既存モデルのLoro対応案を最終schemaとしない。保存技術の検証と製品モデルの変更を分け、両方の受入を示す。
+
 最初は現行の `tree_layout.ts` とSvelte/SVG・D3操作を使う。ELK.jsはLineageの配置を置き換える比較候補とする。Dagreは単純な階層図が要件を満たす場合の候補に留め、三方式を製品の設定として常設しない。
 
 Petgraphはグラフのデータ構造とアルゴリズムを提供するライブラリであり、保存、Radiora固有の関係型、UI状態、座標配置をまとめて所有するものではない。[Petgraph公式](https://docs.rs/petgraph/latest/petgraph/)
@@ -35,16 +42,18 @@ TauriはシステムWebViewを利用するため、現在のCEFと同じ描画�
 | 描画・camera・pointer・focus | [PhylogeneticTree.svelte](../../src/ui/PhylogeneticTree.svelte)、[tree_pointer_adapter.ts](../../src/ui/tree_pointer_adapter.ts)、[tree_camera.ts](../../src/ui/tree_camera.ts) | Svelte/SVGとD3をまず再利用。WebView実機で操作を確認 |
 | 歴史年代の年表 | [HistoricalTimeline.svelte](../../src/ui/HistoricalTimeline.svelte)、[historical_timeline_layout.ts](../../src/ui/historical_timeline_layout.ts) | 通常Treeとは別の時間投影として維持 |
 | Treeの設定・取得・公開 | [tree_controller.svelte.ts](../../src/ui/tree_controller.svelte.ts) | 所有と要求失効を維持。非同期レイアウトにも公開条件を適用 |
-| DB・保存復元 | [storage_bootstrap.ts](../../src/storage/storage_bootstrap.ts)、[sqlite_store.ts](../../src/storage/sqlite_store.ts)、[sqlite_records.ts](../../src/storage/sqlite_records.ts) | SQLiteを継続。Rust側で保存契約を実装する |
+| DB・保存復元 | [storage_bootstrap.ts](../../src/storage/storage_bootstrap.ts)、[sqlite_store.ts](../../src/storage/sqlite_store.ts)、[sqlite_records.ts](../../src/storage/sqlite_records.ts) | record形式を新Loro docへ変換し、SQLiteをsnapshot＋差分の保存先へ変更。旧DBは保全する |
 | 配布・更新・監査 | `scripts/desktop_*`、[release workflow](../../.github/workflows/release.yml)、[deno.json](../../deno.json) | Tauriのdev/build/bundleへ。更新・署名・installer・監査は個別検証 |
 
-既存の[UI所有契約](ui-state-ownership.md)、[Tree所有契約](tree-state-ownership.md)、[画面復帰契約](outline-screen-navigation.md)、[永続化契約](storage-persistence-contracts.md)を移行後も基準とする。SQLite継続は[ADR 0001](../adr/0001-retire-surrealdb-runtime.md)と整合する。
+既存の[UI所有契約](ui-state-ownership.md)、[Tree所有契約](tree-state-ownership.md)、[画面復帰契約](outline-screen-navigation.md)、[永続化契約](storage-persistence-contracts.md)の振る舞い・データ保護を基準とする。SQLiteの継続と、recordを正本とする現在の保存方式の維持は別。main側のADR 0003の限定導入案との相違は追補§6.5で扱う。
 
 ## 4. 目標のModuleとInterface
 
 ```mermaid
 flowchart LR
-    DB[(SQLite)] --> Read[Rust 読み取り投影]
+    DB[("SQLite snapshot + updates")] --> Restore["起動時復元"]
+    Restore --> Doc["Backend Loro SSOT"]
+    Doc --> Read[Rust 読み取り投影]
     Read --> Graph[Petgraph 構造計算]
     Graph --> DTO[Tree read model]
     DTO --> IPC[Tauri command]
@@ -53,14 +62,17 @@ flowchart LR
     Layout --> Display[LOD・camera・SVG描画]
     UI[Svelte 操作] --> Cmd[Tauri command]
     Cmd --> Domain[Rust 業務操作・検証]
-    Domain --> DB
+    Domain --> Doc
+    Doc --> Persist["Rust 永続化adapter"]
+    Persist --> DB
 ```
 
 図は最終構成。現行TypeScriptのバックエンドがTauriに自動移植されることを意味しない。
 
 ### Rustが所有すること
 
-- SQLiteへの読み書き、操作単位のtransaction、保存済みWork/Branch/Occurrence/Revision/Linkの検証。
+- Loro doc、操作単位の検証・直列化、SQLiteへのsnapshot/Update保存・復元。Loro commitとSQLite transactionを区別する。
+- 保存対象のWork/Branch/Occurrence/Revision/Linkの不変条件と、保存成功後のread model公開。
 - filterを適用した読み取り投影、暗黙関係の生成、代表Occurrenceの選択規則。
 - 意味グラフの隣接・到達・SCCなどの構造計算と、Radioraのルールによる世代・結び目の決定。
 - 計算に使ったデータ版と、投影条件を識別できる値。
@@ -125,9 +137,10 @@ Rust移植が機能の早期提供に間に合わない場合はNode sidecarを�
 
 SQLiteを維持しても、現在の保存方法まで維持する必要はない。移行の単位はファイルやserviceクラスではなく、ユーザー操作と、その操作が守る不変条件とする。
 
-現行 `SqliteGraphStore` は `MemoryGraphStore` を継承し、mutationの前後で全stateをexportして差分保存し、失敗時に全stateを戻す。[保存経路](../../src/storage/sqlite_store.ts)
-また `listOutline` はKnotを書き戻し、配置削除は子ごとに `moveItem` を呼ぶ。[Outline操作](../../src/services/occurrence_operations.ts)
-これらの実行手順は互換性の対象から外し、表示結果・保存結果・失敗時の保護を互換性の対象にする。[性能監査](../performance-audit-2026-10-08.md)は別HEADでの過去の単体測定であり、今回の性能測定ではない。
+現行 `SqliteGraphStore` は `MemoryGraphStore` を継承するが、すべての保存が全state diffではない。
+`SqlitePersistence.mutateTargeted` は局所更新とrollbackを行い、構造変更等は全state export/diff/restore経路へ分岐する。[保存境界](../../src/storage/sqlite_persistence.ts#L60-L90)
+現在の `listOutline` は項目・Knotを読み、再帰配置等を投影する処理であり、Knotを書き戻さない。[Outline操作](../../src/services/occurrence_operations.ts#L39-L48)
+2026-10-11時点の説明を現在の退行や移植要件にしない。これらの実行手順は互換性の対象から外し、表示結果・保存結果・失敗時の保護を対象にする。[性能監査](../performance-audit-2026-10-08.md)は別HEADでの過去の単体測定であり、今回の性能測定ではない。
 
 | 対象 | 保持するもの | 再利用・置換・保留の判断 |
 | --- | --- | --- |
@@ -148,7 +161,9 @@ SQLiteを維持しても、現在の保存方法まで維持する必要はな�
 
 ### 6.2 保存・読取り・UI更新を操作別に設計する
 
-通常の保存は「対象を読む → 対象と依存先を検証 → 関連recordを一つのtransactionで更新 → commit後に必要な表示を更新」とする。transaction失敗では未確定変更をDBへ残さず、UIのdraftを維持する。DB全体をメモリに複製しなければrollbackできない設計にはしない。
+通常の保存は「対象と依存先を読む・検証 → Loroへ操作を適用・commit → 保存済みVersion Vector（VV）から差分export → 差分と保存済みVVを一つのSQLite transactionで保存 → 保存成功後にread modelを公開」とする。
+**通常更新の成功は差分UpdateのSQLite保存成功まで。全snapshotの生成・保存を毎回待たない。** 初回導入・明示checkpointはsnapshot保存transactionの成功までをその処理の成功条件とする。
+LoroにはACID rollback/isolationがないため、SQLite失敗でLoroまで戻ったと扱わない。保存失敗時の保護と再試行は§6.5の先行検証で固定する。DB全体のcloneを通常保存の前提にしない。
 
 | 操作 | 保存と更新の範囲 | 避ける処理 |
 | --- | --- | --- |
@@ -166,7 +181,7 @@ Knotを含む構造計算は、最初は「構造変更後に一度全体計算�
 変更種別と影響IDを操作結果として返すか、既存portから必要な読み取りを呼ぶかは具体的なcallerで決める。汎用のevent bus、差分query engine、全画面共通の巨大storeは先行導入しない。必要範囲の再読込でも、snapshot/draft分離と最新要求だけの公開は維持する。
 
 SQLiteは現在、recordのID/positionとJSON payloadを中心に保存している。[schema](../../src/storage/sqlite_schema.ts)
-したがってRustでSQLへ移せば親子/検索queryが自動的に索引化されるわけではない。最初は互換schemaでID指定の更新を証明する。親IDやendpoint等の索引・正規化が必要なら、実測とrollback可能なschema移行を別の変更にする。「SQLite継続」と「schemaを永久に固定」は区別する。
+新方式は旧record schemaのままでは実現しない。旧schemaは移行元readerとして維持し、別DBへLoro snapshot/Updateと形式versionを保存する。親子・検索・逆参照はLoro由来のread modelとして設計し、必要なら派生索引を追加する。既存recordとLoroを両方の正本にするdual-writeは採用しない。
 
 ### 6.3 Rustへ移す範囲を狭める
 
@@ -182,34 +197,63 @@ M0では各機能に「初回移行に必要」「後続で提供」「廃止候
 
 最初に検証する縦方向のsliceは、コピーDBの既存本文を表示し、編集し、一件保存し、同branchの別配置へ反映し、再起動で読み戻す処理とする。pinnedへの編集拒否、保存失敗時のdraft維持、古い応答の棄却を含める。本文に内部参照を含む場合は依存の失効も確認する。
 
-このsliceで変更record数・走査record数・transaction数・IPC量・paint/commit時間を計測する。全体データ量を増やしても、保存経路が無関係の全recordを複製・比較せず、更新量が対象と依存先に対応することを確認する。広い本文依存queryの費用は別記し、実行時間を厳密なO(1)とは約束しない。
+このsliceでLoro操作/export時間、差分bytes、走査量、SQLite transaction時間、queue待ち、IPC量、paintを分離して計測する。全体データ量を増やしても、通常保存が毎回の全snapshotや無関係の全recordの複製・比較を要求しないことを確認する。checkpointと広い本文依存queryの費用は別記し、実行時間を厳密なO(1)とは約束しない。
 
 ここが成立してから他の機能を載せる。shellの表示とELK比較だけを先に完成させて、旧保存方式を最後に直訳する進め方は採らない。
+
+### 6.5 Loroへの正本移行の先行条件
+
+- **保存・公開境界**: Backendの単一writerが検証から永続化までを直列化する。Loroの通知をそのまま「保存済み」として配信せず、保存した版を確認して公開する。UI要求が失効しても完了した保存は戻さない。
+- **読取り境界**: 保存中・dirtyのdocを通常queryで読んで未保存値を漏らさない。初期は同じownerでreadも調停し、保存済みread modelを返せない場合は明示的に読取りを拒否する。エラー待ちのqueueで無期限に停止させない。
+- **失敗時の推奨**: SQLite保存失敗時は適用済みLoro状態を未耐久のdirtyとして保持し、保存済みVVを進めず、そのdocの後続mutationを停止する。同じ差分の永続化を再試行し、成功後だけ公開・再開する。UI draftは保持する。複合操作の途中適用失敗は別問題であり、再起動復元等で安全に隔離できることをPoCで証明する。単純な再実行・UndoManagerによるrollbackはしない。
+- **再試行**: commandのrequest IDと保存結果の対応を永続化transactionへ含め、保存後の応答喪失でも追加・移動等を二重実行しない。実schema/APIはPoCで決める。
+- **checkpoint**: 初期はwriterを止めた保存済みの版から生成し、新snapshot・対応VVの保存と、そのsnapshotに取り込み済みの差分だけの削除を同一transactionで行う。未保存状態・依存待ちのimportがあれば集約しない。失敗時は旧snapshot/差分を残す。Loroの集約とSQLite WAL checkpointは別処理。
+- **保持方針（合意済み）**: 永続化snapshotは最新1世代＋それ以降の差分を保持する。日数で削除せず、置換成功時に旧snapshotと取り込み済み差分を削除する。集約周期は差分件数・容量・復元時間のPoC結果で決める。内部操作履歴の切捨ては別判断とし、Recovery Snapshot・Revision・backupの保持と連動させない。
+- **耐久性**: 先行測定の候補はWAL＋`synchronous=FULL`。現行DELETEとの比較条件を残し、NORMAL/OFFによる保証の低下を性能改善と混同しない。停電耐性はOS/VFS/ストレージの契約も伴い、プロセス強制終了の試験だけで証明しない。
+- **互換性**: WASM `loro-crdt` 1.16.4とRust `loro` 1.16.2を最初の候補とし、lockfileで内部依存も固定する。番号の違い自体は非互換の証拠ではないが、共通実装・安定binary formatだけでアプリの移行完了とはしない。snapshot＋Updateを双方向で往復させる。
+- **モデル**: doc分割、複数docの原子性、Branch単位の本文、Occurrenceの複数配置、安定した業務ID、Revision/Recovery Snapshotを先に対応付ける。[対応案](loro-backend-migration-research.md#31-現行モデルからloroへの対応案)はLoroTreeを配置の木、Workを独立したMapとして扱う。Loroのsnapshot、製品のRecovery Snapshot、UI snapshotは別物。
+- **schema**: Loro binary format、SQLite保存envelope、Radiora doc内部schemaを別にversion管理する。docのフィールド追加・変換もmigrationとして扱い、未知version拒否と旧データ保持を検証する。
+- **undo**: Backendの共通docで全ペインの操作が同じpeerになると、単純なUndoManagerでは他ペインまで対象になる。セッション別undoの実現を先行検証する。共同編集・端末同期は今回も非目標。
+
+main `8acc2af`のADR 0003は文面上Proposedで、決定1/9の「編集セッション内だけ・Controller所有」、決定10の「既存DBへの投影」は今回の方針と異なる。実装前に後続ADRで置換関係を明示し、UI/永続化所有契約を更新する。決定5の「Loro IDを永続化しない」も、「binary内部には含まれるが、業務ID・RPC IDとして公開しない」へ精密化が必要。本worktreeにないmain側の文書を移行済みとして書き換えない。
+
+先行PoCの再現条件・障害注入・1万件測定は[調査ノート§4](loro-backend-migration-research.md#4-先行pocの仕様未実装)に定義する。計画更新の完了と、この検証の合格を区別する。
 
 ## 7. 段階計画と完了条件
 
 | 段階 | 作業 | 終了条件 |
 | --- | --- | --- |
-| M0: 契約・範囲の固定 | `RadioraBindings`の全methodと実callerを棚卸しし、振る舞いの保持・再利用・再設計・機能保留/廃止候補へ分類。対象規模、runtime依存、設定/ログ、DTO、backend経路を固定 | 機能の採否と実装の採否を別に記録し、最初の編集・保存sliceの契約と性能条件を固定できる |
-| M1: Tauri shellと読取り | 既存Vite/Svelte UIを載せ、mockで起動確認。コピーしたSQLiteをRustから読取り、最小commandをinvoke経由で接続 | Windows実機でOutline/Treeの表示、IME、keyboard、focus、pan/zoomが動く。本番DBへ書かない |
+| M0: 契約・範囲の固定 | `RadioraBindings`の全methodとcallerを棚卸し。Loroモデル、doc境界、保存成功/失敗、undo、互換性、旧データ変換・rollbackを固定 | 採否と再設計を別記。既存ADRとの差を記録し、先行PoCの評価条件を固定できる |
+| M0-L: Loro永続化PoC | WASM/Rust往復、snapshot＋差分のSQLite保存・復元、失敗/再試行/強制終了、1万件データの性能を独立検証 | 保存成功済みデータの復元・安定ID・日本語位置・セッション別undoが成立。p50/p95/p99と未達条件を記録し、採用を判定できる |
+| M1: Tauri shellと読取り | Vite/Svelte UIを載せmockで起動。コピーした旧SQLiteを別の新DBへ変換・検証し、Loro由来read modelをinvokeへ接続 | Windows実機でOutline/Treeの表示、IME、keyboard、focus、pan/zoomが動く。旧本番DBへ書かず、変換前後のデータが一致する |
 | M2: Petgraph構造計算 | 現行filter/暗黙関係/代表配置を含むTree read modelと世代・循環を移植。TSとRustを同fixtureで比較 | ID、edge向き、世代、循環membership、孤立node、順序が一致。フロントの重複構造計算を取り除ける |
 | M3: layoutの比較 | 同一read modelで現行対ELKを比較。必要ならDagreも追加比較。非同期公開、寸法/edge経路、camera/LODを接続 | 時間/世代/結び目・選択が正しく、実機で性能を比較できる。一方式を採用し不採用依存を残さない |
-| M4: 保存と業務操作 | まず本文保存・再起動・障害時保護の縦方向のsliceを証明。その後Work/Branch/Copy、Occurrence、Link、Revision/Recovery、検索/提案、bookmark/復帰、入出力を採用範囲に沿って再実装 | 採用した振る舞い、transaction、局所更新、未保存draft、再起動、バックアップ復元を証明。保留/廃止は承認済み範囲とデータ保護を明記 |
+| M4: 保存と業務操作 | 本文保存・再起動・障害時保護のsliceを、Loro単一writerと差分永続化で証明。その後Work/Branch/Copy、Occurrence、Link、Revision/Recovery、検索/提案、bookmark/復帰、入出力を再実装 | 振る舞い、保存成功後の公開、失敗時dirty/retry、局所更新、draft、再起動、バックアップ復元を証明。保留機能の保存データも保護 |
 | M5: 配布とruntime終了 | dev/build/CI/テスト/ライセンス、署名/installer/更新、startup/log/cache、旧データ導入を移行。旧Desktopと残るDenoタスクを撤去 | release artifactにDenoが不要。各対象OSの実機試験とデータ復帰手順が通る。残る制約を公開できる |
 
-M1の読取り確認後、M4の本文保存sliceを先に行い、保存経路とUI更新の設計を検証する。全機能の書込み対応はその後に進める。M2/M3はread modelを固定後、残るM4と別の変更として進められる。M3でELKが不採用でもTauri移行は進める。実装量が未確定なので日数はここで断定しない。各段階のPRには固定base、完了した契約、未完了項目、検証結果を記録する。
+M0-Lを保存方式の実装前gateとする。M1の読取り確認後、M4の本文保存sliceを先に行い、保存経路とUI更新を検証する。全機能の書込み対応はその後に進める。M2/M3はread modelを固定後、残るM4と別の変更として進められる。M3でELKが不採用でもTauri移行は進める。実装量が未確定なので日数は断定しない。各段階のPRには固定base、完了した契約、未完了項目、検証結果を記録する。
 
-最初の実装単位はM0の一覧とM1の読取りslice。Tauri shellだけで「移行完了」としない。
+最初の実装単位はM0の一覧とM0-Lの保存・互換性PoC。Tauri shellだけで「移行完了」としない。
+
+### 7.1 現行版の凍結・切替とIssueの実行順
+
+[現行版の退出gateとIssue実行計画](tauri-loro-transition-backlog.md)を本節の具体化とする。
+43件の既存Issueをすべて現行TS実装で完了させることを移行条件にしない。
+現行版の機能追加凍結、検証コピーによる新版開発、日常利用先の切替、旧runtimeの保守終了・撤去は別の判断とする。
+ユーザーは現行版の新機能追加凍結を承認し、昨日までの性能/UI改修を反映したv0.7.0のreleaseと、
+ここまで挙げた新機能のTauri版実装を決定した。具体的な収録差分・release検証は別作業であり、公開済みではない。
+本書のM0〜M5は技術上の作業分類であり、M2/M3完了までM4の保存sliceを待つという実行順ではない。
+GitHub Projectsは既存Issueと移行固有の検証作業を関連付け、仕様決定・PoC合格・main反映・配布完了を混同しない。
 
 ## 8. データ・設定・復帰の保護
 
-- SQLiteを継続し、初期はschema変更を同時に行わない。payload、並び順、version、日時、関係型定義をRustで読めることを確認する。
+- SQLiteを継続するが、旧recordと新Loro binaryではschemaが異なる。旧DBは変更せず、別DBへ展開・変換・再起動検証・採用の順に進める。payload、並び順、version、日時、関係型定義を保持し、変換の再実行は二重登録しない。
 - 現行Windowsの通常DBは `RadioraV2/turso/radiora.db`。Tauriのapp data pathが同じになると仮定せず、旧パス検出・明示選択・バックアップ・コピー・検証・採用の順を設計する。旧 `surreal` とmigration markerの検査も保持する。
 - SQLiteコピーは旧アプリの終了・接続close後か整合したbackup手段で行う。稼働中のDB本体だけをコピーせず、WALを含む整合性を確保する。初期検証は専用コピーで行う。
-- 旧版と新版で同じDBへ同時に書かない。復帰は旧データの保管先を使う。新版で追加した編集を旧版へ戻す必要があれば、互換性確認済みexport/importの手順を用意する。
+- 旧版と新版で同じDBへ同時に書かず、dual-writeしない。採用前のrollbackは旧DBへ戻る。採用後に新しい編集を旧版へ戻すには、互換export/importの往復検証が必要。未検証なら新版DBを保管し、編集を無損失で戻せるとは案内しない。未知versionの起動は非破壊で拒否する。
 - JSONバックアップ、Markdown/OPML入出力、Revision/Recovery、purge manifestなど、Tree表示外の保存データも欠落を検査する。[永続化対応表](storage-persistence-contracts.md)を基準にする。
 - WebViewのorigin変更によりlocalStorageの設定は自動継承されない可能性がある。Tree filter/projection、theme、layout、editor設定を棚卸しし、旧版からのexport等の移行手段を決める。
-- startup snapshotは描画キャッシュとして扱い、SQLiteの正本を上書きしない。未保存draftを保存済みデータと混ぜない。
+- startup snapshotは描画キャッシュとして扱い、BackendのLoro正本やその永続化データを上書きしない。未保存draftを保存済みデータと混ぜない。
 - Tauriのcommand・plugin権限を限定する。任意SQL、任意パス書込み、任意shell実行をフロントへ公開しない。custom commandのACLも別途設定・検証する。[Tauri command権限](https://v2.tauri.app/security/permissions/)
 
 ## 9. 回帰・性能の証明
@@ -223,6 +267,7 @@ M1の読取り確認後、M4の本文保存sliceを先に行い、保存経路�
 | 配置/表示 | 同時刻、長い日本語ラベル、世代位置、結び目、極端zoom、LOD/cluster、再寸法、viewport |
 | 要求寿命 | filter/projection/選択変更、応答逆順、旧失敗/finally、Treeを離れる、dispose、Worker終了 |
 | 保存 | 本文/配置/関係の保存失敗、複数操作の直列化、復元の途中失敗、再起動、旧schema、未知schema |
+| Loro | WASM/Rust双方向のsnapshot＋差分、依存欠落/重複import、保存済みVV、途中適用失敗、保存後応答喪失、checkpoint途中終了、ペイン別undo、履歴増大 |
 | 実機 | IME、caret、pane/画面復帰、context menu、touch/wheel、gesture中unmount、download/dialog、accessibility |
 
 [既存性能監査](../performance-audit-2026-10-08.md)はTreeの再計算と保存の全体処理を指摘している。RustやELKを入れただけでこれらが消えるとは仮定しない。過去の単体測定はGUI/WebViewの実測と区別する。
@@ -231,12 +276,14 @@ M1の読取り確認後、M4の本文保存sliceを先に行い、保存経路�
 
 仮の採用目安は、入力からpaint p95 50ms未満、pan/zoomが対象端末のframe budget内、通常単件操作p95 100ms未満。これは現状の保証ではなくM0で合意する目標である。初期layout時間は現行との比較と許容待機時間を別に決める。満たせなければ転送量・再計算回数・LOD/描画量を調べる。
 
+Loro保存の「一桁ms」は未検証の仮説とし、1万件のWorkを保持した状態での単件差分保存p95 < 10msを先行PoCの評価目安にする。1万件の全件保存時間や平均値で代用しない。差分exportからSQLite commitまでと、検証・queue・IPCを含む操作全体を別に報告し、正式な採否は対象端末の結果で判断する。
+
 ## 10. 残る決定と今回の終了点
 
 1. M0で機能の採否と再設計の範囲を確定してからRust再実装の規模を見積もり、早期提供にNode sidecarが必要か判断する。
 2. 対象OS・installer/MSIX等・更新配布・署名を確定する。既存配布方法とTauri標準bundleの互換性は未検証。
 3. Lineageの世代横軸と結び目をELKで維持できるか、ラベル固定サイズとzoom時のlane変更をどう扱うか比較する。
-4. Rust SQLite crate、TS/Rust DTOの管理方法、重い計算の実行方法はM1で実証してから固定する。
+4. Rust Loro/SQLite crateの固定version・features、doc境界、undoのsession分離、writer実行方式、耐久性設定をM0-Lで検証する。TS/Rust DTOと重い計算の実行方法はM1で固定する。
 5. 描画もライブラリへ委任したい場合、Svelte Flowを既存操作契約に対して評価する。今回はSVGを基準とする。
 
-本書と[一次資料の調査ノート](tauri-migration-research.md)を今回の成果物とする。既存READMEの現行構成やaccepted ADRは、実装前に移行済みの記述へ変更しない。
+本書、[Tauri一次資料](tauri-migration-research.md)、[Loro Backend移行調査](loro-backend-migration-research.md)を計画の成果物とする。既存READMEの現行構成やADRは、実装前に移行済みの記述へ変更しない。Loro追補時点でM0-Lの実装・ベンチマークは未実施。
