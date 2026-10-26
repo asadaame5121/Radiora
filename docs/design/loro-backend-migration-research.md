@@ -4,6 +4,9 @@
 照合基点: `poc/loro-undo` `faa8c16`、ローカルmain `8acc2af`。
 関連: [Tauri移行計画](tauri-migration-plan.md) §6.5 / M0-L。
 
+後続の[ユーザー決定とIssue所有](v3-model-decisions.md)により、単一Doc・UUIDv7・Block主体のモデルが決まった。
+本書の旧モデル対応案は調査経緯/互換候補であり、Branchモデルをそのまま再実装する決定ではない。
+
 ## 1. 結論と調査範囲
 
 BackendのLoroをSSOT、SQLiteをsnapshot＋差分Updateの永続化先にする。
