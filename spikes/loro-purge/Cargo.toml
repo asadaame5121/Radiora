@@ -1,0 +1,10 @@
+[package]
+name = "radiora-loro-purge-poc"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+loro = "=1.16.2"
+rusqlite = { version = "=0.32.1", features = ["bundled"] }
+tempfile = "=3.10.1"
