@@ -2,7 +2,9 @@
 
 Issue #381についてユーザーが提示した「文書モデル・境界・ID・旧データ移行の設計決定」を入力にした、
 **製品実装とは独立の有界モデル検査**。Loro自体の検証や、全仕様の証明ではない。
-モデルと実行スクリプトはthrowawayな検証成果物としてこのディレクトリに閉じる。
+モデルと実行スクリプトは製品実装と分離した検証成果物としてこのディレクトリに閉じる。
+追加の[完全削除/Undo barrierモデル](purge_protocol.als)は、
+[実装契約](../../docs/design/purge-undo-contract.md)の参照として使用する。
 
 ## 結果
 
@@ -13,6 +15,10 @@ Issue #381についてユーザーが提示した「文書モデル・境界・I
 - 15個の正の`check`で反例なし（UNSAT、下記scope内のみ）。
 - 意図的に誤った3個の`check`で反例あり（SAT）。反例検出能力の対照試験。
 - 詳細は[検査記録](results.md)。具体的なLoro操作・DB・UUID生成器・IME・性能は未検証。
+
+完全削除モデル追加後はOpenJDK 27.0.1.0.2で**全50 commandを再実行して期待結果と一致**した。
+新モデルは6 witness、10正条件、4 negative controlの20件。
+状態遷移・結果・モデルhashは[追加検査記録](purge-results.md)を参照する。
 
 ## 実行
 
@@ -33,6 +39,7 @@ D:\Downloads\alloy-6.2.0-windows-amd64\app\org.alloytools.alloy.dist.jar
 `.results/<unique-id>/`に各commandのreceipt・SAT instance・stdout/stderrと`summary.json`を保存する。
 出力先は`-OutputDirectory`、各commandのtimeoutは`-TimeoutSeconds`（既定180秒）で変更できる。
 timeout・実行エラー・期待結果不一致はスクリプトの失敗とする。
+既定では3モデルすべてを実行する。完全削除だけなら`-Models purge_protocol`を指定する。
 
 Analyzerは解析エラー等の際に必ずしも非0終了しないため、exit codeだけでなくreceiptと期待SAT値を照合する。
 Windowsのnative wildcard展開を避けるため、`exec -c '*'`ではなくcommand番号ごとに実行する。
@@ -74,7 +81,8 @@ java -jar 'D:\Downloads\alloy-6.2.0-windows-amd64\app\org.alloytools.alloy.dist.
   URL構文、`[[`補完、前方一致・同名候補・Markdown除外範囲は検証しない。
 - 通常削除は「部分木全体をTombstone化し、親/順序/本文を保存」、復元は「親がliveなら部分木復元」、
   完全削除は「Tombstoneの部分木をpurge」と解釈した。
-  削除範囲、親も削除済みの場合の復元、purgeをUndoできるかは別途仕様化が必要。
+  削除範囲、親も削除済みの場合の復元は別途仕様化が必要。
+  後続決定でpurgeはUndo不可・全session履歴リセットとなり、追加の`purge_protocol.als`で扱う。
 - referenceは別の本文ownerを直接指し、reference chainを許さない。
   代表削除時の見え方や参照項目を複製した場合など、未決のUX全体は扱わない。
 - orderは保存されている兄弟間の厳密全順序。切り出したrootは末尾へ置く解釈。

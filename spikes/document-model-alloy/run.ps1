@@ -1,7 +1,9 @@
 param(
   [string]$Jar = 'D:\Downloads\alloy-6.2.0-windows-amd64\app\org.alloytools.alloy.dist.jar',
   [string]$OutputDirectory = (Join-Path $PSScriptRoot ('.results/' + [Guid]::NewGuid())),
-  [int]$TimeoutSeconds = 180
+  [int]$TimeoutSeconds = 180,
+  [ValidateSet('document_model', 'legacy_sharing', 'purge_protocol')]
+  [string[]]$Models = @('document_model', 'legacy_sharing', 'purge_protocol')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -14,7 +16,7 @@ $outputRoot = (Resolve-Path -LiteralPath $OutputDirectory).Path
 $results = @()
 $failed = $false
 
-foreach ($model in @('document_model', 'legacy_sharing')) {
+foreach ($model in $Models) {
   $file = Join-Path $PSScriptRoot ($model + '.als')
   $listing = & $java -jar $Jar commands $file 2>&1
   if ($LASTEXITCODE -ne 0) { throw "Cannot parse $file : $listing" }
@@ -44,7 +46,7 @@ foreach ($model in @('document_model', 'legacy_sharing')) {
     $actual = 'ERROR'
     $expected = $null
     $ok = $false
-    if (-not $timedOut -and $process.ExitCode -eq 0 -and (Test-Path -LiteralPath $receipt)) {
+    if (-not $timedOut -and (Test-Path -LiteralPath $receipt)) {
       $data = Get-Content -LiteralPath $receipt -Raw | ConvertFrom-Json
       $entries = @($data.commands.PSObject.Properties)
       if ($entries.Count -ne 1) { throw "Unexpected receipt: $receipt" }
@@ -53,7 +55,7 @@ foreach ($model in @('document_model', 'legacy_sharing')) {
       $sat = $null -ne $command.solution -and @($command.solution).Count -gt 0
       $actual = if ($sat) { 'SAT' } else { 'UNSAT' }
       $expected = [int]$command.expects
-      $ok = ([int]$sat -eq $expected)
+      $ok = ([int]$sat -eq $expected) -and $process.ExitCode -eq 0
     }
     if ($timedOut) { $actual = 'TIMEOUT' }
     $results += [pscustomobject]@{
