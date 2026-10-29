@@ -607,6 +607,7 @@ dependencies = [
  "serde_columnar",
  "serde_json",
  "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]
@@ -1008,6 +1009,7 @@ dependencies = [
  "loro",
  "rusqlite",
  "tempfile",
+ "tracing-subscriber",
 ]
 
 [[package]]

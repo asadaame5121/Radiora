@@ -4,6 +4,10 @@
 workspaceの公開操作（編集/通常削除/完全削除/Undo/Redo/再試行/読取り）。
 実データ・既存Deno版・Tauri UIは変更しない。PBT/Quintは今回導入していない。
 
+**後続決定:** 初回v3は[workspace共通のUndo履歴](../../docs/design/v3-model-decisions.md#3-383保存doc履歴管理の検証)を採用。
+このPoCの二つのsession別managerは旧方式の調査fixtureであり、製品の推奨構成ではない。
+既知失敗の期待値や検証結果は変更せず保存する。共通履歴のpurge/Tree/複数pane操作は別途検証する。
+
 ## 実行
 
 通常のRust環境ではrepository rootから:
@@ -130,3 +134,12 @@ Loro操作自体が部分失敗した場合は`RecoveryRequired`として通常r
 model-based PBTを作る。形式仕様の状態を実装側の関数で再計算して期待値にするだけでは不十分。
 seed/縮小後の操作列、適用前後の観測値、仕様のassertionとの対応を残す。
 同本文Redoの未成立を解消する前に、今回の8 passedだけでsession分離を完成扱いしない。
+
+## 同本文Redoの追加調査
+
+[公式仕様・固定版source・最小再現の調査記録](undo-research.md)を追加した。
+`run.ps1 -Action trace`でLoroの内部span、公開diff、manager stackを観測できる。
+SQLiteや本文updateなしの直接insertでもAB→BAが再現する。
+異なるpeer/Docの比較でも同じ順序反転を確認した（`-Action peer-trace`）。
+一方、片方だけをUndo→Redoする対照caseは両peerともABへ戻る。
+期待値の変更や上流bugの断定はしていない。

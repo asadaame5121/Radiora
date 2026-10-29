@@ -5,6 +5,12 @@ edition = "2021"
 publish = false
 
 [dependencies]
-loro = "=1.16.2"
+# loro 1.16.2 has no `debug` feature. `logging` is the only output feature; it
+# enables loro-common's log macros as tracing events. loro-internal's tracing
+# spans (e.g. UndoManager::undo/redo) are compiled in regardless.
+loro = { version = "=1.16.2", features = ["logging"] }
 rusqlite = { version = "=0.32.1", features = ["bundled"] }
 tempfile = "=3.10.1"
+# tracing emits nothing without a subscriber. `fmt` prints spans/events;
+# per-target levels use filter::Targets (no extra feature needed).
+tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt"] }
