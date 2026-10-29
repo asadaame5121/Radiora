@@ -183,6 +183,11 @@ Alloyの削除・復元・直接参照等の仮定を、ユーザー決定とし
 モデル決定#381と、最小fixtureを使う保存技術PoCは並行できる。
 単一Doc方針が実測で成立しない場合は、勝手に分割せず決定の見直しとして報告する。
 
+共通履歴の[追加Rust fixture検証](../../spikes/loro-purge/shared-undo-results.md)では、
+複数pane由来の本文編集、Tree移動/切り出し/削除復元、複合split、SQLite保存失敗/retry、
+完全削除後の履歴resetを13件の公開操作testで確認した。
+製品UI・focus/IME、crash復旧、規模性能、共通履歴版Alloyは未検証であり、#383全体の完了とはしない。
+
 ## 4. #384：旧データとLegacy Importer
 
 ### 決定

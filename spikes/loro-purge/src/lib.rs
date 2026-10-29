@@ -1,6 +1,13 @@
 //! Isolated, fixture-only PoC for the adopted purge/Undo boundary.
+//!
+//! `Workspace` is the historical two-session-manager fixture kept for its
+//! known-failure reproduction. `SharedWorkspace` is the fixture for the adopted
+//! v3 direction (one workspace, one shared history).
 
+mod shared;
 mod storage;
+
+pub use shared::{BlockView, SharedWorkspace, TreeProbe};
 
 use loro::{CommitOptions, LoroDoc, UndoManager, VersionVector};
 use std::path::Path;

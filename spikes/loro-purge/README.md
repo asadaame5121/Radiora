@@ -6,7 +6,8 @@ workspaceの公開操作（編集/通常削除/完全削除/Undo/Redo/再試行/
 
 **後続決定:** 初回v3は[workspace共通のUndo履歴](../../docs/design/v3-model-decisions.md#3-383保存doc履歴管理の検証)を採用。
 このPoCの二つのsession別managerは旧方式の調査fixtureであり、製品の推奨構成ではない。
-既知失敗の期待値や検証結果は変更せず保存する。共通履歴のpurge/Tree/複数pane操作は別途検証する。
+既知失敗の期待値や検証結果は変更せず保存する。共通履歴のpurge/Tree/複数pane操作は
+[共通履歴fixtureの検証記録](shared-undo-results.md)で扱う（製品実装ではない）。
 
 ## 実行
 
@@ -22,6 +23,7 @@ cargo run --locked --manifest-path spikes/loro-purge/Cargo.toml
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./spikes/loro-purge/run.ps1 -Action test
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./spikes/loro-purge/run.ps1 -Action demo
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./spikes/loro-purge/run.ps1 -Action purge-scope
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./spikes/loro-purge/run.ps1 -Action check
 ```
 
@@ -46,15 +48,34 @@ SQLite DBは`tempfile`で作り、demo終了時に削除する。workspace API�
 
 ## 確認したこと
 
-### 実Loro API
+### 共通履歴fixture（`SharedWorkspace`）
 
-- Tombstoneはtree物理削除ではなくtrash flagで表し、通常Undo/Redoで本文と論理IDが保たれる。
+採用済みの「一つのworkspace・一つの共通Undo履歴」を、`src/shared.rs`の固定seedで検証する。
+Loro 1.16.2の実LoroTree・実SQLiteを使い、paneはcommit originの文脈だけで履歴の選択単位にしない。
+
+- 複数paneの同本文/別本文編集は一つのLIFO順でUndo/Redoし、別paneからのUndoも同じ履歴を動かす。
+- 兄弟順move、部分木の文書間move、複数段Undo/Redoでは論理ID・親子・順序・本文を維持する。
+  Tree内部IDはmove/Undo/Redoで保たれるが、Tree deleteのUndoや復元ではLoroが新しいTreeIDを作る。
+- 通常削除はLoroTreeのdeleteと論理IDのTombstone記録を同じcommitに入れる。
+  既に削除済みの子を親の復元で復活させず、元親liveなら兄弟目印の位置、目印消失なら末尾、
+  元親deleted/purgedなら確認後に同じ論理IDの独立文書として復元する。
+  **別の削除操作で作られたゴミ箱項目は独立**という採用済み仕様に従い、
+  fixtureは削除時に捕捉した可視部分木だけをpurge対象にしており、
+  `-Action purge-scope`と[結果7節](shared-undo-results.md#7-追加確認-親bのpurgeと以前から削除済みの子c)でCの状態を確認できる。
+- 行分割相当の複合commandは一commit＝一履歴項目。SQLite失敗時は`Dirty`で後続操作を拒否し、
+  retryは保存だけを行う。purgeは耐久保存成功後だけ共通Undo/Redoをclearする。
+- 13件の公開操作testを`tests/shared_undo.rs`に置いた。詳細なcommand・観測・限界は
+  [shared-undo-results.md](shared-undo-results.md)を参照する。
+
+### 実Loro API（旧fixtureの記録）
+
+- 旧WorkspaceではTombstoneをtree物理削除ではなくtrash flagで表し、通常Undo/Redoで本文と論理IDが保たれる。
 - `add_exclude_origin_prefix("system:")`でpurgeを非記録にしても、古いUndo/Redo stackは消えない。
 - 一つのmanagerの`clear()`は他のmanagerをclearしない。
 - **通常編集のorigin分離だけでは、他sessionのUndoを自分の編集として記録し得る。**
   同一Doc/peerに二つのmanagerを付けた素朴な構成で再現し、negative controlとして残した。
 
-### workspaceと実SQLite
+### 旧workspaceと実SQLite（旧fixtureの記録）
 
 - 同期的な単一ownerがdoc/managerを非公開に保持する。通常操作は`Ready`だけで受け付ける。
 - 二つのfixture sessionをoriginで分け、replay中は他managerを`pause`し、終了時に`resume`する。
@@ -102,7 +123,8 @@ Loro全体のbugと断定せず、pinned version・操作列・現調停の組�
 
 ## 検証結果
 
-- 通常test: **8 passed / 2 ignored / 0 failed**。3件のLoro API試験（negative control含む）＋5件のworkspace試験。
+- 通常test: **21 passed / 2 ignored / 0 failed**。3件のLoro API試験（negative control含む）
+  ＋13件の共通履歴fixture＋5件の旧workspace試験。
 - `known-failure`: **2 failed**。上記の未成立を明示的に再現。
 - demo: 実SQLite失敗→Dirty/操作拒否→retry→全履歴clear→別connection読戻し→新編集Undoを確認。
 - `cargo fmt -- --check`、`cargo clippy --all-targets -- -D warnings`を確認。
@@ -111,11 +133,12 @@ Loro全体のbugと断定せず、pinned version・操作列・現調停の組�
 SQLite失敗のtestも先に追加してからfault controlを実装した。
 session replayは実際の期待不一致を再現し、他manager pauseで別Block caseを通した。
 同本文caseは未解決のまま残しており、v3のUndo完了・#383完了とはしない。
+共通履歴fixtureの合格を、旧方式の失敗の解消や製品UIの完了へ読み替えない。
 
 ## 意図的に省いたもの
 
-- LoroTree/兄弟順/切り出し/参照項目/Relation、UUIDv7生成、汎用schema、既存DB移行。
-  二つの固定IDとroot LoroTextだけを使う。
+- 旧WorkspaceはLoroTree/兄弟順/切り出しを使わず、二つの固定IDとroot LoroTextだけを使う。
+  共通履歴fixtureはLoroTreeの固定seedを使うが、参照項目/Relation、UUIDv7生成、汎用schema、既存DB移行は扱わない。
 - 未保存editor draftのflush・実async queue・多thread・session追加/破棄。
   全操作は同期的で、その前の保存失敗があればpurgeを拒否する。
 - commit後の応答喪失、process kill、停電、clear途中の失敗、snapshot集約、履歴GC、1万件測定。
@@ -133,7 +156,7 @@ Loro操作自体が部分失敗した場合は`RecoveryRequired`として通常r
 今回の固定操作列とAlloyの不変条件を起点に、公開workspace操作へ`Vec<Action>`等を適用する
 model-based PBTを作る。形式仕様の状態を実装側の関数で再計算して期待値にするだけでは不十分。
 seed/縮小後の操作列、適用前後の観測値、仕様のassertionとの対応を残す。
-同本文Redoの未成立を解消する前に、今回の8 passedだけでsession分離を完成扱いしない。
+同本文Redoの未成立を解消する前に、通常testの緑だけでsession分離や製品Undoを完成扱いしない。
 
 ## 同本文Redoの追加調査
 

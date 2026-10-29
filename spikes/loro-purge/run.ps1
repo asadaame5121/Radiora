@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('test', 'demo', 'known-failure', 'trace', 'peer-trace', 'check')]
+    [ValidateSet('test', 'demo', 'known-failure', 'trace', 'peer-trace', 'purge-scope', 'check')]
     [string]$Action = 'test',
     [string]$Toolchain = 'stable-x86_64-pc-windows-gnu'
 )
@@ -18,6 +18,9 @@ switch ($Action) {
     'known-failure' {
         cargo "+$Toolchain" test --locked --manifest-path $manifest --test workspace `
             session_replay_transforms -- --ignored --nocapture
+    }
+    'purge-scope' {
+        cargo "+$Toolchain" run --locked --manifest-path $manifest --example shared_purge_scope
     }
     'trace' {
         cargo "+$Toolchain" run --locked --manifest-path $manifest --example redo_trace -- --trace --stacks

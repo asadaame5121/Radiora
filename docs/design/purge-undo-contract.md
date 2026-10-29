@@ -2,7 +2,8 @@
 
 状態: ユーザー採用済みの方針。Alloy有界検査済み。
 独立Rust PoCで実Loro/SQLiteの部分検証を実施。初回v3はworkspace共通Undo履歴へ方針変更した。
-既存のAlloy/Rust PoCは複数履歴方式の検証記録であり、共通履歴でのpurgeや製品UIは未検証・未実装。
+既存Alloyと旧Rust fixtureは複数履歴方式の検証記録。共通履歴でのpurge・retryは
+[追加Rust fixture](../../spikes/loro-purge/shared-undo-results.md)で確認したが、製品UIは未実装。
 対象: 単一workspace・単一Backend LoroDoc。通常削除と完全削除を分ける。
 関連: #381（意味）、#383（保存/失敗/UndoManager検証）、#385（UI・要求失効）。
 
@@ -100,4 +101,6 @@ Alloyだけでライブラリ挙動を確認済みとはしない。
 異なるpeer/Docでも再現することを[追加調査](../../spikes/loro-purge/undo-research.md)で確認した。
 ユーザー決定により初回v3はworkspace共通履歴を採用し、独立session履歴と独自の選択的Undoは対象外とした。
 旧方式の失敗caseは期待値を書き換えず診断として残すが、初回v3の独立session Undo受入とはしない。
-共通履歴でのpurge・保存失敗/retry・Tree操作の受入は未完了であり、旧方式の検査成功では代替しない。
+共通履歴の追加fixtureでは、purge・保存失敗/retry・Tree操作を含む13件の公開操作testが成功した。
+これは製品UI、crash復旧、共通履歴版Alloyの検証完了ではない。範囲と限界は
+[共通履歴の検証記録](../../spikes/loro-purge/shared-undo-results.md)を参照する。
