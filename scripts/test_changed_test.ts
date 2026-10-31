@@ -1,5 +1,6 @@
 import {
 	changedFiles as readChanges,
+	parseTestMode,
 	runPlan,
 	selectTests,
 	splitGitPaths,
@@ -34,47 +35,46 @@ const inventory = [
 
 Deno.test("UI and controller changes use Vitest related paths, not Deno", () => {
 	assertEquals(
-		selectTests([
-			"src/ui/theme_controller.svelte.ts",
-			"src/ui/ThemeView.svelte",
-		], inventory),
+		selectTests(["src/ui/theme_controller.svelte.ts", "src/ui/ThemeView.svelte"], inventory),
 		{
 			deno: [],
 			vitest: ["src/ui/ThemeView.svelte", "src/ui/theme_controller.svelte.ts"],
 			denoFallback: false,
 			vitestFallback: false,
+			rust: false,
 		},
 	);
 });
 
 Deno.test("Deno chooses colocated and nested tests by exact basename", () => {
 	assertEquals(
-		selectTests([
-			"src/services/parser.ts",
-			"src/domain/model.ts",
-			"scripts/tool.ts",
-		], inventory),
+		selectTests(["src/services/parser.ts", "src/domain/model.ts", "scripts/tool.ts"], inventory),
 		{
 			deno: ["scripts/tool_test.ts", "src/services/parser_test.ts", "tests/nested/model_test.ts"],
 			vitest: [],
 			denoFallback: false,
 			vitestFallback: false,
+			rust: false,
 		},
 	);
 });
 
 Deno.test("modified test files select themselves and deduplicate", () => {
 	assertEquals(
-		selectTests([
-			"src/services/parser.ts",
-			"src/services/parser_test.ts",
-			"vitest/theme_controller.svelte.test.ts",
-		], inventory),
+		selectTests(
+			[
+				"src/services/parser.ts",
+				"src/services/parser_test.ts",
+				"vitest/theme_controller.svelte.test.ts",
+			],
+			inventory,
+		),
 		{
 			deno: ["src/services/parser_test.ts"],
 			vitest: ["vitest/theme_controller.svelte.test.ts"],
 			denoFallback: false,
 			vitestFallback: false,
+			rust: false,
 		},
 	);
 });
@@ -86,33 +86,29 @@ Deno.test("shared unmapped modules and deleted Deno tests fall back", () => {
 			vitest: [],
 			denoFallback: true,
 			vitestFallback: false,
+			rust: false,
 		});
 	}
 });
 
 Deno.test("deleted and renamed UI files run all unit tests", () => {
 	assertEquals(
-		selectTests([
-			"src/ui/OldView.svelte",
-			"src/ui/ThemeView.svelte",
-		], inventory).vitestFallback,
+		selectTests(["src/ui/OldView.svelte", "src/ui/ThemeView.svelte"], inventory).vitestFallback,
 		true,
 	);
 	assertEquals(selectTests(["vitest/deleted.test.ts"], inventory).vitestFallback, true);
 });
 
 Deno.test("config, dependencies, assets and unknown changes fall back to both suites", () => {
-	for (
-		const file of [
-			"deno.json",
-			"package-lock.json",
-			"vite.config.ts",
-			"src/main.ts",
-			"public/icon.svg",
-			"stories/App.stories.svelte",
-			"tests/fixtures/data.json",
-		]
-	) {
+	for (const file of [
+		"deno.json",
+		"package-lock.json",
+		"vite.config.ts",
+		"src/main.ts",
+		"public/icon.svg",
+		"stories/App.stories.svelte",
+		"tests/fixtures/data.json",
+	]) {
 		const plan = selectTests([file], inventory);
 		assertEquals(plan.denoFallback, true);
 		// src/main.ts is a Deno entry point; root config and assets affect both runners.
@@ -121,9 +117,53 @@ Deno.test("config, dependencies, assets and unknown changes fall back to both su
 });
 
 Deno.test("empty and documentation-only changes need no tests", () => {
-	const empty = { deno: [], vitest: [], denoFallback: false, vitestFallback: false };
+	const empty = { deno: [], vitest: [], denoFallback: false, vitestFallback: false, rust: false };
 	assertEquals(selectTests([], inventory), empty);
 	assertEquals(selectTests(["README.md", "docs/design/foo.md"], inventory), empty);
+});
+
+Deno.test("test mode accepts staged flags and preserves positional compatibility", () => {
+	for (const args of [[], ["changed"], ["--changed"]]) {
+		assertEquals(parseTestMode(args), "changed");
+	}
+	for (const args of [["staged"], ["--staged"]]) {
+		assertEquals(parseTestMode(args), "staged");
+	}
+	for (const args of [["--unknown"], ["--staged", "--changed"]]) {
+		let rejected = false;
+		try {
+			parseTestMode(args);
+		} catch {
+			rejected = true;
+		}
+		assertEquals(rejected, true);
+	}
+});
+
+Deno.test("Rust and Cargo changes select the workspace without frontend suites", () => {
+	for (const file of [
+		"Cargo.toml",
+		"Cargo.lock",
+		"rust-toolchain.toml",
+		".cargo/config.toml",
+		"crates/radiora-core/src/lib.rs",
+		"crates/radiora-infra/tests/deleted.rs",
+	]) {
+		assertEquals(selectTests([file], inventory, [file]), {
+			deno: [],
+			vitest: [],
+			denoFallback: false,
+			vitestFallback: false,
+			rust: true,
+		});
+	}
+	const mixed = selectTests(
+		["crates/radiora-core/src/lib.rs", "src/services/parser.ts"],
+		inventory,
+	);
+	assertEquals(mixed.rust, true);
+	assertEquals(mixed.deno, ["src/services/parser_test.ts"]);
+	assertEquals(selectTests(["mise.toml"], inventory).rust, true);
 });
 
 Deno.test("Windows paths normalize and NUL parsing preserves spaces and newlines", () => {
@@ -151,6 +191,13 @@ Deno.test("Vitest report rejects malformed counts", () => {
 		assertEquals(rejected, true);
 	}
 });
+
+// Git hooks export GIT_DIR/GIT_INDEX_FILE etc. Inherited by this process, they would make
+// `git init`/`git config` in temp directories (here and in changedFiles) rewrite the real
+// repository (core.bare=true, user.*). Drop them once for every child git process.
+for (const name of Object.keys(Deno.env.toObject())) {
+	if (name.toUpperCase().startsWith("GIT_")) Deno.env.delete(name);
+}
 
 async function git(cwd: string, ...args: string[]): Promise<void> {
 	const output = await new Deno.Command("git", {
@@ -271,6 +318,7 @@ Deno.test("selected Deno test failures propagate", async () => {
 			vitest: [],
 			denoFallback: false,
 			vitestFallback: false,
+			rust: false,
 		});
 		assertEquals(code !== 0, true);
 	} finally {
@@ -354,6 +402,7 @@ Deno.test("Vitest CLI runs related tests and falls back only for a valid zero co
 					vitest: ["src/ui/example.svelte.ts"],
 					denoFallback: false,
 					vitestFallback: false,
+					rust: false,
 				});
 			} catch {
 				rejected = true;

@@ -117,7 +117,7 @@ Deno.test("Biome and GritQL enforce the production safety policy", async () => {
 		const diagnostics = report.diagnostics;
 
 		const dangerous = diagnostics.filter((diagnostic) =>
-			diagnostic.message.startsWith("Do not bypass type safety")
+			diagnostic.message.startsWith("Do not bypass type safety"),
 		);
 		assert(
 			dangerous.length === 2,
@@ -128,7 +128,7 @@ Deno.test("Biome and GritQL enforce the production safety policy", async () => {
 			"Test fixtures must be excluded from the dangerous assertion plugin.",
 		);
 		const swallowed = diagnostics.filter((diagnostic) =>
-			diagnostic.message.startsWith("Do not silently swallow")
+			diagnostic.message.startsWith("Do not silently swallow"),
 		);
 		assert(
 			swallowed.length === 5,

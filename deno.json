@@ -24,12 +24,14 @@
 		}
 	},
 	"fmt": {
+		"include": ["*.md", "docs/**/*.md"],
 		"lineWidth": 100,
 		"useTabs": true
 	},
 	"tasks": {
 		"build": "npm run build && deno task licenses",
 		"licenses": "deno run -A scripts/licenses.ts",
+		"fmt:check": "npm exec -- biome format",
 		"lint": "npm exec -- biome lint",
 		"quality": "deno run --allow-read scripts/quality/implementation_lines.ts",
 		"quality:magic-numbers": "deno run -A scripts/quality/biome_diagnostic_ratchet.ts",
@@ -39,7 +41,7 @@
 		"static:opengrep": "opengrep scan --error --config .opengrep/rules.yml src scripts",
 		"security:secrets": "gitleaks git --redact --no-banner --verbose .",
 		"check": "deno check --node-modules-dir=auto src/main.ts && npm run check",
-		"verify": "deno task lint && deno task quality && deno task quality:magic-numbers && deno task duplicates:ratchet && deno fmt --check src scripts tests vitest .storybook stories deno.json biome.json biome.legacy.json .jscpd.json stryker.config.mjs vite.config.ts && deno task check && deno task test && deno task test:svelte && npm run build",
+		"verify": "deno task lint && deno task quality && deno task quality:magic-numbers && deno task duplicates:ratchet && deno task fmt:check && deno task check && deno task test && deno task test:svelte && npm run build",
 		"desktop:preflight": "deno run -A scripts/desktop_preflight.ts",
 		"test": "deno test --node-modules-dir=auto -A src tests scripts",
 		"test:svelte": "npm run test:svelte",
@@ -56,7 +58,6 @@
 		"desktop:run:sqlite": "deno run -A scripts/desktop_run.ts --sqlite",
 		"desktop:run:turso": "deno run -A scripts/desktop_run.ts --turso",
 		"storage:migrate:legacy": "deno run -A scripts/migrate_legacy_surreal.ts",
-		"probe:turso": "deno run -A scripts/turso_probe.ts",
 		"desktop:run:json": "deno run -A scripts/desktop_run.ts --json",
 		"desktop:hmr": "deno run -A scripts/desktop_hmr.ts",
 		"desktop:inspect": "deno run -A scripts/desktop_hmr.ts --inspect=127.0.0.1:9230",

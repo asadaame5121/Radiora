@@ -5,6 +5,7 @@ export type TestPlan = {
 	vitest: string[];
 	denoFallback: boolean;
 	vitestFallback: boolean;
+	rust: boolean;
 };
 
 const denoRoots = ["src", "tests", "scripts"];
@@ -14,14 +15,14 @@ export function splitGitPaths(output: string): string[] {
 	return output.split("\0").filter((file) => file !== "");
 }
 
-function changeKind(file: string): "documentation" | "vitest" | "deno" | "both" | "all" {
+function changeKind(file: string): "documentation" | "vitest" | "deno" | "rust" | "both" | "all" {
 	if (file.endsWith(".md")) return "documentation";
+	if (/^(Cargo\.(toml|lock)|rust-toolchain(?:\.toml)?)$/.test(file)) return "rust";
+	if (file.startsWith("crates/") || file.startsWith(".cargo/")) return "rust";
 	const ui = file.startsWith("src/ui/") || file.startsWith("vitest/");
 	if (ui && !file.endsWith("_test.ts")) {
-		if (
-			file.endsWith(".svelte") || file.endsWith(".svelte.ts") ||
-			file.startsWith("vitest/")
-		) return "vitest";
+		if (file.endsWith(".svelte") || file.endsWith(".svelte.ts") || file.startsWith("vitest/"))
+			return "vitest";
 		if (file.endsWith(".ts")) return "both";
 	}
 	return /^(src|tests|scripts)\/.*\.ts$/.test(file) ? "deno" : "all";
@@ -31,8 +32,9 @@ function matchingDenoTests(file: string, tests: string[]): string[] {
 	if (file.endsWith("_test.ts")) return [file];
 	const testName = file.split("/").at(-1)?.replace(/\.ts$/, "_test.ts");
 	const colocated = file.replace(/\.ts$/, "_test.ts");
-	return tests.filter((test) =>
-		test === colocated || (test.startsWith("tests/") && test.split("/").at(-1) === testName)
+	return tests.filter(
+		(test) =>
+			test === colocated || (test.startsWith("tests/") && test.split("/").at(-1) === testName),
 	);
 }
 
@@ -51,14 +53,20 @@ export function selectTests(
 	const vitest = new Set<string>();
 	let denoFallback = false;
 	let vitestFallback = false;
+	let rust = false;
 	for (const raw of changed) {
 		const file = raw.replaceAll("\\", "/");
 		const kind = changeKind(file);
 		if (kind === "documentation") continue;
+		if (kind === "rust") {
+			rust = true;
+			continue;
+		}
 		// Unknown non-doc files fail closed, including config and fixture changes.
 		if (kind === "all") {
 			denoFallback = true;
 			vitestFallback = true;
+			rust = true;
 			continue;
 		}
 		if (kind !== "deno") {
@@ -77,6 +85,7 @@ export function selectTests(
 		vitest: [...vitest].sort(),
 		denoFallback,
 		vitestFallback,
+		rust,
 	};
 }
 
@@ -110,14 +119,7 @@ function parseNameStatus(output: string): GitChanges {
 export async function changedFiles(cwd: string, mode: Mode): Promise<GitChanges> {
 	// --no-renames exposes both old and new paths, including deleted tests.
 	const staged = parseNameStatus(
-		await git(cwd, [
-			"diff",
-			"--cached",
-			"--name-status",
-			"--no-renames",
-			"-z",
-			"--",
-		]),
+		await git(cwd, ["diff", "--cached", "--name-status", "--no-renames", "-z", "--"]),
 	);
 	if (mode === "staged") return staged;
 	const [working, untracked] = await Promise.all([
@@ -133,40 +135,41 @@ export async function changedFiles(cwd: string, mode: Mode): Promise<GitChanges>
 
 async function existingFiles(cwd: string): Promise<string[]> {
 	const candidates = splitGitPaths(
-		await git(cwd, [
-			"ls-files",
-			"--cached",
-			"--others",
-			"--exclude-standard",
-			"-z",
-		]),
+		await git(cwd, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]),
 	);
-	const existing = await Promise.all(candidates.map(async (file) => {
-		try {
-			return (await Deno.stat(`${cwd}/${file}`)).isFile ? file : null;
-		} catch (error) {
-			if (error instanceof Deno.errors.NotFound) return null;
-			throw error;
-		}
-	}));
+	const existing = await Promise.all(
+		candidates.map(async (file) => {
+			try {
+				return (await Deno.stat(`${cwd}/${file}`)).isFile ? file : null;
+			} catch (error) {
+				if (error instanceof Deno.errors.NotFound) return null;
+				throw error;
+			}
+		}),
+	);
 	return existing.filter((file) => file !== null);
 }
 
 async function run(cwd: string, command: string, args: string[]): Promise<number> {
 	console.log(`> ${command} ${args.join(" ")}`);
-	return (await new Deno.Command(command, {
-		cwd,
-		args,
-		stdout: "inherit",
-		stderr: "inherit",
-	}).spawn().status).code;
+	return (
+		await new Deno.Command(command, {
+			cwd,
+			args,
+			stdout: "inherit",
+			stderr: "inherit",
+		}).spawn().status
+	).code;
 }
 
 export function vitestTestCount(report: unknown): number {
 	if (
-		typeof report !== "object" || report === null ||
-		!("numTotalTests" in report) || typeof report.numTotalTests !== "number" ||
-		!Number.isInteger(report.numTotalTests) || report.numTotalTests < 0
+		typeof report !== "object" ||
+		report === null ||
+		!("numTotalTests" in report) ||
+		typeof report.numTotalTests !== "number" ||
+		!Number.isInteger(report.numTotalTests) ||
+		report.numTotalTests < 0
 	) {
 		throw new Error("Invalid Vitest report: missing test count");
 	}
@@ -200,9 +203,7 @@ async function runVitest(cwd: string, plan: TestPlan): Promise<number> {
 			const code = await run(cwd, "node", [
 				base[0],
 				"related",
-				...await Promise.all(
-					plan.vitest.map((file) => resolveVitestPath(cwd, file)),
-				),
+				...(await Promise.all(plan.vitest.map((file) => resolveVitestPath(cwd, file)))),
 				...base.slice(1),
 				"--passWithNoTests",
 			]);
@@ -253,6 +254,10 @@ async function runDeno(cwd: string, plan: TestPlan): Promise<number> {
 }
 
 export async function runPlan(cwd: string, plan: TestPlan): Promise<number> {
+	if (plan.rust) {
+		const code = await run(cwd, "cargo", ["test", "--workspace", "--locked"]);
+		if (code !== 0) return code;
+	}
 	if (plan.denoFallback) {
 		console.log("Deno fallback: deleted or unmapped file; run src tests scripts.");
 	}
@@ -264,11 +269,20 @@ export async function runPlan(cwd: string, plan: TestPlan): Promise<number> {
 	return 0;
 }
 
+export function parseTestMode(args: string[]): Mode {
+	const mode = args[0] ?? "changed";
+	if (args.length <= 1 && (mode === "changed" || mode === "--changed")) return "changed";
+	if (args.length === 1 && (mode === "staged" || mode === "--staged")) return "staged";
+	throw new Error("Usage: mise run test [--staged|--changed]");
+}
+
 async function main(): Promise<void> {
-	const mode = Deno.args[0] ?? "changed";
-	if ((mode !== "changed" && mode !== "staged") || Deno.args.length > 1) {
-		throw new Error("Usage: deno run -A scripts/test_changed.ts [changed|staged]");
+	if (Deno.args.length === 1 && (Deno.args[0] === "--help" || Deno.args[0] === "-h")) {
+		console.log("Usage: mise run test [--staged|--changed]");
+		console.log("Select staged paths or all changed paths; execute the current working tree.");
+		return;
 	}
+	const mode = parseTestMode(Deno.args);
 	const cwd = (await git(Deno.cwd(), ["rev-parse", "--show-toplevel"])).trim();
 	const changed = await changedFiles(cwd, mode);
 	if (changed.files.length === 0) {
@@ -277,7 +291,7 @@ async function main(): Promise<void> {
 	}
 	console.log(`test:${mode}: ${changed.files.length} changed file(s).`);
 	const plan = selectTests(changed.files, await existingFiles(cwd), changed.deleted);
-	if (plan.deno.length === 0 && plan.vitest.length === 0 && !plan.vitestFallback) {
+	if (!plan.rust && plan.deno.length === 0 && plan.vitest.length === 0 && !plan.vitestFallback) {
 		console.log("Documentation-only changes; no executable tests.");
 		return;
 	}

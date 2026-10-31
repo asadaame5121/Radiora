@@ -19,26 +19,23 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
+          persist-credentials: false
 
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
         with:
-          deno-version: "2.9.3"
-          cache: true
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
 
       - name: Install frontend dependencies
         run: npm ci
 
       - name: Verify
-        run: deno task verify
+        run: mise run verify:frontend
 
   duplicates:
     name: Duplicate-code SARIF
@@ -49,30 +46,38 @@ jobs:
       security-events: write
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
+          persist-credentials: false
+
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+        with:
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: "2.9.3"
 
       - name: Generate duplicate-code SARIF
         run: deno task duplicates:sarif
 
       - name: Upload duplicate-code SARIF
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        if: ${{ !cancelled() && hashFiles('reports/jscpd/jscpd-report.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         with:
           sarif_file: reports/jscpd/jscpd-report.sarif
+
+      - name: Keep scan report (including fork PRs)
+        if: ${{ !cancelled() && hashFiles('reports/jscpd/jscpd-report.sarif') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: duplicate-code-sarif
+          path: reports/jscpd/jscpd-report.sarif
+          if-no-files-found: error
 
   static-analysis:
     name: Opengrep and secret scanning
@@ -89,9 +94,10 @@ jobs:
       GITLEAKS_SHA256: "79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"
     steps:
       - name: Check out repository with history
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Install verified Opengrep
         shell: bash
@@ -105,21 +111,34 @@ jobs:
         run: |
           mkdir -p reports
           /tmp/opengrep scan --error --sarif-output=reports/opengrep.sarif --config .opengrep/rules.yml src scripts
+        id: opengrep
 
       - name: Upload Opengrep SARIF
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        if: ${{ !cancelled() && hashFiles('reports/opengrep.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         with:
           sarif_file: reports/opengrep.sarif
 
       - name: Install verified Gitleaks
         shell: bash
+        if: ${{ !cancelled() && (steps.opengrep.outcome == 'success' || steps.opengrep.outcome == 'failure') }}
+        id: gitleaks-install
         run: |
           curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
           echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum --check
           tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
 
       - name: Scan Git history for secrets
+        if: ${{ !cancelled() && steps.gitleaks-install.outcome == 'success' }}
         run: /tmp/gitleaks git --redact --no-banner --verbose .
+
+      - name: Keep scan report (including fork PRs)
+        if: ${{ !cancelled() && hashFiles('reports/opengrep.sarif') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: opengrep-sarif
+          path: reports/opengrep.sarif
+          if-no-files-found: error
 
   a11y:
     name: Application interactions and WCAG A/AA
@@ -127,14 +146,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: package-lock.json
+          persist-credentials: false
+
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+        with:
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
 
       - name: Install dependencies
         id: dependencies
@@ -146,19 +168,19 @@ jobs:
 
       - name: Test application interactions
         id: ui
-        run: npm run test:ui
+        run: mise run test:ui
 
       - name: Audit the mock application
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.chromium.outcome == 'success' && (steps.ui.outcome == 'success' || steps.ui.outcome == 'failure') }}
-        run: npm run test:a11y
+        run: mise run test:a11y
 
       - name: Test component interactions (Storybook)
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.chromium.outcome == 'success' }}
-        run: npm run test:storybook
+        run: mise run test:storybook
 
       - name: Upload Playwright test results
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-test-results
           path: test-results/
@@ -173,15 +195,128 @@ jobs:
       matrix:
         batch: [parsers, projections, domain, storage, controllers]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          node-version: "22"
-          cache: npm
-      - uses: denoland/setup-deno@v2
+          persist-credentials: false
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
         with:
-          deno-version: "2.9.3"
-          cache: true
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
       - run: npm ci
       - name: Verify mutation batch wiring
-        run: npm run test:mutation:${{ matrix.batch }} -- --dryRunOnly
+        env:
+          BATCH: ${{ matrix.batch }}
+        run: mise run mutation:preflight "$BATCH"
+
+  rust-product:
+    name: Rust product (Windows MSVC)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+        with:
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
+      - name: Cache Rust build inputs and outputs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: rust-rust-product-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml', 'mise.lock') }}
+      - run: mise run verify:rust
+
+  rust-portable:
+    name: Rust core and infra (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+        with:
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
+      - name: Cache Rust build inputs and outputs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: rust-rust-portable-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/**/Cargo.toml', 'mise.lock') }}
+      - run: mise run verify:rust:portable
+
+  workflow-lint:
+    name: Workflow syntax and security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+        with:
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
+      - run: mise tasks validate
+      - run: mise run lint:workflows
+
+  cargo-deny:
+    name: Cargo dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+        with:
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
+      - run: mise run deny:rust
+
+  required-checks:
+    name: Required checks
+    # Aggregates every CI job. A failed, cancelled or skipped job is never reported as success.
+    # scripts/quality/ci_required_jobs.ts checks that no job is missing from this list.
+    if: ${{ always() }}
+    needs:
+      - verify
+      - duplicates
+      - static-analysis
+      - a11y
+      - mutation-preflight
+      - rust-product
+      - rust-portable
+      - cargo-deny
+      - workflow-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every upstream job to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS_JSON" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS_JSON" | jq -e 'length > 0 and all(.[]; .result == "success")' > /dev/null

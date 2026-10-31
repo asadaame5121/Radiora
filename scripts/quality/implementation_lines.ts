@@ -80,9 +80,11 @@ function consumeQuotedCharacter(cursor: Cursor): boolean {
 }
 
 function isClosingQuote(character: string, quote: Exclude<Quote, null>): boolean {
-	return (quote === "single" && character === "'") ||
+	return (
+		(quote === "single" && character === "'") ||
 		(quote === "double" && character === '"') ||
-		(quote === "template" && character === "`");
+		(quote === "template" && character === "`")
+	);
 }
 
 function consumeSvelteBoundary(cursor: Cursor): boolean {
@@ -187,20 +189,22 @@ async function readBaseline(): Promise<Baseline> {
 
 async function inspect(root: string): Promise<Array<{ path: string; lines: number }>> {
 	const files = await collectProductionSources(root);
-	return await Promise.all(files.map(async (path) => {
-		const kind = sourceKind(path);
-		if (kind === null) throw new Error(`Unsupported production source: ${path}`);
-		const source = await Deno.readTextFile(`${root}/${path}`);
-		return { path, lines: countImplementationLines(source, kind) };
-	}));
+	return await Promise.all(
+		files.map(async (path) => {
+			const kind = sourceKind(path);
+			if (kind === null) throw new Error(`Unsupported production source: ${path}`);
+			const source = await Deno.readTextFile(`${root}/${path}`);
+			return { path, lines: countImplementationLines(source, kind) };
+		}),
+	);
 }
 
 async function main(): Promise<void> {
 	const root = new URL("../../", import.meta.url).pathname.replace(/^\/(?:([A-Za-z]:))/, "$1");
 	const entries = await inspect(root);
 	const baseline = await readBaseline();
-	const failures = entries.filter(({ path, lines }) =>
-		lines > allowedImplementationLines(path, baseline)
+	const failures = entries.filter(
+		({ path, lines }) => lines > allowedImplementationLines(path, baseline),
 	);
 	if (failures.length === 0) {
 		console.log(`Implementation-line quality gate passed for ${entries.length} production files.`);
@@ -209,9 +213,10 @@ async function main(): Promise<void> {
 
 	for (const failure of failures) {
 		console.error(
-			`${failure.path}: ${failure.lines} implementation lines (maximum ${
-				allowedImplementationLines(failure.path, baseline)
-			})`,
+			`${failure.path}: ${failure.lines} implementation lines (maximum ${allowedImplementationLines(
+				failure.path,
+				baseline,
+			)})`,
 		);
 	}
 	Deno.exit(1);

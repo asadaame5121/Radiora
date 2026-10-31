@@ -9,12 +9,32 @@
 			"vitest/**/*.{ts,tsx,js,jsx}",
 			"stories/**/*.{ts,tsx,js,jsx,svelte}",
 			".storybook/**/*.{ts,tsx,js,jsx}",
+			"deno.json",
+			"biome.json",
+			"biome.legacy.json",
+			".jscpd.json",
+			"stryker*.mjs",
+			"vite.config.ts",
+			"vitest*.config.ts",
+			"playwright*.config.ts",
+			"svelte.config.js",
+			"knip.json",
+			"tsconfig.json",
 			"!output",
 			"!!**/.delta"
 		]
 	},
 	"formatter": {
-		"enabled": false
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 100,
+		"lineEnding": "lf"
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double",
+			"semicolons": "always"
+		}
 	},
 	"assist": {
 		"enabled": false
@@ -43,6 +63,16 @@
 	],
 	"linter": {
 		"enabled": true,
+		"includes": [
+			"src/**/*.{ts,tsx,js,jsx,svelte,css}",
+			"scripts/**/*.{ts,tsx,js,jsx}",
+			"tests/**/*.{ts,tsx,js,jsx}",
+			"vitest/**/*.{ts,tsx,js,jsx}",
+			"stories/**/*.{ts,tsx,js,jsx,svelte}",
+			".storybook/**/*.{ts,tsx,js,jsx}",
+			"!output",
+			"!!**/.delta"
+		],
 		"rules": {
 			"preset": "recommended",
 			"complexity": {

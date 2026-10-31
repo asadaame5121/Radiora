@@ -1,0 +1,166 @@
+# Transitional entry point: keep the existing checks until their replacements pass.
+# Tool versions and artifact checksums are shared by local development and CI.
+
+[tools]
+node = "22.23.4"
+deno = "2.9.3"
+rust = { version = "1.98.1", profile = "minimal", components = "rustfmt,clippy" }
+"aqua:rhysd/actionlint" = "1.7.12"
+"aqua:zizmorcore/zizmor" = "1.31.1"
+"aqua:EmbarkStudios/cargo-deny" = "0.20.2"
+
+[tasks.verify]
+description = "Run the Frontend gate and the v3 Rust gate"
+depends = ["verify:frontend", "verify:rust"]
+
+[tasks."verify:rust"]
+description = "Check all product Rust crates, including the desktop host"
+run = [
+  { task = "fmt:rust" },
+  { task = "lint:rust" },
+  { task = "test:rust" },
+  { task = "check:rust-structure" },
+]
+
+[tasks."fmt:rust"]
+description = "Check Rust formatting without modifying files"
+run = "cargo fmt --all -- --check"
+
+[tasks."lint:rust"]
+description = "Run Clippy for the entire product workspace"
+run = "cargo clippy --workspace --all-targets --locked -- -D warnings"
+
+[tasks."test:rust"]
+description = "Run Rust tests and doctests for the product workspace"
+run = "cargo test --workspace --locked"
+
+[tasks."test:ui"]
+description = "Run the existing mock application interaction tests"
+run = "npm run test:ui"
+
+[tasks."test:a11y"]
+description = "Run the existing mock application accessibility tests"
+run = "npm run test:a11y"
+
+[tasks.test]
+description = "Run tests for changed files; --staged selects staged paths (working-tree execution)"
+raw_args = true
+run = "deno run -A scripts/test_changed.ts"
+
+[tasks."verify:rust:portable"]
+description = "Check core and infra without the desktop OS dependencies"
+run = [
+  "cargo clippy -p radiora-core -p radiora-infra --all-targets --locked -- -D warnings",
+  "cargo test -p radiora-core -p radiora-infra --locked",
+  { task = "check:rust-structure" },
+]
+
+[tasks."lint:workflows"]
+description = "Check all GitHub workflows (actionlint, offline zizmor) and that required-checks aggregates every CI job"
+run = [
+  "actionlint -shellcheck= -pyflakes=",
+  "zizmor --offline --no-progress --min-severity low .github/workflows",
+  "deno run --allow-read scripts/quality/ci_required_jobs.ts",
+]
+
+[tasks."check:rust-structure"]
+description = "Check Rust crate boundaries (cargo metadata) and the 600 non-blank-line file limit"
+run = [
+  "deno run --allow-run=cargo --allow-read scripts/quality/rust_crate_boundaries.ts",
+  "deno run --allow-read scripts/quality/rust_file_size.ts",
+]
+
+[tasks."deny:rust"]
+description = "Audit Cargo.lock with cargo-deny (advisories, licenses, bans, sources); needs network for the advisory DB"
+run = "cargo deny check"
+
+# Frontend gate. Each task maps to one step of the former `deno task verify` chain.
+[tasks."fmt:frontend"]
+description = "Check Biome formatting (the only formatter for TS/JS/Svelte/CSS/JSON); no files are modified"
+run = "npm exec -- biome format"
+
+[tasks."lint:frontend"]
+description = "Run Biome lint with the GritQL plugins"
+run = "npm exec -- biome lint"
+
+[tasks."quality:frontend"]
+description = "Run the implementation-line, magic-number and duplicate-code ratchets"
+run = [
+  "deno run --allow-read scripts/quality/implementation_lines.ts",
+  "deno run -A scripts/quality/biome_diagnostic_ratchet.ts",
+  "deno run -A scripts/quality/duplicate_ratchet.ts",
+]
+
+[tasks."check:frontend"]
+description = "Type-check the Deno entry point and the Svelte project"
+run = [
+  "deno check --node-modules-dir=auto src/main.ts",
+  "npm run check",
+]
+
+[tasks."test:frontend:deno"]
+description = "Run the remaining Deno tests (src, tests, scripts)"
+run = "deno test --node-modules-dir=auto -A src tests scripts"
+
+[tasks."test:frontend:unit"]
+description = "Run the Vitest unit project (fast-check included)"
+run = "npm run test:svelte"
+
+[tasks."build:frontend"]
+description = "Build the Vite frontend"
+run = "npm run build"
+
+[tasks."verify:frontend"]
+description = "Frontend gate: format, lint, ratchets, types, Deno/Vitest tests, build (same order as the legacy chain)"
+run = [
+  { task = "lint:frontend" },
+  { task = "quality:frontend" },
+  { task = "fmt:frontend" },
+  { task = "check:frontend" },
+  { task = "test:frontend:deno" },
+  { task = "test:frontend:unit" },
+  { task = "build:frontend" },
+]
+
+[tasks."test:storybook"]
+description = "Run the Storybook component interaction tests"
+run = "npm run test:storybook"
+
+[tasks."verify:ui"]
+description = "Browser interaction gate: UI, WCAG A/AA and Storybook (needs Playwright Chromium)"
+run = [
+  { task = "test:ui" },
+  { task = "test:a11y" },
+  { task = "test:storybook" },
+]
+
+[tasks."verify:security"]
+description = "Static/supply-chain checks available through mise (cargo-deny, workflow lint); Opengrep and Gitleaks stay CI-installed"
+run = [
+  { task = "deny:rust" },
+  { task = "lint:workflows" },
+]
+
+# Periodic quality (Q4). Alloy model checking and Rust proptest jobs are connected by the
+# verification plan work and are intentionally not wired here yet.
+[tasks."coverage:frontend"]
+description = "Collect Vitest and Deno coverage and apply the coverage ratchet"
+run = [
+  "npm run coverage:unit",
+  "deno task coverage:deno",
+  "deno run --allow-read scripts/quality/coverage_ratchet.ts",
+]
+
+[tasks."test:visual"]
+description = "Run Playwright visual regression (baselines are Windows captures)"
+run = "npm run test:visual"
+
+[tasks."mutation:preflight"]
+description = "Dry-run one Stryker batch to verify wiring: mise run mutation:preflight parsers"
+usage = 'arg "<batch>" help="parsers|projections|domain|storage|controllers"'
+run = "npm run test:mutation:{{usage.batch}} -- --dryRunOnly"
+
+[tasks."mutation:run"]
+description = "Run one Stryker batch (long): mise run mutation:run parsers"
+usage = 'arg "<batch>" help="parsers|projections|domain|storage|controllers"'
+run = "npm run test:mutation:{{usage.batch}}"

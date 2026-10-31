@@ -51,9 +51,9 @@ if (UPDATE) {
 			const minimum = baseline[suite][metric] - TOLERANCE;
 			if (current[suite][metric] < minimum) {
 				console.error(
-					`${suite} ${metric} coverage regressed: ${current[suite][metric]} < ${
-						minimum.toFixed(2)
-					}`,
+					`${suite} ${metric} coverage regressed: ${current[suite][metric]} < ${minimum.toFixed(
+						2,
+					)}`,
 				);
 				failed = true;
 			}

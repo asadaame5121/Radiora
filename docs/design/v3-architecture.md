@@ -12,12 +12,12 @@ coreの判断・計算を純粋関数に寄せ、I/Oを扱うapplication coordin
 UI/runtime/保存方式の変更理由を分け、同じ公開操作をheadless testから呼べることを目的とする。
 全関数のtrait化、汎用effect DSL、event sourcing、plugin基盤は導入しない。
 
-| 配置予定        | 責務                                                                                                  | 依存                                |
-| --------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| radiora-core    | 文書規則、commandの検証/計画、Relation投影、純粋な状態遷移、application coordinator、必要なportの契約 | Tauri/Svelte/Loro/SQL型を公開しない |
-| radiora-infra   | Loro・共通Undo・SQLite耐久化・ファイル・設定・派生索引のadapter                                       | coreへ依存                          |
-| radiora-desktop | Tauri invoke/通知、起動終了、adapterの組立                                                            | coreとinfraへ依存                   |
-| Frontend        | Svelte View、feature Controller、Workspace、draft/IME/focus、Svelte Flow/ELK接続                      | desktopのDTO境界                    |
+| 配置予定        | 責務                                                                                                  | 依存                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| radiora-core    | 文書規則、commandの検証/計画、Relation投影、純粋な状態遷移、application coordinator、必要なportの契約 | Tauri/Svelte/Loro/SQL型を公開しない            |
+| radiora-infra   | Loro・共通Undo・SQLite耐久化・ファイル・設定・派生索引のadapter                                       | coreへ依存                                     |
+| radiora-desktop | Tauri invoke/通知、起動終了、adapterの組立                                                            | coreとinfraへ依存。Loro/SQLiteへ直接依存しない |
+| Frontend        | Svelte View、feature Controller、Workspace、draft/IME/focus、Svelte Flow/ELK接続                      | desktopのDTO境界                               |
 
 crate名とCargo workspaceは[製品Rust依存](v3-rust-dependencies.md)へ反映した。lib
 targetのみを置き、製品機能やTauri起動はまだ未接続。

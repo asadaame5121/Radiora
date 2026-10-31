@@ -1,0 +1,37 @@
+[workspace]
+members = ["crates/radiora-core", "crates/radiora-infra", "crates/radiora-desktop"]
+default-members = ["crates/radiora-core", "crates/radiora-infra"]
+exclude = ["spikes/loro-purge", "spikes/syncular-rust-ffi"]
+resolver = "3"
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[workspace.dependencies]
+radiora-core = { path = "crates/radiora-core" }
+radiora-infra = { path = "crates/radiora-infra" }
+petgraph = { version = "=0.8.3", default-features = false, features = ["std", "stable_graph"] }
+pulldown-cmark = { version = "=0.13.6", default-features = false }
+unicode-normalization = "=0.1.26"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+thiserror = "=2.0.21"
+uuid = { version = "=1.29.0", default-features = false, features = ["std", "serde"] }
+# Preserve the tested storage API baseline; upgrades require the V01/V11/V12 fixtures.
+loro = { version = "=1.16.2", default-features = false, features = ["logging"] }
+rusqlite = { version = "=0.32.1", features = ["bundled", "backup"] }
+sha2 = { version = "=0.11.1", default-features = false }
+tempfile = "=3.27.0"
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "env-filter"] }
+tauri = "=2.12.5"
+tauri-build = "=2.7.4"
+tauri-plugin-dialog = "=2.8.4"
+proptest = { version = "=1.12.0", default-features = false, features = ["std"] }

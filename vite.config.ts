@@ -4,11 +4,9 @@ import { desktopHmrProxyPlugin } from "./scripts/desktop_hmr_proxy_plugin.ts";
 import { mockUiPlugin } from "./scripts/mock_ui_plugin.ts";
 
 export default defineConfig(({ mode }) => ({
-	plugins: [
-		desktopHmrProxyPlugin(),
-		mode === "mock" ? mockUiPlugin() : null,
-		svelte(),
-	].filter((plugin) => plugin !== null),
+	plugins: [desktopHmrProxyPlugin(), mode === "mock" ? mockUiPlugin() : null, svelte()].filter(
+		(plugin) => plugin !== null,
+	),
 	resolve: mode === "test" ? { conditions: ["browser"] } : undefined,
 	build: { target: "es2022" },
 }));

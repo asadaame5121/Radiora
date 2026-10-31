@@ -32,9 +32,7 @@ async function main(): Promise<void> {
 			repositoryRoot,
 		);
 		if (formatResult.code !== 0) {
-			console.error(
-				`deno fmt failed for changed files:\n${summarize(formatResult.output)}`,
-			);
+			console.error(`deno fmt failed for changed files:\n${summarize(formatResult.output)}`);
 			Deno.exit(2);
 		}
 	}
@@ -58,7 +56,8 @@ async function main(): Promise<void> {
 		JSON.stringify({
 			hookSpecificOutput: {
 				hookEventName: "PostToolUse",
-				additionalContext: "Biome safe fixes ran for changed files. Remaining diagnostics are " +
+				additionalContext:
+					"Biome safe fixes ran for changed files. Remaining diagnostics are " +
 					"reported here and will be enforced by deno task verify:\n" +
 					summarize(lintResult.output),
 			},

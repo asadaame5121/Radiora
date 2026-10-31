@@ -13,10 +13,10 @@ function assertEquals<T>(actual: T, expected: T): void {
 }
 
 Deno.test("extracts files from apply_patch input", () => {
-	assertEquals(
-		extractPatchPaths("*** Update File: src/main.ts\n*** Add File: src/new.svelte"),
-		["src/main.ts", "src/new.svelte"],
-	);
+	assertEquals(extractPatchPaths("*** Update File: src/main.ts\n*** Add File: src/new.svelte"), [
+		"src/main.ts",
+		"src/new.svelte",
+	]);
 });
 
 Deno.test("rejects absolute and parent paths", () => {

@@ -18,28 +18,31 @@ jobs:
       matrix:
         batch: [parsers, projections, domain, storage, controllers]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          node-version: "22"
-          cache: npm
-      - uses: denoland/setup-deno@v2
+          persist-credentials: false
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
         with:
-          deno-version: "2.9.3"
-          cache: true
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
       - run: npm ci
       - name: Restore incremental mutation results
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: reports/mutation/${{ matrix.batch }}-incremental.json
           key: mutation-${{ matrix.batch }}-${{ runner.os }}-${{ hashFiles('package-lock.json', 'deno.lock') }}-${{ github.run_id }}
           restore-keys: |
             mutation-${{ matrix.batch }}-${{ runner.os }}-${{ hashFiles('package-lock.json', 'deno.lock') }}-
       - name: Run mutation batch
-        run: npm run test:mutation:${{ matrix.batch }}
+        env:
+          BATCH: ${{ matrix.batch }}
+        run: mise run mutation:run "$BATCH"
       - name: Upload mutation report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mutation-${{ matrix.batch }}
           path: reports/mutation/
@@ -50,20 +53,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          node-version: "22"
-          cache: npm
-      - uses: denoland/setup-deno@v2
+          persist-credentials: false
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
         with:
-          deno-version: "2.9.3"
-          cache: true
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
       - run: npm ci
-      - run: npm run coverage:unit
-      - run: deno task coverage:deno
-      - run: deno task coverage:ratchet
-      - uses: actions/upload-artifact@v4
+      - run: mise run coverage:frontend
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: coverage-reports
@@ -77,15 +79,20 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          node-version: "22"
-          cache: npm
+          persist-credentials: false
+      - name: Set up pinned tools
+        uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+        with:
+          version: "2026.10.17"
+          sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
+          cache: false
+          install_args: --locked
       - run: npm ci
       - run: npx playwright install chromium
-      - run: npm run test:visual
-      - uses: actions/upload-artifact@v4
+      - run: mise run test:visual
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
           name: visual-test-results
