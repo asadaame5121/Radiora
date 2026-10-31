@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        batch: [parsers, projections, domain, storage, controllers]
+        batch: [parsers, projections, domain, storage, controllers, tree]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
