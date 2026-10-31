@@ -8,6 +8,8 @@
 		"dev:web": "npm exec -- vite",
 		"dev:mock": "npm exec -- vite --mode mock",
 		"check": "npm exec -- svelte-check --tsconfig ./tsconfig.json",
+		"check:frontend-tests": "npm exec -- tsc -p tsconfig.frontend-tests.json",
+		"verify:frontend:deno-free": "npm run check && npm run check:frontend-tests && npm run test:svelte && npm run build",
 		"knip": "knip",
 		"test:svelte": "npm exec -- vitest run --project unit",
 		"test:changed": "deno task test:changed",
@@ -27,6 +29,7 @@
 		"test:mutation:domain": "stryker run stryker.domain.config.mjs",
 		"test:mutation:storage": "stryker run stryker.storage.config.mjs",
 		"test:mutation:controllers": "stryker run stryker.config.mjs",
+		"test:mutation:tree": "stryker run stryker.tree.config.mjs",
 		"prepare": "husky"
 	},
 	"dependencies": {
