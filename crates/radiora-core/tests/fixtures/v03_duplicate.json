@@ -1,0 +1,33 @@
+[
+  {
+    "id": "V03-F01",
+    "contract": "B→CをB/CまとめてコピーするとB'→C'",
+    "placements": [[1, null], [2, 1], [3, 1]],
+    "references": [[2, 3]],
+    "duplicate": [2, 3],
+    "target": null,
+    "mapping": { "2": 4, "3": 5 },
+    "expected_references": { "2": 3, "4": 5 }
+  },
+  {
+    "id": "V03-F02",
+    "contract": "BだけのコピーならB'→元のC",
+    "placements": [[1, null], [2, 1], [3, 1]],
+    "references": [[2, 3]],
+    "duplicate": [2],
+    "target": null,
+    "mapping": { "2": 4 },
+    "expected_references": { "2": 3, "4": 3 }
+  },
+  {
+    "id": "V03-F03",
+    "contract": "本文の内部リンクにも同じ対応規則。部分木の子孫もコピー集合に含む",
+    "placements": [[1, null], [2, 1], [3, 2]],
+    "links": [[3, 2], [3, 1]],
+    "duplicate": [2],
+    "target": null,
+    "mapping": { "2": 4, "3": 5 },
+    "expected_references": {},
+    "expected_links": { "3": [1, 2], "5": [1, 4] }
+  }
+]

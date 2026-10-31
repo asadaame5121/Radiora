@@ -1,0 +1,188 @@
+[
+  {
+    "id": "V11-F01",
+    "contract": "同じBlockへの連続入力は入力間隔1秒以内を一まとまり (1000ms merges, 1001ms splits)",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 0, "text": "a" },
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 1000, "text": "b" },
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 2001, "text": "c" },
+      { "op": "undo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": ["new_group", "merged", "new_group", "undone:notify=false"],
+    "live": { "1": "ab", "2": "", "3": "" },
+    "undo_len": 1,
+    "redo_len": 1
+  },
+  {
+    "id": "V11-F02",
+    "contract": "別paneの操作で直前のまとまりを終了。別paneの操作のUndoは対象通知",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 0, "text": "a" },
+      { "op": "type", "pane": 2, "block": 1, "at_ms": 100, "text": "b" },
+      { "op": "undo", "pane": 2, "flush_ok": true },
+      { "op": "undo", "pane": 2, "flush_ok": true }
+    ],
+    "outcomes": ["new_group", "new_group", "undone:notify=false", "undone:notify=true"],
+    "live": { "1": "", "2": "", "3": "" },
+    "undo_len": 0,
+    "redo_len": 2
+  },
+  {
+    "id": "V11-F03",
+    "contract": "caretの明示移動とBlock切替でまとまりを終了",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 0, "text": "a" },
+      { "op": "caret_move", "pane": 1, "block": 1 },
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 10, "text": "b" },
+      { "op": "type", "pane": 1, "block": 2, "at_ms": 20, "text": "c" },
+      { "op": "undo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": ["new_group", "boundary", "new_group", "new_group", "undone:notify=false"],
+    "live": { "1": "ab", "2": "", "3": "" },
+    "undo_len": 2,
+    "redo_len": 1
+  },
+  {
+    "id": "V11-F04",
+    "contract": "IME変換中はアプリUndoが介入しない。一回の変換確定が一操作",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "ime_start", "pane": 1 },
+      { "op": "undo", "pane": 1, "flush_ok": true },
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 0, "text": "x" },
+      { "op": "ime_commit", "pane": 1, "block": 1, "at_ms": 5, "text": "日本語" },
+      { "op": "undo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": [
+      "boundary",
+      "rejected:ime_composing",
+      "rejected:ime_composing",
+      "new_group",
+      "undone:notify=false"
+    ],
+    "live": { "1": "", "2": "", "3": "" },
+    "undo_len": 0,
+    "redo_len": 1
+  },
+  {
+    "id": "V11-F05",
+    "contract": "IME確定の直後の通常入力は1秒以内でもIME単位へ結合しない",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "ime_start", "pane": 1 },
+      { "op": "ime_commit", "pane": 1, "block": 1, "at_ms": 0, "text": "変換" },
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 100, "text": "a" },
+      { "op": "undo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": ["boundary", "new_group", "new_group", "undone:notify=false"],
+    "live": { "1": "変換", "2": "", "3": "" },
+    "undo_len": 1,
+    "redo_len": 1
+  },
+  {
+    "id": "V11-F06",
+    "contract": "Undoで論理IDを再利用しない。Undo後の新しい操作でRedo失効",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "create", "pane": 1, "at_ms": 0 },
+      { "op": "undo", "pane": 1, "flush_ok": true },
+      { "op": "create", "pane": 1, "at_ms": 10 },
+      { "op": "redo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": ["new_group", "undone:notify=false", "new_group", "rejected:empty"],
+    "live": { "1": "", "2": "", "3": "", "5": "" },
+    "undo_len": 1,
+    "redo_len": 0,
+    "issued": [1, 2, 3, 4, 5]
+  },
+  {
+    "id": "V11-F07",
+    "contract": "再起動でUndo/Redo履歴を終了し、文書は保持",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 0, "text": "a" },
+      { "op": "restart" },
+      { "op": "undo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": ["new_group", "cleared", "rejected:empty"],
+    "live": { "1": "a", "2": "", "3": "" },
+    "undo_len": 0,
+    "redo_len": 0
+  },
+  {
+    "id": "V11-F08",
+    "contract": "autosaveの実行だけではUndo単位を区切らない",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 0, "text": "a" },
+      { "op": "autosave" },
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 500, "text": "b" },
+      { "op": "undo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": ["new_group", "ignored", "merged", "undone:notify=false"],
+    "live": { "1": "", "2": "", "3": "" },
+    "undo_len": 0,
+    "redo_len": 1
+  },
+  {
+    "id": "V11-F09",
+    "contract": "Undo/Redo前の未保存入力flushが失敗したら履歴操作を行わない",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 0, "text": "a" },
+      { "op": "undo", "pane": 1, "flush_ok": false }
+    ],
+    "outcomes": ["new_group", "rejected:flush_failed"],
+    "live": { "1": "a", "2": "", "3": "" },
+    "undo_len": 1,
+    "redo_len": 0
+  },
+  {
+    "id": "V11-F10",
+    "contract": "削除は複合構造変更として一操作。完全削除の耐久化後に全履歴clear",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "remove", "pane": 1, "block": 2, "at_ms": 0 },
+      { "op": "undo", "pane": 1, "flush_ok": true },
+      { "op": "purge_committed" },
+      { "op": "undo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": ["new_group", "undone:notify=false", "cleared", "rejected:empty"],
+    "live": { "1": "", "2": "", "3": "" },
+    "undo_len": 0,
+    "redo_len": 0
+  },
+  {
+    "id": "V11-F11",
+    "contract": "pasteは1秒以内の入力に挟まれても一操作",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 0, "text": "a" },
+      { "op": "paste", "pane": 1, "block": 1, "at_ms": 100, "text": "XY" },
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 200, "text": "b" },
+      { "op": "undo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": ["new_group", "new_group", "new_group", "undone:notify=false"],
+    "live": { "1": "aXY", "2": "", "3": "" },
+    "undo_len": 2,
+    "redo_len": 1
+  },
+  {
+    "id": "V11-F12",
+    "contract": "Undo後の新入力でRedo失効",
+    "initial_blocks": 3,
+    "ops": [
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 0, "text": "a" },
+      { "op": "undo", "pane": 1, "flush_ok": true },
+      { "op": "type", "pane": 1, "block": 1, "at_ms": 5000, "text": "b" },
+      { "op": "redo", "pane": 1, "flush_ok": true }
+    ],
+    "outcomes": ["new_group", "undone:notify=false", "new_group", "rejected:empty"],
+    "live": { "1": "b", "2": "", "3": "" },
+    "undo_len": 1,
+    "redo_len": 0
+  }
+]

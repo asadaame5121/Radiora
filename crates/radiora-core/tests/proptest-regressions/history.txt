@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a9acea4ba2cf8d9c0950fb3a3550bf6dbbd411648a7d4361a52b5d983696d82f # shrinks to [Paste { pane: 1, block: 1, at_ms: 0, text: "<p>" }, Undo { pane: 1, flush_ok: true }, Type { pane: 1, block: 1, at_ms: 0, text: "a" }]

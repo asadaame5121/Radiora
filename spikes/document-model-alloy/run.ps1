@@ -2,8 +2,8 @@ param(
   [string]$Jar = 'D:\Downloads\alloy-6.2.0-windows-amd64\app\org.alloytools.alloy.dist.jar',
   [string]$OutputDirectory = (Join-Path $PSScriptRoot ('.results/' + [Guid]::NewGuid())),
   [int]$TimeoutSeconds = 180,
-  [ValidateSet('document_model', 'legacy_sharing', 'purge_protocol')]
-  [string[]]$Models = @('document_model', 'legacy_sharing', 'purge_protocol')
+  [ValidateSet('document_model', 'legacy_sharing', 'purge_protocol', 'shared_undo_protocol', 'delete_sets')]
+  [string[]]$Models = @('document_model', 'legacy_sharing', 'purge_protocol', 'shared_undo_protocol', 'delete_sets')
 )
 
 $ErrorActionPreference = 'Stop'

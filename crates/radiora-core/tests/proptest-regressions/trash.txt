@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 22daac20deea6f1300d9af498af90111a6779e1bde197ec4b081ed4f9a18c42b # shrinks to (Forest { placements: [(1, None), (2, None)], references: [] }, [Delete(Index(0)), Purge(Index(0))])
+cc ae7f00d82ad706654a9f63ad209b81f5deceb7e51c0fd16cae32a608e9311fef # shrinks to (Forest { placements: [(1, None), (2, Some(1))], references: [] }, [Delete(Index(9223372036854775808)), Delete(Index(0))])

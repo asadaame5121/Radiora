@@ -1,0 +1,109 @@
+[
+  {
+    "id": "V12-F01",
+    "contract": "Cを削除してから親Bを削除した場合、Bの復元だけでCを復活させない",
+    "placements": [[1, null], [2, 1], [3, 2], [4, 2], [5, 1]],
+    "references": [[5, 2]],
+    "ops": [
+      { "op": "delete", "block": 3 },
+      { "op": "delete", "block": 2 },
+      { "op": "restore", "item": 2, "confirmed": false }
+    ],
+    "outcomes": ["deleted:1", "deleted:2", "restored_original"],
+    "outline": [[null, [1]], [1, [2, 5]], [2, [4]]],
+    "trash": { "1": [3] },
+    "purged": [],
+    "reference_views": { "5": "Live" }
+  },
+  {
+    "id": "V12-F02",
+    "contract": "元の親が存在し削除されていなければ元の親の下・元の位置へ復元",
+    "placements": [[1, null], [2, 1], [3, 2], [4, 2], [5, 1]],
+    "references": [[5, 2]],
+    "ops": [
+      { "op": "delete", "block": 3 },
+      { "op": "delete", "block": 2 },
+      { "op": "restore", "item": 2, "confirmed": false },
+      { "op": "restore", "item": 1, "confirmed": false }
+    ],
+    "outcomes": ["deleted:1", "deleted:2", "restored_original", "restored_original"],
+    "outline": [[null, [1]], [1, [2, 5]], [2, [3, 4]]],
+    "trash": {},
+    "purged": []
+  },
+  {
+    "id": "V12-F03",
+    "contract": "Bの完全削除対象はB/D。Cは残り、確認のうえ独立文書として復元。代表の完全削除で参照項目はMissing",
+    "placements": [[1, null], [2, 1], [3, 2], [4, 2], [5, 1]],
+    "references": [[5, 2]],
+    "ops": [
+      { "op": "delete", "block": 3 },
+      { "op": "delete", "block": 2 },
+      { "op": "purge", "item": 2 },
+      { "op": "restore", "item": 1, "confirmed": false },
+      { "op": "restore", "item": 1, "confirmed": true }
+    ],
+    "outcomes": [
+      "deleted:1",
+      "deleted:2",
+      "purged",
+      "rejected:needs_confirmation",
+      "restored_independent"
+    ],
+    "outline": [[null, [1, 3]], [1, [5]]],
+    "trash": {},
+    "purged": [2, 4],
+    "reference_views": { "5": "Missing" }
+  },
+  {
+    "id": "V12-F04",
+    "contract": "代表Blockを通常削除しても部分木外の参照項目は残り、参照先がゴミ箱内と表示",
+    "placements": [[1, null], [2, 1], [3, 2], [4, 2], [5, 1]],
+    "references": [[5, 2]],
+    "ops": [{ "op": "delete", "block": 2 }],
+    "outcomes": ["deleted:1"],
+    "outline": [[null, [1]], [1, [5]]],
+    "trash": { "1": [2, 3, 4] },
+    "purged": [],
+    "reference_views": { "5": "TargetInTrash" }
+  },
+  {
+    "id": "V12-F05",
+    "contract": "参照項目を通常削除しても代表Blockは変更しない",
+    "placements": [[1, null], [2, 1], [3, 2], [4, 2], [5, 1]],
+    "references": [[5, 2]],
+    "ops": [{ "op": "delete", "block": 5 }],
+    "outcomes": ["deleted:1"],
+    "outline": [[null, [1]], [1, [2]], [2, [3, 4]]],
+    "trash": { "1": [5] },
+    "purged": [],
+    "reference_views": { "5": "Live" }
+  },
+  {
+    "id": "V12-F06",
+    "contract": "位置の目印となる兄弟がなくなったら元の親の末尾",
+    "placements": [[10, null], [11, 10], [12, 10], [13, 10]],
+    "ops": [
+      { "op": "delete", "block": 12 },
+      { "op": "delete", "block": 11 },
+      { "op": "restore", "item": 1, "confirmed": false }
+    ],
+    "outcomes": ["deleted:1", "deleted:2", "restored_at_end"],
+    "outline": [[null, [10]], [10, [13, 12]]],
+    "trash": { "2": [11] },
+    "purged": []
+  },
+  {
+    "id": "V12-F07",
+    "contract": "元から文書rootなら文書rootとして復元",
+    "placements": [[1, null], [2, 1], [6, null]],
+    "ops": [
+      { "op": "delete", "block": 1 },
+      { "op": "restore", "item": 1, "confirmed": false }
+    ],
+    "outcomes": ["deleted:1", "restored_as_root"],
+    "outline": [[null, [1, 6]], [1, [2]]],
+    "trash": {},
+    "purged": []
+  }
+]

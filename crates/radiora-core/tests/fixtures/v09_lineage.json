@@ -1,0 +1,155 @@
+[
+  {
+    "id": "V09-F01",
+    "contract": "FROMの保存方向(New→Old)を変えず、派生元→派生先へ表示方向を正規化。派生元がG0",
+    "input": {
+      "blocks": [
+        { "id": 1, "topic": 10, "state": "live" },
+        { "id": 2, "topic": 20, "state": "live" }
+      ],
+      "types": [{ "name": "from", "advances_generation": true, "display_reversed": true }],
+      "relations": [{ "id": 1, "kind": "from", "from": 2, "to": 1 }]
+    },
+    "generation": { "10": 0, "20": 1 },
+    "knot": [],
+    "knot_generation": null,
+    "edges": [[10, 20, [1]]],
+    "class": { "1": "Normal" }
+  },
+  {
+    "id": "V09-F02",
+    "contract": "複数親のdiamondでは最深親+1",
+    "input": {
+      "blocks": [
+        { "id": 1, "topic": 1, "state": "live" },
+        { "id": 2, "topic": 2, "state": "live" },
+        { "id": 3, "topic": 3, "state": "live" },
+        { "id": 4, "topic": 4, "state": "live" }
+      ],
+      "types": [{ "name": "derives", "advances_generation": true, "display_reversed": false }],
+      "relations": [
+        { "id": 1, "kind": "derives", "from": 1, "to": 2 },
+        { "id": 2, "kind": "derives", "from": 1, "to": 3 },
+        { "id": 3, "kind": "derives", "from": 2, "to": 4 },
+        { "id": 4, "kind": "derives", "from": 3, "to": 4 },
+        { "id": 5, "kind": "derives", "from": 1, "to": 4 }
+      ]
+    },
+    "generation": { "1": 0, "2": 1, "3": 1, "4": 2 },
+    "knot": [],
+    "knot_generation": null,
+    "edges": [[1, 2, [1]], [1, 3, [2]], [1, 4, [5]], [2, 4, [3]], [3, 4, [4]]],
+    "class": { "1": "Normal", "2": "Normal", "3": "Normal", "4": "Normal", "5": "Normal" }
+  },
+  {
+    "id": "V09-F03",
+    "contract": "循環メンバーだけをKnotへ分離し、出入りする非循環Topicを巻き込まない",
+    "input": {
+      "blocks": [
+        { "id": 1, "topic": 1, "state": "live" },
+        { "id": 2, "topic": 2, "state": "live" },
+        { "id": 3, "topic": 3, "state": "live" },
+        { "id": 4, "topic": 4, "state": "live" }
+      ],
+      "types": [{ "name": "derives", "advances_generation": true, "display_reversed": false }],
+      "relations": [
+        { "id": 1, "kind": "derives", "from": 1, "to": 2 },
+        { "id": 2, "kind": "derives", "from": 2, "to": 3 },
+        { "id": 3, "kind": "derives", "from": 3, "to": 2 },
+        { "id": 4, "kind": "derives", "from": 3, "to": 4 }
+      ]
+    },
+    "generation": { "1": 0, "4": 0 },
+    "knot": [2, 3],
+    "knot_generation": 1,
+    "edges": [[1, 2, [1]], [2, 3, [2]], [3, 2, [3]], [3, 4, [4]]],
+    "class": {
+      "1": "KnotConnection",
+      "2": "KnotConnection",
+      "3": "KnotConnection",
+      "4": "KnotConnection"
+    }
+  },
+  {
+    "id": "V09-F04",
+    "contract": "同一Topic内Relationと元Blockの自己loopはカード内関係。自己edgeを作らず外部世代に使わない",
+    "input": {
+      "blocks": [
+        { "id": 1, "topic": 1, "state": "live" },
+        { "id": 2, "topic": 1, "state": "live" },
+        { "id": 3, "topic": 2, "state": "live" }
+      ],
+      "types": [{ "name": "derives", "advances_generation": true, "display_reversed": false }],
+      "relations": [
+        { "id": 1, "kind": "derives", "from": 1, "to": 2 },
+        { "id": 2, "kind": "derives", "from": 1, "to": 1 },
+        { "id": 3, "kind": "derives", "from": 2, "to": 3 }
+      ]
+    },
+    "generation": { "1": 0, "2": 1 },
+    "knot": [],
+    "knot_generation": null,
+    "edges": [[1, 2, [3]]],
+    "class": { "1": "InCard", "2": "InCard", "3": "Normal" }
+  },
+  {
+    "id": "V09-F05",
+    "contract": "同じカード間の複数Relationは元ID集合で集約。非世代進行型は世代に使わない。ゴミ箱/Missingは世代計算から除外",
+    "input": {
+      "blocks": [
+        { "id": 1, "topic": 1, "state": "live" },
+        { "id": 2, "topic": 1, "state": "live" },
+        { "id": 3, "topic": 2, "state": "live" },
+        { "id": 4, "topic": 3, "state": "trash" }
+      ],
+      "types": [
+        { "name": "derives", "advances_generation": true, "display_reversed": false },
+        { "name": "mentions", "advances_generation": false, "display_reversed": false }
+      ],
+      "relations": [
+        { "id": 1, "kind": "derives", "from": 1, "to": 3 },
+        { "id": 2, "kind": "derives", "from": 2, "to": 3 },
+        { "id": 3, "kind": "mentions", "from": 3, "to": 1 },
+        { "id": 4, "kind": "derives", "from": 1, "to": 4 },
+        { "id": 5, "kind": "derives", "from": 1, "to": 99 }
+      ]
+    },
+    "generation": { "1": 0, "2": 1 },
+    "knot": [],
+    "knot_generation": null,
+    "edges": [[1, 2, [1, 2]], [2, 1, [3]]],
+    "class": {
+      "1": "Normal",
+      "2": "Normal",
+      "3": "NonGenerational",
+      "4": "ExcludedEndpoint",
+      "5": "ExcludedEndpoint"
+    }
+  },
+  {
+    "id": "V09-F06",
+    "contract": "表示filterは表示対象だけを変え、世代番号を変えない",
+    "input": {
+      "blocks": [
+        { "id": 1, "topic": 1, "state": "live" },
+        { "id": 2, "topic": 2, "state": "live" },
+        { "id": 3, "topic": 3, "state": "live" },
+        { "id": 4, "topic": 4, "state": "live" }
+      ],
+      "types": [{ "name": "derives", "advances_generation": true, "display_reversed": false }],
+      "relations": [
+        { "id": 1, "kind": "derives", "from": 1, "to": 2 },
+        { "id": 2, "kind": "derives", "from": 1, "to": 3 },
+        { "id": 3, "kind": "derives", "from": 2, "to": 4 },
+        { "id": 4, "kind": "derives", "from": 3, "to": 4 },
+        { "id": 5, "kind": "derives", "from": 1, "to": 4 }
+      ]
+    },
+    "visible": [2, 4],
+    "generation": { "2": 1, "4": 2 },
+    "knot": [],
+    "knot_generation": null,
+    "edges": [[2, 4, [3]]],
+    "class": { "1": "Normal", "2": "Normal", "3": "Normal", "4": "Normal", "5": "Normal" }
+  }
+]

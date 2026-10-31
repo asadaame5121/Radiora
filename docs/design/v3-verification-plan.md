@@ -164,9 +164,68 @@ skip/ignored/quarantineは合格へ数えず、理由・Issue・担当・見直�
 ## 8. 残る実装前の判断
 
 D1は責任分担・対応表・oracle/再現規約・初期予算を本書で決定した。
-D5はA01/A02の追加とA03監査を決定したが、モデル作成/実行はこれからである。 Rust PBT
+D5はA01/A02の追加とA03監査を決定し、2026-10-31にモデル作成・実行を行った（§9）。 Rust PBT
 runnerは[製品Rust依存](v3-rust-dependencies.md)でproptestを採用した。 native
 driverはD2、command/version/実行thread/fault hookはD4、 CI gateはD3、全移行写像は#384で具体化する。
 性能数値は[全体計画](tauri-migration-plan.md)と規模fixtureの既存条件を照合してV16へ引き継ぐ。
 本計画策定時には試験コード・Cargo・CI・Alloy本体・GitHub Issueを変更していない。
-後続の依存整理で製品Cargoを作成したが、検証fixtureとモデル本体は未実装。
+後続の依存整理で製品Cargoを作成した。A01〜A03とPBTオラクルの実装記録は§9に分ける。
+
+## 9. A01〜A03とPBTオラクルの実装記録（2026-10-31）
+
+状態:
+**モデル検査の実行合格と、独立oracleの実装・自己検証まで**。製品command・実Loro/SQLite・CIへの接続は未実施であり、
+各Vの製品証拠は引き続き「未接続」。
+
+### モデル検査
+
+[v3追加モデル検査の記録](../../spikes/document-model-alloy/v3-results.md)に、hash・scope・witness・negative
+control・限界を記録した。
+
+- A01 `shared_undo_protocol.als`: 共通LIFO履歴＋purge
+  barrier＋保存/成功応答/公開＋crash/再起動＋要求epoch。27 command全件期待どおり。
+- A02 `delete_sets.als`: 削除操作ごとの独立項目・復元先・選択項目だけのpurge・参照非連鎖。18
+  command全件期待どおり。
+- A03:
+  既存`document_model`の部分木全体restore/purgeは最新契約と不一致としてA02で置換、旧`purge_protocol`はA01で置換。
+- 既存3モデルを含む5モデル95 commandを再実行し、全件期待どおり（Alloy 6.2.0、OpenJDK
+  27.0.1.0.2、SAT4J）。
+
+### PBTオラクル（P層）
+
+`crates/radiora-core/tests/oracles/`（test target
+`oracles`）。Map/Vec/Setの参照モデルだけで書き、production code・Loro・SQLiteを呼ばない。
+Rust/TS共有の固定例は`crates/radiora-core/tests/fixtures/*.json`（契約ID・契約文・操作列・手書き期待値）。
+
+| V   | oracle                 | 性質（PBT）                                                                                                                              | 固定例                                                                                            |
+| --- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| V11 | `history.rs` 共通Undo  | ID台帳の単調性、拒否時の無変更、新編集でRedo失効、型付き単位の境界、全Undoで最後のclear時点へ戻る、Undo→Redo恒等、autosave挿入で単位不変 | 12件（1秒境界・別pane/caret/Block切替・IME・paste・ID非再利用・再起動・flush失敗・purge clear）   |
+| V12 | `trash.rs` ゴミ箱      | 項目の独立・状態整合・liveの木の閉包、削除集合＝live部分木（既存項目と素）、復元/purgeが当該項目だけ、参照非連鎖、削除→即復元で順序往復  | 7件（契約例C→B、purge後の独立復元、代表/参照項目、兄弟目印の消失、root復元）                      |
+| V09 | `lineage.rs` Topic投影 | 全Relationの単一分類、通常edgeで世代増加、Knot＝独立DFSの循環判定と一致、filterで世代/Knot/分類不変、入力順で意味不変                    | 6件（FROM正規化、diamond、Knotと出入り、カード内/自己loop、集約・非世代・ゴミ箱/Missing、filter） |
+| V03 | `structure.rs` 複製    | 新IDの非衝突、原本の配置/参照/リンク不変、コピー集合内だけ写像、子順序の複写                                                             | 3件（B→C同時/単独コピー、本文リンクと子孫）                                                       |
+
+PR予算は§3どおり100列×最大50操作（`PROPTEST_CASES`/`RADIORA_PBT_MAX_OPS`で変更）。乱数が到達した分岐を数え、
+0件の分岐があればtestを失敗させる（例: Undo拒否理由、通知、兄弟目印消失、Knotと正世代の共存）。
+到達率の低い分岐には生成器の偏りを加えた。failureは`proptest-regressions/`へ保存し、縮小済み例を固定例へ昇格する運用とする。
+
+実行証拠（Windows MSVC、Rust 1.98.1）: `cargo test -p radiora-core --test oracles --locked`で14
+test成功、 定期予算相当（`PROPTEST_CASES=1000 RADIORA_PBT_MAX_OPS=200`）でも14 test成功（約13秒）。
+`cargo fmt --all -- --check`と`cargo clippy -p radiora-core --all-targets --locked -- -D warnings`も成功。
+oracle自体の検出力は誤実装の一時注入で確認した（既存項目を飲み込む削除、purge後の本文残存、1秒境界の排他化、
+新編集でRedo維持、filter後graphでの循環判定。すべて失敗を検出し、注入は戻した）。
+
+### oracle作成で置いた解釈（製品決定ではない。変更時は固定例を更新）
+
+- 「入力間隔1秒以内」: ちょうど1000msは同じ単位、1001msで分割。
+- 「位置の目印となる兄弟」:
+  削除時の直前の兄弟（先頭なら親の先頭）。それが元の親のliveな子でなければ末尾へ復元。
+- Undo通知:
+  要求paneと記録paneが異なるか、要求paneの現在Blockと対象Blockが異なれば通知（画面は動かさない）。
+- Knot隣接の世代: Knot成員からのedgeは世代計算に使わない（現行`tree_lineage_projection.ts`と同じ）。
+
+### 残作業
+
+- 製品command/ControllerをこれらのoracleとJSON固定例へ接続する（P/S/I層）。TS側のfixture読込も未実装。
+- A01の具体protocol（command
+  dedup・snapshot切替・backup置換）がD4で決まったら、fault注入点（§4）とモデルを照合し直す。
+- CIへのAlloy/PBT job接続はD3/Q4で行う。現時点ではローカル実行の証拠のみ。
