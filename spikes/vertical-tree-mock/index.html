@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Radiora — 縦ツリー モック</title><link rel="stylesheet" href="./styles.css"><script src="./mock.js" defer></script></head>
+<body>
+<header class="mock-topbar">
+  <div class="mock-brand"><img src="../../src/Radiora_icon.png" alt=""><strong>Radiora</strong><span>v3</span></div>
+  <div class="mock-breadcrumb">個人のワークスペース <span>/</span> <strong>Lineage</strong></div>
+  <span class="mock-preview">モック · 保存なし</span><button id="theme" class="mock-quiet" type="button">ライトに切替</button>
+</header>
+<div class="mock-shell">
+  <aside class="mock-sidebar" aria-label="Topic一覧">
+    <div class="mock-workspace"><span>R</span><div><strong>思考の庭</strong><small>Personal workspace</small></div></div>
+    <label class="mock-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search" type="search" placeholder="名前・別名で探す" autocomplete="off" aria-label="Topicの名前・別名を検索"></label>
+    <div class="mock-section-label mock-topics-label">TOPICS <span id="topic-count">4</span></div><div id="topic-list"></div><div id="search-empty" class="mock-empty" hidden>一致するTopicはありません</div>
+    <div class="mock-sidebar-foot">
+      <span class="mock-section-label">RELATIONS</span>
+      <div class="mock-legend"><i class="cyan"></i><span>FROM</span><small>派生・系譜</small></div>
+      <div class="mock-legend"><i class="violet"></i><span>LIKE</span><small>似ている</small></div>
+      <div class="mock-legend"><i class="amber"></i><span>FIX</span><small>修正する</small></div>
+      <div class="mock-legend"><i class="red"></i><span>VS</span><small>対比する</small></div>
+      <div class="mock-local-note">編集内容はこのタブ内のみ</div>
+    </div>
+  </aside>
+  <main class="mock-main">
+    <div class="mock-viewbar">
+      <div><span class="mock-section-label">WORKSPACE VIEW</span><h1>思考の系譜 <span>Lineage</span></h1></div>
+      <div class="mock-view-actions"><label class="mock-switch"><input id="auxiliary" type="checkbox"><span>補助Relation</span></label><button id="inspector-toggle" class="mock-quiet" type="button" aria-pressed="true">詳細を閉じる</button></div>
+    </div>
+    <div class="mock-stage">
+      <section id="canvas" class="mock-canvas" tabindex="0" aria-label="縦系譜キャンバス。空白をドラッグで移動、ホイールでズーム。">
+        <div class="mock-canvas-heading"><i></i>縦系譜<span>/</span><small>派生元から、派生先へ</small></div>
+        <div id="world" class="mock-world"><svg id="edges" class="mock-edges" aria-label="Topic間のRelation"></svg><div id="generation-labels"></div><div id="cards"></div></div>
+        <div class="mock-canvas-controls" aria-label="表示操作"><button id="zoom-out" type="button" aria-label="縮小">−</button><output id="zoom-label" aria-label="表示倍率">100%</output><button id="zoom-in" type="button" aria-label="拡大">＋</button><i></i><button id="fit" type="button" aria-label="全体を表示" title="全体を表示">⛶</button><button id="reveal" class="mock-reveal" type="button">選択へ</button></div>
+        <div class="mock-canvas-help">空白をドラッグで移動 <span>·</span> ホイールでズーム <span>·</span> ダブルクリックで編集</div>
+      </section>
+      <aside id="inspector" class="mock-inspector" aria-label="選択したTopicの詳細">
+        <div class="mock-inspector-eyebrow"><span class="mock-section-label">TOPIC DETAILS</span><span>選択中</span></div>
+        <h2 id="detail-title"></h2><p id="detail-description"></p>
+        <div class="mock-detail-section"><span class="mock-section-label">ALIASES</span><div id="detail-aliases" class="mock-aliases"></div></div>
+        <div class="mock-detail-section"><span class="mock-section-label">RELATIONS</span><div id="detail-relations"></div></div>
+        <div class="mock-detail-section"><span class="mock-section-label">OUTLINE</span><div id="detail-outline" class="mock-detail-outline"></div></div>
+        <div class="mock-inspector-actions"><button id="edit" type="button">本文を編集</button><button id="collapse-card" class="mock-quiet" type="button">カードを閉じる</button></div>
+        <div class="mock-inspector-note"><strong>ひとつのカードが、ひとつの文書。</strong><p>カードの内側はアウトライン。カードの間はRelation。内容とつながりを、同じ画面でたどれます。</p></div>
+      </aside>
+    </div>
+    <footer class="mock-statusbar"><span id="stats"></span><span id="status" role="status" aria-live="polite">表示モック · 実データには接続していません</span></footer>
+  </main>
+</div>
+</body></html>
