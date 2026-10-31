@@ -25,8 +25,8 @@ function childrenByParent(items: readonly OutlineItem[]): Map<string, OutlineIte
 		childrenByParent.set(item.parentId, children);
 	}
 	for (const children of childrenByParent.values()) {
-		children.sort((left, right) =>
-			left.orderKey - right.orderKey || left.id.localeCompare(right.id)
+		children.sort(
+			(left, right) => left.orderKey - right.orderKey || left.id.localeCompare(right.id),
 		);
 	}
 	return childrenByParent;
@@ -70,21 +70,18 @@ export class ManuscriptProjectionService {
 	}
 }
 
-export function manuscriptSectionFromItem(
-	item: OutlineItem,
-	depth: number,
-): ManuscriptSection {
+export function manuscriptSectionFromItem(item: OutlineItem, depth: number): ManuscriptSection {
 	const normalizedText = item.text.replaceAll("\r\n", "\n");
 	const lines = normalizedText.split("\n");
 	const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
 	const contextualHeading = item.contextualHeading?.trim();
-	const heading = contextualHeading ||
-		(firstContentIndex >= 0 ? lines[firstContentIndex].trim() : "(空の項目)");
+	const heading =
+		contextualHeading || (firstContentIndex >= 0 ? lines[firstContentIndex].trim() : "(空の項目)");
 	const body = contextualHeading
 		? normalizedText
 		: firstContentIndex < 0
-		? ""
-		: lines.slice(firstContentIndex + 1).join("\n");
+			? ""
+			: lines.slice(firstContentIndex + 1).join("\n");
 	return {
 		occurrenceId: item.id,
 		workId: item.workId,

@@ -42,15 +42,16 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 		[source.workId],
 	);
 	assertEquals(
-		(await handlers.resolveInternalReferences(
-			`[共有](radiora://work/${source.workId})`,
-		))[0].status,
+		(await handlers.resolveInternalReferences(`[共有](radiora://work/${source.workId})`))[0].status,
 		"resolved",
 	);
 
 	let snapshot = await handlers.listOutline();
 	const placements = snapshot.items.filter((item) => item.workId === source.workId);
-	assertEquals(placements.map((item) => item.text), ["共有後", "共有後"]);
+	assertEquals(
+		placements.map((item) => item.text),
+		["共有後", "共有後"],
+	);
 	assertEquals(placements.find((item) => item.id === mirror.id)?.contextualHeading, "更新した文脈");
 	assertEquals(placements.find((item) => item.id === mirror.id)?.collapsed, true);
 	assertEquals(placements.find((item) => item.id === mirror.id)?.parentId, null);
@@ -65,20 +66,23 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 		"branch",
 	);
 
-	const sourceBranchId = source.revisionSelector.mode === "branch"
-		? source.revisionSelector.branchId
-		: "";
-	await store.createRevision({
-		id: "source-version",
-		workId: source.workId,
-		text: "読み取り専用の版",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: "2026-07-28T00:00:00.000Z",
-	}, sourceBranchId);
-	assertEquals((await handlers.listRevisions(source.workId)).map((revision) => revision.id), [
-		"source-version",
-	]);
+	const sourceBranchId =
+		source.revisionSelector.mode === "branch" ? source.revisionSelector.branchId : "";
+	await store.createRevision(
+		{
+			id: "source-version",
+			workId: source.workId,
+			text: "読み取り専用の版",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: "2026-07-28T00:00:00.000Z",
+		},
+		sourceBranchId,
+	);
+	assertEquals(
+		(await handlers.listRevisions(source.workId)).map((revision) => revision.id),
+		["source-version"],
+	);
 	assertEquals(await handlers.listRevisions(target.workId), []);
 	assertEquals((await handlers.listGlobalLineage()).snapshot.items.length, 2);
 	assertEquals((await handlers.listWorkLineage(source.workId)).work.id, source.workId);
@@ -86,11 +90,7 @@ Deno.test("Phase 1 desktop bindings preserve Work and Occurrence semantics end t
 		(await handlers.listWorkLineage(source.workId)).revisions.map((revision) => revision.id),
 		["source-version"],
 	);
-	const rewrite = await handlers.rewriteAsNewBranch(
-		sourceBranchId,
-		"別の観点",
-		"confirmed",
-	);
+	const rewrite = await handlers.rewriteAsNewBranch(sourceBranchId, "別の観点", "confirmed");
 	assertEquals(rewrite.status, "created");
 	assertEquals(
 		(await handlers.listWorkLineage(source.workId)).branches.map((branch) => branch.name).sort(),
@@ -176,13 +176,11 @@ Deno.test("desktop bindings validate the global lineage filter at the IPC bounda
 	);
 	await assertRejects(
 		() =>
-			handlers.listGlobalLineage(
-				{
-					includeIsolated: true,
-					linkTypes: ["NONSENSE"],
-					includeWorkIds: [],
-				} as unknown as Parameters<typeof handlers.listGlobalLineage>[0],
-			),
+			handlers.listGlobalLineage({
+				includeIsolated: true,
+				linkTypes: ["NONSENSE"],
+				includeWorkIds: [],
+			} as unknown as Parameters<typeof handlers.listGlobalLineage>[0]),
 		Error,
 		"Invalid GlobalLineageFilter",
 	);
@@ -252,7 +250,7 @@ Deno.test("desktop bindings validate user input payloads with Valibot schemas", 
 
 	// createLink with invalid type
 	await assertRejects(() =>
-		handlers.createLink({ fromId: "work-1", toId: "work-2", type: "invalid-type" as never })
+		handlers.createLink({ fromId: "work-1", toId: "work-2", type: "invalid-type" as never }),
 	);
 });
 

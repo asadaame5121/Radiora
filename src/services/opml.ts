@@ -32,17 +32,21 @@ const MAX_OPML_DEPTH = 256;
 export function renderOutlineSnapshotOpml(snapshot: OutlineSnapshot): string {
 	const roots = snapshotToNodes(snapshot);
 	const body = roots.map((node) => renderNode(node, 1)).join("\n");
-	return [
-		'<?xml version="1.0" encoding="UTF-8"?>',
-		'<opml version="2.0">',
-		"  <head>",
-		"    <title>Radiora outline</title>",
-		"  </head>",
-		"  <body>",
-		body,
-		"  </body>",
-		"</opml>",
-	].filter((line) => line.length > 0).join("\n") + "\n";
+	return (
+		[
+			'<?xml version="1.0" encoding="UTF-8"?>',
+			'<opml version="2.0">',
+			"  <head>",
+			"    <title>Radiora outline</title>",
+			"  </head>",
+			"  <body>",
+			body,
+			"  </body>",
+			"</opml>",
+		]
+			.filter((line) => line.length > 0)
+			.join("\n") + "\n"
+	);
 }
 
 /**
@@ -107,8 +111,9 @@ function snapshotToNodes(snapshot: OutlineSnapshot): OpmlNode[] {
 function compareItems(left: IndexedItem, right: IndexedItem): number {
 	const leftOrder = Number.isFinite(left.item.orderKey) ? left.item.orderKey : Infinity;
 	const rightOrder = Number.isFinite(right.item.orderKey) ? right.item.orderKey : Infinity;
-	return leftOrder - rightOrder || left.item.id.localeCompare(right.item.id) ||
-		left.index - right.index;
+	return (
+		leftOrder - rightOrder || left.item.id.localeCompare(right.item.id) || left.index - right.index
+	);
 }
 
 function renderNode(node: OpmlNode, depth: number): string {
@@ -287,8 +292,10 @@ function decodeXmlEntity(entity: string): string {
 		? Number.parseInt(normalized.slice(2), 16)
 		: Number.parseInt(normalized.slice(1), 10);
 	if (
-		!Number.isInteger(number) || number < 0 || number > 0x10ffff ||
-		number >= 0xd800 && number <= 0xdfff
+		!Number.isInteger(number) ||
+		number < 0 ||
+		number > 0x10ffff ||
+		(number >= 0xd800 && number <= 0xdfff)
 	) {
 		throw new Error("OPML contains an invalid numeric XML entity");
 	}

@@ -56,9 +56,7 @@ export interface AcceptanceFixture {
 	state: GraphStateSnapshot;
 }
 
-export function createAcceptanceFixture(
-	input: AcceptanceFixtureOptions,
-): AcceptanceFixture {
+export function createAcceptanceFixture(input: AcceptanceFixtureOptions): AcceptanceFixture {
 	const options = validateOptions(input);
 	const baseline = createBaselineFixture({
 		profile: "baseline",
@@ -66,18 +64,10 @@ export function createAcceptanceFixture(
 		seed: options.seed,
 	});
 
-	const { state: shapedState, metadata } = applyAcceptanceShape(
-		baseline.state,
-		options.shape,
-	);
+	const { state: shapedState, metadata } = applyAcceptanceShape(baseline.state, options.shape);
 	const sameTime = fixtureTime(options.timeShape);
 	const timed = applyTextOptions(shapedState, options, sameTime);
-	const { branches, revisions } = createBranchesAndRevisions(
-		shapedState,
-		timed,
-		options,
-		sameTime,
-	);
+	const { branches, revisions } = createBranchesAndRevisions(shapedState, timed, options, sameTime);
 	const links = createAcceptanceLinks(options, timed.works, sameTime);
 	const knots = createFixtureKnots(shapedState, metadata.cycleSize);
 	const state = validatedGraphStateSnapshot({
@@ -155,9 +145,10 @@ function createBranchesAndRevisions(
 					id,
 					workId: work.id,
 					text: copy.text,
-					parentRevisionIds: revisionIndex === 0
-						? []
-						: [fixtureId(options.seed, REVISION_FIXTURE_ID_KIND, index - 1)],
+					parentRevisionIds:
+						revisionIndex === 0
+							? []
+							: [fixtureId(options.seed, REVISION_FIXTURE_ID_KIND, index - 1)],
 					kind: "checkpoint",
 					createdAt: sameTime ?? fixtureTimestamp(index),
 				});
@@ -271,7 +262,9 @@ function validateOptions(input: AcceptanceFixtureOptions): NormalizedOptions {
 	};
 }
 
-function validateAxisOptions(input: AcceptanceFixtureOptions): Pick<
+function validateAxisOptions(
+	input: AcceptanceFixtureOptions,
+): Pick<
 	NormalizedOptions,
 	"bodyBytes" | "revisionsPerWork" | "linkMultiplier" | "timeShape" | "hub"
 > {

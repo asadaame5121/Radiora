@@ -10,15 +10,14 @@ import {
 const lineArbitrary = fc.string({ maxLength: 24 }).filter((line) => !/[\r\n]/.test(line));
 const textArbitrary = fc.array(lineArbitrary, { maxLength: 12 }).chain((lines) => {
 	if (lines.length === 0) return fc.constant("");
-	return fc.array(fc.constantFrom("\n", "\r\n", "\r"), {
-		minLength: lines.length - 1,
-		maxLength: lines.length - 1,
-	}).map((separators) =>
-		lines.slice(1).reduce(
-			(text, line, index) => `${text}${separators[index]}${line}`,
-			lines[0],
-		)
-	);
+	return fc
+		.array(fc.constantFrom("\n", "\r\n", "\r"), {
+			minLength: lines.length - 1,
+			maxLength: lines.length - 1,
+		})
+		.map((separators) =>
+			lines.slice(1).reduce((text, line, index) => `${text}${separators[index]}${line}`, lines[0]),
+		);
 });
 
 function normalizeLineEndings(text: string): string {
@@ -64,14 +63,17 @@ Deno.test("Revision text diff is stable for identical Japanese text and line end
 Deno.test("Revision text diff preserves added and removed blank lines", () => {
 	const nodes = diffRevisionText("一行目\n\n旧しい行\n末尾", "一行目\n新しい行\n\n末尾\n");
 
-	assertEquals(nodes.map(({ kind, text }) => ({ kind, text })), [
-		{ kind: "equal", text: "一行目" },
-		{ kind: "add", text: "新しい行" },
-		{ kind: "equal", text: "" },
-		{ kind: "remove", text: "旧しい行" },
-		{ kind: "equal", text: "末尾" },
-		{ kind: "add", text: "" },
-	]);
+	assertEquals(
+		nodes.map(({ kind, text }) => ({ kind, text })),
+		[
+			{ kind: "equal", text: "一行目" },
+			{ kind: "add", text: "新しい行" },
+			{ kind: "equal", text: "" },
+			{ kind: "remove", text: "旧しい行" },
+			{ kind: "equal", text: "末尾" },
+			{ kind: "add", text: "" },
+		],
+	);
 });
 
 Deno.test("Revision text diff deterministically emits a replacement as remove then add", () => {
@@ -79,24 +81,25 @@ Deno.test("Revision text diff deterministically emits a replacement as remove th
 	const second = diffRevisionText("同じ\n左だけ\n同じ", "同じ\n右だけ\n同じ");
 
 	assertEquals(first, second);
-	assertEquals(first.map(({ kind, text }) => ({ kind, text })), [
-		{ kind: "equal", text: "同じ" },
-		{ kind: "remove", text: "左だけ" },
-		{ kind: "add", text: "右だけ" },
-		{ kind: "equal", text: "同じ" },
-	]);
+	assertEquals(
+		first.map(({ kind, text }) => ({ kind, text })),
+		[
+			{ kind: "equal", text: "同じ" },
+			{ kind: "remove", text: "左だけ" },
+			{ kind: "add", text: "右だけ" },
+			{ kind: "equal", text: "同じ" },
+		],
+	);
 });
 
 Deno.test("Revision text diff represents empty and newly populated bodies", () => {
 	assertEquals(diffRevisionText("", ""), []);
-	assertEquals(
-		diffRevisionText("", "新しい本文"),
-		[{ kind: "add", text: "新しい本文", rightLineNumber: 1 }],
-	);
-	assertEquals(
-		diffRevisionText("削除する本文", ""),
-		[{ kind: "remove", text: "削除する本文", leftLineNumber: 1 }],
-	);
+	assertEquals(diffRevisionText("", "新しい本文"), [
+		{ kind: "add", text: "新しい本文", rightLineNumber: 1 },
+	]);
+	assertEquals(diffRevisionText("削除する本文", ""), [
+		{ kind: "remove", text: "削除する本文", leftLineNumber: 1 },
+	]);
 });
 
 Deno.test("Property: revision diff reconstructs both normalized source texts", () => {

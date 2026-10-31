@@ -99,14 +99,17 @@ Deno.test("Snapshot retention fixes the 7-day, 30-day, and 1-year boundaries", (
 	];
 
 	const decision = policy.decideRetention({ snapshots, now });
-	assertEquals(decision.keep.map((candidate) => candidate.id), [
-		"after-one-year",
-		"one-year",
-		"after-thirty-days",
-		"thirty-days",
-		"after-seven-days",
-		"seven-days",
-	]);
+	assertEquals(
+		decision.keep.map((candidate) => candidate.id),
+		[
+			"after-one-year",
+			"one-year",
+			"after-thirty-days",
+			"thirty-days",
+			"after-seven-days",
+			"seven-days",
+		],
+	);
 	assertEquals(decision.prune, []);
 });
 
@@ -124,19 +127,14 @@ Deno.test("Snapshot retention keeps the last unprotected Snapshot in each UTC bu
 	];
 
 	const decision = policy.decideRetention({ snapshots, now });
-	assertEquals(decision.keep.map((candidate) => candidate.id), [
-		"month-last",
-		"month-next",
-		"day-last",
-		"day-next",
-		"hour-last",
-		"hour-next",
-	]);
-	assertEquals(decision.prune.map((candidate) => candidate.id), [
-		"month-early",
-		"day-early",
-		"hour-early",
-	]);
+	assertEquals(
+		decision.keep.map((candidate) => candidate.id),
+		["month-last", "month-next", "day-last", "day-next", "hour-last", "hour-next"],
+	);
+	assertEquals(
+		decision.prune.map((candidate) => candidate.id),
+		["month-early", "day-early", "hour-early"],
+	);
 });
 
 Deno.test("Snapshot retention preserves named and active protection outside representative slots", () => {
@@ -160,12 +158,14 @@ Deno.test("Snapshot retention preserves named and active protection outside repr
 	];
 
 	const decision = policy.decideRetention({ snapshots, now });
-	assertEquals(decision.keep.map((candidate) => candidate.id), [
-		"named",
-		"protected",
-		"hour-last",
-	]);
-	assertEquals(decision.prune.map((candidate) => candidate.id), ["expired"]);
+	assertEquals(
+		decision.keep.map((candidate) => candidate.id),
+		["named", "protected", "hour-last"],
+	);
+	assertEquals(
+		decision.prune.map((candidate) => candidate.id),
+		["expired"],
+	);
 });
 
 Deno.test("Snapshot retention isolates buckets per Working Copy and ignores input order", () => {
@@ -187,14 +187,12 @@ Deno.test("Snapshot retention isolates buckets per Working Copy and ignores inpu
 	const forward = policy.decideRetention({ snapshots, now });
 	const reversed = policy.decideRetention({ snapshots: snapshots.toReversed(), now });
 	assertEquals(forward, reversed);
-	assertEquals(forward.keep.map((candidate) => candidate.id), [
-		"branch-a-last",
-		"branch-b-last",
-		"work-b-last",
-	]);
-	assertEquals(forward.prune.map((candidate) => candidate.id), [
-		"branch-a-early",
-		"branch-b-early",
-		"work-b-early",
-	]);
+	assertEquals(
+		forward.keep.map((candidate) => candidate.id),
+		["branch-a-last", "branch-b-last", "work-b-last"],
+	);
+	assertEquals(
+		forward.prune.map((candidate) => candidate.id),
+		["branch-a-early", "branch-b-early", "work-b-early"],
+	);
 });

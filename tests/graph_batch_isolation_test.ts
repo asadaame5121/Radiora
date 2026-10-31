@@ -82,7 +82,7 @@ for (const [name, createStore] of Object.entries(factories)) {
 					await ops.moveItem({ id: root.id, parentId: child.id });
 					await ops.updateItemText(child.id, "partial write");
 					throw new Error("later operation failed");
-				})
+				}),
 			);
 			assertEquals(await store.exportGraphState(), before);
 			if (name !== "memory") {
@@ -232,7 +232,10 @@ Deno.test("JSON batch commit failure preserves the old file and rolls back befor
 		assertEquals(await store.exportGraphState(), before);
 		assertEquals(stateAtCleanup, before);
 		assertEquals(await Deno.readTextFile(path), disk);
-		assertEquals(Array.from(Deno.readDirSync(dir), (entry) => entry.name), ["graph.json"]);
+		assertEquals(
+			Array.from(Deno.readDirSync(dir), (entry) => entry.name),
+			["graph.json"],
+		);
 	} finally {
 		await store.close();
 		await Deno.remove(dir, { recursive: true });

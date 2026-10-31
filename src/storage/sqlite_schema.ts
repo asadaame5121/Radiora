@@ -20,13 +20,15 @@ export const SQLITE_RECORD_TABLES = [
 	"relation_type_definition",
 ] as const;
 
-const RECORD_TABLE_DDL = SQLITE_RECORD_TABLES.map((table) => `
+const RECORD_TABLE_DDL = SQLITE_RECORD_TABLES.map(
+	(table) => `
 	CREATE TABLE IF NOT EXISTS ${table} (
 		id TEXT PRIMARY KEY CHECK (length(id) > 0),
 		position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
 		payload TEXT NOT NULL CHECK (json_valid(payload))
 	) STRICT;
-	CREATE INDEX IF NOT EXISTS idx_${table}_position ON ${table}(position);`).join("\n");
+	CREATE INDEX IF NOT EXISTS idx_${table}_position ON ${table}(position);`,
+).join("\n");
 
 export const SQLITE_SCHEMA_SQL = `
 PRAGMA foreign_keys = ON;

@@ -49,14 +49,14 @@ Deno.test("createAcceptanceFixture is deterministic for identical options", () =
 Deno.test("createAcceptanceFixture validates options strictly", () => {
 	assertThrows(() => createAcceptanceFixture({ seed: -1, nodeCount: 1_000, shape: "balanced" }));
 	assertThrows(() =>
-		createAcceptanceFixture({ seed: 42, nodeCount: 500 as unknown as 1_000, shape: "balanced" })
+		createAcceptanceFixture({ seed: 42, nodeCount: 500 as unknown as 1_000, shape: "balanced" }),
 	);
 	assertThrows(() =>
 		createAcceptanceFixture({
 			seed: 42,
 			nodeCount: 1_000,
 			shape: "invalid-shape" as unknown as "balanced",
-		})
+		}),
 	);
 	assertThrows(() =>
 		createAcceptanceFixture({
@@ -64,7 +64,7 @@ Deno.test("createAcceptanceFixture validates options strictly", () => {
 			nodeCount: 1_000,
 			shape: "balanced",
 			bodyBytes: 1024 as unknown as 2048,
-		})
+		}),
 	);
 });
 

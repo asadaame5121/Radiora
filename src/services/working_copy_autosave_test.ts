@@ -153,10 +153,13 @@ Deno.test("A failed save retains newer text while another Branch saves", async (
 		})),
 		[{ branchId: "branch-main", occurrenceId: "latest", text: "latest text" }],
 	);
-	assertEquals(coordinator.statuses().map(({ branchId, phase }) => ({ branchId, phase })), [
-		{ branchId: "branch-main", phase: "failed" },
-		{ branchId: "branch-side", phase: "saved" },
-	]);
+	assertEquals(
+		coordinator.statuses().map(({ branchId, phase }) => ({ branchId, phase })),
+		[
+			{ branchId: "branch-main", phase: "failed" },
+			{ branchId: "branch-side", phase: "saved" },
+		],
+	);
 
 	await coordinator.retry("work");
 	assertEquals(saves, [
@@ -261,5 +264,8 @@ Deno.test("Working Copy autosave keeps Branch drafts independent within one Work
 	coordinator.queue("work", "branch-alternate", "alternate", "alternate text");
 	await coordinator.flush("work");
 
-	assertEquals(saves.sort(), [["alternate", "alternate text"], ["main", "main text"]]);
+	assertEquals(saves.sort(), [
+		["alternate", "alternate text"],
+		["main", "main text"],
+	]);
 });

@@ -89,8 +89,8 @@ export class DateProjectionService {
 			const inRange = isInRange(work.createdAt, start, end)
 				? "created"
 				: isInRange(work.updatedAt, start, end)
-				? "updated"
-				: null;
+					? "updated"
+					: null;
 			if (!inRange) continue;
 			for (const placement of entry.placements) {
 				nodes.push({
@@ -134,8 +134,8 @@ function toEntry(
 	placements: OutlineItem[],
 	itemById: Map<string, OutlineItem>,
 ): DateProjectionEntry {
-	const sorted = [...placements].sort((left, right) =>
-		left.orderKey - right.orderKey || left.id.localeCompare(right.id)
+	const sorted = [...placements].sort(
+		(left, right) => left.orderKey - right.orderKey || left.id.localeCompare(right.id),
 	);
 	return {
 		work,
@@ -185,6 +185,7 @@ function compareEntries(
 	if (Number.isFinite(rightTime) && Number.isFinite(leftTime) && rightTime !== leftTime) {
 		return rightTime - leftTime;
 	}
-	return right.work[field].localeCompare(left.work[field]) ||
-		left.work.id.localeCompare(right.work.id);
+	return (
+		right.work[field].localeCompare(left.work[field]) || left.work.id.localeCompare(right.work.id)
+	);
 }

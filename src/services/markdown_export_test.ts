@@ -81,7 +81,10 @@ Deno.test("selected scope can include only the selected placement", () => {
 		]),
 		selection("selected"),
 	);
-	assertEquals(selected.items.map((entry) => entry.id), ["selected"]);
+	assertEquals(
+		selected.items.map((entry) => entry.id),
+		["selected"],
+	);
 	assertEquals(renderOutlineSnapshotMarkdown(selected), "# Selected\n");
 });
 
@@ -95,13 +98,17 @@ Deno.test("selected scope expands ancestors and descendants independently", () =
 		item("sibling", "Sibling", "parent", 1),
 	]);
 	assertEquals(
-		selectMarkdownExportSnapshot(source, selection("selected", { includeAncestors: true }))
-			.items.map((entry) => entry.id),
+		selectMarkdownExportSnapshot(
+			source,
+			selection("selected", { includeAncestors: true }),
+		).items.map((entry) => entry.id),
 		["root", "parent", "selected"],
 	);
 	assertEquals(
-		selectMarkdownExportSnapshot(source, selection("selected", { includeDescendants: true }))
-			.items.map((entry) => entry.id),
+		selectMarkdownExportSnapshot(
+			source,
+			selection("selected", { includeDescendants: true }),
+		).items.map((entry) => entry.id),
 		["selected", "child", "grandchild"],
 	);
 	assertEquals(
@@ -138,12 +145,10 @@ Deno.test("semantic expansion is direct, bidirectional, active, and includes eve
 		source,
 		selection("selected", { includeSemanticNeighbors: true }),
 	);
-	assertEquals(selected.items.map((entry) => entry.id), [
-		"selected",
-		"neighbor-b",
-		"neighbor-a",
-		"incoming",
-	]);
+	assertEquals(
+		selected.items.map((entry) => entry.id),
+		["selected", "neighbor-b", "neighbor-a", "incoming"],
+	);
 	assertEquals(
 		renderOutlineSnapshotMarkdown(selected),
 		"# Selected\n\n# Neighbor A\n\n# Neighbor B\n\n# Incoming\n",
@@ -185,27 +190,24 @@ Deno.test("selection rejects absent selections and tolerates malformed outline r
 	assertThrows(() => selectMarkdownExportSnapshot(source, selection(null)), RangeError);
 	assertThrows(() => selectMarkdownExportSnapshot(source, selection("missing")), RangeError);
 	assertEquals(
-		selectMarkdownExportSnapshot(source, selection("cycle-a", { includeAncestors: true }))
-			.items.map((entry) => entry.id),
+		selectMarkdownExportSnapshot(
+			source,
+			selection("cycle-a", { includeAncestors: true }),
+		).items.map((entry) => entry.id),
 		["cycle-a", "cycle-b"],
 	);
 	assertEquals(
-		selectMarkdownExportSnapshot(source, selection("orphan", { includeAncestors: true }))
-			.items.map((entry) => entry.id),
+		selectMarkdownExportSnapshot(source, selection("orphan", { includeAncestors: true })).items.map(
+			(entry) => entry.id,
+		),
 		["orphan"],
 	);
-	assertEquals(
-		selectMarkdownExportSnapshot(source, selection("duplicate")).items.length,
-		1,
-	);
+	assertEquals(selectMarkdownExportSnapshot(source, selection("duplicate")).items.length, 1);
 });
 
 Deno.test("Markdown export selection does not mutate its input", () => {
 	const source = snapshot(
-		[
-			item("root", "Root", null, 0),
-			item("selected", "Selected", "root", 0),
-		],
+		[item("root", "Root", null, 0), item("selected", "Selected", "root", 0)],
 		["selected"],
 		[link("self", "work-selected", "work-selected")],
 	);
@@ -221,12 +223,14 @@ Deno.test("Markdown export selection does not mutate its input", () => {
 });
 
 Deno.test("Markdown export follows stable parent and orderKey hierarchy", () => {
-	const markdown = renderOutlineSnapshotMarkdown(snapshot([
-		item("later", "Later\nlater body", null, 2),
-		item("child-b", "Child B", "root", 2),
-		item("root", "Root\nroot body", null, 1),
-		item("child-a", "Child A\nchild body", "root", 1),
-	]));
+	const markdown = renderOutlineSnapshotMarkdown(
+		snapshot([
+			item("later", "Later\nlater body", null, 2),
+			item("child-b", "Child B", "root", 2),
+			item("root", "Root\nroot body", null, 1),
+			item("child-a", "Child A\nchild body", "root", 1),
+		]),
+	);
 	assertEquals(
 		markdown,
 		[
@@ -249,15 +253,17 @@ Deno.test("Markdown export follows stable parent and orderKey hierarchy", () => 
 });
 
 Deno.test("contextual heading is preferred without dropping any original text", () => {
-	const markdown = renderOutlineSnapshotMarkdown(snapshot([
-		item(
-			"occurrence",
-			"\nOriginal first line\nradiora://work/work-2\nLast line",
-			null,
-			0,
-			"Placement heading",
-		),
-	]));
+	const markdown = renderOutlineSnapshotMarkdown(
+		snapshot([
+			item(
+				"occurrence",
+				"\nOriginal first line\nradiora://work/work-2\nLast line",
+				null,
+				0,
+				"Placement heading",
+			),
+		]),
+	);
 	assertEquals(
 		markdown,
 		"# Placement heading\n\n\nOriginal first line\nradiora://work/work-2\nLast line\n",
@@ -265,10 +271,8 @@ Deno.test("contextual heading is preferred without dropping any original text", 
 });
 
 Deno.test("depth beyond Markdown heading level six remains explicit", () => {
-	const items = Array.from(
-		{ length: 8 },
-		(_, index) =>
-			item(`item-${index}`, `Level ${index + 1}`, index ? `item-${index - 1}` : null, 0),
+	const items = Array.from({ length: 8 }, (_, index) =>
+		item(`item-${index}`, `Level ${index + 1}`, index ? `item-${index - 1}` : null, 0),
 	);
 	const markdown = renderOutlineSnapshotMarkdown(snapshot(items));
 	assertStringIncludes(markdown, "###### Level 6");
@@ -277,25 +281,28 @@ Deno.test("depth beyond Markdown heading level six remains explicit", () => {
 });
 
 Deno.test("cycles, orphans, duplicate IDs, and stash placements are all exported once", () => {
-	const markdown = renderOutlineSnapshotMarkdown(snapshot([
-		item("cycle-a", "Cycle A", "cycle-b", 2),
-		item("cycle-b", "Cycle B", "cycle-a", 1),
-		item("orphan", "Orphan", "missing", 0),
-		item("duplicate", "Duplicate first", null, 4),
-		item("duplicate", "Duplicate second", null, 5),
-		item("stash", "Stashed\nkept", null, 3),
-	], ["cycle-a", "stash"]));
-	for (
-		const content of [
-			"Cycle A",
-			"Cycle B",
-			"Orphan",
-			"Duplicate first",
-			"Duplicate second",
-			"Stashed",
-			"kept",
-		]
-	) {
+	const markdown = renderOutlineSnapshotMarkdown(
+		snapshot(
+			[
+				item("cycle-a", "Cycle A", "cycle-b", 2),
+				item("cycle-b", "Cycle B", "cycle-a", 1),
+				item("orphan", "Orphan", "missing", 0),
+				item("duplicate", "Duplicate first", null, 4),
+				item("duplicate", "Duplicate second", null, 5),
+				item("stash", "Stashed\nkept", null, 3),
+			],
+			["cycle-a", "stash"],
+		),
+	);
+	for (const content of [
+		"Cycle A",
+		"Cycle B",
+		"Orphan",
+		"Duplicate first",
+		"Duplicate second",
+		"Stashed",
+		"kept",
+	]) {
 		assertEquals(markdown.split(content).length - 1, 1);
 	}
 	assertStringIncludes(markdown, "[Stash] Cycle A");
@@ -352,8 +359,5 @@ Deno.test("Obsidian export rewrites only resolved references and preserves unres
 Deno.test("portable export rewrites multiple escaped canonical labels without range drift", () => {
 	const markdown =
 		"[表示 \\[一\\]](radiora://work/work-1) / [A \\\\ B](radiora://revision/revision-1)";
-	assertEquals(
-		rewriteMarkdownExportReferences(markdown, "portable"),
-		"表示 \\[一\\] / A \\\\ B",
-	);
+	assertEquals(rewriteMarkdownExportReferences(markdown, "portable"), "表示 \\[一\\] / A \\\\ B");
 });

@@ -27,7 +27,7 @@ Deno.test("resume autosave debounces to the latest caret", async () => {
 Deno.test("resume autosave serializes in-flight writes and finishes with the latest value", async () => {
 	const saves: Array<[string, number]> = [];
 	let releaseFirst!: () => void;
-	const first = new Promise<void>((resolve) => releaseFirst = resolve);
+	const first = new Promise<void>((resolve) => (releaseFirst = resolve));
 	const coordinator = new ResumePositionAutosaveCoordinator({
 		save: (occurrenceId, caretOffset) => {
 			saves.push([occurrenceId, caretOffset]);
@@ -43,5 +43,8 @@ Deno.test("resume autosave serializes in-flight writes and finishes with the lat
 	releaseFirst();
 	await flushing;
 
-	assertEquals(saves, [["occurrence", 1], ["other", 3]]);
+	assertEquals(saves, [
+		["occurrence", 1],
+		["other", 3],
+	]);
 });

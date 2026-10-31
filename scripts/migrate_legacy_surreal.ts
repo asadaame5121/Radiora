@@ -42,8 +42,8 @@ export async function runStandaloneMigration(
 	const dataDir = options.dataDir ?? `${appData}\\RadioraV2`;
 	const surrealDir = `${dataDir}\\surreal`;
 	const sourcePath = options.sourcePath ?? `${surrealDir}\\main.db`;
-	const sourceVersionMarkerPath = options.sourceVersionMarkerPath ??
-		`${surrealDir}\\storage-schema-version`;
+	const sourceVersionMarkerPath =
+		options.sourceVersionMarkerPath ?? `${surrealDir}\\storage-schema-version`;
 	const tursoDir = `${dataDir}\\turso`;
 	const targetPath = options.targetPath ?? `${tursoDir}\\radiora.db`;
 	const markerPath = options.markerPath ?? `${targetPath}.migration.json`;
@@ -53,7 +53,8 @@ export async function runStandaloneMigration(
 	console.log(`  Source: ${sourcePath}`);
 	console.log(`  Target: ${targetPath}`);
 
-	const exporter = options.exportSnapshot ??
+	const exporter =
+		options.exportSnapshot ??
 		((copyPath: string) =>
 			exportLegacySnapshot(copyPath, {
 				onLog: (event, fields, cause) => {

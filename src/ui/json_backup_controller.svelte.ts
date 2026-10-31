@@ -22,23 +22,27 @@ export class JsonBackupController {
 	constructor(private readonly ports: JsonBackupPorts) {}
 
 	export = (): Promise<void> =>
-		this.operation.run(this.ports.flush, async (current) => {
-			const source = await this.ports.api.exportJsonBackup();
-			if (!current()) {
-				return;
-			}
-			downloadTextFile(
-				source,
-				"application/json;charset=utf-8",
-				`radiora-backup-${localDateValue(new Date())}.json`,
-			);
-			return `${this.ports.vocabulary.jsonBackupExportSuccess}。`;
-		}, (cause) =>
-			this.ports.reportError(
-				`${this.ports.vocabulary.jsonBackupExport}ことができませんでした: ${
-					this.ports.errorMessage(cause)
-				}`,
-			));
+		this.operation.run(
+			this.ports.flush,
+			async (current) => {
+				const source = await this.ports.api.exportJsonBackup();
+				if (!current()) {
+					return;
+				}
+				downloadTextFile(
+					source,
+					"application/json;charset=utf-8",
+					`radiora-backup-${localDateValue(new Date())}.json`,
+				);
+				return `${this.ports.vocabulary.jsonBackupExportSuccess}。`;
+			},
+			(cause) =>
+				this.ports.reportError(
+					`${this.ports.vocabulary.jsonBackupExport}ことができませんでした: ${this.ports.errorMessage(
+						cause,
+					)}`,
+				),
+		);
 
 	restore = (file: Pick<File, "text">): Promise<void> =>
 		this.operation.runFile(
@@ -50,14 +54,14 @@ export class JsonBackupController {
 				await this.ports.relations.load(current);
 				if (!current()) return;
 				this.ports.tree.reconcileRelations(this.ports.relations.names, true);
-				if (!await this.ports.reload(current) || !current()) return;
+				if (!(await this.ports.reload(current)) || !current()) return;
 				return `${this.ports.vocabulary.jsonBackupRestoreSuccess}: ${result.workCount}件の${this.ports.vocabulary.work}。`;
 			},
 			(cause) =>
 				this.ports.reportError(
-					`${this.ports.vocabulary.jsonBackupRestore}に失敗しました: ${
-						this.ports.errorMessage(cause)
-					} ${this.ports.vocabulary.jsonBackupRestoreFailureRecovery}`,
+					`${this.ports.vocabulary.jsonBackupRestore}に失敗しました: ${this.ports.errorMessage(
+						cause,
+					)} ${this.ports.vocabulary.jsonBackupRestoreFailureRecovery}`,
 				),
 		);
 

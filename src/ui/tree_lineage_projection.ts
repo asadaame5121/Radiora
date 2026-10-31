@@ -40,8 +40,10 @@ function generationGraph(
 	for (const link of snapshot.links) {
 		if (
 			!isRelationTypeAdvancesGeneration(link.type, definitions) ||
-			!visible.has(link.fromId) || !visible.has(link.toId)
-		) continue;
+			!visible.has(link.fromId) ||
+			!visible.has(link.toId)
+		)
+			continue;
 		children.get(link.fromId)?.add(link.toId);
 		parents.get(link.toId)?.add(link.fromId);
 	}

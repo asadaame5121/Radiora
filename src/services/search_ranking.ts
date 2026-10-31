@@ -195,7 +195,9 @@ function scoreCandidate(input: {
 	return {
 		item: input.candidate.item,
 		ancestorIds: ancestorsOf(input.candidate.item, input.byId),
-		score: LEXICAL_WEIGHT * input.candidate.lexical + GRAPH_WEIGHT * graph.score +
+		score:
+			LEXICAL_WEIGHT * input.candidate.lexical +
+			GRAPH_WEIGHT * graph.score +
 			EXPANSION_WEIGHT * input.candidate.expansion,
 		reasons: [...input.candidate.reasons, ...graph.reasons],
 	};
@@ -234,7 +236,7 @@ function indirectGraphScore(
 		: [];
 	const contextAncestors = new Set(ancestorsOf(input.context, input.byId));
 	const sharesAncestor = ancestorsOf(input.candidate.item, input.byId).some((id) =>
-		contextAncestors.has(id)
+		contextAncestors.has(id),
 	);
 	if (sharesAncestor && score < SHARED_ANCESTOR_SCORE) {
 		score = SHARED_ANCESTOR_SCORE;

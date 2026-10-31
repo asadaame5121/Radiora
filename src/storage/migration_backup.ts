@@ -36,7 +36,7 @@ export async function restoreStorageMigrationBackup(
 	const sourceVersion = backupSourceVersion(backupPath);
 
 	const restorePath = `${databasePath}.restore-${crypto.randomUUID()}`;
-	const failedDatabasePath = await exists(databasePath)
+	const failedDatabasePath = (await exists(databasePath))
 		? `${databasePath}.migration-failed-${crypto.randomUUID()}`
 		: null;
 
@@ -52,11 +52,7 @@ export async function restoreStorageMigrationBackup(
 		return { databasePath, failedDatabasePath };
 	} catch (cause) {
 		await removeIfExists(restorePath, true);
-		if (
-			failedDatabasePath &&
-			!(await exists(databasePath)) &&
-			await exists(failedDatabasePath)
-		) {
+		if (failedDatabasePath && !(await exists(databasePath)) && (await exists(failedDatabasePath))) {
 			await Deno.rename(failedDatabasePath, databasePath);
 		}
 		throw cause;

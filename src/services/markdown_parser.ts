@@ -149,7 +149,8 @@ export function rewriteCanonicalInternalReferences(
 			raw: source.slice(reference.range.start, reference.range.end),
 		});
 		if (replacement === null) continue;
-		rewritten = rewritten.slice(0, reference.range.start) +
+		rewritten =
+			rewritten.slice(0, reference.range.start) +
 			replacement +
 			rewritten.slice(reference.range.end);
 	}

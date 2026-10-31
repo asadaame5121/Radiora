@@ -49,9 +49,7 @@ const expectedPorts: Record<string, string[]> = {
 };
 
 for (const [fileName, ports] of Object.entries(expectedPorts)) {
-	const source = await Deno.readTextFile(
-		new URL(`../src/services/${fileName}`, import.meta.url),
-	);
+	const source = await Deno.readTextFile(new URL(`../src/services/${fileName}`, import.meta.url));
 	Deno.test(`${fileName} depends on feature-specific store ports`, () => {
 		assertStringIncludes(source, "../storage/graph_store.ts");
 		assert(!/\bGraphStore\b/.test(source));

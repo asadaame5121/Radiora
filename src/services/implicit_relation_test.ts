@@ -2,11 +2,7 @@ import { assertEquals } from "jsr:@std/assert@1";
 import type { OutlineItem, OutlineLink } from "../domain/models.ts";
 import { mergeImplicitFromLinks } from "./implicit_relation.ts";
 
-function createItem(
-	id: string,
-	workId: string,
-	parentId: string | null = null,
-): OutlineItem {
+function createItem(id: string, workId: string, parentId: string | null = null): OutlineItem {
 	return {
 		id,
 		workId,
@@ -152,7 +148,10 @@ Deno.test("implicit relation: treats Unicode-equivalent Work IDs as distinct and
 
 	const result = mergeImplicitFromLinks(items, explicitLinks);
 
-	assertEquals(result.map((link) => link.id), ["link-1"]);
+	assertEquals(
+		result.map((link) => link.id),
+		["link-1"],
+	);
 });
 
 Deno.test("implicit relation: generates implicit FROM when explicit link is retracted", () => {

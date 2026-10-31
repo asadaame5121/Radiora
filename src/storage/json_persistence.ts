@@ -144,9 +144,7 @@ export class JsonPersistence<Savepoint = GraphStateSnapshot> {
 			if (current.kind === "batch") {
 				return await operation();
 			}
-			return Promise.reject(
-				new Error("Cannot start batch inside active persistence operation"),
-			);
+			return Promise.reject(new Error("Cannot start batch inside active persistence operation"));
 		}
 		return await this.enqueue(async () => {
 			const before = this.memory.capture();

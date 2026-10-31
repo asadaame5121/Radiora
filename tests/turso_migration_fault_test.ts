@@ -177,11 +177,9 @@ Deno.test("migration cleans up temporary migrating DB when target validation fai
 	invalidSnapshot.occurrences[0].workId = crypto.randomUUID();
 
 	try {
-		await assertRejects(
-			async () => {
-				await importGraphStateToTurso(invalidSnapshot, target);
-			},
-		);
+		await assertRejects(async () => {
+			await importGraphStateToTurso(invalidSnapshot, target);
+		});
 
 		// Target database must not exist
 		let targetExists = false;

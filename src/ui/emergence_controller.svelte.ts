@@ -28,7 +28,7 @@ function createEmergenceToastController(titleForId: (id: string) => string) {
 			return content;
 		},
 		notify,
-		dismiss: () => content = null,
+		dismiss: () => (content = null),
 	};
 }
 
@@ -72,8 +72,9 @@ export function createEmergenceController(ports: EmergenceControllerPorts) {
 			const next = await ports.api.listEmergenceSuggestions(contextItemId, 10);
 			if (request !== loadRequest || ports.getSelectedId() !== contextItemId) return;
 			suggestions = next;
-			const unseen = next.filter((suggestion) =>
-				suggestion.persistenceStatus === "pending" && !notifiedIds.has(suggestion.id)
+			const unseen = next.filter(
+				(suggestion) =>
+					suggestion.persistenceStatus === "pending" && !notifiedIds.has(suggestion.id),
 			);
 			for (const suggestion of next) notifiedIds.add(suggestion.id);
 			if (unseen.length) toastController.notify(unseen);

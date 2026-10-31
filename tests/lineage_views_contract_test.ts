@@ -8,9 +8,7 @@ Deno.test("global and selected Work lineage have separate UI responsibilities", 
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
 	const global = await readUi("GlobalLineage.svelte");
 	const displayed = await readUi("GlobalLineageDisplayedPane.svelte");
-	const work = await Deno.readTextFile(
-		new URL("../src/ui/WorkLineage.svelte", import.meta.url),
-	);
+	const work = await Deno.readTextFile(new URL("../src/ui/WorkLineage.svelte", import.meta.url));
 
 	for (const view of ['"outline"', '"today"', '"unplaced"', '"globalLineage"', '"workLineage"']) {
 		assert(app.includes(view));
@@ -190,9 +188,7 @@ Deno.test("lineage UI labels come from UiVocabulary", async () => {
 	const global = await Deno.readTextFile(
 		new URL("../src/ui/GlobalLineage.svelte", import.meta.url),
 	);
-	const work = await Deno.readTextFile(
-		new URL("../src/ui/WorkLineage.svelte", import.meta.url),
-	);
+	const work = await Deno.readTextFile(new URL("../src/ui/WorkLineage.svelte", import.meta.url));
 
 	for (const component of [global, work]) {
 		assert(component.includes("useUiVocabulary()"));

@@ -192,10 +192,7 @@ Deno.test("applyAcceptanceShape preserves IDs, works, text, links and updates pa
 			assertEquals(result.metadata.rootCount, 1);
 			assertEquals(result.metadata.maximumDepth, 999);
 			assertEquals(result.state.occurrences[0].parentOccurrenceId, null);
-			assertEquals(
-				result.state.occurrences[1].parentOccurrenceId,
-				result.state.occurrences[0].id,
-			);
+			assertEquals(result.state.occurrences[1].parentOccurrenceId, result.state.occurrences[0].id);
 			assertEquals(
 				result.state.occurrences[999].parentOccurrenceId,
 				result.state.occurrences[998].id,

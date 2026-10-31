@@ -66,7 +66,7 @@ let cachedDatabaseSync: RawDatabaseSyncConstructor | null = null;
 async function loadDatabaseSync(): Promise<RawDatabaseSyncConstructor> {
 	if (cachedDatabaseSync) return cachedDatabaseSync;
 	const specifier = "node:sqlite";
-	const mod = await import(specifier) as { DatabaseSync: RawDatabaseSyncConstructor };
+	const mod = (await import(specifier)) as { DatabaseSync: RawDatabaseSyncConstructor };
 	cachedDatabaseSync = mod.DatabaseSync;
 	return cachedDatabaseSync;
 }
@@ -153,8 +153,11 @@ export function isRecord(value: unknown): value is UnknownRecord {
 }
 
 export function hasPersistedState(state: GraphStateSnapshot): boolean {
-	return Object.values(state).some((value) => Array.isArray(value) && value.length > 0) ||
-		Object.keys(state.emergenceFeedback).length > 0 || state.resumePosition !== null;
+	return (
+		Object.values(state).some((value) => Array.isArray(value) && value.length > 0) ||
+		Object.keys(state.emergenceFeedback).length > 0 ||
+		state.resumePosition !== null
+	);
 }
 
 export const RECORD_SCHEMAS: Record<RecordTable, v.GenericSchema> = {
@@ -384,10 +387,7 @@ export function calculateSqliteDiff(
 	return diff;
 }
 
-export function applySqliteDiffOperations(
-	diff: SqliteDiffOperations,
-	db: SqliteDatabase,
-): void {
+export function applySqliteDiffOperations(diff: SqliteDiffOperations, db: SqliteDatabase): void {
 	if (diff.deletes.length === 0 && diff.upserts.length === 0) return;
 
 	db.transaction((txn) => {
@@ -425,9 +425,6 @@ export function persistSqliteDiff(
 	applySqliteDiffOperations(diff, db);
 }
 
-export function persistSqliteState(
-	state: GraphStateSnapshot,
-	db: SqliteDatabase,
-): void {
+export function persistSqliteState(state: GraphStateSnapshot, db: SqliteDatabase): void {
 	persistSqliteDiff(null, state, db);
 }

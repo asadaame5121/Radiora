@@ -21,7 +21,7 @@ export function applyWorkTrash(
 	deletedAt: string,
 ): void {
 	state.works = state.works.map((work) =>
-		work.id === workId ? { ...work, deletedAt, updatedAt: deletedAt } : work
+		work.id === workId ? { ...work, deletedAt, updatedAt: deletedAt } : work,
 	);
 }
 
@@ -54,10 +54,7 @@ function cleanupOrphanOccurrences(
 	}
 }
 
-export function applyWorkPurge(
-	state: MutableWorkLifecycleState,
-	workId: string,
-): PurgeManifest {
+export function applyWorkPurge(state: MutableWorkLifecycleState, workId: string): PurgeManifest {
 	const work = state.works.find((candidate) => candidate.id === workId);
 	if (!work?.deletedAt) {
 		throw new Error(`Work must be in trash before it can be purged: ${workId}`);
@@ -93,17 +90,17 @@ function purgeAssociatedEntities(
 ): void {
 	state.works = state.works.filter((work) => work.id !== workId);
 	state.branches = state.branches.filter((branch) => branch.workId !== workId);
-	state.workingCopies = state.workingCopies.filter((copy) =>
-		copy.workId !== workId && !branchIds.has(copy.branchId)
+	state.workingCopies = state.workingCopies.filter(
+		(copy) => copy.workId !== workId && !branchIds.has(copy.branchId),
 	);
 	state.revisions = state.revisions.filter((revision) => revision.workId !== workId);
-	state.recoverySnapshots = state.recoverySnapshots.filter((snapshot) =>
-		snapshot.workId !== workId
+	state.recoverySnapshots = state.recoverySnapshots.filter(
+		(snapshot) => snapshot.workId !== workId,
 	);
 	state.bookmarks = state.bookmarks.filter((bookmark) => bookmark.workId !== workId);
 	if (state.resumePosition?.workId === workId) state.resumePosition = null;
 	state.occurrences = state.occurrences.filter((occurrence) => occurrence.workId !== workId);
-	state.links = state.links.filter((link) =>
-		link.from.workId !== workId && link.to.workId !== workId
+	state.links = state.links.filter(
+		(link) => link.from.workId !== workId && link.to.workId !== workId,
 	);
 }

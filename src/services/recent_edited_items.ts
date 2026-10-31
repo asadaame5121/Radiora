@@ -15,11 +15,7 @@ interface TopEntry {
 }
 
 function compareEntries(a: TopEntry, b: TopEntry): number {
-	return (
-		b.time - a.time ||
-		a.item.id.localeCompare(b.item.id) ||
-		a.inputIndex - b.inputIndex
-	);
+	return b.time - a.time || a.item.id.localeCompare(b.item.id) || a.inputIndex - b.inputIndex;
 }
 
 function normalizeLimit(rawLimit?: number): number {
@@ -58,9 +54,8 @@ export function rankRecentEditedItems(options: RankRecentEditedItemsOptions): Ou
 	const limit = normalizeLimit(options.limit);
 	if (limit <= 0) return [];
 
-	const stashedIds = options.stashItemIds && options.stashItemIds.length > 0
-		? new Set(options.stashItemIds)
-		: null;
+	const stashedIds =
+		options.stashItemIds && options.stashItemIds.length > 0 ? new Set(options.stashItemIds) : null;
 
 	const top: TopEntry[] = [];
 

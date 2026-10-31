@@ -12,9 +12,7 @@ interface ParseFailure {
 	end: number;
 }
 
-type ParseResult<T> =
-	| { kind: "success"; value: T }
-	| { kind: "failure"; failure: ParseFailure };
+type ParseResult<T> = { kind: "success"; value: T } | { kind: "failure"; failure: ParseFailure };
 
 interface ScannedField {
 	value: string;
@@ -74,9 +72,10 @@ function readEndpoint(
 	field: "source" | "target",
 ): ParseResult<ScannedField> {
 	cursor = skipHorizontalWhitespace(input, cursor);
-	const token = input[cursor] === '"'
-		? readQuoted(input, cursor, offset, field)
-		: readEndpointToken(input, cursor, offset, field);
+	const token =
+		input[cursor] === '"'
+			? readQuoted(input, cursor, offset, field)
+			: readEndpointToken(input, cursor, offset, field);
 	if (token.kind === "failure") return token;
 	cursor = skipHorizontalWhitespace(input, token.value.next);
 	return { kind: "success", value: { value: token.value.value, next: cursor } };
@@ -264,8 +263,15 @@ function syntaxFailure(
 
 function isTokenBoundary(input: string, cursor: number): boolean {
 	const character = input[cursor];
-	return character === " " || character === "\t" || character === "\r" || character === "\n" ||
-		character === "[" || character === "]" || input.startsWith("::", cursor);
+	return (
+		character === " " ||
+		character === "\t" ||
+		character === "\r" ||
+		character === "\n" ||
+		character === "[" ||
+		character === "]" ||
+		input.startsWith("::", cursor)
+	);
 }
 
 function skipHorizontalWhitespace(input: string, cursor: number): number {

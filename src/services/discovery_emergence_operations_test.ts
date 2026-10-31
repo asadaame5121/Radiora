@@ -17,8 +17,8 @@ Deno.test("emergence contract: listing materializes a suggestion and acceptance 
 	await addDiscoveryTestLink(store, "target", "middle-b", "LIKE");
 	const operations = new DiscoveryEmergenceOperations(store, new SearchOperations(store));
 
-	const suggestion = (await operations.listEmergenceSuggestions(context.id)).find((entry) =>
-		entry.targetWorkId === "target"
+	const suggestion = (await operations.listEmergenceSuggestions(context.id)).find(
+		(entry) => entry.targetWorkId === "target",
 	);
 	assert(suggestion);
 	assertEquals(
@@ -40,8 +40,8 @@ Deno.test("emergence contract: productive tension suggests a conservative RELATE
 	await addDiscoveryTestLink(store, "middle", "target", "VS");
 	const operations = new DiscoveryOperations(store);
 
-	const suggestion = (await operations.listEmergenceSuggestions(context.id)).find((entry) =>
-		entry.kind === "productive-tension" && entry.targetWorkId === "target"
+	const suggestion = (await operations.listEmergenceSuggestions(context.id)).find(
+		(entry) => entry.kind === "productive-tension" && entry.targetWorkId === "target",
 	);
 	assert(suggestion);
 	assertEquals(suggestion.proposedLinkType, "RELATED");
@@ -156,7 +156,10 @@ Deno.test("emergence contract: dismissed and accepted suggestions are excluded f
 
 	// Listing again should exclude the dismissed suggestion
 	const afterDismiss = await operations.listEmergenceSuggestions(context.id);
-	assertEquals(afterDismiss.find((s) => s.id === suggestionId), undefined);
+	assertEquals(
+		afterDismiss.find((s) => s.id === suggestionId),
+		undefined,
+	);
 
 	// In store, it persists with dismissed status
 	const persisted = (await store.listEmergenceSuggestions()).find((s) => s.id === suggestionId);

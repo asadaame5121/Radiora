@@ -37,9 +37,10 @@ export class GlobalKeyboardAdapter {
 			return;
 		}
 		const shortcut = shortcutForKeyboardEvent(event);
-		const id = shortcut === "Alt+."
-			? "hoist"
-			: this.ports.bindings.find((binding) => binding.shortcut === shortcut)?.commandId;
+		const id =
+			shortcut === "Alt+."
+				? "hoist"
+				: this.ports.bindings.find((binding) => binding.shortcut === shortcut)?.commandId;
 		if (!id) return;
 		event.preventDefault();
 		event.stopImmediatePropagation();
@@ -58,11 +59,22 @@ export class GlobalKeyboardAdapter {
 		void this.ports.execute(id).catch(this.ports.reportError);
 	}
 	private handleSpecial(event: KeyboardEvent): boolean {
-		const help = (event.key === "F1" && !event.ctrlKey && !event.altKey && !event.shiftKey &&
-			!event.metaKey) ||
-			(event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey &&
+		const help =
+			(event.key === "F1" &&
+				!event.ctrlKey &&
+				!event.altKey &&
+				!event.shiftKey &&
+				!event.metaKey) ||
+			(event.ctrlKey &&
+				event.shiftKey &&
+				!event.altKey &&
+				!event.metaKey &&
 				["/", "?"].includes(event.key));
-		const palette = event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey &&
+		const palette =
+			event.ctrlKey &&
+			!event.altKey &&
+			!event.shiftKey &&
+			!event.metaKey &&
 			event.key.toLowerCase() === "k";
 		if (!help && !palette) return false;
 		// Allow palette toggle/Help from the palette, but suppress unrelated modal dialogs.
@@ -75,9 +87,15 @@ export class GlobalKeyboardAdapter {
 		return true;
 	}
 	private isSpaceToggle(event: KeyboardEvent): boolean {
-		return event.key === " " && !event.ctrlKey && !event.altKey && !event.shiftKey &&
-			!event.metaKey && !isEditableTarget(event.target) &&
-			!(event.target instanceof HTMLElement && event.target.closest("button, a, [role='button']"));
+		return (
+			event.key === " " &&
+			!event.ctrlKey &&
+			!event.altKey &&
+			!event.shiftKey &&
+			!event.metaKey &&
+			!isEditableTarget(event.target) &&
+			!(event.target instanceof HTMLElement && event.target.closest("button, a, [role='button']"))
+		);
 	}
 	connect(target: Window = window): () => void {
 		const cancel = () => this.ports.chord.cancel(false);
@@ -85,7 +103,8 @@ export class GlobalKeyboardAdapter {
 			if (
 				this.ports.chord.open &&
 				!(event.target instanceof Element && event.target.closest("[data-shortcut-navigation]"))
-			) cancel();
+			)
+				cancel();
 		};
 		target.addEventListener("keydown", this.handle, true);
 		target.addEventListener("pointerdown", outside, true);

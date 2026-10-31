@@ -43,8 +43,8 @@ export class QuickCaptureService {
 		const entries: UnplacedWork[] = [];
 		for (const work of works) {
 			if (placed.has(work.id)) continue;
-			const mains = branches.filter((branch) =>
-				branch.workId === work.id && branch.name === "main" && !branch.archivedAt
+			const mains = branches.filter(
+				(branch) => branch.workId === work.id && branch.name === "main" && !branch.archivedAt,
 			);
 			if (mains.length !== 1) {
 				throw new Error(`Expected one active main Branch for Work: ${work.id}`);
@@ -79,10 +79,10 @@ export class QuickCaptureService {
 			}
 		}
 
-		return entries
-			.sort((left, right) =>
-				right.createdAt.localeCompare(left.createdAt) || left.workId.localeCompare(right.workId)
-			);
+		return entries.sort(
+			(left, right) =>
+				right.createdAt.localeCompare(left.createdAt) || left.workId.localeCompare(right.workId),
+		);
 	}
 
 	async updateText(workId: string, text: string): Promise<void> {

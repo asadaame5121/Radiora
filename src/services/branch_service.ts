@@ -146,8 +146,8 @@ export class BranchService {
 		]);
 		const activeWorkIds = new Set(works.map((work) => work.id));
 		for (const work of works) this.#requireUniqueMain(branches, work.id);
-		return branches.filter((branch) =>
-			activeWorkIds.has(branch.workId) && branch.promotedAt && !branch.archivedAt
+		return branches.filter(
+			(branch) => activeWorkIds.has(branch.workId) && branch.promotedAt && !branch.archivedAt,
 		);
 	}
 
@@ -161,9 +161,7 @@ export class BranchService {
 	 * Explicitly promoted Branch heads are returned beside the Work graph so consumers do not
 	 * have to reinterpret a Revision or Branch as a Work node.
 	 */
-	async listGlobalLineage(
-		filter: GlobalLineageFilter,
-	): Promise<GlobalLineageProjection> {
+	async listGlobalLineage(filter: GlobalLineageFilter): Promise<GlobalLineageProjection> {
 		const [works, items, links, revisions, promotedBranches] = await Promise.all([
 			this.store.listWorks(),
 			this.store.listItems(),
@@ -173,11 +171,10 @@ export class BranchService {
 		]);
 		const activeWorkIds = new Set(works.map((work) => work.id));
 		const representativeByWork = new Map<string, OutlineItem>();
-		for (
-			const item of [...items].sort((left, right) =>
-				left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
-			)
-		) {
+		for (const item of [...items].sort(
+			(left, right) =>
+				left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
+		)) {
 			if (activeWorkIds.has(item.workId) && !representativeByWork.has(item.workId)) {
 				representativeByWork.set(item.workId, {
 					...item,
@@ -188,10 +185,11 @@ export class BranchService {
 		}
 
 		const mergedLinks = mergeImplicitFromLinks(items, links);
-		const candidateLinks = mergedLinks.filter((link) =>
-			link.status !== "retracted" &&
-			activeWorkIds.has(link.from.workId) &&
-			activeWorkIds.has(link.to.workId)
+		const candidateLinks = mergedLinks.filter(
+			(link) =>
+				link.status !== "retracted" &&
+				activeWorkIds.has(link.from.workId) &&
+				activeWorkIds.has(link.to.workId),
 		);
 		const filtered = applyGlobalLineageFilter(
 			filter,
@@ -210,16 +208,17 @@ export class BranchService {
 			promotedBranches: promotedBranches
 				.map((branch) => {
 					const headRevision = branch.headRevisionId
-						? revisionById.get(branch.headRevisionId) ?? null
+						? (revisionById.get(branch.headRevisionId) ?? null)
 						: null;
 					if (headRevision && headRevision.workId !== branch.workId) {
 						throw new Error(`Branch head Revision belongs to another Work: ${branch.id}`);
 					}
 					return { branch, headRevision };
 				})
-				.sort((left, right) =>
-					(left.branch.promotedAt ?? "").localeCompare(right.branch.promotedAt ?? "") ||
-					left.branch.id.localeCompare(right.branch.id)
+				.sort(
+					(left, right) =>
+						(left.branch.promotedAt ?? "").localeCompare(right.branch.promotedAt ?? "") ||
+						left.branch.id.localeCompare(right.branch.id),
 				),
 			totalWorkCount: representativeByWork.size,
 			filteredWorkCount: filtered.items.length,
@@ -241,11 +240,13 @@ export class BranchService {
 		this.#requireUniqueMain(branches, workId);
 		return {
 			work,
-			branches: branches.sort((left, right) =>
-				left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+			branches: branches.sort(
+				(left, right) =>
+					left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
 			),
-			revisions: revisions.sort((left, right) =>
-				left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+			revisions: revisions.sort(
+				(left, right) =>
+					left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
 			),
 		};
 	}
@@ -407,10 +408,7 @@ export class BranchService {
 		return mains[0];
 	}
 
-	#requireWorkingCopy(
-		workingCopies: readonly WorkingCopy[],
-		branch: Branch,
-	): WorkingCopy {
+	#requireWorkingCopy(workingCopies: readonly WorkingCopy[], branch: Branch): WorkingCopy {
 		const workingCopy = workingCopies.find((candidate) => candidate.branchId === branch.id);
 		if (!workingCopy || workingCopy.workId !== branch.workId) {
 			throw new Error(`Working Copy not found for Branch: ${branch.id}`);

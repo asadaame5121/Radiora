@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
-test("Palette and screen restoration preserve shared Omni input; Escape clears it", async ({ page }) => {
+test("Palette and screen restoration preserve shared Omni input; Escape clears it", async ({
+	page,
+}) => {
 	await page.goto("/");
 	const input = page.getByRole("combobox", { name: "検索・クイック入力", exact: true });
 	await expect(input).toBeEnabled();

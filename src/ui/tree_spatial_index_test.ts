@@ -22,17 +22,11 @@ Deno.test("tree spatial index returns nodes across cell boundaries", () => {
 
 Deno.test("screen rectangle overlap excludes touching edges", () => {
 	assertEquals(
-		screenRectanglesOverlap(
-			{ x1: 0, y1: 0, x2: 10, y2: 10 },
-			{ x1: 10, y1: 0, x2: 20, y2: 10 },
-		),
+		screenRectanglesOverlap({ x1: 0, y1: 0, x2: 10, y2: 10 }, { x1: 10, y1: 0, x2: 20, y2: 10 }),
 		false,
 	);
 	assertEquals(
-		screenRectanglesOverlap(
-			{ x1: 0, y1: 0, x2: 10, y2: 10 },
-			{ x1: 9, y1: 9, x2: 20, y2: 20 },
-		),
+		screenRectanglesOverlap({ x1: 0, y1: 0, x2: 10, y2: 10 }, { x1: 9, y1: 9, x2: 20, y2: 20 }),
 		true,
 	);
 });

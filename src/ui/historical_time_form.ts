@@ -97,11 +97,13 @@ export function parseHistoricalTimeDraft(draft: HistoricalTimeDraft): Historical
 	const original = draft.original || undefined;
 	return v.parse(
 		HistoricalTimeSchema,
-		draft.kind === "point" ? { kind: "point", date: parseDate(draft.start), original } : {
-			kind: "period",
-			start: draft.start.unknown ? null : parseDate(draft.start),
-			end: draft.end.unknown ? null : parseDate(draft.end),
-			original,
-		},
+		draft.kind === "point"
+			? { kind: "point", date: parseDate(draft.start), original }
+			: {
+					kind: "period",
+					start: draft.start.unknown ? null : parseDate(draft.start),
+					end: draft.end.unknown ? null : parseDate(draft.end),
+					original,
+				},
 	);
 }

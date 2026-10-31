@@ -19,7 +19,8 @@ function failingConnector(point: FailurePoint) {
 			return new NodeSqliteDatabaseAdapter({
 				exec: (sql) => {
 					if (
-						armed && ((point === "begin" && sql === "BEGIN IMMEDIATE") ||
+						armed &&
+						((point === "begin" && sql === "BEGIN IMMEDIATE") ||
 							(point === "commit" && sql === "COMMIT"))
 					) {
 						armed = false;
@@ -30,10 +31,10 @@ function failingConnector(point: FailurePoint) {
 				prepare: (sql) => {
 					const statement = raw.prepare(sql);
 					return {
-						get: (...args: unknown[]) => statement.get(...args as SQLInputValue[]),
-						all: (...args: unknown[]) => statement.all(...args as SQLInputValue[]),
+						get: (...args: unknown[]) => statement.get(...(args as SQLInputValue[])),
+						all: (...args: unknown[]) => statement.all(...(args as SQLInputValue[])),
 						run: (...args: unknown[]) => {
-							const result = statement.run(...args as SQLInputValue[]);
+							const result = statement.run(...(args as SQLInputValue[]));
 							if (armed && point === "statement") {
 								armed = false;
 								throw new Error("injected statement failure");
@@ -230,7 +231,10 @@ Deno.test("SQLite structural occurrence updates reuse the validated local plan i
 			assertStrictEquals(store.occurrenceRecords(), records);
 		});
 		const after = await store.exportGraphState();
-		assertEquals(after.knots.map((knot) => knot.cycleIds), [[item.id]]);
+		assertEquals(
+			after.knots.map((knot) => knot.cycleIds),
+			[[item.id]],
+		);
 		await store.close();
 		const reopened = new SqliteGraphStore(path);
 		try {

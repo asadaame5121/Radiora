@@ -28,9 +28,8 @@ Deno.test("optimistic edits update only placements of the selected Branch", () =
 		"2026-08-12T01:00:00.000Z",
 	);
 
-	assertEquals([main.text, mainMirror.text, alternate.text], [
-		"main text",
-		"main text",
-		"edited alternate",
-	]);
+	assertEquals(
+		[main.text, mainMirror.text, alternate.text],
+		["main text", "main text", "edited alternate"],
+	);
 });

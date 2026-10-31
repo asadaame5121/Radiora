@@ -35,9 +35,7 @@ function createMockTargetedState(): TargetedMutableState {
 				createdAt: "2026-01-01T00:00:00.000Z",
 			},
 		],
-		workingCopies: [
-			{ branchId, workId, text: "hello", updatedAt: "2026-01-01T00:00:00.000Z" },
-		],
+		workingCopies: [{ branchId, workId, text: "hello", updatedAt: "2026-01-01T00:00:00.000Z" }],
 		revisions: [
 			{
 				id: revId,
@@ -56,14 +54,16 @@ function createMockTargetedState(): TargetedMutableState {
 				createdAt: "2026-01-01T00:00:00.000Z",
 			},
 		],
-		occurrences: [{
-			id: occId,
-			workId,
-			parentOccurrenceId: null,
-			orderKey: 10,
-			collapsed: false,
-			revisionSelector: { mode: "branch", branchId },
-		}],
+		occurrences: [
+			{
+				id: occId,
+				workId,
+				parentOccurrenceId: null,
+				orderKey: 10,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId },
+			},
+		],
 		bookmarks: [{ id: "bm-1", workId, occurrenceId: occId, createdAt: "2026-01-01T00:00:00.000Z" }],
 		resumePosition: {
 			workId,

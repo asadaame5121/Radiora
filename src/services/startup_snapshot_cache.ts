@@ -52,51 +52,81 @@ function isStartupSnapshotCache(value: unknown): value is StartupSnapshotCache {
 
 function isOutlineSnapshot(value: unknown): value is OutlineSnapshot {
 	if (!isRecord(value)) return false;
-	return Array.isArray(value.items) && value.items.every(isOutlineItem) &&
-		Array.isArray(value.links) && value.links.every(isOutlineLink) &&
-		Array.isArray(value.knots) && value.knots.every(isKnot) && isStringArray(value.stashItemIds);
+	return (
+		Array.isArray(value.items) &&
+		value.items.every(isOutlineItem) &&
+		Array.isArray(value.links) &&
+		value.links.every(isOutlineLink) &&
+		Array.isArray(value.knots) &&
+		value.knots.every(isKnot) &&
+		isStringArray(value.stashItemIds)
+	);
 }
 
 function isOutlineItem(value: unknown): value is OutlineItem {
 	if (!isRecord(value)) return false;
-	return typeof value.id === "string" && typeof value.workId === "string" &&
-		typeof value.text === "string" && isNullableString(value.parentId) &&
-		typeof value.orderKey === "number" && Number.isFinite(value.orderKey) &&
-		typeof value.collapsed === "boolean" && isRevisionSelector(value.revisionSelector) &&
+	return (
+		typeof value.id === "string" &&
+		typeof value.workId === "string" &&
+		typeof value.text === "string" &&
+		isNullableString(value.parentId) &&
+		typeof value.orderKey === "number" &&
+		Number.isFinite(value.orderKey) &&
+		typeof value.collapsed === "boolean" &&
+		isRevisionSelector(value.revisionSelector) &&
 		(value.contextualHeading === undefined || typeof value.contextualHeading === "string") &&
 		(value.referenceStub === undefined || typeof value.referenceStub === "boolean") &&
-		isIsoDate(value.createdAt) && isIsoDate(value.updatedAt);
+		isIsoDate(value.createdAt) &&
+		isIsoDate(value.updatedAt)
+	);
 }
 
 function isOutlineLink(value: unknown): value is OutlineLink {
 	if (!isRecord(value)) return false;
-	return typeof value.id === "string" && typeof value.fromId === "string" &&
-		typeof value.toId === "string" && isLinkEndpoint(value.from) && isLinkEndpoint(value.to) &&
-		typeof value.type === "string" && typeof value.status === "string" &&
-		typeof value.origin === "string" && isIsoDate(value.createdAt) &&
-		(value.reason === undefined || typeof value.reason === "string");
+	return (
+		typeof value.id === "string" &&
+		typeof value.fromId === "string" &&
+		typeof value.toId === "string" &&
+		isLinkEndpoint(value.from) &&
+		isLinkEndpoint(value.to) &&
+		typeof value.type === "string" &&
+		typeof value.status === "string" &&
+		typeof value.origin === "string" &&
+		isIsoDate(value.createdAt) &&
+		(value.reason === undefined || typeof value.reason === "string")
+	);
 }
 
 function isRevisionSelector(value: unknown): boolean {
 	if (!isRecord(value)) return false;
-	return value.mode === "branch" && typeof value.branchId === "string" ||
-		value.mode === "pinned" && typeof value.revisionId === "string";
+	return (
+		(value.mode === "branch" && typeof value.branchId === "string") ||
+		(value.mode === "pinned" && typeof value.revisionId === "string")
+	);
 }
 
 function isLinkEndpoint(value: unknown): boolean {
 	if (!isRecord(value) || typeof value.workId !== "string") return false;
-	return value.scope === "work" ||
-		value.scope === "revision" && typeof value.revisionId === "string";
+	return (
+		value.scope === "work" || (value.scope === "revision" && typeof value.revisionId === "string")
+	);
 }
 
 function isKnot(value: unknown): boolean {
-	return isRecord(value) && typeof value.id === "string" && isStringArray(value.cycleIds) &&
-		isIsoDate(value.createdAt);
+	return (
+		isRecord(value) &&
+		typeof value.id === "string" &&
+		isStringArray(value.cycleIds) &&
+		isIsoDate(value.createdAt)
+	);
 }
 
 function isLocation(value: unknown): value is StartupSnapshotLocation {
-	return isRecord(value) && isNullableString(value.selectedOccurrenceId) &&
-		isNullableString(value.hoistOccurrenceId);
+	return (
+		isRecord(value) &&
+		isNullableString(value.selectedOccurrenceId) &&
+		isNullableString(value.hoistOccurrenceId)
+	);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -5,10 +5,9 @@ export type HelpUpdateStatus = "idle" | "checking" | "current" | "available" | "
 
 export type HelpUpdateChecker = (currentVersion: string) => Promise<UpdateCheckResult>;
 
-export function createHelpUpdateController(options: {
-	currentVersion?: string;
-	checkForUpdate?: HelpUpdateChecker;
-} = {}) {
+export function createHelpUpdateController(
+	options: { currentVersion?: string; checkForUpdate?: HelpUpdateChecker } = {},
+) {
 	const currentVersion = options.currentVersion ?? APP_VERSION;
 	const check = options.checkForUpdate ?? checkForUpdate;
 	let status = $state<HelpUpdateStatus>("idle");
@@ -33,11 +32,12 @@ export function createHelpUpdateController(options: {
 				const result = await check(currentVersion);
 				if (activeRequestId !== requestId) return;
 				latest = result.latest;
-				status = result.error || !result.latest
-					? "unavailable"
-					: result.updateAvailable
-					? "available"
-					: "current";
+				status =
+					result.error || !result.latest
+						? "unavailable"
+						: result.updateAvailable
+							? "available"
+							: "current";
 			} catch {
 				if (activeRequestId !== requestId) return;
 				latest = null;

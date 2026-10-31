@@ -46,8 +46,9 @@ class WorkListState {
 			case "duplicates": {
 				const result = await this.api.listDuplicateCandidates();
 				return () => {
-					this._duplicateCandidates = result.filter((candidate) =>
-						!this._excludedDuplicateCandidateKeys.includes(duplicateCandidateKey(candidate))
+					this._duplicateCandidates = result.filter(
+						(candidate) =>
+							!this._excludedDuplicateCandidateKeys.includes(duplicateCandidateKey(candidate)),
 					);
 				};
 			}
@@ -80,8 +81,8 @@ class WorkListState {
 		if (!this._excludedDuplicateCandidateKeys.includes(key)) {
 			this._excludedDuplicateCandidateKeys = [...this._excludedDuplicateCandidateKeys, key];
 		}
-		this._duplicateCandidates = this._duplicateCandidates.filter((entry) =>
-			duplicateCandidateKey(entry) !== key
+		this._duplicateCandidates = this._duplicateCandidates.filter(
+			(entry) => duplicateCandidateKey(entry) !== key,
 		);
 	};
 	get unplacedWorks() {

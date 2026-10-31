@@ -3,12 +3,14 @@ import { DEFAULT_UI_VOCABULARY } from "../src/shared/ui_vocabulary.ts";
 import DuplicateCandidatesPanel from "../src/ui/DuplicateCandidatesPanel.svelte";
 import { expect, fn, userEvent, within } from "storybook/test";
 
-const candidates = [{
-	workA: { workId: "work-a", title: "静的解析の導入" },
-	workB: { workId: "work-b", title: "静的検査を追加する" },
-	score: 82,
-	reasons: [{ kind: "title" as const, label: "タイトルが類似", score: 50 }],
-}];
+const candidates = [
+	{
+		workA: { workId: "work-a", title: "静的解析の導入" },
+		workB: { workId: "work-b", title: "静的検査を追加する" },
+		score: 82,
+		reasons: [{ kind: "title" as const, label: "タイトルが類似", score: 50 }],
+	},
+];
 
 const meta = {
 	title: "Discovery/DuplicateCandidates",

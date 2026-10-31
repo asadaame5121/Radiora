@@ -155,7 +155,7 @@ export function markRecursivePlacements(
 	}
 	if (context.recursiveItemIds.size === 0) return items;
 	return items.map((item) =>
-		context.recursiveItemIds.has(item.id) ? { ...item, referenceStub: true } : item
+		context.recursiveItemIds.has(item.id) ? { ...item, referenceStub: true } : item,
 	);
 }
 

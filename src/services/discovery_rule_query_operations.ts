@@ -14,10 +14,9 @@ import { fetchActiveMergedLinks } from "./implicit_relation.ts";
 import { runRuleQuery } from "./rule_query.ts";
 import { buildSparseOutline } from "./sparse_outline.ts";
 
-type RuleQueryStore =
-	& Pick<OutlineStorePort, "listItems">
-	& Pick<RelationStorePort, "listLinks">
-	& Pick<
+type RuleQueryStore = Pick<OutlineStorePort, "listItems"> &
+	Pick<RelationStorePort, "listLinks"> &
+	Pick<
 		DiscoveryStorePort,
 		"listSavedRuleQueries" | "upsertSavedRuleQuery" | "deleteSavedRuleQuery"
 	>;
@@ -46,9 +45,11 @@ export class DiscoveryRuleQueryOperations {
 		return this.store.listSavedRuleQueries();
 	}
 
-	async saveRuleQuery(
-		input: { id?: string; name: string; source: string },
-	): Promise<SavedRuleQuery> {
+	async saveRuleQuery(input: {
+		id?: string;
+		name: string;
+		source: string;
+	}): Promise<SavedRuleQuery> {
 		const now = new Date().toISOString();
 		const existing = input.id
 			? (await this.store.listSavedRuleQueries()).find((query) => query.id === input.id)

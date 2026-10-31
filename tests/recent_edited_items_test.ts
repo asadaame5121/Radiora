@@ -32,7 +32,10 @@ Deno.test("rankRecentEditedItems sorts by updatedAt descending with id tiebreake
 	];
 
 	const ranked = rankRecentEditedItems({ items });
-	assertEquals(ranked.map((i: OutlineItem) => i.id), ["item-a", "item-c", "item-b"]);
+	assertEquals(
+		ranked.map((i: OutlineItem) => i.id),
+		["item-a", "item-c", "item-b"],
+	);
 });
 
 Deno.test("rankRecentEditedItems excludes stashed items", () => {
@@ -42,7 +45,10 @@ Deno.test("rankRecentEditedItems excludes stashed items", () => {
 	];
 
 	const ranked = rankRecentEditedItems({ items, stashItemIds: ["item-1"] });
-	assertEquals(ranked.map((i: OutlineItem) => i.id), ["item-2"]);
+	assertEquals(
+		ranked.map((i: OutlineItem) => i.id),
+		["item-2"],
+	);
 });
 
 Deno.test("rankRecentEditedItems deduplicates items with the same workId keeping the most recent", () => {
@@ -53,14 +59,15 @@ Deno.test("rankRecentEditedItems deduplicates items with the same workId keeping
 	];
 
 	const ranked = rankRecentEditedItems({ items });
-	assertEquals(ranked.map((i: OutlineItem) => i.id), ["item-w1-new", "item-w2"]);
+	assertEquals(
+		ranked.map((i: OutlineItem) => i.id),
+		["item-w1-new", "item-w2"],
+	);
 });
 
 Deno.test("rankRecentEditedItems limits results to DEFAULT_RECENT_EDITED_LIMIT or custom limit", () => {
-	const items = Array.from(
-		{ length: 10 },
-		(_, i) =>
-			createItem(`item-${i}`, `work-${i}`, `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`),
+	const items = Array.from({ length: 10 }, (_, i) =>
+		createItem(`item-${i}`, `work-${i}`, `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00Z`),
 	);
 
 	const defaultRanked = rankRecentEditedItems({ items });
@@ -69,18 +76,19 @@ Deno.test("rankRecentEditedItems limits results to DEFAULT_RECENT_EDITED_LIMIT o
 
 	const customRanked = rankRecentEditedItems({ items, limit: 3 });
 	assertEquals(customRanked.length, 3);
-	assertEquals(customRanked.map((i: OutlineItem) => i.id), ["item-9", "item-8", "item-7"]);
+	assertEquals(
+		customRanked.map((i: OutlineItem) => i.id),
+		["item-9", "item-8", "item-7"],
+	);
 });
 
 Deno.test("rankRecentEditedItems ranks 10,000 items with duplicate Works accurately", () => {
-	const items = Array.from(
-		{ length: 10000 },
-		(_, i) =>
-			createItem(
-				`item-${String(i).padStart(5, "0")}`,
-				`work-${String(i % 500).padStart(3, "0")}`,
-				new Date(1700000000000 + i * 1000).toISOString(),
-			),
+	const items = Array.from({ length: 10000 }, (_, i) =>
+		createItem(
+			`item-${String(i).padStart(5, "0")}`,
+			`work-${String(i % 500).padStart(3, "0")}`,
+			new Date(1700000000000 + i * 1000).toISOString(),
+		),
 	);
 
 	const ranked = rankRecentEditedItems({ items, limit: 6 });
@@ -92,14 +100,10 @@ Deno.test("rankRecentEditedItems ranks 10,000 items with duplicate Works accurat
 	// item-09996 is work-496
 	// item-09995 is work-495
 	// item-09994 is work-494
-	assertEquals(ranked.map((i) => i.id), [
-		"item-09999",
-		"item-09998",
-		"item-09997",
-		"item-09996",
-		"item-09995",
-		"item-09994",
-	]);
+	assertEquals(
+		ranked.map((i) => i.id),
+		["item-09999", "item-09998", "item-09997", "item-09996", "item-09995", "item-09994"],
+	);
 });
 
 function legacyOracle(
@@ -119,10 +123,8 @@ function legacyOracle(
 		})
 		.filter((e) => !stashedIds.has(e.item.id));
 
-	valid.sort((a, b) =>
-		b.time - a.time ||
-		a.item.id.localeCompare(b.item.id) ||
-		a.inputIndex - b.inputIndex
+	valid.sort(
+		(a, b) => b.time - a.time || a.item.id.localeCompare(b.item.id) || a.inputIndex - b.inputIndex,
 	);
 
 	const seenWorks = new Set<string>();
@@ -143,10 +145,14 @@ Deno.test("A09 - rankRecentEditedItems exactly matches legacy oracle across comp
 			`dist-${String(i).padStart(5, "0")}`,
 			`w-dist-${String(i).padStart(5, "0")}`,
 			new Date(1700000000000 + (i % 100) * 1000).toISOString(),
-		));
+		),
+	);
 	const oracle1 = legacyOracle(distinctItems, { limit: 6 });
 	const actual1 = rankRecentEditedItems({ items: distinctItems, limit: 6 });
-	assertEquals(actual1.map((i) => i.id), oracle1.map((i) => i.id));
+	assertEquals(
+		actual1.map((i) => i.id),
+		oracle1.map((i) => i.id),
+	);
 
 	// 2. NFC / NFD ID ties with identical timestamps
 	const tieItems = [
@@ -157,7 +163,10 @@ Deno.test("A09 - rankRecentEditedItems exactly matches legacy oracle across comp
 	];
 	const oracle2 = legacyOracle(tieItems, { limit: 4 });
 	const actual2 = rankRecentEditedItems({ items: tieItems, limit: 4 });
-	assertEquals(actual2.map((i) => i.id), oracle2.map((i) => i.id));
+	assertEquals(
+		actual2.map((i) => i.id),
+		oracle2.map((i) => i.id),
+	);
 
 	// 3. High duplicate occurrences for same Work (1000 occurrences per Work)
 	const dupItems = Array.from({ length: 3000 }, (_, i) => {
@@ -172,7 +181,10 @@ Deno.test("A09 - rankRecentEditedItems exactly matches legacy oracle across comp
 	});
 	const oracle3 = legacyOracle(dupItems, { limit: 3 });
 	const actual3 = rankRecentEditedItems({ items: dupItems, limit: 3 });
-	assertEquals(actual3.map((i) => i.id), oracle3.map((i) => i.id));
+	assertEquals(
+		actual3.map((i) => i.id),
+		oracle3.map((i) => i.id),
+	);
 
 	// 4. Invalid timestamps and NaN handling
 	const invalidTimeItems = [
@@ -183,7 +195,10 @@ Deno.test("A09 - rankRecentEditedItems exactly matches legacy oracle across comp
 	];
 	const oracle4 = legacyOracle(invalidTimeItems, { limit: 3 });
 	const actual4 = rankRecentEditedItems({ items: invalidTimeItems, limit: 3 });
-	assertEquals(actual4.map((i) => i.id), oracle4.map((i) => i.id));
+	assertEquals(
+		actual4.map((i) => i.id),
+		oracle4.map((i) => i.id),
+	);
 
 	// 5. Limit edge cases: 0, negative, float, NaN, Infinity, undefined
 	const sample = [
@@ -211,7 +226,10 @@ Deno.test("recent ranking preserves stable locale ties after a Work winner chang
 	assertEquals(items[1].id.localeCompare(items[2].id), 0);
 	const before = structuredClone(items);
 	const actual = rankRecentEditedItems({ items, limit: 2 });
-	assertEquals(actual.map((entry) => entry.workId), ["w2", "w1"]);
+	assertEquals(
+		actual.map((entry) => entry.workId),
+		["w2", "w1"],
+	);
 	assertEquals(items, before);
 	assertEquals(actual[0], items[1]);
 });

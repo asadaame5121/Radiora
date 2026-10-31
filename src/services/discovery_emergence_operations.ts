@@ -14,17 +14,16 @@ import { fetchActiveMergedLinks } from "./implicit_relation.ts";
 import type { SearchOperations } from "./search_operations.ts";
 import { titleOf } from "./search_text.ts";
 
-type EmergenceStore =
-	& Pick<OutlineStorePort, "listItems">
-	& Pick<RelationStorePort, "listLinks">
-	& Pick<
+type EmergenceStore = Pick<OutlineStorePort, "listItems"> &
+	Pick<RelationStorePort, "listLinks"> &
+	Pick<
 		DiscoveryStorePort,
 		| "getEmergenceFeedback"
 		| "listEmergenceSuggestions"
 		| "resolveEmergenceSuggestion"
 		| "upsertEmergenceSuggestion"
-	>
-	& Partial<Pick<RelationTypeDefinitionStorePort, "listRelationTypeDefinitions">>;
+	> &
+	Partial<Pick<RelationTypeDefinitionStorePort, "listRelationTypeDefinitions">>;
 
 export class DiscoveryEmergenceOperations {
 	private readonly persistence: EmergencePersistence;

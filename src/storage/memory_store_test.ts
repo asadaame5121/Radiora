@@ -144,10 +144,7 @@ Deno.test("MemoryGraphStore createRelationTypeDefinition rejects invalid or dupl
 	await store.createRelationTypeDefinition(validDef);
 	const prior = await store.listRelationTypeDefinitions();
 
-	await assertRejects(
-		() => store.createRelationTypeDefinition({ ...validDef }),
-		Error,
-	);
+	await assertRejects(() => store.createRelationTypeDefinition({ ...validDef }), Error);
 
 	await assertRejects(
 		() =>

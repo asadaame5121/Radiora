@@ -226,12 +226,7 @@ Deno.test("semantic link annotations use relationTypeDefinitions for custom dire
 	assertEquals(causes.find((p) => p.occurrenceId === "occ-2")?.direction, "incoming");
 });
 
-function outlineItem(
-	id: string,
-	workId: string,
-	text: string,
-	createdAt = NOW,
-): OutlineItem {
+function outlineItem(id: string, workId: string, text: string, createdAt = NOW): OutlineItem {
 	return {
 		id,
 		workId,

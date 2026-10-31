@@ -52,14 +52,20 @@ Deno.test("isolated Works are kept when includeIsolated is on and dropped when o
 		items,
 		links,
 	);
-	assertEquals(shown.items.map((entry) => entry.workId), ["a", "b", "lonely"]);
+	assertEquals(
+		shown.items.map((entry) => entry.workId),
+		["a", "b", "lonely"],
+	);
 
 	const connectedOnly = applyGlobalLineageFilter(
 		{ includeIsolated: false, linkTypes: allTypes(), includeWorkIds: [] },
 		items,
 		links,
 	);
-	assertEquals(connectedOnly.items.map((entry) => entry.workId), ["a", "b"]);
+	assertEquals(
+		connectedOnly.items.map((entry) => entry.workId),
+		["a", "b"],
+	);
 	assertEquals(connectedOnly.links, links);
 });
 
@@ -108,8 +114,14 @@ Deno.test("the selected Work stays visible as a transient exception without its 
 		items,
 		links,
 	);
-	assertEquals(result.items.map((entry) => entry.workId), ["b", "focus"]);
-	assertEquals(result.links.map((entry) => entry.id), [links[0].id]);
+	assertEquals(
+		result.items.map((entry) => entry.workId),
+		["b", "focus"],
+	);
+	assertEquals(
+		result.links.map((entry) => entry.id),
+		[links[0].id],
+	);
 });
 
 Deno.test("links whose endpoints disappear after filtering are removed", () => {
@@ -121,8 +133,14 @@ Deno.test("links whose endpoints disappear after filtering are removed", () => {
 		items,
 		links,
 	);
-	assertEquals(result.items.map((entry) => entry.workId), ["a", "b"]);
-	assertEquals(result.links.map((entry) => entry.id), [links[0].id]);
+	assertEquals(
+		result.items.map((entry) => entry.workId),
+		["a", "b"],
+	);
+	assertEquals(
+		result.links.map((entry) => entry.id),
+		[links[0].id],
+	);
 });
 
 Deno.test("default filter shows every Work with every link type", () => {

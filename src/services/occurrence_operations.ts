@@ -51,8 +51,9 @@ export class OccurrenceOperations {
 	async listRevisions(workId: string): Promise<Revision[]> {
 		if (!workId) return [];
 		const revisions = await this.store.listRevisions(workId);
-		return revisions.sort((left, right) =>
-			left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)
+		return revisions.sort(
+			(left, right) =>
+				left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id),
 		);
 	}
 
@@ -156,14 +157,14 @@ export class OccurrenceOperations {
 		const item = await this.requireItem(id);
 		let revisionSelector: RevisionSelector;
 		if (revisionId) {
-			const revision = (await this.store.listRevisions(item.workId)).find((candidate) =>
-				candidate.id === revisionId
+			const revision = (await this.store.listRevisions(item.workId)).find(
+				(candidate) => candidate.id === revisionId,
 			);
 			if (!revision) throw new Error(`Revision not found for Work: ${revisionId}`);
 			revisionSelector = { mode: "pinned", revisionId };
 		} else {
-			const main = (await this.store.listBranches(item.workId)).find((branch) =>
-				branch.name === "main" && !branch.archivedAt
+			const main = (await this.store.listBranches(item.workId)).find(
+				(branch) => branch.name === "main" && !branch.archivedAt,
 			);
 			if (!main) throw new Error(`Active main Branch not found for Work: ${item.workId}`);
 			revisionSelector = { mode: "branch", branchId: main.id };
@@ -282,12 +283,15 @@ export class OccurrenceOperations {
 		item: OutlineItem,
 		items: OutlineItem[],
 	): Promise<void> {
-		const children = items.filter((candidate) => candidate.parentId === item.id)
+		const children = items
+			.filter((candidate) => candidate.parentId === item.id)
 			.sort((a, b) => a.orderKey - b.orderKey);
 		let afterId =
-			items.filter((candidate) => candidate.parentId === item.parentId && candidate.id !== item.id)
+			items
+				.filter((candidate) => candidate.parentId === item.parentId && candidate.id !== item.id)
 				.sort((a, b) => a.orderKey - b.orderKey)
-				.filter((candidate) => candidate.orderKey < item.orderKey).at(-1)?.id ?? null;
+				.filter((candidate) => candidate.orderKey < item.orderKey)
+				.at(-1)?.id ?? null;
 
 		const workingSiblings = items.filter(
 			(candidate) => candidate.parentId === item.parentId && candidate.id !== item.id,
@@ -321,8 +325,8 @@ export class OccurrenceOperations {
 		return works.map((work) => ({
 			work,
 			occurrenceCount: occurrences.filter((occurrence) => occurrence.workId === work.id).length,
-			linkCount:
-				links.filter((link) => link.from.workId === work.id || link.to.workId === work.id).length,
+			linkCount: links.filter((link) => link.from.workId === work.id || link.to.workId === work.id)
+				.length,
 		}));
 	}
 
@@ -392,15 +396,17 @@ export class OccurrenceOperations {
 	 */
 	private async trashBlankUnplacedWork(workId: string): Promise<void> {
 		const [work, occurrences, branches, copies] = await Promise.all([
-			this.store.listWorks(true).then((works) =>
-				works.find((candidate) => candidate.id === workId)
-			),
+			this.store
+				.listWorks(true)
+				.then((works) => works.find((candidate) => candidate.id === workId)),
 			this.store.listOccurrences(),
 			this.store.listBranches(workId),
 			this.store.listWorkingCopies(workId),
 		]);
 		if (
-			!work || work.deletedAt || work.stub ||
+			!work ||
+			work.deletedAt ||
+			work.stub ||
 			occurrences.some((occurrence) => occurrence.workId === workId)
 		) {
 			return;
@@ -415,7 +421,8 @@ export class OccurrenceOperations {
 		parentId: string | null,
 		afterId: string | null,
 	): number {
-		const siblings = items.filter((item) => item.parentId === parentId)
+		const siblings = items
+			.filter((item) => item.parentId === parentId)
 			.sort((a, b) => a.orderKey - b.orderKey);
 		if (!siblings.length) return ORDER_STEP;
 		if (!afterId) return siblings[0].orderKey - ORDER_STEP;

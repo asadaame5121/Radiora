@@ -4,11 +4,11 @@ export type PendingConfirmation =
 	| { action: "trash"; occurrenceId: string; occurrenceCount: number }
 	| { action: "purge"; workId: string; occurrenceCount: number; linkCount: number }
 	| {
-		action: "rewrite";
-		occurrenceId: string;
-		workId: string;
-		sourceBranchId: string;
-	}
+			action: "rewrite";
+			occurrenceId: string;
+			workId: string;
+			sourceBranchId: string;
+	  }
 	| { action: "merge-duplicate"; preview: WorkMergePreview }
 	| { action: "cancel-longform"; pendingAction: () => Promise<void> };
 

@@ -41,11 +41,13 @@ export function loadTreeFilterPreference(
 ): GlobalLineageFilter {
 	const defaults = defaultGlobalLineageFilter(allowedTypes);
 	const stored = readStoredFilter(storage, allowedTypes);
-	return stored === null ? defaults : {
-		includeIsolated: stored.includeIsolated,
-		linkTypes: stored.linkTypes as GlobalLineageFilter["linkTypes"],
-		includeWorkIds: [],
-	};
+	return stored === null
+		? defaults
+		: {
+				includeIsolated: stored.includeIsolated,
+				linkTypes: stored.linkTypes as GlobalLineageFilter["linkTypes"],
+				includeWorkIds: [],
+			};
 }
 
 export function saveTreeFilterPreference(

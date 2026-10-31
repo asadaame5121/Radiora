@@ -1,8 +1,6 @@
 import { type InferOutput, object, picklist, safeParse } from "valibot";
 
-export type QuickCaptureDestination = InferOutput<
-	typeof QuickCaptureDestinationSchema
->;
+export type QuickCaptureDestination = InferOutput<typeof QuickCaptureDestinationSchema>;
 
 export const QuickCaptureDestinationSchema = picklist(["root", "unplaced"]);
 
@@ -12,9 +10,7 @@ export const QuickCapturePreferenceSchema = object({
 
 export const QUICK_CAPTURE_PREFERENCE_STORAGE_KEY = "radiora.quickCapturePreference";
 
-export type QuickCapturePreference = Readonly<
-	InferOutput<typeof QuickCapturePreferenceSchema>
->;
+export type QuickCapturePreference = Readonly<InferOutput<typeof QuickCapturePreferenceSchema>>;
 
 export interface QuickCapturePreferenceStorage {
 	getItem(key: string): string | null;
@@ -43,10 +39,7 @@ export function saveQuickCapturePreference(
 	storage: QuickCapturePreferenceStorage | null = browserStorage(),
 ): void {
 	try {
-		storage?.setItem(
-			QUICK_CAPTURE_PREFERENCE_STORAGE_KEY,
-			JSON.stringify(preference),
-		);
+		storage?.setItem(QUICK_CAPTURE_PREFERENCE_STORAGE_KEY, JSON.stringify(preference));
 		// biome-ignore lint/plugin/noSwallowedRejection: Quick-capture preferences are optional and storage failure must not block input.
 	} catch {
 		// Quick capture preferences are best-effort and must not block input.

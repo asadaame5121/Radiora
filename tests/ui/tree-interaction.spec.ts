@@ -12,7 +12,9 @@ test.beforeEach(async ({ page }) => {
 	await page.goto("/");
 });
 
-test("native mouse pan, wheel zoom and background selection retain SVG-local coordinates", async ({ page }) => {
+test("native mouse pan, wheel zoom and background selection retain SVG-local coordinates", async ({
+	page,
+}) => {
 	const svg = await openTree(page);
 	const node = svg.locator(".tree-node:not(.aggregate)").first();
 	await node.locator(".node-core").click();
@@ -31,14 +33,17 @@ test("native mouse pan, wheel zoom and background selection retain SVG-local coo
 	const camera = await svg.evaluate((element) => Reflect.get(element, "__zoom").k);
 	await page.mouse.move(x, y);
 	await page.mouse.wheel(0, -150);
-	await expect.poll(() => svg.evaluate((element) => Reflect.get(element, "__zoom").k))
+	await expect
+		.poll(() => svg.evaluate((element) => Reflect.get(element, "__zoom").k))
 		.toBeGreaterThan(camera);
 	await page.mouse.click(x, y);
 	await expect(svg.locator(".tree-node.selected")).toHaveCount(0);
 	await expect(svg).toBeFocused();
 });
 
-test("unmount during captured pan releases window gesture handlers and permits a fresh pan", async ({ page }) => {
+test("unmount during captured pan releases window gesture handlers and permits a fresh pan", async ({
+	page,
+}) => {
 	const svg = await openTree(page);
 	const box = await svg.boundingBox();
 	if (!box) throw new Error("Tree viewport missing");
@@ -51,10 +56,13 @@ test("unmount during captured pan releases window gesture handlers and permits a
 		const { x, y, k } = Reflect.get(element, "__zoom");
 		return { x, y, k };
 	});
-	await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
-		name: "Option",
-		exact: true,
-	}).dispatchEvent("click");
+	await page
+		.getByRole("navigation", { name: "主な画面" })
+		.getByRole("button", {
+			name: "Option",
+			exact: true,
+		})
+		.dispatchEvent("click");
 	await expect(svg).toHaveCount(0);
 	await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height - 120);
 	await page.mouse.up();
@@ -74,7 +82,9 @@ test("unmount during captured pan releases window gesture handlers and permits a
 	await expect(node).not.toHaveAttribute("transform", before ?? "");
 });
 
-test("Tree and Options share projection with one writer through remount and restart", async ({ page }) => {
+test("Tree and Options share projection with one writer through remount and restart", async ({
+	page,
+}) => {
 	await page.addInitScript(() => {
 		const writes: string[] = [];
 		Reflect.set(window, "treePreferenceWrites", writes);
@@ -91,13 +101,16 @@ test("Tree and Options share projection with one writer through remount and rest
 		"aria-pressed",
 		"true",
 	);
-	await expect.poll(() => page.evaluate(() => Reflect.get(window, "treePreferenceWrites"))).toEqual(
-		["lineage"],
-	);
-	await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
-		name: "Option",
-		exact: true,
-	}).click();
+	await expect
+		.poll(() => page.evaluate(() => Reflect.get(window, "treePreferenceWrites")))
+		.toEqual(["lineage"]);
+	await page
+		.getByRole("navigation", { name: "主な画面" })
+		.getByRole("button", {
+			name: "Option",
+			exact: true,
+		})
+		.click();
 	const preference = page.getByLabel("ツリーの表示方式");
 	await expect(preference).toHaveValue("lineage");
 	await preference.selectOption("chronology");
@@ -115,39 +128,44 @@ test("Tree and Options share projection with one writer through remount and rest
 	);
 });
 
-test("initial Tree failure exposes retry and successful retry clears the error", async ({ page }) => {
-	await page.route(
-		"**/api/rpc/listGlobalLineage",
-		(route) => route.fulfill({ status: 503, json: { error: "Tree offline" } }),
+test("initial Tree failure exposes retry and successful retry clears the error", async ({
+	page,
+}) => {
+	await page.route("**/api/rpc/listGlobalLineage", (route) =>
+		route.fulfill({ status: 503, json: { error: "Tree offline" } }),
 	);
 	await page.reload();
 	await page.getByRole("button", { name: "ツリー", exact: true }).click();
-	await expect(page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }))
-		.toBeVisible();
-	await expect(page.getByRole("status").filter({ hasText: "ツリーを読み込んでいます" }))
-		.toHaveCount(0);
+	await expect(
+		page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("status").filter({ hasText: "ツリーを読み込んでいます" }),
+	).toHaveCount(0);
 	await page.unroute("**/api/rpc/listGlobalLineage");
 	await page.getByRole("button", { name: "ツリーを再試行" }).click();
 	await expect(page.getByRole("group", { name: "思索の系統樹" })).toBeVisible();
-	await expect(page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }))
-		.toHaveCount(0);
+	await expect(
+		page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }),
+	).toHaveCount(0);
 });
 
 test("failed filter refresh retains the Tree and permits retry", async ({ page }) => {
 	const svg = await openTree(page);
-	await page.route(
-		"**/api/rpc/listGlobalLineage",
-		(route) => route.fulfill({ status: 503, json: { error: "Tree offline" } }),
+	await page.route("**/api/rpc/listGlobalLineage", (route) =>
+		route.fulfill({ status: 503, json: { error: "Tree offline" } }),
 	);
 	await page.getByRole("tab", { name: "フィルター" }).click();
 	await page.getByRole("checkbox", { name: /孤立/ }).uncheck();
-	await expect(page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }))
-		.toBeVisible();
+	await expect(
+		page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }),
+	).toBeVisible();
 	await expect(svg).toBeVisible();
 	await expect(svg.locator(".tree-node").first()).toBeVisible();
 	await page.unroute("**/api/rpc/listGlobalLineage");
 	await page.getByRole("button", { name: "ツリーを再試行" }).click();
-	await expect(page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }))
-		.toHaveCount(0);
+	await expect(
+		page.getByRole("alert").filter({ hasText: "ツリーを読み込めませんでした" }),
+	).toHaveCount(0);
 	await expect(svg).toBeVisible();
 });

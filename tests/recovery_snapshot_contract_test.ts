@@ -5,9 +5,7 @@ Deno.test("Recovery Snapshot UI is reachable from Work lineage and uses explicit
 	const component = await Deno.readTextFile(
 		new URL("../src/ui/RecoverySnapshots.svelte", import.meta.url),
 	);
-	const bindings = await Deno.readTextFile(
-		new URL("../src/shared/bindings.ts", import.meta.url),
-	);
+	const bindings = await Deno.readTextFile(new URL("../src/shared/bindings.ts", import.meta.url));
 
 	assert(app.includes("<RecoverySnapshots"));
 	assertMatch(app, /viewMode === "workLineage"/);

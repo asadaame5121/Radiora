@@ -70,10 +70,7 @@ Deno.test("Sparse Outline uses no hardcoded UI labels — verifies vocabulary co
 	const source = await Deno.readTextFile(
 		new URL("../src/ui/SparseOutlineView.svelte", import.meta.url),
 	);
-	const literalPatterns = [
-		/textContent\s*=\s*"[^"]*結果"/,
-		/label\s*=\s*"[^"]*投影"/,
-	];
+	const literalPatterns = [/textContent\s*=\s*"[^"]*結果"/, /label\s*=\s*"[^"]*投影"/];
 	for (const pattern of literalPatterns) {
 		const match = source.match(pattern);
 		assert(!match, `found hardcoded label: ${match?.[0]}`);
@@ -159,9 +156,7 @@ Deno.test("sparse_outline accepts sourceType parameter", async () => {
 });
 
 Deno.test("bindings includes buildQueryProjectionNodes", async () => {
-	const source = await Deno.readTextFile(
-		new URL("../src/shared/bindings.ts", import.meta.url),
-	);
+	const source = await Deno.readTextFile(new URL("../src/shared/bindings.ts", import.meta.url));
 	assert(source.includes("buildQueryProjectionNodes"), "has binding signature");
 	assert(source.includes("TransientProjectionNode"), "imports TransientProjectionNode");
 });

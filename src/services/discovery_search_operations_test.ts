@@ -19,8 +19,9 @@ Deno.test("search contract: aliases expand results while reserved tag aliases st
 
 	const results = await operations.searchItems("alpha");
 	assert(
-		results.some((result) =>
-			result.item.workId === "beta" && result.reasons.some((reason) => reason.kind === "alias")
+		results.some(
+			(result) =>
+				result.item.workId === "beta" && result.reasons.some((reason) => reason.kind === "alias"),
 		),
 	);
 	assertEquals((await operations.listSearchAliases()).map((alias) => alias.id).length, 1);

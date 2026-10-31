@@ -67,7 +67,7 @@ Deno.test("WorkSchema validates valid Work and rejects invalid fields", () => {
 		v.parse(WorkSchema, {
 			...validWork,
 			stub: { createdAt: ISO_NOW, createdVia: "unknown-via" },
-		})
+		}),
 	);
 });
 
@@ -133,7 +133,7 @@ Deno.test("OccurrenceSchema validates branch and pinned selector occurrences", (
 		v.parse(OccurrenceSchema, {
 			...branchOccurrence,
 			revisionSelector: { mode: "unknown", id: VALID_UUID },
-		})
+		}),
 	);
 });
 

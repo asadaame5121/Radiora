@@ -42,8 +42,10 @@ export function validateWorkBundleImport(
 		requireFreshId(workingCopy.branchId, copyBranchIds, "Working Copy");
 		requireFreshId(occurrence.id, occurrenceIds, "Occurrence");
 		if (
-			branch.workId !== work.id || branch.name !== "main" ||
-			workingCopy.workId !== work.id || workingCopy.branchId !== branch.id ||
+			branch.workId !== work.id ||
+			branch.name !== "main" ||
+			workingCopy.workId !== work.id ||
+			workingCopy.branchId !== branch.id ||
 			occurrence.workId !== work.id ||
 			occurrence.revisionSelector.mode !== "branch" ||
 			occurrence.revisionSelector.branchId !== branch.id
@@ -88,7 +90,8 @@ export function isValidWorkStub(stub: WorkStub | undefined): boolean {
 	if (!stub) return false;
 	const parsedCreatedAt = Date.parse(stub.createdAt);
 	if (
-		!Number.isFinite(parsedCreatedAt) || new Date(parsedCreatedAt).toISOString() !== stub.createdAt
+		!Number.isFinite(parsedCreatedAt) ||
+		new Date(parsedCreatedAt).toISOString() !== stub.createdAt
 	) {
 		return false;
 	}
@@ -108,26 +111,32 @@ export function validateUnplacedWorkCreation(
 		throw new Error("Quick Capture text must not be blank");
 	}
 	if (
-		branch.workId !== work.id || workingCopy.workId !== work.id ||
+		branch.workId !== work.id ||
+		workingCopy.workId !== work.id ||
 		workingCopy.branchId !== branch.id
 	) {
 		throw new Error("Work, Branch, and Working Copy identity must match");
 	}
 	if (
-		branch.name !== "main" || branch.headRevisionId !== null || branch.promotedAt ||
+		branch.name !== "main" ||
+		branch.headRevisionId !== null ||
+		branch.promotedAt ||
 		branch.archivedAt
 	) {
 		throw new Error("Quick Capture requires an active main Branch without a Revision");
 	}
 	const parsedCreatedAt = Date.parse(work.createdAt);
 	if (
-		!Number.isFinite(parsedCreatedAt) || new Date(parsedCreatedAt).toISOString() !== work.createdAt
+		!Number.isFinite(parsedCreatedAt) ||
+		new Date(parsedCreatedAt).toISOString() !== work.createdAt
 	) {
 		throw new Error("Quick Capture requires a valid ISO creation instant");
 	}
 	if (
-		work.deletedAt || work.createdAt !== work.updatedAt ||
-		branch.createdAt !== work.createdAt || workingCopy.updatedAt !== work.updatedAt
+		work.deletedAt ||
+		work.createdAt !== work.updatedAt ||
+		branch.createdAt !== work.createdAt ||
+		workingCopy.updatedAt !== work.updatedAt
 	) {
 		throw new Error("Quick Capture timestamps must describe one new active Work");
 	}

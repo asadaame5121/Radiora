@@ -23,8 +23,8 @@ for (const kind of ["memory", "json", "sqlite"] as const) {
 			kind === "memory"
 				? new MemoryGraphStore()
 				: kind === "json"
-				? new JsonGraphStore(path)
-				: new SqliteGraphStore(path);
+					? new JsonGraphStore(path)
+					: new SqliteGraphStore(path);
 		let store = create();
 		try {
 			await store.initialize();
@@ -32,17 +32,17 @@ for (const kind of ["memory", "json", "sqlite"] as const) {
 			const item = await service.createItem({ text: "江戸時代", parentId: null });
 			await service.createOccurrence({ workId: item.workId, parentId: null });
 			await service.setWorkHistoricalTime(item.workId, time);
-			assertEquals((await service.listOutline()).items.map((item) => item.historicalTime), [
-				time,
-				time,
-			]);
+			assertEquals(
+				(await service.listOutline()).items.map((item) => item.historicalTime),
+				[time, time],
+			);
 			const backup = await new JsonBackupService(store).export();
 			const restored = new MemoryGraphStore();
 			await new JsonBackupService(restored).restore(backup);
 			assertEquals((await restored.listWorks())[0].historicalTime, time);
 
 			await assertRejects(() =>
-				service.setWorkHistoricalTime(item.workId, { kind: "bad" } as never)
+				service.setWorkHistoricalTime(item.workId, { kind: "bad" } as never),
 			);
 			assertEquals((await store.listWorks())[0].historicalTime, time);
 			if (kind !== "memory") {

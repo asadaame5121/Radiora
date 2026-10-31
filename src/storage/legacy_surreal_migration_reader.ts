@@ -142,9 +142,10 @@ function parseOccurrenceRow(r: Record<string, unknown>): Occurrence {
 		parentOccurrenceId: parentId,
 		orderKey: Number(r.order_key ?? 0),
 		collapsed: Boolean(r.collapsed),
-		revisionSelector: selectorMode === "pinned" && revId
-			? { mode: "pinned", revisionId: revId }
-			: { mode: "branch", branchId },
+		revisionSelector:
+			selectorMode === "pinned" && revId
+				? { mode: "pinned", revisionId: revId }
+				: { mode: "branch", branchId },
 		contextualHeading: r.contextual_heading == null ? undefined : String(r.contextual_heading),
 	};
 }
@@ -156,12 +157,14 @@ function parseLinkRow(r: Record<string, unknown>): OutlineLink {
 		id: extractRecordId(r.id),
 		fromId,
 		toId,
-		from: r.from_scope === "revision"
-			? { scope: "revision", workId: fromId, revisionId: extractRecordId(r.from_revision) }
-			: { scope: "work", workId: fromId },
-		to: r.to_scope === "revision"
-			? { scope: "revision", workId: toId, revisionId: extractRecordId(r.to_revision) }
-			: { scope: "work", workId: toId },
+		from:
+			r.from_scope === "revision"
+				? { scope: "revision", workId: fromId, revisionId: extractRecordId(r.from_revision) }
+				: { scope: "work", workId: fromId },
+		to:
+			r.to_scope === "revision"
+				? { scope: "revision", workId: toId, revisionId: extractRecordId(r.to_revision) }
+				: { scope: "work", workId: toId },
 		type: String(r.type) as LinkType,
 		status: String(r.status ?? "active") as OutlineLink["status"],
 		origin: String(r.origin ?? "manual") as OutlineLink["origin"],
@@ -281,13 +284,18 @@ function parseRecoverySnapshotRow(r: Record<string, unknown>): RecoverySnapshot 
 		createdAt: String(r.created_at ?? ""),
 		sourceRevisionId: optionalRecordId(r.source_revision_id ?? r.source_revision),
 		name: r.name == null ? undefined : String(r.name),
-		protection: r.protection_reason == null ? undefined : {
-			reason: String(r.protection_reason) as NonNullable<
-				RecoverySnapshot["protection"]
-			>["reason"],
-			protectedAt: String(r.protected_at ?? ""),
-			...(r.protection_expires_at == null ? {} : { expiresAt: String(r.protection_expires_at) }),
-		},
+		protection:
+			r.protection_reason == null
+				? undefined
+				: {
+						reason: String(r.protection_reason) as NonNullable<
+							RecoverySnapshot["protection"]
+						>["reason"],
+						protectedAt: String(r.protected_at ?? ""),
+						...(r.protection_expires_at == null
+							? {}
+							: { expiresAt: String(r.protection_expires_at) }),
+					},
 	};
 }
 
@@ -378,9 +386,7 @@ export async function readLegacySurrealSnapshot(
 
 	if (!response.ok) {
 		const text = await response.text().catch(() => "");
-		throw new Error(
-			`SurrealDB query failed with HTTP status ${response.status}: ${text}`,
-		);
+		throw new Error(`SurrealDB query failed with HTTP status ${response.status}: ${text}`);
 	}
 
 	const body = (await response.json()) as SurrealSqlStatementResult[];

@@ -61,11 +61,13 @@ test("selected Work is derived per request and never persisted in the filter", a
 	s.select("work-a");
 	s.tree.setFilter({ includeIsolated: false, linkTypes: ["FROM"], includeWorkIds: ["untrusted"] });
 	await s.tree.refresh();
-	expect(s.listGlobalLineage.mock.calls[0]).toEqual([{
-		includeIsolated: false,
-		linkTypes: ["FROM"],
-		includeWorkIds: ["work-a"],
-	}]);
+	expect(s.listGlobalLineage.mock.calls[0]).toEqual([
+		{
+			includeIsolated: false,
+			linkTypes: ["FROM"],
+			includeWorkIds: ["work-a"],
+		},
+	]);
 	s.select("work-b");
 	expect(s.tree.activeFilter().includeWorkIds).toEqual(["work-b"]);
 	expect(s.tree.filter.includeWorkIds).toEqual([]);

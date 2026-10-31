@@ -136,33 +136,35 @@ export class MemoryGraphStore implements GraphStore {
 		const work = this.state.works.find((w) => w.id === occurrence.workId);
 		if (!work || work.deletedAt) return Promise.resolve(null);
 		const selector = occurrence.revisionSelector;
-		const text = selector.mode === "branch"
-			? this.state.workingCopies.find(
-				(copy) => copy.branchId === selector.branchId,
-			)?.text ?? ""
-			: this.state.revisions.find(
-				(revision) => revision.id === selector.revisionId,
-			)?.text ?? "";
+		const text =
+			selector.mode === "branch"
+				? (this.state.workingCopies.find((copy) => copy.branchId === selector.branchId)?.text ?? "")
+				: (this.state.revisions.find((revision) => revision.id === selector.revisionId)?.text ??
+					"");
 		return Promise.resolve(projectSingleOutlineItem(occurrence, work, text));
 	}
 
 	listWorks(includeDeleted = false): Promise<Work[]> {
-		return Promise.resolve(structuredClone(
-			this.state.works.filter((work) =>
-				includeDeleted || (!work.deletedAt && !work.mergedIntoWorkId)
+		return Promise.resolve(
+			structuredClone(
+				this.state.works.filter(
+					(work) => includeDeleted || (!work.deletedAt && !work.mergedIntoWorkId),
+				),
 			),
-		));
+		);
 	}
 
 	listOccurrences(includeDeletedWorks = false): Promise<Occurrence[]> {
 		const visibleWorkIds = new Set(
-			this.state.works.filter((work) =>
-				includeDeletedWorks || (!work.deletedAt && !work.mergedIntoWorkId)
-			).map((work) => work.id),
+			this.state.works
+				.filter((work) => includeDeletedWorks || (!work.deletedAt && !work.mergedIntoWorkId))
+				.map((work) => work.id),
 		);
-		return Promise.resolve(structuredClone(
-			this.state.occurrences.filter((occurrence) => visibleWorkIds.has(occurrence.workId)),
-		));
+		return Promise.resolve(
+			structuredClone(
+				this.state.occurrences.filter((occurrence) => visibleWorkIds.has(occurrence.workId)),
+			),
+		);
 	}
 
 	getOccurrence(id: string): Promise<Occurrence | null> {
@@ -179,45 +181,57 @@ export class MemoryGraphStore implements GraphStore {
 	}
 
 	listBranches(workId?: string): Promise<Branch[]> {
-		return Promise.resolve(structuredClone(
-			this.state.branches.filter((branch) => workId == null || branch.workId === workId),
-		));
+		return Promise.resolve(
+			structuredClone(
+				this.state.branches.filter((branch) => workId == null || branch.workId === workId),
+			),
+		);
 	}
 
 	listWorkingCopies(workId?: string): Promise<WorkingCopy[]> {
-		return Promise.resolve(structuredClone(
-			this.state.workingCopies.filter((copy) => workId == null || copy.workId === workId),
-		));
+		return Promise.resolve(
+			structuredClone(
+				this.state.workingCopies.filter((copy) => workId == null || copy.workId === workId),
+			),
+		);
 	}
 
 	listRevisions(workId?: string): Promise<Revision[]> {
-		return Promise.resolve(structuredClone(
-			this.state.revisions.filter((revision) => workId == null || revision.workId === workId),
-		));
+		return Promise.resolve(
+			structuredClone(
+				this.state.revisions.filter((revision) => workId == null || revision.workId === workId),
+			),
+		);
 	}
 
 	listRecoverySnapshots(workId?: string, branchId?: string): Promise<RecoverySnapshot[]> {
-		return Promise.resolve(structuredClone(
-			this.state.recoverySnapshots.filter((snapshot) =>
-				(workId == null || snapshot.workId === workId) &&
-				(branchId == null || snapshot.branchId === branchId)
+		return Promise.resolve(
+			structuredClone(
+				this.state.recoverySnapshots.filter(
+					(snapshot) =>
+						(workId == null || snapshot.workId === workId) &&
+						(branchId == null || snapshot.branchId === branchId),
+				),
 			),
-		));
+		);
 	}
 
 	listBookmarks(): Promise<Bookmark[]> {
 		const activeWorkIds = new Set(
 			this.state.works.filter((work) => !work.deletedAt).map((work) => work.id),
 		);
-		return Promise.resolve(structuredClone(
-			this.state.bookmarks.filter((bookmark) => activeWorkIds.has(bookmark.workId)),
-		));
+		return Promise.resolve(
+			structuredClone(
+				this.state.bookmarks.filter((bookmark) => activeWorkIds.has(bookmark.workId)),
+			),
+		);
 	}
 
 	getResumePosition(): Promise<ResumePosition | null> {
-		const active = this.state.resumePosition &&
-			this.state.works.some((work) =>
-				work.id === this.state.resumePosition?.workId && !work.deletedAt
+		const active =
+			this.state.resumePosition &&
+			this.state.works.some(
+				(work) => work.id === this.state.resumePosition?.workId && !work.deletedAt,
 			);
 		return Promise.resolve(active ? structuredClone(this.state.resumePosition) : null);
 	}
@@ -310,11 +324,11 @@ export class MemoryGraphStore implements GraphStore {
 		if (this.state.bookmarks.some((candidate) => candidate.id === bookmark.id)) {
 			return Promise.reject(new Error(`Bookmark already exists: ${bookmark.id}`));
 		}
-		const occurrence = this.state.occurrences.find((candidate) =>
-			candidate.id === bookmark.occurrenceId
+		const occurrence = this.state.occurrences.find(
+			(candidate) => candidate.id === bookmark.occurrenceId,
 		);
-		const work = this.state.works.find((candidate) =>
-			candidate.id === bookmark.workId && !candidate.deletedAt
+		const work = this.state.works.find(
+			(candidate) => candidate.id === bookmark.workId && !candidate.deletedAt,
 		);
 		if (!work || occurrence?.workId !== bookmark.workId) {
 			return Promise.reject(new Error("Bookmark Work and Occurrence must exist and match"));
@@ -332,11 +346,11 @@ export class MemoryGraphStore implements GraphStore {
 		if (!Number.isSafeInteger(position.caretOffset) || position.caretOffset < 0) {
 			return Promise.reject(new Error(`Invalid caret offset: ${position.caretOffset}`));
 		}
-		const occurrence = this.state.occurrences.find((candidate) =>
-			candidate.id === position.occurrenceId
+		const occurrence = this.state.occurrences.find(
+			(candidate) => candidate.id === position.occurrenceId,
 		);
-		const work = this.state.works.find((candidate) =>
-			candidate.id === position.workId && !candidate.deletedAt
+		const work = this.state.works.find(
+			(candidate) => candidate.id === position.workId && !candidate.deletedAt,
 		);
 		if (!work || occurrence?.workId !== position.workId) {
 			return Promise.reject(new Error("Resume Work and Occurrence must exist and match"));
@@ -361,7 +375,7 @@ export class MemoryGraphStore implements GraphStore {
 
 	updateBranch(branch: Branch): Promise<void> {
 		this.state.branches = this.state.branches.map((candidate) =>
-			candidate.id === branch.id ? structuredClone(branch) : candidate
+			candidate.id === branch.id ? structuredClone(branch) : candidate,
 		);
 		return Promise.resolve();
 	}
@@ -370,17 +384,17 @@ export class MemoryGraphStore implements GraphStore {
 		const copy = this.state.workingCopies.find((candidate) => candidate.branchId === branchId);
 		if (!copy) return Promise.reject(new Error(`Working Copy not found for Branch: ${branchId}`));
 		this.state.workingCopies = this.state.workingCopies.map((candidate) =>
-			candidate.branchId === branchId ? { ...candidate, text, updatedAt } : candidate
+			candidate.branchId === branchId ? { ...candidate, text, updatedAt } : candidate,
 		);
 		this.state.works = this.state.works.map((work) =>
-			work.id === copy.workId ? { ...work, updatedAt } : work
+			work.id === copy.workId ? { ...work, updatedAt } : work,
 		);
 		return Promise.resolve();
 	}
 
 	updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
-		const main = this.state.branches.find((branch) =>
-			branch.workId === workId && branch.name === "main"
+		const main = this.state.branches.find(
+			(branch) => branch.workId === workId && branch.name === "main",
 		);
 		if (!main) return Promise.reject(new Error(`Main Branch not found for Work: ${workId}`));
 		return this.updateBranchWorkingCopy(main.id, text, updatedAt);
@@ -444,7 +458,7 @@ export class MemoryGraphStore implements GraphStore {
 	updateOccurrence(occurrence: Occurrence): Promise<void> {
 		const previous = this.state.occurrences.find((candidate) => candidate.id === occurrence.id);
 		this.state.occurrences = this.state.occurrences.map((candidate) =>
-			candidate.id === occurrence.id ? structuredClone(occurrence) : candidate
+			candidate.id === occurrence.id ? structuredClone(occurrence) : candidate,
 		);
 		if (hasOccurrenceStructureChanged(previous, occurrence)) {
 			this.afterOutlineStructureChanged();
@@ -496,10 +510,12 @@ export class MemoryGraphStore implements GraphStore {
 	}
 	deleteLink(fromId: string, toId: string, type: LinkType): Promise<void> {
 		this.state.links = this.state.links.map((link) =>
-			link.fromId === fromId && link.toId === toId && link.type === type &&
-				link.status !== "retracted"
+			link.fromId === fromId &&
+			link.toId === toId &&
+			link.type === type &&
+			link.status !== "retracted"
 				? { ...link, status: "retracted" }
-				: link
+				: link,
 		);
 		return Promise.resolve();
 	}
@@ -518,33 +534,40 @@ export class MemoryGraphStore implements GraphStore {
 		const normalized = normalizeSearchText(prefix);
 		if (!normalized) return Promise.resolve([]);
 		const items = this.representativeItems();
-		return Promise.resolve(structuredClone(
-			items
-				.filter((item) => normalizeSearchText(titleOf(item)).startsWith(normalized))
-				.sort((a, b) =>
-					titleOf(a).length - titleOf(b).length || b.updatedAt.localeCompare(a.updatedAt)
-				)
-				.slice(0, limit),
-		));
+		return Promise.resolve(
+			structuredClone(
+				items
+					.filter((item) => normalizeSearchText(titleOf(item)).startsWith(normalized))
+					.sort(
+						(a, b) =>
+							titleOf(a).length - titleOf(b).length || b.updatedAt.localeCompare(a.updatedAt),
+					)
+					.slice(0, limit),
+			),
+		);
 	}
 	searchLexical(query: string, limit: number): Promise<LexicalHit[]> {
 		const normalized = normalizeSearchText(query);
 		const tokenized = searchTerms(query).split(" ").filter(Boolean);
 		if (!normalized) return Promise.resolve([]);
-		const hits = this.representativeItems().map((item) => {
-			const title = normalizeSearchText(titleOf(item));
-			const body = normalizeSearchText(item.text);
-			const titleCount = countOccurrences(title, normalized) +
-				tokenized.reduce((score, token) => score + countOccurrences(title, token), 0);
-			const bodyCount = countOccurrences(body, normalized) +
-				tokenized.reduce((score, token) => score + countOccurrences(body, token), 0);
-			return {
-				item,
-				titleScore: title === normalized ? 3 : title.startsWith(normalized) ? 2 : titleCount,
-				bodyScore: bodyCount,
-			};
-		}).filter((hit) => hit.titleScore > 0 || hit.bodyScore > 0)
-			.sort((a, b) => (b.titleScore * 2 + b.bodyScore) - (a.titleScore * 2 + a.bodyScore))
+		const hits = this.representativeItems()
+			.map((item) => {
+				const title = normalizeSearchText(titleOf(item));
+				const body = normalizeSearchText(item.text);
+				const titleCount =
+					countOccurrences(title, normalized) +
+					tokenized.reduce((score, token) => score + countOccurrences(title, token), 0);
+				const bodyCount =
+					countOccurrences(body, normalized) +
+					tokenized.reduce((score, token) => score + countOccurrences(body, token), 0);
+				return {
+					item,
+					titleScore: title === normalized ? 3 : title.startsWith(normalized) ? 2 : titleCount,
+					bodyScore: bodyCount,
+				};
+			})
+			.filter((hit) => hit.titleScore > 0 || hit.bodyScore > 0)
+			.sort((a, b) => b.titleScore * 2 + b.bodyScore - (a.titleScore * 2 + a.bodyScore))
 			.slice(0, limit);
 		return Promise.resolve(structuredClone(hits));
 	}
@@ -573,20 +596,20 @@ export class MemoryGraphStore implements GraphStore {
 		return Promise.resolve(structuredClone(this.state.emergenceSuggestions));
 	}
 	upsertEmergenceSuggestion(suggestion: EmergenceSuggestion): Promise<void> {
-		const existing = this.state.emergenceSuggestions.find((candidate) =>
-			candidate.id === suggestion.id
+		const existing = this.state.emergenceSuggestions.find(
+			(candidate) => candidate.id === suggestion.id,
 		);
 		this.state.emergenceSuggestions = [
 			...this.state.emergenceSuggestions.filter((candidate) => candidate.id !== suggestion.id),
 			structuredClone(
 				existing
 					? {
-						...suggestion,
-						persistenceStatus: existing.persistenceStatus,
-						createdAt: existing.createdAt,
-						resolvedAt: existing.resolvedAt,
-						resolutionReason: existing.resolutionReason,
-					}
+							...suggestion,
+							persistenceStatus: existing.persistenceStatus,
+							createdAt: existing.createdAt,
+							resolvedAt: existing.resolvedAt,
+							resolutionReason: existing.resolutionReason,
+						}
 					: suggestion,
 			),
 		];
@@ -614,25 +637,25 @@ export class MemoryGraphStore implements GraphStore {
 				);
 			}
 			const isSymmetric = isRelationTypeSymmetric(link.type, this.state.relationTypeDefinitions);
-			const endpointsMatch = (link.from.workId === current.contextWorkId &&
-				link.to.workId === current.targetWorkId) ||
+			const endpointsMatch =
+				(link.from.workId === current.contextWorkId && link.to.workId === current.targetWorkId) ||
 				(isSymmetric &&
 					link.from.workId === current.targetWorkId &&
 					link.to.workId === current.contextWorkId);
 			if (!endpointsMatch || link.type !== current.proposedLinkType) {
 				return Promise.reject(new Error("Emergence suggestion link does not match its proposal"));
 			}
-			const duplicate = this.state.links.some((candidate) =>
-				candidate.status !== "retracted" &&
-				candidate.origin === "suggestion" &&
-				candidate.from.scope === "work" &&
-				candidate.to.scope === "work" &&
-				candidate.type === link.type &&
-				((candidate.from.workId === link.from.workId &&
-					candidate.to.workId === link.to.workId) ||
-					(isSymmetric &&
-						candidate.from.workId === link.to.workId &&
-						candidate.to.workId === link.from.workId))
+			const duplicate = this.state.links.some(
+				(candidate) =>
+					candidate.status !== "retracted" &&
+					candidate.origin === "suggestion" &&
+					candidate.from.scope === "work" &&
+					candidate.to.scope === "work" &&
+					candidate.type === link.type &&
+					((candidate.from.workId === link.from.workId && candidate.to.workId === link.to.workId) ||
+						(isSymmetric &&
+							candidate.from.workId === link.to.workId &&
+							candidate.to.workId === link.from.workId)),
 			);
 			if (!duplicate) this.state.links.push(structuredClone(link));
 		}

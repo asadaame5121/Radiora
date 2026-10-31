@@ -32,26 +32,26 @@ export interface HighDensityGraphFixture {
 
 export async function createHighDensityGraphFixture(): Promise<HighDensityGraphFixture> {
 	const roots = Array.from({ length: 10 }, (_, index) => makeItem(`root-${index}`, null, "root"));
-	const groups = Array.from(
-		{ length: 50 },
-		(_, index) => makeItem(`group-${index}`, roots[Math.floor(index / 5)].id, "group"),
+	const groups = Array.from({ length: 50 }, (_, index) =>
+		makeItem(`group-${index}`, roots[Math.floor(index / 5)].id, "group"),
 	);
-	const matches = Array.from(
-		{ length: HIGH_DENSITY_MATCH_COUNT },
-		(_, index) =>
-			makeItem(
-				`match-${index}`,
-				groups[Math.floor(index / 10)].id,
-				`${HIGH_DENSITY_SEARCH_QUERY} match ${index}`,
-			),
+	const matches = Array.from({ length: HIGH_DENSITY_MATCH_COUNT }, (_, index) =>
+		makeItem(
+			`match-${index}`,
+			groups[Math.floor(index / 10)].id,
+			`${HIGH_DENSITY_SEARCH_QUERY} match ${index}`,
+		),
 	);
-	const directTargets = Array.from(
-		{ length: HIGH_DENSITY_MATCH_COUNT },
-		(_, index) => makeItem(`direct-${index}`, null, "direct target"),
+	const directTargets = Array.from({ length: HIGH_DENSITY_MATCH_COUNT }, (_, index) =>
+		makeItem(`direct-${index}`, null, "direct target"),
 	);
 	const fillers = Array.from(
 		{
-			length: HIGH_DENSITY_WORK_COUNT - roots.length - groups.length - matches.length -
+			length:
+				HIGH_DENSITY_WORK_COUNT -
+				roots.length -
+				groups.length -
+				matches.length -
 				directTargets.length,
 		},
 		(_, index) => makeItem(`filler-${index}`, null, "filler"),

@@ -14,9 +14,10 @@ for (let version = 0; version <= 8; version++) {
 			const state = await store.exportGraphState();
 			if (version === 8) {
 				assertEquals(await Deno.readTextFile(path), input);
-				assertEquals(Array.from(Deno.readDirSync(directory)).map((entry) => entry.name), [
-					"graph.json",
-				]);
+				assertEquals(
+					Array.from(Deno.readDirSync(directory)).map((entry) => entry.name),
+					["graph.json"],
+				);
 			} else {
 				assertEquals(await Deno.readTextFile(`${path}.v${version}.bak`), input);
 				assertEquals(JSON.parse(await Deno.readTextFile(path)).schemaVersion, 8);
@@ -64,9 +65,10 @@ Deno.test("JSON initialize rejects broken input before altering memory, disk or 
 			await assertRejects(() => store.initialize(), Error);
 			assertEquals(await store.exportGraphState(), before);
 			assertEquals(await Deno.readTextFile(path), input);
-			assertEquals(Array.from(Deno.readDirSync(directory)).map((entry) => entry.name), [
-				"graph.json",
-			]);
+			assertEquals(
+				Array.from(Deno.readDirSync(directory)).map((entry) => entry.name),
+				["graph.json"],
+			);
 		}
 	} finally {
 		await Deno.remove(directory, { recursive: true });

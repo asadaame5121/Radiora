@@ -179,10 +179,7 @@ export function createCountingSqliteConnector(
 	};
 }
 
-export function instrumentStore(
-	store: MemoryGraphStore,
-	counters: PerformanceCounters,
-): void {
+export function instrumentStore(store: MemoryGraphStore, counters: PerformanceCounters): void {
 	const originalExport = store.exportGraphState.bind(store);
 	store.exportGraphState = async () => {
 		counters.recordCapture();

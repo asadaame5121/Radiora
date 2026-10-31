@@ -16,9 +16,7 @@ const LicenseIndexSchema = v.object({
 export type LicenseEntry = v.InferOutput<typeof LicenseEntrySchema>;
 export type LicenseIndex = v.InferOutput<typeof LicenseIndexSchema>;
 
-export async function fetchLicenseIndex(
-	fetcher: typeof fetch = fetch,
-): Promise<LicenseIndex> {
+export async function fetchLicenseIndex(fetcher: typeof fetch = fetch): Promise<LicenseIndex> {
 	const response = await fetcher("/licenses/index.json");
 	if (!response.ok) {
 		throw new Error(`ライセンス情報を読み込めませんでした (${response.status})`);

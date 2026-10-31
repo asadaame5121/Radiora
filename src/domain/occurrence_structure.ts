@@ -5,7 +5,8 @@ export function hasOccurrenceStructureChanged(
 	previous: Occurrence | undefined,
 	next: Occurrence,
 ): boolean {
-	return previous !== undefined && (
-		previous.parentOccurrenceId !== next.parentOccurrenceId || previous.workId !== next.workId
+	return (
+		previous !== undefined &&
+		(previous.parentOccurrenceId !== next.parentOccurrenceId || previous.workId !== next.workId)
 	);
 }

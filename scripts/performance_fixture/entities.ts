@@ -25,12 +25,7 @@ export function fixtureTimestamp(index: number): string {
 	return new Date(FIXTURE_BASE_TIME + index * FIXTURE_TIME_STEP_MS).toISOString();
 }
 
-export function makeLink(
-	seed: number,
-	index: number,
-	fromId: string,
-	toId: string,
-): OutlineLink {
+export function makeLink(seed: number, index: number, fromId: string, toId: string): OutlineLink {
 	return {
 		id: fixtureId(seed, LINK_FIXTURE_ID_KIND, index),
 		fromId,

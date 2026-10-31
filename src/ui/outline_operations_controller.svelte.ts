@@ -1,11 +1,7 @@
 import type { OutlineItem } from "../domain/models.ts";
 
 export interface OutlineOperationsApi {
-	moveItem(input: {
-		id: string;
-		parentId: string | null;
-		afterId: string | null;
-	}): Promise<void>;
+	moveItem(input: { id: string; parentId: string | null; afterId: string | null }): Promise<void>;
 	setCollapsed(id: string, collapsed: boolean): Promise<void>;
 	updateItemText(id: string, text: string): Promise<void>;
 	createItem(input: {
@@ -161,9 +157,8 @@ export class OutlineOperationsController {
 		const index = siblings.findIndex((candidate) => candidate.id === item.id);
 		const targetIndex = index + direction;
 		if (targetIndex < 0 || targetIndex >= siblings.length) return;
-		const afterId = direction < 0
-			? (siblings[targetIndex - 1]?.id ?? null)
-			: siblings[targetIndex].id;
+		const afterId =
+			direction < 0 ? (siblings[targetIndex - 1]?.id ?? null) : siblings[targetIndex].id;
 		await this.options.api.moveItem({
 			id: item.id,
 			parentId: item.parentId,
@@ -213,8 +208,8 @@ export class OutlineOperationsController {
 
 	canDeleteEmptyRow = (item: OutlineItem): boolean => {
 		if (item.text.trim()) return false;
-		const siblings = this.siblingsOf(item).filter((candidate) =>
-			candidate.orderKey < item.orderKey
+		const siblings = this.siblingsOf(item).filter(
+			(candidate) => candidate.orderKey < item.orderKey,
 		);
 		return siblings.length > 0;
 	};
@@ -222,8 +217,8 @@ export class OutlineOperationsController {
 	deleteEmptyRow = async (item: OutlineItem): Promise<boolean> => {
 		const current = this.options.captureRequest();
 		if (!this.canDeleteEmptyRow(item)) return false;
-		const siblings = this.siblingsOf(item).filter((candidate) =>
-			candidate.orderKey < item.orderKey
+		const siblings = this.siblingsOf(item).filter(
+			(candidate) => candidate.orderKey < item.orderKey,
 		);
 		const previous = siblings.at(-1);
 		if (!previous) return false;
@@ -246,8 +241,12 @@ export class OutlineOperationsController {
 		readSelection: ReadRowSelection,
 	): Promise<void> => {
 		if (
-			event.isComposing || event.keyCode === IME_PROCESS_KEY_CODE || event.ctrlKey || event.metaKey
-		) return;
+			event.isComposing ||
+			event.keyCode === IME_PROCESS_KEY_CODE ||
+			event.ctrlKey ||
+			event.metaKey
+		)
+			return;
 		const current = this.options.captureRequest();
 		try {
 			await this.dispatchEditingKey(event, item, readSelection);

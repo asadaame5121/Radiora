@@ -23,12 +23,15 @@ Deno.test("high-density lineage layout stays within its performance budget", asy
 		height: 800,
 		projection: "chronology",
 		projectX: (timestamp) => timestamp / 1000,
-		camera: { k: .5, x: 0, y: 0 },
+		camera: { k: 0.5, x: 0, y: 0 },
 	});
 	const elapsedMs = performance.now() - started;
 
 	assertLess(elapsedMs, 1_500, `layout took ${elapsedMs.toFixed(1)}ms`);
-	assert(layout.nodes.some((node) => node.aggregate), "dense content is collapsed");
+	assert(
+		layout.nodes.some((node) => node.aggregate),
+		"dense content is collapsed",
+	);
 	assert(
 		layout.nodes.reduce((total, node) => total + node.count, 0) === HIGH_DENSITY_WORK_COUNT,
 		"every Work is represented exactly once",
@@ -48,7 +51,7 @@ Deno.test("Lineage and Chronology share the same high-density cluster behavior",
 		height: 800,
 		projectX: (timestamp: number) => timestamp / 1000,
 		projectGeneration: (generation: number) => generation * 160,
-		camera: { k: .5, x: 0, y: 0 },
+		camera: { k: 0.5, x: 0, y: 0 },
 	};
 	const chronology = calculateTreeLayout(projection.snapshot, {
 		...options,
@@ -59,9 +62,7 @@ Deno.test("Lineage and Chronology share the same high-density cluster behavior",
 		projection: "lineage" as const,
 	});
 	for (const layout of [chronology, lineage]) {
-		const clusterIds = layout.nodes
-			.filter((node) => node.aggregate)
-			.map((node) => node.id);
+		const clusterIds = layout.nodes.filter((node) => node.aggregate).map((node) => node.id);
 		assert(clusterIds.length > 0, "both projections collapse dense content");
 		assert(new Set(clusterIds).size === clusterIds.length, "cluster ids are unique");
 		for (const cluster of layout.nodes.filter((node) => node.aggregate)) {

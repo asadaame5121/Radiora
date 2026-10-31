@@ -40,9 +40,9 @@ test.each([false, true])("standalone reload retires staged Outline bookmark %s",
 
 test("latest failure retains bookmarks and retry succeeds", async () => {
 	const s = setup();
-	s.read.mockResolvedValueOnce([{ id: "saved" } as Bookmark]).mockRejectedValueOnce(
-		new Error("offline"),
-	);
+	s.read
+		.mockResolvedValueOnce([{ id: "saved" } as Bookmark])
+		.mockRejectedValueOnce(new Error("offline"));
 	await s.controller.reload();
 	await s.controller.reload();
 	expect(s.controller.bookmarks[0].id).toBe("saved");

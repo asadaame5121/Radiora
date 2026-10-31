@@ -5,15 +5,11 @@ import type { GraphStateSnapshot } from "../../src/storage/graph_store.ts";
 export async function jsonGraphCodecFixture(version: number) {
 	if (version === 0) {
 		return JSON.parse(
-			await Deno.readTextFile(
-				new URL("../fixtures/backup-v0.json", import.meta.url),
-			),
+			await Deno.readTextFile(new URL("../fixtures/backup-v0.json", import.meta.url)),
 		);
 	}
 	const fixture = JSON.parse(
-		await Deno.readTextFile(
-			new URL("../fixtures/backup-v4.json", import.meta.url),
-		),
+		await Deno.readTextFile(new URL("../fixtures/backup-v4.json", import.meta.url)),
 	);
 	fixture.schemaVersion = version;
 	fixture.source.storageSchemaVersion = version;

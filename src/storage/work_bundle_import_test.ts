@@ -37,7 +37,10 @@ async function assertAtomicImport(store: GraphStore): Promise<void> {
 	const root = bundle("日本語\n複数行", null, 1024);
 	const child = bundle("子", root.occurrence.id, 1024);
 	await store.importWorkBundles([root, child]);
-	assertEquals((await store.listItems()).map((item) => item.text), ["日本語\n複数行", "子"]);
+	assertEquals(
+		(await store.listItems()).map((item) => item.text),
+		["日本語\n複数行", "子"],
+	);
 	const historicalTime = {
 		kind: "point",
 		date: { precision: "year", year: 1604, approximate: false },
@@ -89,11 +92,10 @@ Deno.test("JsonGraphStore imports and persists a complete outline atomically", a
 		await store.close();
 		const reopened = new JsonGraphStore(path);
 		await reopened.initialize();
-		assertEquals((await reopened.listItems()).map((item) => item.text), [
-			"日本語\n複数行",
-			"子",
-			"年代付き",
-		]);
+		assertEquals(
+			(await reopened.listItems()).map((item) => item.text),
+			["日本語\n複数行", "子", "年代付き"],
+		);
 		await reopened.close();
 	} finally {
 		await Deno.remove(directory, { recursive: true });

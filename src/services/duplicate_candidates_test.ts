@@ -5,11 +5,7 @@ import type { OutlineLink, Work, WorkingCopy } from "../domain/models.ts";
 
 const CREATED_AT = "2026-07-30T00:00:00.000Z";
 
-async function addWork(
-	store: MemoryGraphStore,
-	id: string,
-	text: string,
-): Promise<void> {
+async function addWork(store: MemoryGraphStore, id: string, text: string): Promise<void> {
 	const work: Work = { id, createdAt: CREATED_AT, updatedAt: CREATED_AT };
 	const branch = {
 		id: `${id}-main`,
@@ -136,7 +132,10 @@ Deno.test("two shared tags (score 2) produce a candidate", async () => {
 	assertEquals(candidates.length, 1);
 	assertEquals(candidates[0].score, 2);
 	assertEquals(candidates[0].reasons.length, 2);
-	assertEquals(candidates[0].reasons.every((reason) => reason.kind === "tag"), true);
+	assertEquals(
+		candidates[0].reasons.every((reason) => reason.kind === "tag"),
+		true,
+	);
 });
 
 Deno.test("single shared link (score 1) does not produce a candidate", async () => {
@@ -352,10 +351,14 @@ Deno.test("custom symmetric link produces link reason in duplicate candidates", 
 	const service = new DuplicateCandidateService(store);
 	const candidates = await service.listCandidates();
 
-	const candidate = candidates.find((c) =>
-		(c.workA.workId === "work-a" && c.workB.workId === "work-b") ||
-		(c.workA.workId === "work-b" && c.workB.workId === "work-a")
+	const candidate = candidates.find(
+		(c) =>
+			(c.workA.workId === "work-a" && c.workB.workId === "work-b") ||
+			(c.workA.workId === "work-b" && c.workB.workId === "work-a"),
 	);
 	assertEquals(Boolean(candidate), true);
-	assertEquals(candidate?.reasons.some((r) => r.kind === "link"), true);
+	assertEquals(
+		candidate?.reasons.some((r) => r.kind === "link"),
+		true,
+	);
 });

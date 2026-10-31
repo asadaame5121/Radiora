@@ -13,12 +13,12 @@ export type RewriteConfirmation = "confirmed" | "cancelled";
 export type RewriteAsNewBranchResult =
 	| { status: "cancelled" }
 	| {
-		status: "created";
-		branch: Branch;
-		workingCopy: WorkingCopy;
-		baseRevision: Revision;
-		checkpointCreated: boolean;
-	};
+			status: "created";
+			branch: Branch;
+			workingCopy: WorkingCopy;
+			baseRevision: Revision;
+			checkpointCreated: boolean;
+	  };
 
 /**
  * Explicit, append-only creation of a Revision from a Branch's current Working Copy.
@@ -143,8 +143,8 @@ export class RevisionService {
 		const sourceBranch = branches.find((candidate) => candidate.id === sourceBranchId);
 		if (!sourceBranch) throw new Error(`Branch not found: ${sourceBranchId}`);
 
-		const sourceWorkingCopy = workingCopies.find((candidate) =>
-			candidate.branchId === sourceBranchId
+		const sourceWorkingCopy = workingCopies.find(
+			(candidate) => candidate.branchId === sourceBranchId,
 		);
 		if (!sourceWorkingCopy || sourceWorkingCopy.workId !== sourceBranch.workId) {
 			throw new Error(`Working Copy not found for Branch: ${sourceBranchId}`);
@@ -164,13 +164,13 @@ export class RevisionService {
 		const checkpointCreated = !headRevision || headRevision.text !== sourceWorkingCopy.text;
 		const baseRevision: Revision = checkpointCreated
 			? {
-				id: this.#createId(),
-				workId: sourceBranch.workId,
-				text: sourceWorkingCopy.text,
-				parentRevisionIds: headRevision ? [headRevision.id] : [],
-				kind: "checkpoint",
-				createdAt: timestamp,
-			}
+					id: this.#createId(),
+					workId: sourceBranch.workId,
+					text: sourceWorkingCopy.text,
+					parentRevisionIds: headRevision ? [headRevision.id] : [],
+					kind: "checkpoint",
+					createdAt: timestamp,
+				}
 			: headRevision;
 		const branch: Branch = {
 			id: this.#createId(),

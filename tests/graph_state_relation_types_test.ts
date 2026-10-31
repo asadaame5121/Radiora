@@ -18,10 +18,7 @@ Deno.test("validatedGraphStateSnapshot injects built-in relation types for legac
 
 	assertEquals("relationTypeDefinitions" in legacySnapshot, false);
 	assertEquals(validated.relationTypeDefinitions, BUILT_IN_RELATION_TYPES);
-	assertEquals(
-		validated.relationTypeDefinitions?.length,
-		BUILT_IN_RELATION_TYPES.length,
-	);
+	assertEquals(validated.relationTypeDefinitions?.length, BUILT_IN_RELATION_TYPES.length);
 });
 
 Deno.test("validatedGraphStateSnapshot preserves valid custom relation type definitions", async () => {
@@ -42,10 +39,7 @@ Deno.test("validatedGraphStateSnapshot preserves valid custom relation type defi
 
 	const validated = validatedGraphStateSnapshot(snapshotWithCatalog);
 
-	assertEquals(validated.relationTypeDefinitions, [
-		...BUILT_IN_RELATION_TYPES,
-		customDef,
-	]);
+	assertEquals(validated.relationTypeDefinitions, [...BUILT_IN_RELATION_TYPES, customDef]);
 });
 
 Deno.test("validatedGraphStateSnapshot rejects explicitly present undefined or malformed catalog", async () => {

@@ -16,27 +16,33 @@ function createTestSnapshot(): GraphStateSnapshot {
 	const occId = "o-bootstrap-test";
 	return validatedGraphStateSnapshot({
 		works: [{ id: workId, createdAt: CREATED_AT, updatedAt: CREATED_AT }],
-		branches: [{
-			id: branchId,
-			workId,
-			name: "main",
-			headRevisionId: null,
-			createdAt: CREATED_AT,
-		}],
-		workingCopies: [{
-			branchId,
-			workId,
-			text: "Bootstrap storage text",
-			updatedAt: CREATED_AT,
-		}],
-		occurrences: [{
-			id: occId,
-			workId,
-			parentOccurrenceId: null,
-			orderKey: 1000,
-			collapsed: false,
-			revisionSelector: { mode: "branch", branchId },
-		}],
+		branches: [
+			{
+				id: branchId,
+				workId,
+				name: "main",
+				headRevisionId: null,
+				createdAt: CREATED_AT,
+			},
+		],
+		workingCopies: [
+			{
+				branchId,
+				workId,
+				text: "Bootstrap storage text",
+				updatedAt: CREATED_AT,
+			},
+		],
+		occurrences: [
+			{
+				id: occId,
+				workId,
+				parentOccurrenceId: null,
+				orderKey: 1000,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId },
+			},
+		],
 		links: [],
 		systemRelations: [],
 		knots: [],
@@ -286,15 +292,13 @@ Deno.test("bootstrapStorage does not read a migrated legacy LOCK file", async ()
 	}
 });
 
-for (
-	const failure of [
-		"missing target",
-		"missing marker",
-		"corrupt marker",
-		"wrong source",
-		"corrupt SQLite",
-	]
-) {
+for (const failure of [
+	"missing target",
+	"missing marker",
+	"corrupt marker",
+	"wrong source",
+	"corrupt SQLite",
+]) {
 	Deno.test(`bootstrapStorage refuses ${failure} without altering retained data`, async () => {
 		const root = await Deno.makeTempDir({ prefix: "radiora-boot-invalid-" });
 		const sourcePath = `${root}\\surreal\\main.db`;
@@ -323,9 +327,8 @@ for (
 			}
 			if (failure === "corrupt SQLite") await Deno.writeTextFile(targetPath, "not a database");
 			const targetBefore = failure === "missing target" ? null : await Deno.readFile(targetPath);
-			const markerBefore = failure === "missing marker"
-				? null
-				: await Deno.readTextFile(markerPath);
+			const markerBefore =
+				failure === "missing marker" ? null : await Deno.readTextFile(markerPath);
 
 			await assertRejects(() => bootstrapStorage({ dataDir: root }), Error);
 			assertEquals(await Deno.readTextFile(sourcePath), "retained legacy data");
@@ -360,10 +363,7 @@ Deno.test("bootstrapStorage session.stop properly closes active store and is ide
 		await session.stop();
 
 		// Subsequent mutation on closed store must reject
-		await assertRejects(
-			() => session.store.restoreGraphState(snapshot),
-			Error,
-		);
+		await assertRejects(() => session.store.restoreGraphState(snapshot), Error);
 
 		// Second stop should be safe and idempotent
 		await session.stop();

@@ -7,7 +7,12 @@ export function normalizeSearchText(value: string): string {
 }
 
 export function titleFromText(value: string): string {
-	return value.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "";
+	return (
+		value
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.find(Boolean) ?? ""
+	);
 }
 
 export function searchTerms(value: string): string {

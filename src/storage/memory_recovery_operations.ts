@@ -4,11 +4,7 @@ import type { MemoryStateContainer } from "./memory_state_container.ts";
 
 export type MutableRecoveryState = Pick<
 	MemoryStateContainer,
-	| "works"
-	| "branches"
-	| "workingCopies"
-	| "revisions"
-	| "recoverySnapshots"
+	"works" | "branches" | "workingCopies" | "revisions" | "recoverySnapshots"
 >;
 
 export function appendRevisionToBranch(
@@ -18,7 +14,7 @@ export function appendRevisionToBranch(
 ): void {
 	state.revisions.push(structuredClone(revision));
 	state.branches = state.branches.map((candidate) =>
-		candidate.id === branchId ? { ...candidate, headRevisionId: revision.id } : candidate
+		candidate.id === branchId ? { ...candidate, headRevisionId: revision.id } : candidate,
 	);
 }
 
@@ -46,7 +42,8 @@ export function applyRecoverySnapshotRestore(
 	if (!target) throw new Error(`Recovery Snapshot not found: ${snapshotId}`);
 	const copy = state.workingCopies.find((candidate) => candidate.branchId === target.branchId);
 	if (
-		!copy || copy.workId !== target.workId ||
+		!copy ||
+		copy.workId !== target.workId ||
 		beforeRestore.workId !== target.workId ||
 		beforeRestore.branchId !== target.branchId
 	) {
@@ -62,10 +59,10 @@ export function applyRecoverySnapshotRestore(
 	state.workingCopies = state.workingCopies.map((candidate) =>
 		candidate.branchId === target.branchId
 			? { ...candidate, text: target.text, updatedAt }
-			: candidate
+			: candidate,
 	);
 	state.works = state.works.map((work) =>
-		work.id === target.workId ? { ...work, updatedAt } : work
+		work.id === target.workId ? { ...work, updatedAt } : work,
 	);
 }
 
@@ -80,8 +77,10 @@ export function applyRecoverySnapshotPromotion(
 	const branch = state.branches.find((candidate) => candidate.id === branchId);
 	if (!snapshot) throw new Error(`Recovery Snapshot not found: ${snapshotId}`);
 	if (
-		snapshot.branchId !== branchId || snapshot.workId !== revision.workId ||
-		branch?.workId !== snapshot.workId || revision.text !== snapshot.text
+		snapshot.branchId !== branchId ||
+		snapshot.workId !== revision.workId ||
+		branch?.workId !== snapshot.workId ||
+		revision.text !== snapshot.text
 	) {
 		throw new Error("Recovery Snapshot scope does not match Revision");
 	}
@@ -90,6 +89,6 @@ export function applyRecoverySnapshotPromotion(
 	state.recoverySnapshots = state.recoverySnapshots.map((candidate) =>
 		candidate.id === snapshotId
 			? { ...candidate, protection: { reason: "revision-source", protectedAt } }
-			: candidate
+			: candidate,
 	);
 }

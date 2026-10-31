@@ -3,12 +3,7 @@ import fc from "fast-check";
 import type { OutlineItem, OutlineSnapshot } from "../domain/models.ts";
 import { type OpmlNode, parseOpml, renderOutlineSnapshotOpml } from "./opml.ts";
 
-function item(
-	id: string,
-	text: string,
-	parentId: string | null,
-	orderKey: number,
-): OutlineItem {
+function item(id: string, text: string, parentId: string | null, orderKey: number): OutlineItem {
 	return {
 		id,
 		workId: `work-${id}`,
@@ -76,12 +71,14 @@ function expectedTree(generated: readonly GeneratedItem[]): OpmlNode[] {
 }
 
 Deno.test("OPML round-trip retains hierarchy, sibling order, Japanese, and complete multiline text", () => {
-	const opml = renderOutlineSnapshotOpml(snapshot([
-		item("later", "後の兄弟", null, 2),
-		item("child-b", "子B\n二行目", "root", 2),
-		item("root", "序章 & <導入>\n\n複数行の本文\n最後", null, 1),
-		item("child-a", "子A\n日本語の本文", "root", 1),
-	]));
+	const opml = renderOutlineSnapshotOpml(
+		snapshot([
+			item("later", "後の兄弟", null, 2),
+			item("child-b", "子B\n二行目", "root", 2),
+			item("root", "序章 & <導入>\n\n複数行の本文\n最後", null, 1),
+			item("child-a", "子A\n日本語の本文", "root", 1),
+		]),
+	);
 	assertEquals(parseOpml(opml), [
 		{
 			text: "序章 & <導入>\n\n複数行の本文\n最後",
@@ -103,50 +100,45 @@ Deno.test("OPML export includes standard text and note fields alongside lossless
 
 Deno.test("external OPML combines text and note and decodes numeric XML entities", () => {
 	assertEquals(
-		parseOpml([
-			'<opml version="2.0">',
-			"<head/>",
-			'<body><outline text="&#26085;&#26412;&#35486; &amp; &#x8A18;&#21495;" _note="1行目&#10;2行目"/></body>',
-			"</opml>",
-		].join("")),
+		parseOpml(
+			[
+				'<opml version="2.0">',
+				"<head/>",
+				'<body><outline text="&#26085;&#26412;&#35486; &amp; &#x8A18;&#21495;" _note="1行目&#10;2行目"/></body>',
+				"</opml>",
+			].join(""),
+		),
 		[{ text: "日本語 & 記号\n1行目\n2行目", children: [] }],
 	);
 });
 
 Deno.test("OPML rejects entity declarations and malformed or incomplete XML", () => {
-	for (
-		const source of [
-			'<!DOCTYPE opml [<!ENTITY unsafe "x">]><opml><body/></opml>',
-			'<opml><body><outline text="broken"></body></opml>',
-			"<opml><head/></opml>",
-		]
-	) {
+	for (const source of [
+		'<!DOCTYPE opml [<!ENTITY unsafe "x">]><opml><body/></opml>',
+		'<opml><body><outline text="broken"></body></opml>',
+		"<opml><head/></opml>",
+	]) {
 		assertThrows(() => parseOpml(source));
 	}
 });
 
 Deno.test("OPML rejects malformed Radiora lossless attributes", () => {
 	assertThrows(() =>
-		parseOpml(
-			'<opml><body><outline text="x" data-radiora-text="not base64!"/></body></opml>',
-		)
+		parseOpml('<opml><body><outline text="x" data-radiora-text="not base64!"/></body></opml>'),
 	);
 });
 
-Deno.test(
-	"Property: OPML round-trip preserves generated text, hierarchy, and sibling order",
-	() => {
-		void fc.assert(
-			fc.property(generatedItemsArbitrary, (generated) => {
-				assertEquals(
-					parseOpml(renderOutlineSnapshotOpml(generatedSnapshot(generated))),
-					expectedTree(generated),
-				);
-			}),
-			{ numRuns: 100 },
-		);
-	},
-);
+Deno.test("Property: OPML round-trip preserves generated text, hierarchy, and sibling order", () => {
+	void fc.assert(
+		fc.property(generatedItemsArbitrary, (generated) => {
+			assertEquals(
+				parseOpml(renderOutlineSnapshotOpml(generatedSnapshot(generated))),
+				expectedTree(generated),
+			);
+		}),
+		{ numRuns: 100 },
+	);
+});
 
 Deno.test("namespaced external OPML preserves nested outlines, empty text, and standard attributes", () => {
 	const source = [
@@ -157,24 +149,24 @@ Deno.test("namespaced external OPML preserves nested outlines, empty text, and s
 		"</o:outline></o:body></o:opml>",
 	].join("");
 
-	assertEquals(parseOpml(source), [{
-		text: "親 & 子",
-		children: [
-			{ text: "", children: [] },
-			{ text: "孫\n一行目\n二行目", children: [] },
-		],
-	}]);
+	assertEquals(parseOpml(source), [
+		{
+			text: "親 & 子",
+			children: [
+				{ text: "", children: [] },
+				{ text: "孫\n一行目\n二行目", children: [] },
+			],
+		},
+	]);
 });
 
 Deno.test("OPML rejects missing text, duplicate attributes, unsupported entities, and trailing XML", () => {
-	for (
-		const [source, message] of [
-			["<opml><body><outline/></body></opml>", "requires a text attribute"],
-			['<opml><body><outline text="a" text="b"/></body></opml>', "duplicate XML attributes"],
-			['<opml><body><outline text="a &bogus;"/></body></opml>', "unsupported XML entity"],
-			["<opml><body/></opml><opml/>", "not well-formed XML"],
-		]
-	) {
+	for (const [source, message] of [
+		["<opml><body><outline/></body></opml>", "requires a text attribute"],
+		['<opml><body><outline text="a" text="b"/></body></opml>', "duplicate XML attributes"],
+		['<opml><body><outline text="a &bogus;"/></body></opml>', "unsupported XML entity"],
+		["<opml><body/></opml><opml/>", "not well-formed XML"],
+	]) {
 		assertThrows(() => parseOpml(source), Error, message);
 	}
 });

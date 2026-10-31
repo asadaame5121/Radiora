@@ -79,8 +79,11 @@ export class OmniSearchController {
 		];
 	}
 	get omniEntryCount() {
-		return this.liveSuggestions.length + this.liveSearchResults.length +
-			(this.liveQuickCaptureText.trim() ? 1 : 0);
+		return (
+			this.liveSuggestions.length +
+			this.liveSearchResults.length +
+			(this.liveQuickCaptureText.trim() ? 1 : 0)
+		);
 	}
 	queueSearch(): void {
 		if (this.disposed) return;
@@ -138,10 +141,7 @@ export class OmniSearchController {
 	moveSearchActiveIndex(delta: -1 | 1): number {
 		this.liveSearchActiveIndex = Math.max(
 			-1,
-			Math.min(
-				this.omniEntryCount - 1,
-				this.liveSearchActiveIndex + delta,
-			),
+			Math.min(this.omniEntryCount - 1, this.liveSearchActiveIndex + delta),
 		);
 		return this.liveSearchActiveIndex;
 	}
@@ -163,16 +163,17 @@ export class OmniSearchController {
 	}
 	enterEntry(title: (entry: OmniwindowEntry) => string): OmniwindowEntry | "capture" | undefined {
 		const entries = this.searchEntries;
-		const exact = entries.findIndex((entry) =>
-			title(entry).trim() === this.liveQuickCaptureText.trim()
+		const exact = entries.findIndex(
+			(entry) => title(entry).trim() === this.liveQuickCaptureText.trim(),
 		);
-		const index = this.liveSearchActiveIndex >= 0
-			? this.liveSearchActiveIndex
-			: exact >= 0
-			? exact
-			: entries.length
-			? 0
-			: -1;
+		const index =
+			this.liveSearchActiveIndex >= 0
+				? this.liveSearchActiveIndex
+				: exact >= 0
+					? exact
+					: entries.length
+						? 0
+						: -1;
 		return index === entries.length && this.liveQuickCaptureText.trim()
 			? "capture"
 			: entries[index];

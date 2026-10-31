@@ -37,7 +37,7 @@ async function discardAfterFlush(
 	await ports.deleteItem(id);
 	forget(id);
 	if (!current()) return false;
-	return await ports.reload(current) !== false;
+	return (await ports.reload(current)) !== false;
 }
 
 async function discardTrackedItem(
@@ -139,7 +139,7 @@ async function discardRestoredItems(
 ): Promise<boolean> {
 	if (pendingIds.size === 0) return current();
 	const initialPending = [...pendingIds];
-	if (!await flushRestoredItems(ports, forget, initialPending, current)) return false;
+	if (!(await flushRestoredItems(ports, forget, initialPending, current))) return false;
 	const candidates = restoredDiscardCandidates(ports, pendingIds, forget, initialPending);
 	return candidates.length === 0
 		? current()

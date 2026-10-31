@@ -36,7 +36,8 @@ describe("help update controller", () => {
 	test("ignores a rejected stale check", async () => {
 		const first = deferred<UpdateCheckResult>();
 		const controller = createHelpUpdateController({
-			checkForUpdate: vi.fn()
+			checkForUpdate: vi
+				.fn()
 				.mockReturnValueOnce(first.promise)
 				.mockResolvedValueOnce(updateResult({ updateAvailable: false })),
 		});
@@ -49,12 +50,13 @@ describe("help update controller", () => {
 		expect(controller.status).toBe("current");
 	});
 
-	test.each(
-		[
-			{ updateAvailable: false, expected: "current" },
-			{ updateAvailable: true, expected: "available" },
-		] as const,
-	)("maps a successful release check to $expected", async ({ updateAvailable, expected }) => {
+	test.each([
+		{ updateAvailable: false, expected: "current" },
+		{ updateAvailable: true, expected: "available" },
+	] as const)("maps a successful release check to $expected", async ({
+		updateAvailable,
+		expected,
+	}) => {
 		const controller = createHelpUpdateController({
 			checkForUpdate: vi.fn(async () => updateResult({ updateAvailable })),
 		});
@@ -82,7 +84,8 @@ describe("help update controller", () => {
 	test("keeps only the newest overlapping result", async () => {
 		const first = deferred<UpdateCheckResult>();
 		const second = deferred<UpdateCheckResult>();
-		const checkForUpdate = vi.fn()
+		const checkForUpdate = vi
+			.fn()
 			.mockReturnValueOnce(first.promise)
 			.mockReturnValueOnce(second.promise);
 		const controller = createHelpUpdateController({ checkForUpdate });
@@ -99,7 +102,7 @@ describe("help update controller", () => {
 
 	test("ignores a result after the help view is disposed", async () => {
 		let resolve!: (result: UpdateCheckResult) => void;
-		const pending = new Promise<UpdateCheckResult>((next) => resolve = next);
+		const pending = new Promise<UpdateCheckResult>((next) => (resolve = next));
 		const controller = createHelpUpdateController({ checkForUpdate: () => pending });
 
 		const checking = controller.check();

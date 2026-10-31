@@ -56,9 +56,8 @@ export function createNavigationController(options: NavigationControllerOptions 
 		},
 		addBrowsingPane(): string {
 			let paneId: string;
-			do paneId = `pane-${nextPaneNumber++}`; while (
-				browsing.panes.some((pane) => pane.id === paneId)
-			);
+			do paneId = `pane-${nextPaneNumber++}`;
+			while (browsing.panes.some((pane) => pane.id === paneId));
 			browsing = openBrowsingPane(browsing, paneId);
 			return paneId;
 		},

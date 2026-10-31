@@ -14,7 +14,10 @@ export interface TagControllerOptions {
 }
 
 export function splitTagInput(value: string): string[] {
-	return value.split(/[,、\s]+/).map((tag) => tag.trim()).filter(Boolean);
+	return value
+		.split(/[,、\s]+/)
+		.map((tag) => tag.trim())
+		.filter(Boolean);
 }
 
 export class TagController {
@@ -38,9 +41,8 @@ export class TagController {
 			this.scopes = scopes;
 			this.aliases = aliases;
 			this.error = "";
-			if (
-				this.selectedTag && !scopes.some((scope) => scope.tags.includes(this.selectedTag ?? ""))
-			) this.selectedTag = null;
+			if (this.selectedTag && !scopes.some((scope) => scope.tags.includes(this.selectedTag ?? "")))
+				this.selectedTag = null;
 		};
 	}
 
@@ -57,10 +59,7 @@ export class TagController {
 			this.scopes = scopes;
 			this.aliases = aliases;
 			const currentSelected = this.selectedTag;
-			if (
-				currentSelected &&
-				!scopes.some((scope) => scope.tags.includes(currentSelected))
-			) {
+			if (currentSelected && !scopes.some((scope) => scope.tags.includes(currentSelected))) {
 				this.selectedTag = null;
 			}
 		} catch (cause) {
@@ -83,10 +82,7 @@ export class TagController {
 	merge = async (): Promise<void> => {
 		this.error = "";
 		try {
-			await this.options.api.mergeTags(
-				splitTagInput(this.mergeSources),
-				this.mergeTarget,
-			);
+			await this.options.api.mergeTags(splitTagInput(this.mergeSources), this.mergeTarget);
 			this.mergeSources = "";
 			this.mergeTarget = "";
 			await this.load();

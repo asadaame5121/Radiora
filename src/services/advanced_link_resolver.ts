@@ -12,11 +12,10 @@ import { normalizeSearchText, titleFromText } from "./search_text.ts";
 export type AdvancedLinkMatchKind = "exact" | "alias" | "short-id" | "selected";
 export type AdvancedLinkResolutionStatus = "resolved" | "ambiguous" | "unresolved";
 
-type AdvancedLinkStore =
-	& OutlineStorePort
-	& WorkStorePort
-	& DiscoveryStorePort
-	& Partial<RelationTypeDefinitionStorePort>;
+type AdvancedLinkStore = OutlineStorePort &
+	WorkStorePort &
+	DiscoveryStorePort &
+	Partial<RelationTypeDefinitionStorePort>;
 
 export interface AdvancedLinkPlacement {
 	occurrenceId: string;
@@ -98,13 +97,13 @@ export class AdvancedLinkResolverService {
 			reason: parsed.reason,
 			...(source.status === "resolved" && target.status === "resolved"
 				? {
-					preview: previewDirection(
-						source.candidates[0].displayName,
-						parsed.type,
-						target.candidates[0].displayName,
-						matchingDefinition?.direction,
-					),
-				}
+						preview: previewDirection(
+							source.candidates[0].displayName,
+							parsed.type,
+							target.candidates[0].displayName,
+							matchingDefinition?.direction,
+						),
+					}
 				: {}),
 		};
 	}
@@ -125,27 +124,25 @@ function activeWorkViews(
 	}
 	const copyByBranch = new Map(workingCopies.map((copy) => [copy.branchId, copy]));
 	return works.map((work) => {
-		const main = branches.find((branch) =>
-			branch.workId === work.id && branch.name === "main" && !branch.archivedAt
+		const main = branches.find(
+			(branch) => branch.workId === work.id && branch.name === "main" && !branch.archivedAt,
 		);
-		const displayName = titleFromText(main ? copyByBranch.get(main.id)?.text ?? "" : "");
+		const displayName = titleFromText(main ? (copyByBranch.get(main.id)?.text ?? "") : "");
 		const placements = (itemsByWork.get(work.id) ?? [])
 			.map((item) => ({
 				occurrenceId: item.id,
 				breadcrumb: breadcrumbFor(item, itemById),
 			}))
-			.sort((left, right) =>
-				left.breadcrumb.join("\u0000").localeCompare(right.breadcrumb.join("\u0000")) ||
-				left.occurrenceId.localeCompare(right.occurrenceId)
+			.sort(
+				(left, right) =>
+					left.breadcrumb.join("\u0000").localeCompare(right.breadcrumb.join("\u0000")) ||
+					left.occurrenceId.localeCompare(right.occurrenceId),
 			);
 		return { work, displayName, placements };
 	});
 }
 
-function breadcrumbFor(
-	item: OutlineItem,
-	itemById: ReadonlyMap<string, OutlineItem>,
-): string[] {
+function breadcrumbFor(item: OutlineItem, itemById: ReadonlyMap<string, OutlineItem>): string[] {
 	const result: string[] = [];
 	const visited = new Set<string>([item.id]);
 	let current = item.parentId ? itemById.get(item.parentId) : undefined;
@@ -184,17 +181,21 @@ function resolveEndpoint(
 
 	const normalized = normalizeSearchText(query);
 	const equivalentNames = aliasEquivalents(normalized, aliases);
-	const matches = active.flatMap((candidate): AdvancedLinkCandidate[] => {
-		const title = normalizeSearchText(candidate.displayName);
-		if (title === normalized) return [toCandidate(candidate, "exact")];
-		if (equivalentNames.has(title)) return [toCandidate(candidate, "alias")];
-		if (normalizeSearchText(candidate.work.id.slice(0, 8)) === normalized) {
-			return [toCandidate(candidate, "short-id")];
-		}
-		return [];
-	}).sort((left, right) =>
-		left.displayName.localeCompare(right.displayName) || left.workId.localeCompare(right.workId)
-	);
+	const matches = active
+		.flatMap((candidate): AdvancedLinkCandidate[] => {
+			const title = normalizeSearchText(candidate.displayName);
+			if (title === normalized) return [toCandidate(candidate, "exact")];
+			if (equivalentNames.has(title)) return [toCandidate(candidate, "alias")];
+			if (normalizeSearchText(candidate.work.id.slice(0, 8)) === normalized) {
+				return [toCandidate(candidate, "short-id")];
+			}
+			return [];
+		})
+		.sort(
+			(left, right) =>
+				left.displayName.localeCompare(right.displayName) ||
+				left.workId.localeCompare(right.workId),
+		);
 	if (matches.length === 1) {
 		return { query, status: "resolved", selectedWorkId: matches[0].workId, candidates: matches };
 	}

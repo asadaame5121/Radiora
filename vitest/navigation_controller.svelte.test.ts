@@ -96,14 +96,12 @@ describe("navigation controller", () => {
 		expect(controller.addBrowsingPane()).toBe("pane-2");
 	});
 
-	test.each(
-		[
-			["pane-9", "pane-10"],
-			["pane-10-extra", "pane-2"],
-			["x-pane-10", "pane-2"],
-			["pane-a", "pane-2"],
-		] as const,
-	)("derives the next id after %s as %s", (initialPaneId, expected) => {
+	test.each([
+		["pane-9", "pane-10"],
+		["pane-10-extra", "pane-2"],
+		["x-pane-10", "pane-2"],
+		["pane-a", "pane-2"],
+	] as const)("derives the next id after %s as %s", (initialPaneId, expected) => {
 		const controller = createNavigationController({ initialPaneId });
 		expect(controller.addBrowsingPane()).toBe(expected);
 	});
@@ -298,12 +296,11 @@ describe("navigation controller", () => {
 
 		const controller = createOmniSearchController({
 			searchPort: {
-				suggestItems: vi.fn()
+				suggestItems: vi
+					.fn()
 					.mockResolvedValueOnce([suggestion1])
 					.mockResolvedValueOnce([suggestion2]),
-				searchItems: vi.fn()
-					.mockResolvedValueOnce([result1])
-					.mockResolvedValueOnce([result2]),
+				searchItems: vi.fn().mockResolvedValueOnce([result1]).mockResolvedValueOnce([result2]),
 				getSelectedId: () => null,
 				reportError: vi.fn(),
 			},
@@ -340,7 +337,7 @@ describe("navigation controller", () => {
 
 function deferred<T>() {
 	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((next) => resolve = next);
+	const promise = new Promise<T>((next) => (resolve = next));
 	return { promise, resolve };
 }
 
@@ -354,12 +351,7 @@ function resultFor(id: string): SearchResult {
 
 function outline(): OutlineSnapshot {
 	return {
-		items: [
-			item("root", null),
-			item("child", "root"),
-			item("leaf", "child"),
-			item("other", null),
-		],
+		items: [item("root", null), item("child", "root"), item("leaf", "child"), item("other", null)],
 		links: [],
 		knots: [],
 		stashItemIds: [],

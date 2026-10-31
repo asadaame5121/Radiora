@@ -12,7 +12,7 @@ Deno.test("default UI concepts cover all concept codes with frozen definitions",
 	assertEquals(Object.keys(DEFAULT_UI_CONCEPTS).sort(), [...UI_CONCEPT_CODES].sort());
 	assertFalse(
 		(Object.values(DEFAULT_UI_CONCEPTS) as UiConceptDefinition[]).some((def) =>
-			/実身|化身/.test(def.label + def.description)
+			/実身|化身/.test(def.label + def.description),
 		),
 	);
 	for (const code of UI_CONCEPT_CODES) {

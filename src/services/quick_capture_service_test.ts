@@ -10,7 +10,11 @@ const BRANCH_ID = "00000000-0000-4000-8000-000000000002";
 
 function deterministicCapture(store: MemoryGraphStore): QuickCaptureService {
 	const ids = [WORK_ID, BRANCH_ID];
-	return new QuickCaptureService(store, () => NOW, () => ids.shift()!);
+	return new QuickCaptureService(
+		store,
+		() => NOW,
+		() => ids.shift()!,
+	);
 }
 
 Deno.test("Quick Capture atomically creates exactly Work, main Branch, and Working Copy", async () => {
@@ -25,13 +29,15 @@ Deno.test("Quick Capture atomically creates exactly Work, main Branch, and Worki
 		updatedAt: NOW,
 	});
 	assertEquals((await store.listWorks()).length, 1);
-	assertEquals(await store.listBranches(), [{
-		id: BRANCH_ID,
-		workId: WORK_ID,
-		name: "main",
-		headRevisionId: null,
-		createdAt: NOW,
-	}]);
+	assertEquals(await store.listBranches(), [
+		{
+			id: BRANCH_ID,
+			workId: WORK_ID,
+			name: "main",
+			headRevisionId: null,
+			createdAt: NOW,
+		},
+	]);
 	assertEquals((await store.listWorkingCopies())[0].text, "idea #inbox");
 	assertEquals(await store.listOccurrences(), []);
 });
@@ -76,11 +82,12 @@ Deno.test("atomic unplaced creation rejects inconsistent identities and timestam
 	};
 	await assertRejects(
 		() =>
-			store.createUnplacedWork(
-				work,
-				branch,
-				{ branchId: BRANCH_ID, workId: "other", text: "text", updatedAt: NOW },
-			),
+			store.createUnplacedWork(work, branch, {
+				branchId: BRANCH_ID,
+				workId: "other",
+				text: "text",
+				updatedAt: NOW,
+			}),
 		Error,
 		"identity must match",
 	);
@@ -115,7 +122,10 @@ Deno.test("unplaced Work can be edited, tagged, placed, and returns after last r
 	assertEquals(await outline.listUnplacedWorks(), []);
 
 	await outline.deleteItem(occurrence.id);
-	assertEquals((await outline.listUnplacedWorks()).map((entry) => entry.workId), [WORK_ID]);
+	assertEquals(
+		(await outline.listUnplacedWorks()).map((entry) => entry.workId),
+		[WORK_ID],
+	);
 });
 
 Deno.test("blank non-Stub unplaced Works are recoverably trashed and Stubs stay in Stub list", async () => {
@@ -168,7 +178,10 @@ Deno.test("blank non-Stub unplaced Works are recoverably trashed and Stubs stay 
 		(await outline.listStubs()).find((entry) => entry.workId === stub.workId)?.text,
 		"Stub本文",
 	);
-	assertEquals((await outline.listStubs()).map((entry) => entry.workId), [stub.workId]);
+	assertEquals(
+		(await outline.listStubs()).map((entry) => entry.workId),
+		[stub.workId],
+	);
 });
 
 Deno.test("unplaced Works participate in Today and deleted Works are excluded", async () => {
@@ -193,16 +206,23 @@ Deno.test("semantic links resolve active Work IDs without implicit placements", 
 	const outline = new OutlineService(store);
 	const root = await outline.createItem({ text: "placed", parentId: null });
 	const ids = [WORK_ID, BRANCH_ID];
-	await new QuickCaptureService(store, () => NOW, () => ids.shift()!).capture("unplaced");
+	await new QuickCaptureService(
+		store,
+		() => NOW,
+		() => ids.shift()!,
+	).capture("unplaced");
 	const beforeOccurrences = await store.listOccurrences();
 
 	await outline.createLink({ fromId: WORK_ID, toId: root.id, type: "SUPPORT" });
 	await outline.createLink({ fromId: root.workId, toId: WORK_ID, type: "FROM" });
 
-	assertEquals((await store.listLinks()).map((link) => [link.from.workId, link.to.workId]), [
-		[WORK_ID, root.workId],
-		[root.workId, WORK_ID],
-	]);
+	assertEquals(
+		(await store.listLinks()).map((link) => [link.from.workId, link.to.workId]),
+		[
+			[WORK_ID, root.workId],
+			[root.workId, WORK_ID],
+		],
+	);
 	assertEquals(await store.listOccurrences(), beforeOccurrences);
 	await assertRejects(
 		() => outline.createLink({ fromId: WORK_ID, toId: WORK_ID, type: "RELATED" }),

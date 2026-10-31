@@ -32,28 +32,26 @@ Deno.test("JsonGraphStore atomically restores graph state and persists it", asyn
 	}
 });
 
-for (
-	const failure of [
-		{
-			name: "capacity exhaustion while writing",
-			message: "No space left on device",
-			operations: (): JsonRestoreFileOperations => ({
-				writeTextFile: () => Promise.reject(new Error("No space left on device")),
-				rename: (oldPath, newPath) => Deno.rename(oldPath, newPath),
-				remove: async () => {},
-			}),
-		},
-		{
-			name: "interruption before replacing the database",
-			message: "simulated interruption",
-			operations: (): JsonRestoreFileOperations => ({
-				writeTextFile: (path, data) => Deno.writeTextFile(path, data),
-				rename: () => Promise.reject(new Error("simulated interruption")),
-				remove: (path) => Deno.remove(path),
-			}),
-		},
-	] as const
-) {
+for (const failure of [
+	{
+		name: "capacity exhaustion while writing",
+		message: "No space left on device",
+		operations: (): JsonRestoreFileOperations => ({
+			writeTextFile: () => Promise.reject(new Error("No space left on device")),
+			rename: (oldPath, newPath) => Deno.rename(oldPath, newPath),
+			remove: async () => {},
+		}),
+	},
+	{
+		name: "interruption before replacing the database",
+		message: "simulated interruption",
+		operations: (): JsonRestoreFileOperations => ({
+			writeTextFile: (path, data) => Deno.writeTextFile(path, data),
+			rename: () => Promise.reject(new Error("simulated interruption")),
+			remove: (path) => Deno.remove(path),
+		}),
+	},
+] as const) {
 	Deno.test(`JsonGraphStore keeps current data after ${failure.name}`, async () => {
 		const directory = await Deno.makeTempDir();
 		const targetPath = `${directory}\\target.json`;

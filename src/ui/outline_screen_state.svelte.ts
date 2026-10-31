@@ -132,25 +132,25 @@ function explicitViewport(
 	browsing: BrowsingNavigationState,
 	longForm: boolean,
 ): OutlineViewport {
-	const { selectedOccurrenceId: id, hoistOccurrenceId: hoistId } = currentBrowsingLocation(
-		browsing,
-	);
+	const { selectedOccurrenceId: id, hoistOccurrenceId: hoistId } =
+		currentBrowsingLocation(browsing);
 	return {
 		focus: destinationFocus(longForm, id),
 		panelScrollTop: destination.editorPosition?.panelScrollTop ?? 0,
 		panelScrollLeft: 0,
 		restoreScroll: Boolean(destination.editorPosition),
-		editorPosition: destination.editorPosition ??
+		editorPosition:
+			destination.editorPosition ??
 			(id
 				? {
-					itemId: id,
-					hoistId,
-					start: destination.caretOffset ?? 0,
-					end: destination.caretOffset ?? 0,
-					scrollTop: 0,
-					scrollLeft: 0,
-					panelScrollTop: 0,
-				}
+						itemId: id,
+						hoistId,
+						start: destination.caretOffset ?? 0,
+						end: destination.caretOffset ?? 0,
+						scrollTop: 0,
+						scrollLeft: 0,
+						panelScrollTop: 0,
+					}
 				: undefined),
 	};
 }

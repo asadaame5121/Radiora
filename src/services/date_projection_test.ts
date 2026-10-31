@@ -14,8 +14,14 @@ Deno.test("date projection separates created Work from existing Work updated in 
 		startInclusive: START,
 		endExclusive: END,
 	});
-	assertEquals(projection.created.map((entry) => entry.work.id), ["created"]);
-	assertEquals(projection.updated.map((entry) => entry.work.id), ["existing"]);
+	assertEquals(
+		projection.created.map((entry) => entry.work.id),
+		["created"],
+	);
+	assertEquals(
+		projection.updated.map((entry) => entry.work.id),
+		["existing"],
+	);
 });
 
 Deno.test("date projection keeps all placements and their breadcrumbs under one Work", async () => {
@@ -40,7 +46,8 @@ Deno.test("date projection keeps all placements and their breadcrumbs under one 
 		"mirrored-occurrence",
 	]);
 	assertEquals(
-		entry?.placements.find((placement) => placement.occurrence.id === "mirrored-occurrence")
+		entry?.placements
+			.find((placement) => placement.occurrence.id === "mirrored-occurrence")
 			?.breadcrumb.map((item) => item.id),
 		["parent-occurrence"],
 	);
@@ -56,12 +63,10 @@ Deno.test("date projection excludes deleted Work and invalid ranges do not write
 	const occurrencesBefore = await store.listOccurrences(true);
 	const service = new DateProjectionService(store);
 	assertEquals(
-		(await service.project({ startInclusive: START, endExclusive: END })).created.map((entry) =>
-			entry.work.id
+		(await service.project({ startInclusive: START, endExclusive: END })).created.map(
+			(entry) => entry.work.id,
 		),
-		[
-			"active",
-		],
+		["active"],
 	);
 	await assertRejects(
 		() => service.project({ startInclusive: "not-an-instant", endExclusive: END }),
@@ -86,7 +91,10 @@ Deno.test("date projection sorts instants rather than their offset ISO strings",
 		startInclusive: START,
 		endExclusive: END,
 	});
-	assertEquals(projection.created.map((entry) => entry.work.id), ["later", "earlier"]);
+	assertEquals(
+		projection.created.map((entry) => entry.work.id),
+		["later", "earlier"],
+	);
 });
 
 Deno.test("date projection includes an unplaced Work without creating an Occurrence", async () => {

@@ -48,9 +48,11 @@ export function selectLogRecord(
 		return { ...safe, ...safeErrorName(entry.error) };
 	}
 	if (
-		event !== "rpc.request" || typeof entry.method !== "string" ||
+		event !== "rpc.request" ||
+		typeof entry.method !== "string" ||
 		!releaseOperations.has(entry.method)
-	) return null;
+	)
+		return null;
 	return safe;
 }
 
@@ -142,17 +144,9 @@ export class Logger {
 		return entry;
 	}
 
-	timed<T>(
-		event: string,
-		operation: () => PromiseLike<T>,
-		fields?: LogFields,
-	): Promise<T>;
+	timed<T>(event: string, operation: () => PromiseLike<T>, fields?: LogFields): Promise<T>;
 
-	timed<T>(
-		event: string,
-		operation: () => T,
-		fields?: LogFields,
-	): T;
+	timed<T>(event: string, operation: () => T, fields?: LogFields): T;
 
 	timed<T>(
 		event: string,
@@ -204,8 +198,12 @@ export function stringifyLogEntry(entry: LogEntry): string {
 }
 
 function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
-	return typeof value === "object" && value !== null && "then" in value &&
-		typeof value.then === "function";
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"then" in value &&
+		typeof value.then === "function"
+	);
 }
 
 function serializeCause(cause: unknown): unknown {

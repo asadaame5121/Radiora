@@ -68,7 +68,8 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 			guard: (prepared, current) => this.guard(prepared, current),
 			valid: (prepared) =>
 				Boolean(
-					prepared && prepared.originSelectedId === ports.selection.current() &&
+					prepared &&
+						prepared.originSelectedId === ports.selection.current() &&
 						(prepared.publication?.current() ?? true),
 				),
 			commit: (prepared) => {
@@ -112,7 +113,7 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 	): Promise<PreparedDestination | null> {
 		const originSelectedId = this.ports.selection.current();
 		const departure = this.view === "outline" ? this.outline.capture() : null;
-		if (!await this.ports.editor.save() || !current()) return null;
+		if (!(await this.ports.editor.save()) || !current()) return null;
 		await this.ports.editor.flush();
 		if (!current()) return null;
 		let snapshot = this.ports.snapshot();
@@ -125,9 +126,10 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 			snapshot = candidate;
 		}
 		if (!current()) return null;
-		const outline = destination.view === "outline"
-			? this.outline.prepare(destination, snapshot, departure)
-			: null;
+		const outline =
+			destination.view === "outline"
+				? this.outline.prepare(destination, snapshot, departure)
+				: null;
 		return {
 			destination,
 			departure,
@@ -137,7 +139,7 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 			originSelectedId,
 			selectedId: outline
 				? currentBrowsingLocation(outline.browsing).selectedOccurrenceId
-				: destination.occurrenceId ?? this.ports.selection.current(),
+				: (destination.occurrenceId ?? this.ports.selection.current()),
 		};
 	}
 
@@ -149,9 +151,9 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 		const current = () =>
 			requestCurrent() && prepared.originSelectedId === this.ports.selection.current();
 		const item = prepared.snapshot.items.find((value) => value.id === prepared.selectedId) ?? null;
-		if (!await this.ports.selection.guard(item, current) || !current()) return false;
-		if (!await this.ports.editor.save() || !current()) return false;
-		if (!await this.refreshWithPublication(prepared, current)) return false;
+		if (!(await this.ports.selection.guard(item, current)) || !current()) return false;
+		if (!(await this.ports.editor.save()) || !current()) return false;
+		if (!(await this.refreshWithPublication(prepared, current))) return false;
 		prepared.publishScreen = await this.ports.screens.prepare(prepared.destination);
 		if (!current()) return false;
 		return this.finishPreparation(prepared, current);
@@ -163,10 +165,10 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 	): Promise<boolean> {
 		while (current()) {
 			const version = this.ports.editor.version();
-			if (!await this.ports.editor.save() || !current()) return false;
+			if (!(await this.ports.editor.save()) || !current()) return false;
 			await this.ports.editor.flush();
 			if (!current()) return false;
-			if (!await this.refreshWithPublication(prepared, current)) return false;
+			if (!(await this.refreshWithPublication(prepared, current))) return false;
 			// A read or renewed selection guard may itself admit input. Save and read again in that case.
 			if (version === this.ports.editor.version()) return current();
 		}
@@ -212,15 +214,16 @@ export class ScreenNavigationWorkspace implements ScreenNavigator {
 		if (destination.view !== "outline") {
 			validateDestinationOccurrence(destination.occurrenceId, snapshot);
 		}
-		const outline = destination.view === "outline"
-			? this.outline.prepare(destination, snapshot, prepared.departure)
-			: null;
+		const outline =
+			destination.view === "outline"
+				? this.outline.prepare(destination, snapshot, prepared.departure)
+				: null;
 		const selectedId = outline
 			? currentBrowsingLocation(outline.browsing).selectedOccurrenceId
 			: prepared.selectedId;
 		const next = snapshot.items.find((value) => value.id === selectedId) ?? null;
 		// Input may arrive after the first guard, including during the final read.
-		if (!await this.ports.selection.guard(next, current) || !current()) return false;
+		if (!(await this.ports.selection.guard(next, current)) || !current()) return false;
 		prepared.snapshot = snapshot;
 		prepared.outline = outline;
 		prepared.selectedId = selectedId;

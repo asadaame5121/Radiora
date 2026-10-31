@@ -95,13 +95,16 @@ describe("work controller", () => {
 		const updateUnplacedWorkText = vi.fn(async () => {
 			// intentional no-op
 		});
-		const listUnplacedWorks = vi.fn()
+		const listUnplacedWorks = vi
+			.fn()
 			.mockResolvedValueOnce([before])
 			.mockResolvedValueOnce([after]);
-		const controller = createWorkController(createPorts({
-			updateUnplacedWorkText,
-			listUnplacedWorks,
-		}));
+		const controller = createWorkController(
+			createPorts({
+				updateUnplacedWorkText,
+				listUnplacedWorks,
+			}),
+		);
 
 		await controller.loadUnplacedWorks();
 		expect(controller.unplacedWorks).toEqual([before]);
@@ -112,50 +115,50 @@ describe("work controller", () => {
 	});
 
 	describe("quick capture", () => {
-		test.each(["root", "unplaced"] as const)(
-			"preserves newer Omni input after a delayed %s capture succeeds",
-			async (destination) => {
-				let complete!: () => void;
-				const saved = new Promise<void>((resolve) => complete = resolve);
-				const omni = createOmniSearchController({
-					searchPort: {
-						suggestItems: async () => [],
-						searchItems: async () => [],
-						getSelectedId: () => null,
-						reportError: vi.fn(),
-					},
-				});
-				const ports = createPorts({
-					createItem: vi.fn(async () => {
-						await saved;
-						return { id: "created" } as OutlineSnapshot["items"][number];
-					}),
-					quickCapture: vi.fn(async () => {
-						await saved;
-						return { workId: "created" } as UnplacedWork;
-					}),
-					listUnplacedWorks: vi.fn().mockResolvedValue([]),
-				});
-				ports.captureQuickCaptureInput = () => {
-					const receipt = omni.captureInput();
-					return () => omni.clearAccepted(receipt);
-				};
-				try {
-					omni.input("Saved memo");
-					const controller = createWorkController(ports);
-					const capture = controller.performQuickCapture(omni.quickCaptureText, destination);
-					expect(controller.quickCaptureSubmitting).toBe(true);
-					omni.input("New draft");
-					complete();
-					await capture;
-					expect(omni.quickCaptureText).toBe("New draft");
-					expect(ports.reportError).not.toHaveBeenCalled();
-					expect(controller.quickCaptureSubmitting).toBe(false);
-				} finally {
-					omni.dispose();
-				}
-			},
-		);
+		test.each([
+			"root",
+			"unplaced",
+		] as const)("preserves newer Omni input after a delayed %s capture succeeds", async (destination) => {
+			let complete!: () => void;
+			const saved = new Promise<void>((resolve) => (complete = resolve));
+			const omni = createOmniSearchController({
+				searchPort: {
+					suggestItems: async () => [],
+					searchItems: async () => [],
+					getSelectedId: () => null,
+					reportError: vi.fn(),
+				},
+			});
+			const ports = createPorts({
+				createItem: vi.fn(async () => {
+					await saved;
+					return { id: "created" } as OutlineSnapshot["items"][number];
+				}),
+				quickCapture: vi.fn(async () => {
+					await saved;
+					return { workId: "created" } as UnplacedWork;
+				}),
+				listUnplacedWorks: vi.fn().mockResolvedValue([]),
+			});
+			ports.captureQuickCaptureInput = () => {
+				const receipt = omni.captureInput();
+				return () => omni.clearAccepted(receipt);
+			};
+			try {
+				omni.input("Saved memo");
+				const controller = createWorkController(ports);
+				const capture = controller.performQuickCapture(omni.quickCaptureText, destination);
+				expect(controller.quickCaptureSubmitting).toBe(true);
+				omni.input("New draft");
+				complete();
+				await capture;
+				expect(omni.quickCaptureText).toBe("New draft");
+				expect(ports.reportError).not.toHaveBeenCalled();
+				expect(controller.quickCaptureSubmitting).toBe(false);
+			} finally {
+				omni.dispose();
+			}
+		});
 
 		test("captures to root with afterId from existing roots", async () => {
 			const createItem = vi.fn().mockResolvedValue({ id: "item-new", workId: "work-new" });
@@ -213,35 +216,31 @@ describe("work controller", () => {
 				parentId: null,
 				afterId: "root-2",
 			});
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "outline" }),
-				0,
-			);
+			expect(openView).toHaveBeenCalledWith(expect.objectContaining({ view: "outline" }), 0);
 			expect(reload).toHaveBeenCalledWith();
 			expect(clearQuickCaptureInput).toHaveBeenCalled();
 			expect(controller.quickCaptureSubmitting).toBe(false);
 		});
 
-		test.each(["false", "throw"])(
-			"clears a successful root capture even when reload returns %s",
-			async (failure) => {
-				const createItem = vi.fn().mockResolvedValue({ id: "created" });
-				const ports = createPorts({ createItem });
-				const error = new Error("refresh failed");
-				ports.reload = failure === "false"
-					? vi.fn().mockResolvedValue(false)
-					: vi.fn().mockRejectedValue(error);
-				const clearQuickCaptureInput = vi.fn();
-				ports.captureQuickCaptureInput = () => clearQuickCaptureInput;
-				const controller = createWorkController(ports);
-				await controller.performQuickCapture("Created memo", "root");
-				expect(createItem).toHaveBeenCalledTimes(1);
-				expect(clearQuickCaptureInput).toHaveBeenCalledTimes(1);
-				expect(ports.navigation.navigate).not.toHaveBeenCalled();
-				expect(controller.quickCaptureSubmitting).toBe(false);
-				if (failure === "throw") expect(ports.reportError).toHaveBeenCalledWith(error);
-			},
-		);
+		test.each([
+			"false",
+			"throw",
+		])("clears a successful root capture even when reload returns %s", async (failure) => {
+			const createItem = vi.fn().mockResolvedValue({ id: "created" });
+			const ports = createPorts({ createItem });
+			const error = new Error("refresh failed");
+			ports.reload =
+				failure === "false" ? vi.fn().mockResolvedValue(false) : vi.fn().mockRejectedValue(error);
+			const clearQuickCaptureInput = vi.fn();
+			ports.captureQuickCaptureInput = () => clearQuickCaptureInput;
+			const controller = createWorkController(ports);
+			await controller.performQuickCapture("Created memo", "root");
+			expect(createItem).toHaveBeenCalledTimes(1);
+			expect(clearQuickCaptureInput).toHaveBeenCalledTimes(1);
+			expect(ports.navigation.navigate).not.toHaveBeenCalled();
+			expect(controller.quickCaptureSubmitting).toBe(false);
+			if (failure === "throw") expect(ports.reportError).toHaveBeenCalledWith(error);
+		});
 
 		test("retains root capture input when creation fails", async () => {
 			const error = new Error("create failed");
@@ -331,9 +330,7 @@ describe("work controller", () => {
 			await controller.openUnplaced();
 
 			expect(listUnplacedWorks).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "unplaced" }),
-			);
+			expect(openView).toHaveBeenCalledWith(expect.objectContaining({ view: "unplaced" }));
 		});
 
 		test("placeUnplaced commits outline through the accepted reload selection", async () => {
@@ -357,10 +354,7 @@ describe("work controller", () => {
 			expect(placeUnplacedWork).toHaveBeenCalledWith({ workId: "w-1", parentId: "parent-1" });
 			expect(reload).toHaveBeenCalledWith();
 			expect(listUnplacedWorks).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "outline" }),
-				0,
-			);
+			expect(openView).toHaveBeenCalledWith(expect.objectContaining({ view: "outline" }), 0);
 			expect(selectOccurrence).not.toHaveBeenCalled();
 		});
 
@@ -452,9 +446,7 @@ describe("work controller", () => {
 			await controller.openStubs();
 
 			expect(listStubs).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "stubs" }),
-			);
+			expect(openView).toHaveBeenCalledWith(expect.objectContaining({ view: "stubs" }));
 		});
 
 		test("createStubFromList creates stub and reloads stubs", async () => {
@@ -559,9 +551,7 @@ describe("work controller", () => {
 			await controller.openDuplicates();
 
 			expect(listDuplicateCandidates).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "duplicates" }),
-			);
+			expect(openView).toHaveBeenCalledWith(expect.objectContaining({ view: "duplicates" }));
 		});
 
 		test("createDuplicateCandidateLink creates link, excludes candidate, and reloads", async () => {
@@ -666,9 +656,7 @@ describe("work controller", () => {
 			await controller.openTrash();
 
 			expect(listTrash).toHaveBeenCalled();
-			expect(openView).toHaveBeenCalledWith(
-				expect.objectContaining({ view: "trash" }),
-			);
+			expect(openView).toHaveBeenCalledWith(expect.objectContaining({ view: "trash" }));
 		});
 
 		test("restoreTrash restores work, reloads trash and outline", async () => {

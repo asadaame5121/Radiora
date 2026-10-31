@@ -103,14 +103,15 @@ function assertMatchesOracle(nodes: TreeLayoutNode[], edges: RawEdge[] = []): vo
 	const expected = oracleComponents(nodes);
 	assertEquals(lodForScreenCollisions(nodes), oracleLod(nodes));
 	const actual = aggregateScreenCells(nodes, edges, "overview", 240);
-	const groups = actual.nodes.map((entry) => [...entry.itemIds].sort()).sort((a, b) =>
-		a[0].localeCompare(b[0])
-	);
+	const groups = actual.nodes
+		.map((entry) => [...entry.itemIds].sort())
+		.sort((a, b) => a[0].localeCompare(b[0]));
 	assertEquals(groups, expected);
 	for (const members of expected) {
-		const projected = actual.nodes.find((entry) =>
-			entry.itemIds.length === members.length &&
-			members.every((id) => entry.itemIds.includes(id))
+		const projected = actual.nodes.find(
+			(entry) =>
+				entry.itemIds.length === members.length &&
+				members.every((id) => entry.itemIds.includes(id)),
 		);
 		assert(projected);
 		if (members.length === 1) {
@@ -122,9 +123,9 @@ function assertMatchesOracle(nodes: TreeLayoutNode[], edges: RawEdge[] = []): vo
 			if (!original) throw new Error(`Missing source node ${id}`);
 			return original;
 		});
-		const representative = [...originals].sort((a, b) =>
-			a.item.updatedAt.localeCompare(b.item.updatedAt) || a.id.localeCompare(b.id)
-		).at(-1);
+		const representative = [...originals]
+			.sort((a, b) => a.item.updatedAt.localeCompare(b.item.updatedAt) || a.id.localeCompare(b.id))
+			.at(-1);
 		if (!representative) throw new Error("Cluster has no representative node");
 		assertEquals(projected.id, `cluster:${members.join(":")}`);
 		assertEquals(projected.item.id, representative.item.id);
@@ -155,19 +156,43 @@ function assertMatchesOracle(nodes: TreeLayoutNode[], edges: RawEdge[] = []): vo
 
 Deno.test("spatial aggregation matches full-pair collision components at strict boundaries", () => {
 	const epsilon = 0.001;
-	for (
-		const positions of [
-			[[0, 0]],
-			Array.from({ length: 8 }, (_, index) => [index * 2, index * 2]),
-			[[0, 0], [48, 0]],
-			[[0, 0], [47.999, 0], [48, 0]],
-			[[0, 0], [0, 36]],
-			[[0, 0], [0, 35.999], [0, 36]],
-			[[0, 0], [48 - epsilon, 36 - epsilon], [48, 35]],
-			[[0, 0], [48 - epsilon, 36 + epsilon], [48, 0]],
-			[[10, 10], [10, 10], [58, 10]],
-		]
-	) {
+	for (const positions of [
+		[[0, 0]],
+		Array.from({ length: 8 }, (_, index) => [index * 2, index * 2]),
+		[
+			[0, 0],
+			[48, 0],
+		],
+		[
+			[0, 0],
+			[47.999, 0],
+			[48, 0],
+		],
+		[
+			[0, 0],
+			[0, 36],
+		],
+		[
+			[0, 0],
+			[0, 35.999],
+			[0, 36],
+		],
+		[
+			[0, 0],
+			[48 - epsilon, 36 - epsilon],
+			[48, 35],
+		],
+		[
+			[0, 0],
+			[48 - epsilon, 36 + epsilon],
+			[48, 0],
+		],
+		[
+			[10, 10],
+			[10, 10],
+			[58, 10],
+		],
+	]) {
 		const nodes = positions.map(([x, y], index) => node(`n${index}`, x, y, index + 1));
 		const edges = [
 			{ sourceId: "n0", targetId: "n1", type: "RELATED" },
@@ -204,24 +229,24 @@ Deno.test("pure pan preserves cluster membership while zoom is compared to the o
 
 Deno.test("adjacent noncolliding buckets use linear bridge comparisons", () => {
 	for (const size of [1000, 2000, 4000]) {
-		const nodes = Array.from(
-			{ length: size },
-			(_, index) => node(`n${index}`, index < size / 2 ? 0 : 95, 0, index + 1),
+		const nodes = Array.from({ length: size }, (_, index) =>
+			node(`n${index}`, index < size / 2 ? 0 : 95, 0, index + 1),
 		);
 		let checks = 0;
 		const result = aggregateScreenCells(nodes, [], "overview", 240, () => checks++);
 		assertEquals(result.nodes.filter((entry) => entry.aggregate).length, 2);
 		assertLessOrEqual(checks, size * 4);
 		let lodChecks = 0;
-		assertEquals(lodForScreenCollisions(nodes, () => lodChecks++), "overview");
+		assertEquals(
+			lodForScreenCollisions(nodes, () => lodChecks++),
+			"overview",
+		);
 		assertLessOrEqual(lodChecks, size * 4);
 
-		const diagonal = Array.from(
-			{ length: size },
-			(_, index) =>
-				index < size / 2
-					? node(`a${index}`, index / (size / 2) * 47.99, 0, index + 1)
-					: node(`b${index}`, 48, 71, index + 1),
+		const diagonal = Array.from({ length: size }, (_, index) =>
+			index < size / 2
+				? node(`a${index}`, (index / (size / 2)) * 47.99, 0, index + 1)
+				: node(`b${index}`, 48, 71, index + 1),
 		);
 		let diagonalChecks = 0;
 		const diagonalResult = aggregateScreenCells(

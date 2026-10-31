@@ -71,8 +71,9 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	await store.createRevision(mergeRevision, root.branch.id);
 	mergeRevision.text = "caller mutation must not alter storage";
 	mergeRevision.parentRevisionIds.length = 0;
-	const storedMerge = (await store.listRevisions(root.work.id))
-		.find((revision) => revision.id === mergeRevision.id);
+	const storedMerge = (await store.listRevisions(root.work.id)).find(
+		(revision) => revision.id === mergeRevision.id,
+	);
 	assertEquals(storedMerge?.text, "merged immutable text");
 	assertEquals(storedMerge?.parentRevisionIds, [firstRevision.id, secondRevision.id]);
 	assertEquals(
@@ -229,29 +230,35 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		UPDATED_AT,
 	);
 	const beforeRestoreId = crypto.randomUUID();
-	await store.restoreRecoverySnapshot(snapshotId, {
-		id: beforeRestoreId,
-		workId: root.work.id,
-		branchId: alternateBranch.id,
-		text: "draft immediately before restore",
-		contentHash: "sha256:before-restore",
-		createdAt: DELETED_AT,
-		sourceRevisionId: firstRevision.id,
-		name: "before restore",
-	}, DELETED_AT);
+	await store.restoreRecoverySnapshot(
+		snapshotId,
+		{
+			id: beforeRestoreId,
+			workId: root.work.id,
+			branchId: alternateBranch.id,
+			text: "draft immediately before restore",
+			contentHash: "sha256:before-restore",
+			createdAt: DELETED_AT,
+			sourceRevisionId: firstRevision.id,
+			name: "before restore",
+		},
+		DELETED_AT,
+	);
 	assertEquals(
-		(await store.listRecoverySnapshots(root.work.id, alternateBranch.id))
-			.find((snapshot) => snapshot.id === beforeRestoreId)?.text,
+		(await store.listRecoverySnapshots(root.work.id, alternateBranch.id)).find(
+			(snapshot) => snapshot.id === beforeRestoreId,
+		)?.text,
 		"draft immediately before restore",
 	);
 	assertEquals(
-		(await store.listWorkingCopies(root.work.id))
-			.find((copy) => copy.branchId === alternateBranch.id)?.text,
+		(await store.listWorkingCopies(root.work.id)).find(
+			(copy) => copy.branchId === alternateBranch.id,
+		)?.text,
 		"snapshot draft",
 	);
 	assertEquals(
-		(await store.listBranches(root.work.id))
-			.find((branch) => branch.id === alternateBranch.id)?.headRevisionId,
+		(await store.listBranches(root.work.id)).find((branch) => branch.id === alternateBranch.id)
+			?.headRevisionId,
 		firstRevision.id,
 	);
 	assertEquals((await store.listRevisions(root.work.id)).length, revisionCount);
@@ -264,21 +271,17 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		kind: "edition",
 		createdAt: DELETED_AT,
 	};
-	await store.promoteRecoverySnapshot(
-		snapshotId,
-		promotedRevision,
-		alternateBranch.id,
-		DELETED_AT,
-	);
+	await store.promoteRecoverySnapshot(snapshotId, promotedRevision, alternateBranch.id, DELETED_AT);
 	assertEquals(
-		(await store.listBranches(root.work.id))
-			.find((branch) => branch.id === alternateBranch.id)?.headRevisionId,
+		(await store.listBranches(root.work.id)).find((branch) => branch.id === alternateBranch.id)
+			?.headRevisionId,
 		promotedRevision.id,
 	);
 	assertEquals((await store.listRevisions(root.work.id)).length, revisionCount + 1);
 	assertEquals(
-		(await store.listRecoverySnapshots(root.work.id, alternateBranch.id))
-			.find((snapshot) => snapshot.id === snapshotId)?.protection,
+		(await store.listRecoverySnapshots(root.work.id, alternateBranch.id)).find(
+			(snapshot) => snapshot.id === snapshotId,
+		)?.protection,
 		{ reason: "revision-source", protectedAt: DELETED_AT },
 	);
 	const stateBeforeRejectedRestore = {
@@ -288,15 +291,19 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		branches: await store.listBranches(root.work.id),
 	};
 	await assertRejects(() =>
-		store.restoreRecoverySnapshot(snapshotId, {
-			id: crypto.randomUUID(),
-			workId: root.work.id,
-			branchId: alternateBranch.id,
-			text: "not the current Working Copy",
-			contentHash: "sha256:invalid",
-			createdAt: DELETED_AT,
-			sourceRevisionId: promotedRevision.id,
-		}, DELETED_AT)
+		store.restoreRecoverySnapshot(
+			snapshotId,
+			{
+				id: crypto.randomUUID(),
+				workId: root.work.id,
+				branchId: alternateBranch.id,
+				text: "not the current Working Copy",
+				contentHash: "sha256:invalid",
+				createdAt: DELETED_AT,
+				sourceRevisionId: promotedRevision.id,
+			},
+			DELETED_AT,
+		),
 	);
 	assertEquals(
 		await store.listRecoverySnapshots(root.work.id, alternateBranch.id),
@@ -348,10 +355,11 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		context: "contract stub",
 	});
 	await store.createUnplacedWork(stubbed.work, stubbed.branch, stubbed.copy);
-	assertEquals(
-		(await store.listWorks()).find((work) => work.id === stubbed.work.id)?.stub,
-		{ createdAt: CREATED_AT, createdVia: "stub-list", context: "contract stub" },
-	);
+	assertEquals((await store.listWorks()).find((work) => work.id === stubbed.work.id)?.stub, {
+		createdAt: CREATED_AT,
+		createdVia: "stub-list",
+		context: "contract stub",
+	});
 
 	const plainBlank = blankUnplaced();
 	await assertRejects(
@@ -395,10 +403,9 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		createdAt: CREATED_AT,
 		updatedAt: UPDATED_AT,
 	});
-	assertEquals(
-		(await store.listAliases()).find((alias) => alias.id === aliasId)?.variants,
-		["agreement"],
-	);
+	assertEquals((await store.listAliases()).find((alias) => alias.id === aliasId)?.variants, [
+		"agreement",
+	]);
 	await store.setEmergenceFeedback(aliasId, "pin");
 	assertEquals(await store.getEmergenceFeedback(aliasId), "pin");
 
@@ -413,11 +420,13 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 		proposedLinkType: "LIKE",
 		title: "Persistent candidate",
 		explanation: "shared contract evidence",
-		evidence: [{
-			fromId: root.occurrence.id,
-			toId: target.occurrence.id,
-			relation: "LEXICAL",
-		}],
+		evidence: [
+			{
+				fromId: root.occurrence.id,
+				toId: target.occurrence.id,
+				relation: "LEXICAL",
+			},
+		],
 		score: 0.75,
 		persistenceStatus: "pending",
 		createdAt: CREATED_AT,
@@ -440,10 +449,7 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	await store.resolveEmergenceSuggestion(emergenceId, "accept", suggestionLink);
 	await store.resolveEmergenceSuggestion(emergenceId, "accept", suggestionLink);
 	assertEquals((await store.listEmergenceSuggestions())[0].persistenceStatus, "accepted");
-	assertEquals(
-		(await store.listLinks()).filter((link) => link.origin === "suggestion").length,
-		1,
-	);
+	assertEquals((await store.listLinks()).filter((link) => link.origin === "suggestion").length, 1);
 
 	const queryId = crypto.randomUUID();
 	await store.upsertSavedRuleQuery({
@@ -528,8 +534,14 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	);
 
 	await store.trashWork(root.work.id, DELETED_AT);
-	assertEquals((await store.listWorks()).some((work) => work.id === root.work.id), false);
-	assertEquals((await store.listItems()).some((item) => item.workId === root.work.id), false);
+	assertEquals(
+		(await store.listWorks()).some((work) => work.id === root.work.id),
+		false,
+	);
+	assertEquals(
+		(await store.listItems()).some((item) => item.workId === root.work.id),
+		false,
+	);
 	assertEquals(
 		(await store.listWorks(true)).find((work) => work.id === root.work.id)?.deletedAt,
 		DELETED_AT,
@@ -539,16 +551,16 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 			.length,
 		4,
 	);
-	assertEquals((await store.listBookmarks()).map((bookmark) => bookmark.id), [targetBookmarkId]);
+	assertEquals(
+		(await store.listBookmarks()).map((bookmark) => bookmark.id),
+		[targetBookmarkId],
+	);
 	assertEquals(await store.getResumePosition(), null);
 
 	await store.restoreWork(root.work.id);
 	assert((await store.listBookmarks()).some((bookmark) => bookmark.id === bookmarkId));
 	assertEquals((await store.getResumePosition())?.caretOffset, 10_000);
-	assertEquals(
-		(await store.listItems()).filter((item) => item.workId === root.work.id).length,
-		4,
-	);
+	assertEquals((await store.listItems()).filter((item) => item.workId === root.work.id).length, 4);
 	await store.deleteOccurrence(mirror.id);
 	assertEquals(
 		(await store.listOccurrences()).filter((occurrence) => occurrence.workId === root.work.id)
@@ -565,11 +577,20 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 	assert(manifest.revisionIds.includes(secondRevision.id));
 	assert(manifest.revisionIds.includes(mergeRevision.id));
 	assertEquals((await store.listRecoverySnapshots(root.work.id)).length, 0);
-	assertEquals((await store.listBookmarks()).some((bookmark) => bookmark.id === bookmarkId), false);
+	assertEquals(
+		(await store.listBookmarks()).some((bookmark) => bookmark.id === bookmarkId),
+		false,
+	);
 	assert((await store.listBookmarks()).some((bookmark) => bookmark.id === targetBookmarkId));
 	assertEquals(await store.getResumePosition(), null);
-	assertEquals((await store.listWorks(true)).some((work) => work.id === root.work.id), false);
-	assertEquals((await store.listLinks()).some((candidate) => candidate.id === linkId), false);
+	assertEquals(
+		(await store.listWorks(true)).some((work) => work.id === root.work.id),
+		false,
+	);
+	assertEquals(
+		(await store.listLinks()).some((candidate) => candidate.id === linkId),
+		false,
+	);
 	assert((await store.listPurgeManifests()).some((candidate) => candidate.id === manifest.id));
 	assert((await store.listWorks()).some((work) => work.id === target.work.id));
 	assertEquals(
@@ -579,8 +600,14 @@ export async function assertGraphStoreContract(store: GraphStore): Promise<void>
 
 	await store.deleteAlias(aliasId);
 	await store.deleteSavedRuleQuery(queryId);
-	assertEquals((await store.listAliases()).some((alias) => alias.id === aliasId), false);
-	assertEquals((await store.listSavedRuleQueries()).some((query) => query.id === queryId), false);
+	assertEquals(
+		(await store.listAliases()).some((alias) => alias.id === aliasId),
+		false,
+	);
+	assertEquals(
+		(await store.listSavedRuleQueries()).some((query) => query.id === queryId),
+		false,
+	);
 	await store.setResumePosition({
 		workId: target.work.id,
 		occurrenceId: target.occurrence.id,
@@ -760,15 +787,15 @@ async function assertPointReadContract(store: GraphStore): Promise<void> {
 
 	// mergeWorks後はsourceのoccurrenceはsurvivorにrewireされている
 	const rewiredItem = await store.getItem(sourceBundle.occurrence.id);
-	const listRewiredItem = (await store.listItems()).find((i) =>
-		i.id === sourceBundle.occurrence.id
+	const listRewiredItem = (await store.listItems()).find(
+		(i) => i.id === sourceBundle.occurrence.id,
 	);
 	assertEquals(rewiredItem, listRewiredItem);
 	assertEquals(rewiredItem?.workId, survivorBundle.work.id);
 
 	const rewiredOcc = await store.getOccurrence(sourceBundle.occurrence.id);
-	const listRewiredOcc = (await store.listOccurrences()).find((o) =>
-		o.id === sourceBundle.occurrence.id
+	const listRewiredOcc = (await store.listOccurrences()).find(
+		(o) => o.id === sourceBundle.occurrence.id,
 	);
 	assertEquals(rewiredOcc, listRewiredOcc);
 	assertEquals(rewiredOcc?.workId, survivorBundle.work.id);
@@ -809,7 +836,10 @@ async function assertPointReadContract(store: GraphStore): Promise<void> {
 	await store.restoreGraphState(snapshot);
 
 	// listOccurrences(false) は mergedIntoWorkId を除外する
-	assertEquals((await store.listOccurrences(false)).find((o) => o.id === mergedOccId), undefined);
+	assertEquals(
+		(await store.listOccurrences(false)).find((o) => o.id === mergedOccId),
+		undefined,
+	);
 	// getOccurrence も null を返す
 	assertEquals(await store.getOccurrence(mergedOccId), null);
 	// listItems(false) は mergedIntoWorkId を除外しない（!work.deletedAt のみ）

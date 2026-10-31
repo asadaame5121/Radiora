@@ -22,13 +22,12 @@ const MIN_BASE_HITS = 40;
 const EXPANSION_HIT_MULTIPLIER = 2;
 const MIN_EXPANSION_HITS = 30;
 
-export type SearchOperationsStore =
-	& Pick<
-		DiscoveryStorePort,
-		"suggestItems" | "searchLexical" | "listAliases" | "upsertAlias" | "deleteAlias"
-	>
-	& Pick<OutlineStorePort, "listItems">
-	& Pick<RelationStorePort, "listLinks">;
+export type SearchOperationsStore = Pick<
+	DiscoveryStorePort,
+	"suggestItems" | "searchLexical" | "listAliases" | "upsertAlias" | "deleteAlias"
+> &
+	Pick<OutlineStorePort, "listItems"> &
+	Pick<RelationStorePort, "listLinks">;
 
 /** Prefix, lexical, graph-aware, and alias search operations. */
 export class SearchOperations {
@@ -40,8 +39,11 @@ export class SearchOperations {
 		const items = await this.store.listItems();
 		const byId = new Map(items.map((item) => [item.id, item]));
 		const boundedLimit = Math.min(Math.max(limit, MIN_SEARCH_LIMIT), MAX_SUGGESTION_LIMIT);
-		return (await this.store.suggestItems(normalized, boundedLimit))
-			.map((item) => ({ item, title: titleOf(item), ancestorIds: ancestorsOf(item, byId) }));
+		return (await this.store.suggestItems(normalized, boundedLimit)).map((item) => ({
+			item,
+			title: titleOf(item),
+			ancestorIds: ancestorsOf(item, byId),
+		}));
 	}
 
 	async searchItems(request: SearchRequest | string): Promise<SearchResult[]> {
@@ -68,12 +70,15 @@ export class SearchOperations {
 		return (await this.store.listAliases()).filter((alias) => !isReservedTagAlias(alias));
 	}
 
-	async saveSearchAlias(
-		input: { id?: string; canonical: string; variants: string[] },
-	): Promise<SearchAlias> {
+	async saveSearchAlias(input: {
+		id?: string;
+		canonical: string;
+		variants: string[];
+	}): Promise<SearchAlias> {
 		const canonical = normalizeSearchText(input.canonical);
-		const variants = [...new Set(input.variants.map(normalizeSearchText).filter(Boolean))]
-			.filter((variant) => variant !== canonical);
+		const variants = [...new Set(input.variants.map(normalizeSearchText).filter(Boolean))].filter(
+			(variant) => variant !== canonical,
+		);
 		if (canonical.startsWith("#") || variants.some((variant) => variant.startsWith("#"))) {
 			throw new Error("タグの改名・統合にはタグ管理を使用してください。");
 		}
@@ -101,10 +106,14 @@ export class SearchOperations {
 
 	private async loadExpansionHits(expansions: readonly SearchExpansion[], limit: number) {
 		const hitLimit = Math.max(limit * EXPANSION_HIT_MULTIPLIER, MIN_EXPANSION_HITS);
-		return (await Promise.all(expansions.map(async ({ term, weight, label }) => ({
-			weight,
-			label,
-			hits: await this.store.searchLexical(term, hitLimit),
-		})))).flatMap(({ weight, label, hits }) => hits.map((hit) => ({ hit, weight, label })));
+		return (
+			await Promise.all(
+				expansions.map(async ({ term, weight, label }) => ({
+					weight,
+					label,
+					hits: await this.store.searchLexical(term, hitLimit),
+				})),
+			)
+		).flatMap(({ weight, label, hits }) => hits.map((hit) => ({ hit, weight, label })));
 	}
 }

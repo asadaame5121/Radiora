@@ -32,13 +32,10 @@ Deno.test("outline view model inserts an appended root after its preceding sibli
 	const beforeSnapshot = structuredClone(snapshot);
 	const beforeProjection = structuredClone(projection);
 
-	assertEquals(rows(snapshot, { projection }).map((row) => row.item.id), [
-		"A",
-		"B",
-		"new",
-		"C",
-		"D",
-	]);
+	assertEquals(
+		rows(snapshot, { projection }).map((row) => row.item.id),
+		["A", "B", "new", "C", "D"],
+	);
 	assertEquals(snapshot, beforeSnapshot);
 	assertEquals(projection, beforeProjection);
 });
@@ -46,24 +43,26 @@ Deno.test("outline view model inserts an appended root after its preceding sibli
 Deno.test("outline view model hides descendants of collapsed items", () => {
 	const snapshot = outline([item("root", null, 1, { collapsed: true }), item("child", "root", 2)]);
 
-	assertEquals(rows(snapshot).map((row) => row.item.id), ["root"]);
+	assertEquals(
+		rows(snapshot).map((row) => row.item.id),
+		["root"],
+	);
 });
 
 Deno.test("outline view model temporarily expands collapsed items", () => {
 	const snapshot = outline([item("root", null, 1, { collapsed: true }), item("child", "root", 2)]);
 
-	assertEquals(rows(snapshot, { transientExpandedIds: ["root"] }).map((row) => row.item.id), [
-		"root",
-		"child",
-	]);
+	assertEquals(
+		rows(snapshot, { transientExpandedIds: ["root"] }).map((row) => row.item.id),
+		["root", "child"],
+	);
 });
 
 Deno.test("outline view model appends stash rows after ordinary rows", () => {
-	const snapshot = outline([
-		item("stash-later", null, 30),
-		item("ordinary", null, 20),
-		item("stash-first", null, 10),
-	], ["stash-later", "stash-first"]);
+	const snapshot = outline(
+		[item("stash-later", null, 30), item("ordinary", null, 20), item("stash-first", null, 10)],
+		["stash-later", "stash-first"],
+	);
 
 	assertEquals(rows(snapshot).map(rowSummary), [
 		["ordinary", 0, false, false],
@@ -76,9 +75,10 @@ Deno.test("outline view model does not show stash rows in a hoisted view", () =>
 	const snapshot = outline([item("root", null, 1), item("stash", null, 2)], ["stash"]);
 	const projection = project(snapshot, ["root"]);
 
-	assertEquals(rows(snapshot, { projection, showStash: false }).map((row) => row.item.id), [
-		"root",
-	]);
+	assertEquals(
+		rows(snapshot, { projection, showStash: false }).map((row) => row.item.id),
+		["root"],
+	);
 });
 
 Deno.test("outline view model treats reference stubs as leaves", () => {
@@ -112,7 +112,10 @@ Deno.test("outline view model is read-only and ignores missing projection roots"
 
 	const result = buildVisibleRows(snapshot, projection, [], true);
 
-	assertEquals(result.map((row) => row.item.id), ["root"]);
+	assertEquals(
+		result.map((row) => row.item.id),
+		["root"],
+	);
 	assertEquals(snapshot, beforeSnapshot);
 	assertEquals(projection, beforeProjection);
 	assertStrictEquals(result[0].item, snapshot.items[0]);
@@ -166,9 +169,9 @@ function rowSummary(row: ReturnType<typeof rows>[number]) {
 function project(
 	snapshot: OutlineSnapshot,
 	items = snapshot.items.map((item) => item.id),
-	rootOccurrenceIds = snapshot.items.filter((item) => item.parentId === null).map((item) =>
-		item.id
-	),
+	rootOccurrenceIds = snapshot.items
+		.filter((item) => item.parentId === null)
+		.map((item) => item.id),
 ): BrowsingOutlineProjection {
 	const included = new Set(items);
 	return {

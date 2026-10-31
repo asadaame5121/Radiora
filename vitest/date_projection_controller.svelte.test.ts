@@ -30,7 +30,7 @@ function setup() {
 	fixture.prepare.mockImplementation((destination) =>
 		destination.dateRange
 			? dates.prepareScreen(destination.dateRange)
-			: Promise.resolve(() => undefined)
+			: Promise.resolve(() => undefined),
 	);
 	dates.setStart("2026-09-28");
 	dates.setEnd("2026-09-29");
@@ -106,7 +106,8 @@ for (const action of ["openToday", "showWeek"] as const) {
 test("an old completed request cannot clear the loading state of a newer date request", async () => {
 	const s = setup();
 	await s.dates.load();
-	const old = deferred<DateProjection>(), next = deferred<DateProjection>();
+	const old = deferred<DateProjection>(),
+		next = deferred<DateProjection>();
 	s.projectDates.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
 	const first = s.dates.moveRange(1);
 	await vi.waitFor(() => expect(s.projectDates).toHaveBeenCalledTimes(2));

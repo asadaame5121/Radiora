@@ -43,14 +43,15 @@ Deno.test("tree filter preference round-trips includeIsolated and linkTypes only
 	};
 
 	saveTreeFilterPreference(filter, storage);
-	assertEquals(
-		loadTreeFilterPreference(storage),
-		{ includeIsolated: false, linkTypes: ["FROM", "VS"], includeWorkIds: [] },
-	);
-	assertEquals(
-		JSON.parse(storage.map.get(TREE_FILTER_STORAGE_KEY)!),
-		{ includeIsolated: false, linkTypes: ["FROM", "VS"] },
-	);
+	assertEquals(loadTreeFilterPreference(storage), {
+		includeIsolated: false,
+		linkTypes: ["FROM", "VS"],
+		includeWorkIds: [],
+	});
+	assertEquals(JSON.parse(storage.map.get(TREE_FILTER_STORAGE_KEY)!), {
+		includeIsolated: false,
+		linkTypes: ["FROM", "VS"],
+	});
 });
 
 Deno.test("an empty storage returns the defaults with every link type enabled", () => {

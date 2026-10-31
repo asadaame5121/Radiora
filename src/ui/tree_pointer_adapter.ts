@@ -15,15 +15,12 @@ export interface TreePointerPorts {
  * coordinate conversion and captures active mouse gestures on the owning window;
  * the View owns the published camera, hover and dimensions.
  */
-export function connectTreePointer(
-	svg: SVGSVGElement,
-	ports: TreePointerPorts,
-	minZoom: number,
-) {
+export function connectTreePointer(svg: SVGSVGElement, ports: TreePointerPorts, minZoom: number) {
 	let disposed = false;
 	let capturedWindow: Window | null = null;
 	const selection = d3.select(svg);
-	const zoom = d3.zoom<SVGSVGElement, unknown>()
+	const zoom = d3
+		.zoom<SVGSVGElement, unknown>()
 		.scaleExtent([minZoom, MAX_ZOOM])
 		.filter((event) => event.type !== "dblclick")
 		.on("start.tree", (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
@@ -53,7 +50,9 @@ export function connectTreePointer(
 		},
 		applyTransform: (next: TreeCameraTransform) => {
 			if (disposed) return;
-			selection.transition().duration(TRANSFORM_DURATION)
+			selection
+				.transition()
+				.duration(TRANSFORM_DURATION)
 				.call(zoom.transform, d3.zoomIdentity.translate(next.x, next.y).scale(next.k));
 		},
 		dispose: () => {

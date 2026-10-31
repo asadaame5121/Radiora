@@ -4,9 +4,7 @@ import { MemoryGraphStore } from "../storage/memory_store.ts";
 import { EmergencePersistence } from "./emergence_persistence.ts";
 import { emergenceSuggestionFingerprint } from "./emergence_suggestion_calculator.ts";
 
-function candidate(
-	overrides: Partial<EmergenceSuggestion> = {},
-): EmergenceSuggestion {
+function candidate(overrides: Partial<EmergenceSuggestion> = {}): EmergenceSuggestion {
 	const kind = overrides.kind ?? "latent-relation";
 	const contextWorkId = overrides.contextWorkId ?? "z-context";
 	const targetWorkId = overrides.targetWorkId ?? "a-target";
@@ -46,10 +44,7 @@ Deno.test("emergence persistence materializes legacy feedback and resolves throu
 	const [link] = await store.listLinks();
 	assertEquals([link.from.workId, link.to.workId], ["a-target", "z-context"]);
 	assertEquals(link.reason, input.explanation);
-	assertEquals(
-		(await store.listEmergenceSuggestions())[0].persistenceStatus,
-		"accepted",
-	);
+	assertEquals((await store.listEmergenceSuggestions())[0].persistenceStatus, "accepted");
 });
 
 Deno.test("emergence persistence dismisses a persisted suggestion after recreation", async () => {

@@ -66,7 +66,7 @@ export class LongFormController {
 				while (this.state.dirty) {
 					const textToSave = this.state.text;
 					await this.ports.save(id, textToSave);
-					if (!await this.ports.reload()) return false;
+					if (!(await this.ports.reload())) return false;
 					if (this.state.text === textToSave) {
 						this.state.dirty = false;
 					}

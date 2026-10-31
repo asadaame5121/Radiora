@@ -102,7 +102,14 @@ export class HistoricalTimeController {
 	/** Keep navigation pending until the user accepts or cancels the selection guard. */
 	async selectWhenReady(next: OutlineItem | null, commit: () => void): Promise<boolean> {
 		const accepted = await new Promise<boolean>((resolve) => {
-			if (this.select(next, () => resolve(true), () => resolve(false))) resolve(true);
+			if (
+				this.select(
+					next,
+					() => resolve(true),
+					() => resolve(false),
+				)
+			)
+				resolve(true);
 		});
 		if (accepted) commit();
 		return accepted;
@@ -143,7 +150,7 @@ export class HistoricalTimeController {
 		}
 		const pending = this.pending;
 		const next = pending.item;
-		if (choice === "save" && (!await this.save() || this.dirty)) return;
+		if (choice === "save" && (!(await this.save()) || this.dirty)) return;
 		if (this.pending !== pending) return;
 		const guarded = this.pendingGuard;
 		const pendingSelectionAction = this.pendingSelectionAction;

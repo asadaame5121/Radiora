@@ -45,11 +45,9 @@ export class TagService {
 		const revisionsById = new Map(revisions.map((revision) => [revision.id, revision]));
 		const result: ScopedTagSet[] = [];
 
-		for (
-			const branch of branches
-				.filter((candidate) => visibleWorkIds.has(candidate.workId) && !candidate.archivedAt)
-				.sort(compareBranch)
-		) {
+		for (const branch of branches
+			.filter((candidate) => visibleWorkIds.has(candidate.workId) && !candidate.archivedAt)
+			.sort(compareBranch)) {
 			const copy = copies.find((candidate) => candidate.branchId === branch.id);
 			const fallback = branch.headRevisionId ? revisionsById.get(branch.headRevisionId) : undefined;
 			const text = copy?.text ?? fallback?.text;
@@ -66,13 +64,12 @@ export class TagService {
 				selectedRevisionIds.add(occurrence.revisionSelector.revisionId);
 			}
 		}
-		for (
-			const revision of revisions
-				.filter((candidate) =>
-					visibleWorkIds.has(candidate.workId) && selectedRevisionIds.has(candidate.id)
-				)
-				.sort(compareRevision)
-		) {
+		for (const revision of revisions
+			.filter(
+				(candidate) =>
+					visibleWorkIds.has(candidate.workId) && selectedRevisionIds.has(candidate.id),
+			)
+			.sort(compareRevision)) {
 			result.push({
 				scope: {
 					kind: "revision",
@@ -94,10 +91,11 @@ export class TagService {
 		const bounded = Math.min(Math.max(limit, 1), 20);
 		return (await this.listTags())
 			.filter((tag) => tag.name.startsWith(normalized))
-			.sort((left, right) =>
-				Number(right.name === normalized) - Number(left.name === normalized) ||
-				right.count - left.count ||
-				left.name.localeCompare(right.name)
+			.sort(
+				(left, right) =>
+					Number(right.name === normalized) - Number(left.name === normalized) ||
+					right.count - left.count ||
+					left.name.localeCompare(right.name),
 			)
 			.slice(0, bounded);
 	}
@@ -109,9 +107,9 @@ export class TagService {
 		if (!all.length) throw new Error("タグ検索には1件以上のAND条件が必要です。");
 		const limit = Math.min(Math.max(request.limit ?? 20, 1), MAX_TAG_RESULTS);
 		return (await this.listScopedTags(request.historyRevisionIds))
-			.filter(({ tags }) =>
-				all.every((name) => tags.includes(name)) &&
-				none.every((name) => !tags.includes(name))
+			.filter(
+				({ tags }) =>
+					all.every((name) => tags.includes(name)) && none.every((name) => !tags.includes(name)),
 			)
 			.slice(0, limit);
 	}
@@ -120,15 +118,17 @@ export class TagService {
 		return this.store.listAliases().then((aliases) =>
 			aliases
 				.filter(isTagAlias)
-				.filter((alias) =>
-					resolveCanonical(normalizeTagName(alias.canonical), aliases) ===
-						normalizeTagName(alias.canonical)
+				.filter(
+					(alias) =>
+						resolveCanonical(normalizeTagName(alias.canonical), aliases) ===
+						normalizeTagName(alias.canonical),
 				)
 				.map(toTagAlias)
-				.sort((left, right) =>
-					left.canonicalName.localeCompare(right.canonicalName) ||
-					left.id.localeCompare(right.id)
-				)
+				.sort(
+					(left, right) =>
+						left.canonicalName.localeCompare(right.canonicalName) ||
+						left.id.localeCompare(right.id),
+				),
 		);
 	}
 
@@ -178,7 +178,7 @@ function canonicalTags(text: string, aliases: SearchAlias[]): string[] {
 	return [
 		...new Set(
 			parseMarkdownCandidates(text).tags.map((tag) =>
-				resolveCanonical(normalizeTagName(tag.name), aliases)
+				resolveCanonical(normalizeTagName(tag.name), aliases),
 			),
 		),
 	].sort();
@@ -189,30 +189,33 @@ function summarize(scopes: ScopedTagSet[]): TagSummary[] {
 	for (const scope of scopes) {
 		for (const tag of scope.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
 	}
-	return [...counts].map(([name, count]) => ({ name, count }))
+	return [...counts]
+		.map(([name, count]) => ({ name, count }))
 		.sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
 }
 
 function resolveCanonical(name: string, aliases: SearchAlias[]): string {
-	const match = matchingAliases(name, aliases)
-		.sort((left, right) =>
+	const match = matchingAliases(name, aliases).sort(
+		(left, right) =>
 			right.variants.length - left.variants.length ||
 			right.updatedAt.localeCompare(left.updatedAt) ||
-			right.id.localeCompare(left.id)
-		)[0];
+			right.id.localeCompare(left.id),
+	)[0];
 	return match ? normalizeTagName(match.canonical) : name;
 }
 
 function matchingAliases(name: string, aliases: SearchAlias[]): SearchAlias[] {
 	const stored = storedName(name);
-	return aliases.filter((alias) =>
-		isTagAlias(alias) && (alias.canonical === stored || alias.variants.includes(stored))
+	return aliases.filter(
+		(alias) => isTagAlias(alias) && (alias.canonical === stored || alias.variants.includes(stored)),
 	);
 }
 
 function isTagAlias(alias: SearchAlias): boolean {
-	return alias.canonical.startsWith(TAG_ALIAS_PREFIX) &&
-		alias.variants.every((variant) => variant.startsWith(TAG_ALIAS_PREFIX));
+	return (
+		alias.canonical.startsWith(TAG_ALIAS_PREFIX) &&
+		alias.variants.every((variant) => variant.startsWith(TAG_ALIAS_PREFIX))
+	);
 }
 
 function toTagAlias(alias: SearchAlias): TagAlias {
@@ -251,7 +254,9 @@ function compareBranch(
 }
 
 function compareRevision(left: Revision, right: Revision): number {
-	return left.workId.localeCompare(right.workId) ||
+	return (
+		left.workId.localeCompare(right.workId) ||
 		left.createdAt.localeCompare(right.createdAt) ||
-		left.id.localeCompare(right.id);
+		left.id.localeCompare(right.id)
+	);
 }

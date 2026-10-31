@@ -14,9 +14,9 @@ const versionArg = argValue("--version");
 const outputArg = argValue("--output");
 
 const repoRoot = new URL("../", import.meta.url);
-const denoConfig = JSON.parse(
-	await Deno.readTextFile(new URL("deno.json", repoRoot)),
-) as { version?: string };
+const denoConfig = JSON.parse(await Deno.readTextFile(new URL("deno.json", repoRoot))) as {
+	version?: string;
+};
 const defaultVersion = `${denoConfig.version ?? "0.1.0"}.0`;
 const version = versionArg ?? defaultVersion;
 const bundleDir = new URL("dist-desktop/radiora-v2-windows/", repoRoot);
@@ -156,10 +156,7 @@ async function ensureSigningCertificate(): Promise<{ cert: string; password: str
 }
 
 export async function assertCleanBundle(dir: URL): Promise<void> {
-	await requireUrlExists(
-		dir,
-		"先に deno task desktop:build を実行してbundleを生成してください。",
-	);
+	await requireUrlExists(dir, "先に deno task desktop:build を実行してbundleを生成してください。");
 	if (await urlExists(new URL("surreal.exe", dir))) {
 		throw new Error(
 			"古い surreal.exe がbundle内に残っています。先に 'deno task desktop:build' でclean rebuildしてください。",

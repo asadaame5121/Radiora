@@ -20,10 +20,10 @@ Deno.test("OPML service atomically imports hierarchy after existing roots and ex
 	assertEquals(await service.import(source), { importedCount: 3 });
 	const snapshot = await operations.listOutline();
 	const ordered = [...snapshot.items].sort((left, right) => left.orderKey - right.orderKey);
-	assertEquals(ordered.filter((item) => item.parentId === null).map((item) => item.text), [
-		"既存",
-		"親\n日本語\n複数行",
-	]);
+	assertEquals(
+		ordered.filter((item) => item.parentId === null).map((item) => item.text),
+		["既存", "親\n日本語\n複数行"],
+	);
 	const parent = snapshot.items.find((item) => item.text.startsWith("親"))!;
 	assertEquals(
 		ordered.filter((item) => item.parentId === parent.id).map((item) => item.text),

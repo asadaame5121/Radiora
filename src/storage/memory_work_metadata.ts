@@ -9,8 +9,8 @@ export function updateHistoricalTime(
 	value: HistoricalTime | null,
 	updatedAt: string,
 ): void {
-	const work = works.find((candidate) =>
-		candidate.id === workId && !candidate.deletedAt && !candidate.mergedIntoWorkId
+	const work = works.find(
+		(candidate) => candidate.id === workId && !candidate.deletedAt && !candidate.mergedIntoWorkId,
 	);
 	if (!work) throw new Error(`Work not found: ${workId}`);
 	const timestamp = parse(CreatedAtSchema, updatedAt);

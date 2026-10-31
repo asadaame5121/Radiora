@@ -19,13 +19,13 @@ export function chooseInitialRevisionComparison(
 	preferredRevisionId?: string,
 ): RevisionComparisonSelection | null {
 	if (revisions.length < 2) return null;
-	const selected = revisions.find((revision) => revision.id === preferredRevisionId) ??
-		revisions.at(-1)!;
+	const selected =
+		revisions.find((revision) => revision.id === preferredRevisionId) ?? revisions.at(-1)!;
 	const parent = selected.parentRevisionIds
 		.map((id) => revisions.find((revision) => revision.id === id))
 		.find((revision) => revision !== undefined);
-	const opposite = parent ??
-		[...revisions].reverse().find((revision) => revision.id !== selected.id);
+	const opposite =
+		parent ?? [...revisions].reverse().find((revision) => revision.id !== selected.id);
 	if (!opposite) return null;
 	return { leftRevisionId: opposite.id, rightRevisionId: selected.id };
 }
@@ -47,12 +47,13 @@ export function diffText(leftText: string, rightText: string): RevisionDiffNode[
 
 	for (let leftIndex = left.length - 1; leftIndex >= 0; leftIndex--) {
 		for (let rightIndex = right.length - 1; rightIndex >= 0; rightIndex--) {
-			commonSuffixLengths[leftIndex][rightIndex] = left[leftIndex] === right[rightIndex]
-				? commonSuffixLengths[leftIndex + 1][rightIndex + 1] + 1
-				: Math.max(
-					commonSuffixLengths[leftIndex + 1][rightIndex],
-					commonSuffixLengths[leftIndex][rightIndex + 1],
-				);
+			commonSuffixLengths[leftIndex][rightIndex] =
+				left[leftIndex] === right[rightIndex]
+					? commonSuffixLengths[leftIndex + 1][rightIndex + 1] + 1
+					: Math.max(
+							commonSuffixLengths[leftIndex + 1][rightIndex],
+							commonSuffixLengths[leftIndex][rightIndex + 1],
+						);
 		}
 	}
 
@@ -77,11 +78,9 @@ export function diffText(leftText: string, rightText: string): RevisionDiffNode[
 		}
 		if (
 			leftIndex < left.length &&
-			(
-				rightIndex >= right.length ||
+			(rightIndex >= right.length ||
 				commonSuffixLengths[leftIndex + 1][rightIndex] >=
-					commonSuffixLengths[leftIndex][rightIndex + 1]
-			)
+					commonSuffixLengths[leftIndex][rightIndex + 1])
 		) {
 			nodes.push({
 				kind: "remove",

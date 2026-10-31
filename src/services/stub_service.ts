@@ -46,8 +46,8 @@ export class StubService {
 		const entries: StubListEntry[] = [];
 		for (const work of works) {
 			if (!work.stub) continue;
-			const main = branches.find((branch) =>
-				branch.workId === work.id && branch.name === "main" && !branch.archivedAt
+			const main = branches.find(
+				(branch) => branch.workId === work.id && branch.name === "main" && !branch.archivedAt,
 			);
 			if (!main) throw new Error(`Main Branch not found for Stub Work: ${work.id}`);
 			const copy = copies.find((candidate) => candidate.branchId === main.id);
@@ -64,8 +64,9 @@ export class StubService {
 			});
 		}
 
-		return entries.sort((left, right) =>
-			right.createdAt.localeCompare(left.createdAt) || left.workId.localeCompare(right.workId)
+		return entries.sort(
+			(left, right) =>
+				right.createdAt.localeCompare(left.createdAt) || left.workId.localeCompare(right.workId),
 		);
 	}
 
@@ -113,8 +114,8 @@ export class StubService {
 		]);
 		const work = works.find((candidate) => candidate.id === workId);
 		if (!work?.stub) throw new Error(`Stub Work not found: ${workId}`);
-		const main = branches.find((branch) =>
-			branch.workId === workId && branch.name === "main" && !branch.archivedAt
+		const main = branches.find(
+			(branch) => branch.workId === workId && branch.name === "main" && !branch.archivedAt,
 		);
 		const copy = main && copies.find((candidate) => candidate.branchId === main.id);
 		if (!copy?.text.trim()) {

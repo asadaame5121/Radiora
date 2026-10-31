@@ -18,14 +18,11 @@ function item(index: number, text = `行 ${index}`): OutlineItem {
 }
 
 async function openLargeOutline(page: Page, largeTextIndex?: number): Promise<void> {
-	const items = Array.from(
-		{ length: 10_000 },
-		(_, index) => item(index, index === largeTextIndex ? "x".repeat(2_048) : undefined),
+	const items = Array.from({ length: 10_000 }, (_, index) =>
+		item(index, index === largeTextIndex ? "x".repeat(2_048) : undefined),
 	);
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } }),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } }),
 	);
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	await expect(page.locator(".rows[role=tree]")).toBeVisible();
@@ -57,9 +54,10 @@ async function mountedLimit(page: Page): Promise<number> {
 		const viewportTop = owner?.getBoundingClientRect().top ?? 0;
 		const viewportBottom = viewportTop + (owner?.clientHeight ?? innerHeight);
 		const rows = [...root.querySelectorAll<HTMLElement>("[role=treeitem]")];
-		const activeId = document.activeElement instanceof HTMLTextAreaElement
-			? document.activeElement.dataset.itemId
-			: undefined;
+		const activeId =
+			document.activeElement instanceof HTMLTextAreaElement
+				? document.activeElement.dataset.itemId
+				: undefined;
 		const counts = rows.reduce(
 			(counts, row) => {
 				const rect = row.getBoundingClientRect();
@@ -67,12 +65,11 @@ async function mountedLimit(page: Page): Promise<number> {
 				const id = row.dataset.outlineRowId;
 				if (
 					id &&
-					(
-						row.getAttribute("aria-selected") === "true" ||
+					(row.getAttribute("aria-selected") === "true" ||
 						row.classList.contains("dragging") ||
-						id === activeId
-					)
-				) counts.protectedIds.add(id);
+						id === activeId)
+				)
+					counts.protectedIds.add(id);
 				return counts;
 			},
 			{ visible: 0, protectedIds: new Set<string>() },
@@ -137,9 +134,10 @@ for (const width of [1440, 800]) {
 					if (id) protectedIds.add(id);
 				}
 			}
-			const activeId = document.activeElement instanceof HTMLTextAreaElement
-				? document.activeElement.dataset.itemId
-				: undefined;
+			const activeId =
+				document.activeElement instanceof HTMLTextAreaElement
+					? document.activeElement.dataset.itemId
+					: undefined;
 			if (activeId) protectedIds.add(activeId);
 			return protectedIds.size;
 		});
@@ -154,19 +152,24 @@ for (const width of [1440, 800]) {
 		);
 		await scrollOwnerToBottom(page);
 		await expect(page.locator('[data-outline-row-id="outline-9999"]')).toBeVisible();
-		await expect.poll(() =>
-			page.locator('[data-outline-row-id="outline-9999"]').evaluate((row) => {
-				let owner = row.parentElement;
-				while (owner && !["auto", "scroll"].includes(getComputedStyle(owner).overflowY)) {
-					owner = owner.parentElement;
-				}
-				if (!owner) return false;
-				const rect = row.getBoundingClientRect();
-				const top = owner.getBoundingClientRect().top + owner.clientTop;
-				return rect.top >= top - 1 && rect.bottom <= top + owner.clientHeight + 1 &&
-					owner.scrollTop > 0;
-			})
-		).toBe(true);
+		await expect
+			.poll(() =>
+				page.locator('[data-outline-row-id="outline-9999"]').evaluate((row) => {
+					let owner = row.parentElement;
+					while (owner && !["auto", "scroll"].includes(getComputedStyle(owner).overflowY)) {
+						owner = owner.parentElement;
+					}
+					if (!owner) return false;
+					const rect = row.getBoundingClientRect();
+					const top = owner.getBoundingClientRect().top + owner.clientTop;
+					return (
+						rect.top >= top - 1 &&
+						rect.bottom <= top + owner.clientHeight + 1 &&
+						owner.scrollTop > 0
+					);
+				}),
+			)
+			.toBe(true);
 		if (width === 800) {
 			expect(await page.locator(".app-main").evaluate((owner) => owner.scrollTop)).toBeGreaterThan(
 				0,
@@ -176,7 +179,9 @@ for (const width of [1440, 800]) {
 	});
 }
 
-test("keeps the middle scroll anchor stable when a mounted row above it grows", async ({ page }) => {
+test("keeps the middle scroll anchor stable when a mounted row above it grows", async ({
+	page,
+}) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await openLargeOutline(page);
 	await scrollOwnerToOffset(page, 500 * 44 + 5);
@@ -190,20 +195,23 @@ test("keeps the middle scroll anchor stable when a mounted row above it grows", 
 
 	await changing.locator("button.bullet").dispatchEvent("click");
 	await expect(changing).toHaveClass(/selected/);
-	await expect.poll(() => changing.evaluate((row) => row.getBoundingClientRect().height))
+	await expect
+		.poll(() => changing.evaluate((row) => row.getBoundingClientRect().height))
 		.toBeGreaterThan(previousHeight);
 	const nextAnchorTop = await anchor.evaluate((row) => row.getBoundingClientRect().top);
 	expect(Math.abs(nextAnchorTop - anchorTop)).toBeLessThanOrEqual(1);
 });
 
-test("mounts a 2 KB editor at a middle index without expanding the rendered window", async ({ page }) => {
+test("mounts a 2 KB editor at a middle index without expanding the rendered window", async ({
+	page,
+}) => {
 	await openLargeOutline(page, 2_048);
 	await scrollOwnerToOffset(page, 2_048 * 44);
 	const editor = page.locator('textarea[data-item-id="outline-2048"]');
 	await expect(editor).toHaveValue("x".repeat(2_048));
-	await page.locator('[data-outline-row-id="outline-2048"] .markdown-editor-host').dispatchEvent(
-		"click",
-	);
+	await page
+		.locator('[data-outline-row-id="outline-2048"] .markdown-editor-host')
+		.dispatchEvent("click");
 	await expect(editor).toBeFocused();
 	const original = await editor.elementHandle();
 	await scrollOwnerToBottom(page);
@@ -216,7 +224,9 @@ test("mounts a 2 KB editor at a middle index without expanding the rendered wind
 	);
 });
 
-test("focused composing and dragged rows survive window changes, then release", async ({ page }) => {
+test("focused composing and dragged rows survive window changes, then release", async ({
+	page,
+}) => {
 	await openLargeOutline(page);
 	const composing = page.locator('textarea[data-item-id="outline-0"]');
 	const original = await composing.elementHandle();

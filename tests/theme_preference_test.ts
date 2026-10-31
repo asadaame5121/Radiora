@@ -162,7 +162,7 @@ function mockDocument(): Document {
 			setAttribute: (name: string, value: string) => {
 				if (name === "data-theme") dataset.theme = value;
 			},
-			getAttribute: (name: string) => (name === "data-theme" ? dataset.theme ?? null : null),
+			getAttribute: (name: string) => (name === "data-theme" ? (dataset.theme ?? null) : null),
 		},
 	};
 	return doc as Document;

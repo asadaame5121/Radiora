@@ -19,9 +19,8 @@ export function overlayDrafts(
 		...snapshot,
 		items: snapshot.items.map((item) => {
 			const selector = item.revisionSelector;
-			const text = selector.mode === "branch"
-				? byWork.get(item.workId)?.get(selector.branchId)
-				: undefined;
+			const text =
+				selector.mode === "branch" ? byWork.get(item.workId)?.get(selector.branchId) : undefined;
 			return { ...item, text: text ?? item.text };
 		}),
 	};

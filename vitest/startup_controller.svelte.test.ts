@@ -260,9 +260,9 @@ function setup() {
 		saveStartupSnapshotCache: vi.fn(async () => undefined),
 		getStartupStatus: vi.fn<() => Promise<StartupStatus>>().mockResolvedValue({ phase: "ready" }),
 		retryStartup: vi.fn<() => Promise<StartupStatus>>().mockResolvedValue({ phase: "ready" }),
-		loadStartupSnapshotCache: vi.fn<() => Promise<StartupSnapshotCache | null>>().mockResolvedValue(
-			null,
-		),
+		loadStartupSnapshotCache: vi
+			.fn<() => Promise<StartupSnapshotCache | null>>()
+			.mockResolvedValue(null),
 	};
 	const onCacheRestored = vi.fn(() => true);
 	const onReady = vi.fn<(current: () => boolean) => Promise<void>>().mockResolvedValue();
@@ -444,14 +444,16 @@ describe("startup cache and retry request ordering", () => {
 		expect(saveStartupSnapshotCache).toHaveBeenCalledWith(cache.snapshot, cache.location);
 	});
 });
-it.each(["starting", "cache", "draft", "disposed"] as const)(
-	"does not save startup cache for %s",
-	(reason) => {
-		const { controller, api } = setup();
-		controller.status = { phase: reason === "starting" ? "starting" : "ready", message: "Test" };
-		controller.cacheActive = reason === "cache";
-		if (reason === "disposed") controller.dispose();
-		controller.saveSnapshotCache(cache.snapshot, cache.location, () => reason !== "draft");
-		expect(api.saveStartupSnapshotCache).not.toHaveBeenCalled();
-	},
-);
+it.each([
+	"starting",
+	"cache",
+	"draft",
+	"disposed",
+] as const)("does not save startup cache for %s", (reason) => {
+	const { controller, api } = setup();
+	controller.status = { phase: reason === "starting" ? "starting" : "ready", message: "Test" };
+	controller.cacheActive = reason === "cache";
+	if (reason === "disposed") controller.dispose();
+	controller.saveSnapshotCache(cache.snapshot, cache.location, () => reason !== "draft");
+	expect(api.saveStartupSnapshotCache).not.toHaveBeenCalled();
+});

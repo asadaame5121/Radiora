@@ -8,9 +8,7 @@ Deno.test("Link Editor exposes GUI search, type selection, and direction selecti
 	const relationTab = await Deno.readTextFile(
 		new URL("../src/ui/InspectorRelationTab.svelte", import.meta.url),
 	);
-	const editor = await Deno.readTextFile(
-		new URL("../src/ui/LinkEditor.svelte", import.meta.url),
-	);
+	const editor = await Deno.readTextFile(new URL("../src/ui/LinkEditor.svelte", import.meta.url));
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/link_editor_controller.svelte.ts", import.meta.url),
 	);
@@ -42,15 +40,12 @@ Deno.test("Link Editor exposes GUI search, type selection, and direction selecti
 });
 
 Deno.test("Link Editor does not create graph entities or access storage directly", async () => {
-	const editor = await Deno.readTextFile(
-		new URL("../src/ui/LinkEditor.svelte", import.meta.url),
-	);
+	const editor = await Deno.readTextFile(new URL("../src/ui/LinkEditor.svelte", import.meta.url));
 
 	assertFalse(
-		/api\.(createItem|createOccurrence|quickCapture|placeUnplacedWork|createStub|createLink)\s*\(/
-			.test(
-				editor,
-			),
+		/api\.(createItem|createOccurrence|quickCapture|placeUnplacedWork|createStub|createLink)\s*\(/.test(
+			editor,
+		),
 	);
 	assertFalse(/from "\.\.\/storage\//.test(editor));
 });

@@ -10,7 +10,8 @@ export function applyBranchWorkingCopyText(
 	const branchId = editedItem.revisionSelector.branchId;
 	for (const placement of items) {
 		if (
-			placement.workId === editedItem.workId && placement.revisionSelector.mode === "branch" &&
+			placement.workId === editedItem.workId &&
+			placement.revisionSelector.mode === "branch" &&
 			placement.revisionSelector.branchId === branchId
 		) {
 			placement.text = text;

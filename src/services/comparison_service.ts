@@ -56,8 +56,8 @@ export class ComparisonService {
 		]);
 		const activeWorkIds = new Set(works.map((work) => work.id));
 		const mergedLinks = mergeImplicitFromLinks(items, links);
-		const link = mergedLinks.find((candidate) =>
-			candidate.id === linkId && candidate.status !== "retracted"
+		const link = mergedLinks.find(
+			(candidate) => candidate.id === linkId && candidate.status !== "retracted",
 		);
 		if (!link) throw new Error(`Active semantic Link not found: ${linkId}`);
 		if (!isComparableLinkType(link.type)) {
@@ -157,14 +157,14 @@ function resolveEndpoint(
 		};
 	}
 
-	const mains = branches.filter((branch) =>
-		branch.workId === endpoint.workId && branch.name === "main" && !branch.archivedAt
+	const mains = branches.filter(
+		(branch) => branch.workId === endpoint.workId && branch.name === "main" && !branch.archivedAt,
 	);
 	if (mains.length !== 1) {
 		throw new Error(`Expected one active main Branch for Work: ${endpoint.workId}`);
 	}
-	const matchingCopies = copies.filter((copy) =>
-		copy.workId === endpoint.workId && copy.branchId === mains[0].id
+	const matchingCopies = copies.filter(
+		(copy) => copy.workId === endpoint.workId && copy.branchId === mains[0].id,
 	);
 	if (matchingCopies.length !== 1) {
 		throw new Error(`Expected one Working Copy for active main Branch: ${mains[0].id}`);

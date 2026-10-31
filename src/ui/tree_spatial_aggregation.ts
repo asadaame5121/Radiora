@@ -183,8 +183,8 @@ function includeClusterMember(stats: ClusterStats, node: TreeLayoutNode): void {
 }
 
 function makeCluster(bucket: TreeLayoutNode[]): TreeLayoutNode {
-	const members = [...bucket].sort((a, b) =>
-		a.item.updatedAt.localeCompare(b.item.updatedAt) || a.id.localeCompare(b.id)
+	const members = [...bucket].sort(
+		(a, b) => a.item.updatedAt.localeCompare(b.item.updatedAt) || a.id.localeCompare(b.id),
 	);
 	const itemIds = members.map((node) => node.id).sort();
 	const stats: ClusterStats = {
@@ -226,9 +226,10 @@ function makeCluster(bucket: TreeLayoutNode[]): TreeLayoutNode {
 	};
 }
 
-function aggregateComponents(
-	components: TreeLayoutNode[][],
-): { nodes: TreeLayoutNode[]; nodeByItemId: Map<string, TreeLayoutNode> } {
+function aggregateComponents(components: TreeLayoutNode[][]): {
+	nodes: TreeLayoutNode[];
+	nodeByItemId: Map<string, TreeLayoutNode>;
+} {
 	const aggregated: TreeLayoutNode[] = [];
 	const nodeByItemId = new Map<string, TreeLayoutNode>();
 	for (const component of components) {
@@ -349,7 +350,12 @@ function forEachNeighborBucketPair<T extends SpatialPoint>(
 	) => void,
 ): void {
 	for (const bucket of buckets) {
-		for (const [offsetX, offsetY] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+		for (const [offsetX, offsetY] of [
+			[1, 0],
+			[0, 1],
+			[1, 1],
+			[1, -1],
+		]) {
 			const neighbor = bucketsByCell.get(cellKey(bucket.cellX + offsetX, bucket.cellY + offsetY));
 			if (neighbor) callback(bucket, neighbor, offsetX, offsetY);
 		}
@@ -419,6 +425,8 @@ function positionsCollideCounted(
 }
 
 function positionsCollide(left: SpatialPoint, right: SpatialPoint): boolean {
-	return Math.abs(left.x - right.x) < OVERVIEW_CELL_WIDTH &&
-		Math.abs(left.y - right.y) < OVERVIEW_CELL_HEIGHT;
+	return (
+		Math.abs(left.x - right.x) < OVERVIEW_CELL_WIDTH &&
+		Math.abs(left.y - right.y) < OVERVIEW_CELL_HEIGHT
+	);
 }

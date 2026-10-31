@@ -46,17 +46,20 @@ it("dispatches the editor event with its caret through the DOM port", () => {
 	expect(dispatch.mock.calls[0][0]).toMatchObject({ detail: { caretOffset: 3 } });
 });
 
-it.each(["pane", "origin", "receipt", "visibility", "disposal"])(
-	"does not dispatch expired focus after %s changes",
-	(reason) => {
-		const { request, invalidate, dispatch, query } = fixture();
-		request();
-		invalidate(reason);
-		vi.runAllTimers();
-		expect(query).not.toHaveBeenCalled();
-		expect(dispatch).not.toHaveBeenCalled();
-	},
-);
+it.each([
+	"pane",
+	"origin",
+	"receipt",
+	"visibility",
+	"disposal",
+])("does not dispatch expired focus after %s changes", (reason) => {
+	const { request, invalidate, dispatch, query } = fixture();
+	request();
+	invalidate(reason);
+	vi.runAllTimers();
+	expect(query).not.toHaveBeenCalled();
+	expect(dispatch).not.toHaveBeenCalled();
+});
 
 it("replaces a pending request and rejects requests after disposal", () => {
 	const { adapter, request, dispatch, query } = fixture();

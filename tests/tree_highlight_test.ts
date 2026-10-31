@@ -18,25 +18,26 @@ Deno.test("selection resolves to the visible representative when its occurrence 
 		resolveTreeSelectionId(snapshot, "secondary-occurrence", "work-a"),
 		"representative",
 	);
-	assertEquals(
-		[...buildTreeHighlightSet(snapshot, "representative", null)].sort(),
-		["representative"],
-	);
+	assertEquals([...buildTreeHighlightSet(snapshot, "representative", null)].sort(), [
+		"representative",
+	]);
 });
 
 function outline(ids: string[]): OutlineSnapshot {
 	return {
-		items: ids.map((id, orderKey): OutlineItem => ({
-			id,
-			workId: id,
-			text: id,
-			parentId: null,
-			orderKey,
-			collapsed: false,
-			revisionSelector: { mode: "branch", branchId: `${id}-branch` },
-			createdAt: "2026-08-05T00:00:00.000Z",
-			updatedAt: "2026-08-05T00:00:00.000Z",
-		})),
+		items: ids.map(
+			(id, orderKey): OutlineItem => ({
+				id,
+				workId: id,
+				text: id,
+				parentId: null,
+				orderKey,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId: `${id}-branch` },
+				createdAt: "2026-08-05T00:00:00.000Z",
+				updatedAt: "2026-08-05T00:00:00.000Z",
+			}),
+		),
 		links: [],
 		knots: [],
 		stashItemIds: [],

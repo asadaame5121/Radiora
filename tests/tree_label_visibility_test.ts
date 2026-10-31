@@ -10,7 +10,10 @@ Deno.test("context labels prioritize emphasized labels when text rectangles over
 	const nodes = [node("left", 40, 50), node("right", 40, 55)];
 	assertEquals(visibleContextLabels(nodes, new Set(), viewport), new Set(["left"]));
 	assertEquals(visibleContextLabels(nodes, new Set(["right"]), viewport), new Set(["right"]));
-	assertEquals(nodes.map(({ id }) => id), ["left", "right"]);
+	assertEquals(
+		nodes.map(({ id }) => id),
+		["left", "right"],
+	);
 });
 
 Deno.test("context label hit tests reject nodes, viewport margins, and multi-line axis collisions", () => {

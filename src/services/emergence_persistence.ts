@@ -14,20 +14,17 @@ import {
 	emergenceSuggestionFingerprint,
 } from "./emergence_suggestion_calculator.ts";
 
-type EmergencePersistenceStore =
-	& Pick<
-		DiscoveryStorePort,
-		| "getEmergenceFeedback"
-		| "listEmergenceSuggestions"
-		| "resolveEmergenceSuggestion"
-		| "upsertEmergenceSuggestion"
-	>
-	& Partial<Pick<RelationTypeDefinitionStorePort, "listRelationTypeDefinitions">>
-	& Partial<import("../storage/graph_store.ts").BatchStorePort>;
+type EmergencePersistenceStore = Pick<
+	DiscoveryStorePort,
+	| "getEmergenceFeedback"
+	| "listEmergenceSuggestions"
+	| "resolveEmergenceSuggestion"
+	| "upsertEmergenceSuggestion"
+> &
+	Partial<Pick<RelationTypeDefinitionStorePort, "listRelationTypeDefinitions">> &
+	Partial<import("../storage/graph_store.ts").BatchStorePort>;
 
-function statusFromFeedback(
-	feedback: "accept" | "dismiss" | "pin" | null,
-): EmergenceStatus {
+function statusFromFeedback(feedback: "accept" | "dismiss" | "pin" | null): EmergenceStatus {
 	if (feedback === "accept") return "accepted";
 	if (feedback === "dismiss") return "dismissed";
 	if (feedback === "pin") return "held";
@@ -55,13 +52,12 @@ function materializedSuggestion(
 export class EmergencePersistence {
 	constructor(private readonly store: EmergencePersistenceStore) {}
 
-	async materialize(
-		candidates: readonly EmergenceCandidate[],
-	): Promise<EmergenceSuggestion[]> {
+	async materialize(candidates: readonly EmergenceCandidate[]): Promise<EmergenceSuggestion[]> {
 		const persisted = new Map(
-			(await this.store.listEmergenceSuggestions()).map((
+			(await this.store.listEmergenceSuggestions()).map((suggestion) => [
+				suggestion.id,
 				suggestion,
-			) => [suggestion.id, suggestion]),
+			]),
 		);
 		const visible: EmergenceSuggestion[] = [];
 		const toUpsert: EmergenceSuggestion[] = [];
@@ -99,15 +95,17 @@ export class EmergencePersistence {
 		const legacyId = emergenceSuggestionFingerprint(
 			`${candidate.kind}:${candidate.contextItemId}:${candidate.targetItemId}`,
 		);
-		const feedback = await this.store.getEmergenceFeedback(candidate.id) ??
-			await this.store.getEmergenceFeedback(legacyId);
+		const feedback =
+			(await this.store.getEmergenceFeedback(candidate.id)) ??
+			(await this.store.getEmergenceFeedback(legacyId));
 		return statusFromFeedback(feedback);
 	}
 
 	async resolve(id: string, action: EmergenceAction, reason?: string): Promise<void> {
-		const suggestion = (await this.store.listEmergenceSuggestions()).find((candidate) =>
-			candidate.id === id &&
-			(candidate.persistenceStatus === "pending" || candidate.persistenceStatus === "held")
+		const suggestion = (await this.store.listEmergenceSuggestions()).find(
+			(candidate) =>
+				candidate.id === id &&
+				(candidate.persistenceStatus === "pending" || candidate.persistenceStatus === "held"),
 		);
 		if (!suggestion) throw new Error("提案が古くなりました。再読み込みしてください。");
 		if (action !== "accept") {
@@ -123,7 +121,8 @@ export class EmergencePersistence {
 		if (
 			isRelationTypeSymmetric(suggestion.proposedLinkType, definitions) &&
 			fromWorkId.localeCompare(toWorkId) > 0
-		) [fromWorkId, toWorkId] = [toWorkId, fromWorkId];
+		)
+			[fromWorkId, toWorkId] = [toWorkId, fromWorkId];
 		const link: OutlineLink = {
 			id: crypto.randomUUID(),
 			fromId: fromWorkId,

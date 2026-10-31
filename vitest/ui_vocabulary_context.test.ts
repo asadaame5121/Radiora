@@ -43,10 +43,13 @@ describe("UI vocabulary contract", () => {
 	});
 
 	it("injects custom labels and explanations from one definition", () => {
-		const custom = createUiVocabulary({
-			...DEFAULT_UI_CONCEPTS,
-			work: { label: "カード", description: "カードをまとめて管理します。" },
-		}, { advancedLinkEditor: "つながりを編集" });
+		const custom = createUiVocabulary(
+			{
+				...DEFAULT_UI_CONCEPTS,
+				work: { label: "カード", description: "カードをまとめて管理します。" },
+			},
+			{ advancedLinkEditor: "つながりを編集" },
+		);
 		context.value = custom;
 		expect(useUiVocabulary().work).toBe("カード");
 		expect(useUiConcepts().work).toEqual({

@@ -14,9 +14,9 @@ import type { GraphStore, RelationTypeDefinitionStorePort } from "./storage/grap
 import { bootstrapStorage, type StorageBootstrapSession } from "./storage/storage_bootstrap.ts";
 
 const hmrUiOrigin = developmentUiOrigin(Deno.env.get("RADIORA_HMR_UI_ORIGIN"));
-const buildProfile =
-	(await Deno.readTextFile(new URL("../dist/build-profile.txt", import.meta.url)))
-		.trim();
+const buildProfile = (
+	await Deno.readTextFile(new URL("../dist/build-profile.txt", import.meta.url))
+).trim();
 if (buildProfile !== "development" && buildProfile !== "release") {
 	throw new Error("Invalid desktop build profile.");
 }
@@ -128,36 +128,42 @@ async function stopBackend(): Promise<void> {
 
 async function bootstrap(): Promise<StartupStatus> {
 	if (bootstrapPromise) return bootstrapPromise;
-	bootstrapPromise = logger.timed("backend.bootstrap", async () => {
-		startupStatus = { phase: "starting", message: "データを読み込んでいます…", logPath };
-		logger.info("backend.startup.begin", { storageMode });
-		await stopBackend();
-		try {
-			const session = await bootstrapStorage({
-				dataDir,
-				storageMode,
-				logger,
-			});
-			currentSession = session;
-			store = session.store;
-			service = new OutlineService(session.store);
-			startupStatus = { phase: "ready", message: "準備完了", logPath };
-			logger.info("backend.startup.ready", { storageMode });
-		} catch (cause) {
-			const detail = cause instanceof Error ? cause.message : String(cause);
-			startupStatus = {
-				phase: "failed",
-				message: "データを読み込めませんでした。",
-				detail,
-				logPath,
-			};
-			logger.error("backend.startup.failed", cause, { storageMode });
-			await stopBackend();
-		}
-		return startupStatus;
-	}, { storageMode }).finally(() => {
-		bootstrapPromise = null;
-	});
+	bootstrapPromise = logger
+		.timed(
+			"backend.bootstrap",
+			async () => {
+				startupStatus = { phase: "starting", message: "データを読み込んでいます…", logPath };
+				logger.info("backend.startup.begin", { storageMode });
+				await stopBackend();
+				try {
+					const session = await bootstrapStorage({
+						dataDir,
+						storageMode,
+						logger,
+					});
+					currentSession = session;
+					store = session.store;
+					service = new OutlineService(session.store);
+					startupStatus = { phase: "ready", message: "準備完了", logPath };
+					logger.info("backend.startup.ready", { storageMode });
+				} catch (cause) {
+					const detail = cause instanceof Error ? cause.message : String(cause);
+					startupStatus = {
+						phase: "failed",
+						message: "データを読み込めませんでした。",
+						detail,
+						logPath,
+					};
+					logger.error("backend.startup.failed", cause, { storageMode });
+					await stopBackend();
+				}
+				return startupStatus;
+			},
+			{ storageMode },
+		)
+		.finally(() => {
+			bootstrapPromise = null;
+		});
 	return bootstrapPromise;
 }
 
@@ -198,9 +204,8 @@ const handlers = createBindingHandlers({
 	loadStartupSnapshotCache: () =>
 		logger.timed("startup_snapshot.load", () => startupSnapshotCache.load()),
 	saveStartupSnapshotCache: async (snapshot, location) => {
-		const saved = await logger.timed(
-			"startup_snapshot.save",
-			() => startupSnapshotCache.save(snapshot, location),
+		const saved = await logger.timed("startup_snapshot.save", () =>
+			startupSnapshotCache.save(snapshot, location),
 		);
 		if (!saved) logger.warn("startup_snapshot.save.skipped", { path: startupSnapshotCachePath });
 	},
@@ -259,11 +264,14 @@ const server = Deno.serve(async (request) => {
 		const started = performance.now();
 		try {
 			const invoke = async () => {
-				const body = await request.json() as { args?: unknown[] };
+				const body = (await request.json()) as { args?: unknown[] };
 				return handler(...(body.args ?? []));
 			};
-			const maintenance = name === "clearDiagnosticLogs" || name === "getOperationSummary" ||
-				name === "exportOperationLog" || name === "recordViewChange" ||
+			const maintenance =
+				name === "clearDiagnosticLogs" ||
+				name === "getOperationSummary" ||
+				name === "exportOperationLog" ||
+				name === "recordViewChange" ||
 				name === "recordClientOperation";
 			const result = maintenance
 				? await invoke()
@@ -289,9 +297,12 @@ const server = Deno.serve(async (request) => {
 					logger.error("operation_log.write.failed", logCause);
 				}
 			}
-			return Response.json({ message: cause instanceof Error ? cause.message : String(cause) }, {
-				status: 500,
-			});
+			return Response.json(
+				{ message: cause instanceof Error ? cause.message : String(cause) },
+				{
+					status: 500,
+				},
+			);
 		}
 	}
 	if (hmrUiOrigin && (request.method === "GET" || request.method === "HEAD")) {
@@ -301,11 +312,10 @@ const server = Deno.serve(async (request) => {
 	const safePath = relative.includes("..") ? "index.html" : relative;
 	const assetUrl = new URL(safePath, distRoot);
 	try {
-		const body = await logger.timed(
-			"http.asset.read",
-			() => Deno.readFile(assetUrl),
-			{ method: request.method, path: safePath },
-		);
+		const body = await logger.timed("http.asset.read", () => Deno.readFile(assetUrl), {
+			method: request.method,
+			path: safePath,
+		});
 		return new Response(body, {
 			headers: { "content-type": mimeTypes[extension(safePath)] ?? "application/octet-stream" },
 		});

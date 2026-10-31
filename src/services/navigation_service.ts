@@ -60,9 +60,10 @@ export class NavigationService {
 		const position = await this.store.getResumePosition();
 		if (!position) return null;
 		const target = await this.resolveTarget(position.workId, position.occurrenceId);
-		const item = target.kind === "occurrence"
-			? (await this.store.listItems()).find((candidate) => candidate.id === target.occurrenceId)
-			: undefined;
+		const item =
+			target.kind === "occurrence"
+				? (await this.store.listItems()).find((candidate) => candidate.id === target.occurrenceId)
+				: undefined;
 		return {
 			position,
 			target,

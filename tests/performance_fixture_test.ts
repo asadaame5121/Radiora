@@ -50,7 +50,7 @@ Deno.test("performance fixture round-trips through an isolated SQLite database",
 	const directory = await Deno.makeTempDir({ prefix: "radiora-performance-" });
 	const path = `${directory}/fixture.db`;
 	try {
-		assert(await writePerformanceDatabase(path, state) > 0);
+		assert((await writePerformanceDatabase(path, state)) > 0);
 		const store = new SqliteGraphStore(path);
 		try {
 			await store.initialize();

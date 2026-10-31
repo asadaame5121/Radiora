@@ -10,9 +10,7 @@ Deno.test("Stub list view is reachable and acts only through bindings", async ()
 		new URL("../src/ui/work_list_state.svelte.ts", import.meta.url),
 	);
 	assert(controller.includes("createWorkListState(ports.api)"));
-	const bindings = await Deno.readTextFile(
-		new URL("../src/shared/bindings.ts", import.meta.url),
-	);
+	const bindings = await Deno.readTextFile(new URL("../src/shared/bindings.ts", import.meta.url));
 
 	for (const method of ["listStubs", "createStub", "resolveStub"]) {
 		assert(bindings.includes(`${method}(`));

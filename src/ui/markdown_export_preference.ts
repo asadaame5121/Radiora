@@ -47,8 +47,8 @@ export function loadMarkdownExportPreference(
 		if (!result.success) return { ...DEFAULT_MARKDOWN_EXPORT_PREFERENCE };
 		return {
 			...result.output,
-			referenceMode: result.output.referenceMode ??
-				DEFAULT_MARKDOWN_EXPORT_PREFERENCE.referenceMode,
+			referenceMode:
+				result.output.referenceMode ?? DEFAULT_MARKDOWN_EXPORT_PREFERENCE.referenceMode,
 		};
 	} catch {
 		return { ...DEFAULT_MARKDOWN_EXPORT_PREFERENCE };

@@ -13,27 +13,31 @@ for await (const entry of Deno.readDir(outputDir)) entries.push(entry);
 
 let launcher: Deno.DirEntry | undefined;
 if (isWindows) {
-	launcher = entries.find((entry) => entry.isFile && entry.name.endsWith(".bat")) ??
-		entries.find((entry) =>
-			entry.isFile &&
-			entry.name.endsWith(".exe") &&
-			!entry.name.startsWith("bootstrap") &&
-			entry.name.toLowerCase() !== "radiora-surreal.exe" &&
-			entry.name.toLowerCase() !== "surreal.exe"
+	launcher =
+		entries.find((entry) => entry.isFile && entry.name.endsWith(".bat")) ??
+		entries.find(
+			(entry) =>
+				entry.isFile &&
+				entry.name.endsWith(".exe") &&
+				!entry.name.startsWith("bootstrap") &&
+				entry.name.toLowerCase() !== "radiora-surreal.exe" &&
+				entry.name.toLowerCase() !== "surreal.exe",
 		);
 } else {
-	launcher = entries.find((entry) => entry.isFile && entry.name === "radiora-v2-linux") ??
-		entries.find((entry) =>
-			entry.isFile &&
-			!entry.name.startsWith("bootstrap") &&
-			!entry.name.endsWith(".so") &&
-			!entry.name.endsWith(".pak") &&
-			!entry.name.endsWith(".dat") &&
-			!entry.name.endsWith(".json") &&
-			!entry.name.endsWith(".png") &&
-			!entry.name.endsWith(".desktop") &&
-			entry.name !== "surreal" &&
-			entry.name !== "chrome-sandbox"
+	launcher =
+		entries.find((entry) => entry.isFile && entry.name === "radiora-v2-linux") ??
+		entries.find(
+			(entry) =>
+				entry.isFile &&
+				!entry.name.startsWith("bootstrap") &&
+				!entry.name.endsWith(".so") &&
+				!entry.name.endsWith(".pak") &&
+				!entry.name.endsWith(".dat") &&
+				!entry.name.endsWith(".json") &&
+				!entry.name.endsWith(".png") &&
+				!entry.name.endsWith(".desktop") &&
+				entry.name !== "surreal" &&
+				entry.name !== "chrome-sandbox",
 		);
 }
 if (!launcher) {

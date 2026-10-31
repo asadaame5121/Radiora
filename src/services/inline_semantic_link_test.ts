@@ -37,18 +37,25 @@ Deno.test("inline semantic links keep the first failed closing diagnostic and co
 	const result = parseInlineSemanticLinks(text);
 	const start = text.indexOf('"');
 	const end = text.indexOf("]]");
-	assertEquals(result.diagnostics, [{
-		code: "SYNTAX_ERROR",
-		field: "reason",
-		message: "Quoted field is missing its closing quote",
-		start,
-		end,
-		range: { start, end },
-	}]);
-	assertEquals(result.candidates.map(({ raw, range }) => ({ raw, range })), [{
-		raw: "[[C::RELATED::D]]",
-		range: { start: text.lastIndexOf("[["), end: text.length },
-	}]);
+	assertEquals(result.diagnostics, [
+		{
+			code: "SYNTAX_ERROR",
+			field: "reason",
+			message: "Quoted field is missing its closing quote",
+			start,
+			end,
+			range: { start, end },
+		},
+	]);
+	assertEquals(
+		result.candidates.map(({ raw, range }) => ({ raw, range })),
+		[
+			{
+				raw: "[[C::RELATED::D]]",
+				range: { start: text.lastIndexOf("[["), end: text.length },
+			},
+		],
+	);
 });
 
 Deno.test("inline semantic links parse Japanese fields, reason, and source ranges", () => {
@@ -77,9 +84,10 @@ Deno.test("inline semantic links allow horizontal space around field delimiters"
 	const result = parseInlineSemanticLinks('[[  Source  ::  RELATED  ::  "Target Name"  ]]');
 
 	assertEquals(result.diagnostics, []);
-	assertEquals(result.candidates.map(({ source, type, target }) => ({ source, type, target })), [
-		{ source: "Source", type: "RELATED", target: "Target Name" },
-	]);
+	assertEquals(
+		result.candidates.map(({ source, type, target }) => ({ source, type, target })),
+		[{ source: "Source", type: "RELATED", target: "Target Name" }],
+	);
 });
 
 Deno.test("inline semantic links parse multiple same-line candidates and normalize type case", () => {
@@ -129,9 +137,10 @@ Deno.test("inline semantic links accept the definition relation", () => {
 	const result = parseInlineSemanticLinks("[[Definition::Def::Concept]]");
 
 	assertEquals(result.diagnostics, []);
-	assertEquals(result.candidates.map(({ source, type, target }) => ({ source, type, target })), [
-		{ source: "Definition", type: "DEF", target: "Concept" },
-	]);
+	assertEquals(
+		result.candidates.map(({ source, type, target }) => ({ source, type, target })),
+		[{ source: "Definition", type: "DEF", target: "Concept" }],
+	);
 });
 
 Deno.test("inline semantic links decode escaped quotes, backslashes, and delimiters", () => {
@@ -183,12 +192,15 @@ Deno.test("inline semantic links diagnose syntax errors without producing candid
 	const result = parseInlineSemanticLinks(source);
 
 	assertEquals(result.candidates, []);
-	assertEquals(result.diagnostics.map(({ code, field }) => ({ code, field })), [
-		{ code: "SYNTAX_ERROR", field: "source" },
-		{ code: "UNKNOWN_TYPE", field: "type" },
-		{ code: "SYNTAX_ERROR", field: "reason" },
-		{ code: "SYNTAX_ERROR", field: "target" },
-	]);
+	assertEquals(
+		result.diagnostics.map(({ code, field }) => ({ code, field })),
+		[
+			{ code: "SYNTAX_ERROR", field: "source" },
+			{ code: "UNKNOWN_TYPE", field: "type" },
+			{ code: "SYNTAX_ERROR", field: "reason" },
+			{ code: "SYNTAX_ERROR", field: "target" },
+		],
+	);
 });
 
 Deno.test("inline semantic links diagnose an unclosed opening marker", () => {
@@ -224,7 +236,10 @@ Deno.test("inline semantic links parse custom relation types when explicitly all
 	// 2. デフォルト（未許可型）では causes も unknown も UNKNOWN_TYPE
 	const defaultResult = parseInlineSemanticLinks(source);
 	assertEquals(defaultResult.candidates, []);
-	assertEquals(defaultResult.diagnostics.map((d) => d.code), ["UNKNOWN_TYPE", "UNKNOWN_TYPE"]);
+	assertEquals(
+		defaultResult.diagnostics.map((d) => d.code),
+		["UNKNOWN_TYPE", "UNKNOWN_TYPE"],
+	);
 });
 
 Deno.test("inline semantic links count UTF-16 positions after astral characters", () => {
@@ -249,24 +264,29 @@ Deno.test("inline semantic links distinguish odd and even escaping before openin
 	const result = parseInlineSemanticLinks(text);
 
 	assertEquals(result.diagnostics, []);
-	assertEquals(result.candidates.map(({ source, range }) => ({ source, range })), [{
-		source: "A",
-		range: { start: text.lastIndexOf("[["), end: text.length },
-	}]);
+	assertEquals(
+		result.candidates.map(({ source, range }) => ({ source, range })),
+		[
+			{
+				source: "A",
+				range: { start: text.lastIndexOf("[["), end: text.length },
+			},
+		],
+	);
 });
 
 Deno.test("inline semantic links skip tilde fences and resume after closing them", () => {
-	const text = [
-		"~~~md",
-		"[[Hidden::RELATED::B]]",
-		"~~~",
-		"[[Visible::RELATED::B]]",
-	].join("\r\n");
+	const text = ["~~~md", "[[Hidden::RELATED::B]]", "~~~", "[[Visible::RELATED::B]]"].join("\r\n");
 	const result = parseInlineSemanticLinks(text);
 
 	assertEquals(result.diagnostics, []);
-	assertEquals(result.candidates.map(({ source, range }) => ({ source, range })), [{
-		source: "Visible",
-		range: { start: text.lastIndexOf("[["), end: text.length },
-	}]);
+	assertEquals(
+		result.candidates.map(({ source, range }) => ({ source, range })),
+		[
+			{
+				source: "Visible",
+				range: { start: text.lastIndexOf("[["), end: text.length },
+			},
+		],
+	);
 });

@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-test("Outline focus dispatch reaches the rendered editor and restores its caret", async ({ page }) => {
+test("Outline focus dispatch reaches the rendered editor and restores its caret", async ({
+	page,
+}) => {
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	const editor = page.locator("textarea[data-item-id]").first();
 	await expect(editor).toBeAttached();
@@ -16,11 +18,14 @@ test("Outline focus dispatch reaches the rendered editor and restores its caret"
 		adapter.request(itemId, 3, () => true);
 	}, id);
 	await expect(editor).toBeFocused();
-	await expect.poll(() => editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart))
+	await expect
+		.poll(() => editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart))
 		.toBe(3);
 });
 
-test("Outline focus uses CSS escaping and dispatches only to the requested DOM host", async ({ page }) => {
+test("Outline focus uses CSS escaping and dispatches only to the requested DOM host", async ({
+	page,
+}) => {
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	const result = await page.evaluate(async () => {
 		const moduleUrl = "/src/ui/outline_focus_adapter.ts";

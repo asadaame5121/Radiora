@@ -45,15 +45,12 @@ Deno.test("Advanced Link parser extracts optional reason from type field", () =>
 });
 
 Deno.test("Advanced Link parser preserves reason with escaped quotes", () => {
-	assertEquals(
-		parseAdvancedLinkInput('source :: RELATED("夫婦\\"だった") :: target'),
-		{
-			source: "source",
-			type: "RELATED",
-			target: "target",
-			reason: '夫婦"だった',
-		},
-	);
+	assertEquals(parseAdvancedLinkInput('source :: RELATED("夫婦\\"だった") :: target'), {
+		source: "source",
+		type: "RELATED",
+		target: "target",
+		reason: '夫婦"だった',
+	});
 });
 
 Deno.test("Advanced Link parser accepts type without reason for backward compatibility", () => {
@@ -64,31 +61,29 @@ Deno.test("Advanced Link parser accepts type without reason for backward compati
 	});
 });
 
-for (
-	const [name, input, code, field] of [
-		["missing first delimiter", "source", "MISSING_DELIMITER", "source"],
-		["missing second delimiter", "source :: RELATED", "MISSING_DELIMITER", "type"],
-		["extra delimiter", "source :: RELATED :: target :: extra", "EXTRA_DELIMITER", "target"],
-		["empty source", " :: RELATED :: target", "EMPTY_FIELD", "source"],
-		["empty type", "source :: \t :: target", "EMPTY_FIELD", "type"],
-		["empty target", "source :: RELATED :: \t", "EMPTY_FIELD", "target"],
-		["unterminated quote", '"source :: RELATED :: target', "UNTERMINATED_QUOTE", "source"],
-		["invalid quoted escape", '"source\\n" :: RELATED :: target', "INVALID_ESCAPE", "source"],
-		[
-			"content after quoted field",
-			'"source" extra :: RELATED :: target',
-			"TRAILING_QUOTED_FIELD_CONTENT",
-			"source",
-		],
-		[
-			"quote in unquoted field",
-			'source"name :: RELATED :: target',
-			"QUOTE_IN_UNQUOTED_FIELD",
-			"source",
-		],
-		["unknown link type", "source :: unknown :: target", "UNKNOWN_LINK_TYPE", "type"],
-	] as const
-) {
+for (const [name, input, code, field] of [
+	["missing first delimiter", "source", "MISSING_DELIMITER", "source"],
+	["missing second delimiter", "source :: RELATED", "MISSING_DELIMITER", "type"],
+	["extra delimiter", "source :: RELATED :: target :: extra", "EXTRA_DELIMITER", "target"],
+	["empty source", " :: RELATED :: target", "EMPTY_FIELD", "source"],
+	["empty type", "source :: \t :: target", "EMPTY_FIELD", "type"],
+	["empty target", "source :: RELATED :: \t", "EMPTY_FIELD", "target"],
+	["unterminated quote", '"source :: RELATED :: target', "UNTERMINATED_QUOTE", "source"],
+	["invalid quoted escape", '"source\\n" :: RELATED :: target', "INVALID_ESCAPE", "source"],
+	[
+		"content after quoted field",
+		'"source" extra :: RELATED :: target',
+		"TRAILING_QUOTED_FIELD_CONTENT",
+		"source",
+	],
+	[
+		"quote in unquoted field",
+		'source"name :: RELATED :: target',
+		"QUOTE_IN_UNQUOTED_FIELD",
+		"source",
+	],
+	["unknown link type", "source :: unknown :: target", "UNKNOWN_LINK_TYPE", "type"],
+] as const) {
 	Deno.test(`Advanced Link parser rejects ${name} with structured error`, () => {
 		const error = assertThrows(() => parseAdvancedLinkInput(input), AdvancedLinkParseError);
 		assertEquals(error.code, code as AdvancedLinkParseErrorCode);
@@ -120,38 +115,39 @@ Deno.test("Advanced Link parser accepts allowed custom link types and rejects un
 	assertEquals(error.code, "UNKNOWN_LINK_TYPE");
 });
 
-const validFieldArbitrary = fc.tuple(
-	fc.array(fc.constantFrom("a", "b", "日本語"), { minLength: 1, maxLength: 12 }),
-	fc.array(fc.constantFrom("c", "d", " ", "資料"), { maxLength: 12 }),
-).map(([required, suffix]) => [...required, ...suffix].join(""));
-const validInputArbitrary = fc.tuple(
-	validFieldArbitrary,
-	fc.constantFrom("FROM", "SUPPORT", "DEF", "RELATED"),
-	validFieldArbitrary,
-).map(([source, type, target]) => source + " :: " + type + " :: " + target);
+const validFieldArbitrary = fc
+	.tuple(
+		fc.array(fc.constantFrom("a", "b", "日本語"), { minLength: 1, maxLength: 12 }),
+		fc.array(fc.constantFrom("c", "d", " ", "資料"), { maxLength: 12 }),
+	)
+	.map(([required, suffix]) => [...required, ...suffix].join(""));
+const validInputArbitrary = fc
+	.tuple(
+		validFieldArbitrary,
+		fc.constantFrom("FROM", "SUPPORT", "DEF", "RELATED"),
+		validFieldArbitrary,
+	)
+	.map(([source, type, target]) => source + " :: " + type + " :: " + target);
 const parserInputArbitrary = fc.oneof(
 	fc.string({ maxLength: 160 }).map((input) => ({ input, guaranteedValid: false })),
 	validInputArbitrary.map((input) => ({ input, guaranteedValid: true })),
 );
 
-Deno.test(
-	"Property: Advanced Link parser returns a value or a bounded structured parse error",
-	() => {
-		void fc.assert(
-			fc.property(parserInputArbitrary, ({ input, guaranteedValid }) => {
-				try {
-					const parsed = parseAdvancedLinkInput(input);
-					assertEquals(typeof parsed.source, "string");
-					assertEquals(typeof parsed.type, "string");
-					assertEquals(typeof parsed.target, "string");
-				} catch (error) {
-					if (!(error instanceof AdvancedLinkParseError)) throw error;
-					assertEquals(guaranteedValid, false);
-					assertEquals(Number.isInteger(error.position), true);
-					assertEquals(error.position >= 0 && error.position <= input.length, true);
-				}
-			}),
-			{ numRuns: 100 },
-		);
-	},
-);
+Deno.test("Property: Advanced Link parser returns a value or a bounded structured parse error", () => {
+	void fc.assert(
+		fc.property(parserInputArbitrary, ({ input, guaranteedValid }) => {
+			try {
+				const parsed = parseAdvancedLinkInput(input);
+				assertEquals(typeof parsed.source, "string");
+				assertEquals(typeof parsed.type, "string");
+				assertEquals(typeof parsed.target, "string");
+			} catch (error) {
+				if (!(error instanceof AdvancedLinkParseError)) throw error;
+				assertEquals(guaranteedValid, false);
+				assertEquals(Number.isInteger(error.position), true);
+				assertEquals(error.position >= 0 && error.position <= input.length, true);
+			}
+		}),
+		{ numRuns: 100 },
+	);
+});

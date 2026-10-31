@@ -24,15 +24,17 @@ export class BookmarkController {
 		let next: Bookmark[] | undefined;
 		const current = () =>
 			!this.disposed && !cancelled && generation === this.generation && canPublish();
-		const result = Promise.resolve().then(() => this.ports.read()).then(
-			(value) => {
-				next = value;
-			},
-			// Retired reads must not publish errors into the latest request.
-			(cause) => {
-				if (current()) throw cause;
-			},
-		);
+		const result = Promise.resolve()
+			.then(() => this.ports.read())
+			.then(
+				(value) => {
+					next = value;
+				},
+				// Retired reads must not publish errors into the latest request.
+				(cause) => {
+					if (current()) throw cause;
+				},
+			);
 		return {
 			result,
 			current,

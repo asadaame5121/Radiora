@@ -19,9 +19,9 @@ export class BranchRewriteController {
 	) {}
 
 	async confirmRewrite(confirmation: RewriteConfirmation, branchName: string): Promise<void> {
-		const source = this.ports.getSnapshot().items.find((item) =>
-			item.id === confirmation.occurrenceId
-		);
+		const source = this.ports
+			.getSnapshot()
+			.items.find((item) => item.id === confirmation.occurrenceId);
 		if (!source) throw new Error(`別稿の配置元が見つかりません: ${confirmation.occurrenceId}`);
 		const origin = this.ports.navigation.origin;
 		const result = await this.ports.api.rewriteAsNewBranch(

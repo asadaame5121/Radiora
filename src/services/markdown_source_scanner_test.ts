@@ -37,9 +37,11 @@ Deno.test("Markdown code spans require an equal backtick run and may span lines"
 });
 
 Deno.test("Markdown scanner recognizes autolinks without treating ordinary angle text as a link", () => {
-	for (
-		const source of ["<https://host.test/path>", "<mailto:name@host.test>", "<radiora://work/id>"]
-	) {
+	for (const source of [
+		"<https://host.test/path>",
+		"<mailto:name@host.test>",
+		"<radiora://work/id>",
+	]) {
 		assertEquals(findAutolinkEnd(source, 0), source.length);
 	}
 	for (const source of ["<ordinary text>", "<https://host.test", "<https://host.test/a b>"]) {
@@ -61,15 +63,13 @@ Deno.test("Markdown link scanner preserves label and angle destination UTF-16 ra
 });
 
 Deno.test("Markdown exclusion scan leaves escaped links, semantic openings, and unfinished syntax to its caller", () => {
-	for (
-		const source of [
-			"[[A::RELATED::B]]",
-			String.raw`\[label](url)`,
-			"[label](unclosed",
-			"[label](<url)",
-			"`unclosed",
-		]
-	) {
+	for (const source of [
+		"[[A::RELATED::B]]",
+		String.raw`\[label](url)`,
+		"[label](unclosed",
+		"[label](<url)",
+		"`unclosed",
+	]) {
 		const index = source.indexOf("[") >= 0 ? source.indexOf("[") : 0;
 		assertEquals(new MarkdownExclusionScanner(source).skipInlineRegion(index), null);
 	}

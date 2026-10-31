@@ -98,14 +98,25 @@ describe("history controller", () => {
 		const secondRecovery = deferred<RecoverySnapshot[]>();
 		const reportError = vi.fn();
 		const api = createApi({
-			listRevisions: vi.fn().mockImplementationOnce(() => firstRevisions.promise)
+			listRevisions: vi
+				.fn()
+				.mockImplementationOnce(() => firstRevisions.promise)
 				.mockImplementationOnce(() => secondRevisions.promise),
-			listRecoverySnapshots: vi.fn().mockImplementationOnce(() => firstRecovery.promise)
+			listRecoverySnapshots: vi
+				.fn()
+				.mockImplementationOnce(() => firstRecovery.promise)
 				.mockImplementationOnce(() => secondRecovery.promise),
-			listWorkLineage: vi.fn().mockImplementationOnce(() => firstLineage.promise)
+			listWorkLineage: vi
+				.fn()
+				.mockImplementationOnce(() => firstLineage.promise)
 				.mockImplementationOnce(() => secondLineage.promise),
 		});
-		const controller = new HistoryController(api, () => "work", () => selectedBranch, reportError);
+		const controller = new HistoryController(
+			api,
+			() => "work",
+			() => selectedBranch,
+			reportError,
+		);
 		const old = [
 			controller.loadRevisions("work"),
 			controller.loadWorkLineage("work"),
@@ -146,7 +157,12 @@ describe("history controller", () => {
 			restoreRecoverySnapshot: vi.fn().mockResolvedValue(undefined),
 		});
 		const reportError = vi.fn();
-		const controller = new HistoryController(api, () => "work-1", () => "branch-1", reportError);
+		const controller = new HistoryController(
+			api,
+			() => "work-1",
+			() => "branch-1",
+			reportError,
+		);
 		const flush = vi.fn().mockResolvedValue(undefined);
 		const reload = vi.fn().mockResolvedValue(undefined);
 
@@ -170,7 +186,12 @@ describe("history controller", () => {
 			promoteRecoverySnapshot: vi.fn().mockResolvedValue(undefined),
 		});
 		const reportError = vi.fn();
-		const controller = new HistoryController(api, () => "work-1", () => "branch-1", reportError);
+		const controller = new HistoryController(
+			api,
+			() => "work-1",
+			() => "branch-1",
+			reportError,
+		);
 
 		await controller.promoteRecoverySnapshot("snap-1");
 		expect(api.promoteRecoverySnapshot).toHaveBeenCalledWith(
@@ -192,7 +213,12 @@ describe("history controller", () => {
 			setOccurrenceRevision: vi.fn().mockResolvedValue(undefined),
 		});
 		const reportError = vi.fn();
-		const controller = new HistoryController(api, () => "work-1", () => "branch-1", reportError);
+		const controller = new HistoryController(
+			api,
+			() => "work-1",
+			() => "branch-1",
+			reportError,
+		);
 		const flush = vi.fn().mockResolvedValue(undefined);
 		const reload = vi.fn().mockResolvedValue(undefined);
 

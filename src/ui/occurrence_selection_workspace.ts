@@ -64,12 +64,15 @@ export class OccurrenceSelectionWorkspace {
 
 	switchPane(paneId: string): boolean {
 		if (!this.ports.outline.visible()) return false;
-		return this.request(() => this.preparePane(paneId), (current) => {
-			const id = this.ports.current();
-			void this.ports.outline.restorePane(id, current).catch((cause) => {
-				if (current()) this.ports.reportError(cause);
-			});
-		});
+		return this.request(
+			() => this.preparePane(paneId),
+			(current) => {
+				const id = this.ports.current();
+				void this.ports.outline.restorePane(id, current).catch((cause) => {
+					if (current()) this.ports.reportError(cause);
+				});
+			},
+		);
 	}
 
 	/** Hoist changes scope, not the global selection; keep the active pane aligned. */
@@ -102,9 +105,13 @@ export class OccurrenceSelectionWorkspace {
 		sessionAllowsRestore: () => boolean,
 	): boolean {
 		if (
-			this.disposed || !this.initialRestorationOpen || !sessionAllowsRestore() ||
-			this.ports.form.dirty || this.ports.form.submitting
-		) return false;
+			this.disposed ||
+			!this.initialRestorationOpen ||
+			!sessionAllowsRestore() ||
+			this.ports.form.dirty ||
+			this.ports.form.submitting
+		)
+			return false;
 		const browsing = reconcileBrowsingState(
 			createBrowsingNavigationState("pane-1", location),
 			snapshot,
@@ -128,9 +135,9 @@ export class OccurrenceSelectionWorkspace {
 			? reconcileBrowsingState(this.ports.outline.browsing(), snapshot)
 			: undefined;
 		const expanded = browsing
-			? this.ports.outline.expanded().filter((key) =>
-				snapshot.items.some((value) => value.id === key)
-			)
+			? this.ports.outline
+					.expanded()
+					.filter((key) => snapshot.items.some((value) => value.id === key))
 			: undefined;
 		this.commit({ id, item, browsing, expanded }, "correction");
 	}
@@ -179,7 +186,7 @@ export class OccurrenceSelectionWorkspace {
 		afterSelection?: (current: () => boolean) => void,
 	): Promise<void> {
 		while (current()) {
-			if (!await this.ports.form.canSelect(next.item, current) || !current()) return;
+			if (!(await this.ports.form.canSelect(next.item, current)) || !current()) return;
 			const latest = prepare();
 			if (!latest) return;
 			if (this.ports.form.canSelectImmediately(latest.item)) {

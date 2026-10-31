@@ -43,16 +43,20 @@ export class JsonGraphStore extends MemoryGraphStore {
 		restoreFileOperations?: JsonRestoreFileOperations,
 	) {
 		super();
-		this.persistence = new JsonPersistence(path, {
-			capture: () => ({ state: this.state.capture(), knotsDirty: this.knotsDirty }),
-			rollback: (savepoint) => {
-				this.knotsDirty = savepoint.knotsDirty;
-				this.state.rollback(savepoint.state);
+		this.persistence = new JsonPersistence(
+			path,
+			{
+				capture: () => ({ state: this.state.capture(), knotsDirty: this.knotsDirty }),
+				rollback: (savepoint) => {
+					this.knotsDirty = savepoint.knotsDirty;
+					this.state.rollback(savepoint.state);
+				},
+				exportGraphState: () => this.exportGraphState(),
+				restoreGraphState: (state) => super.restoreGraphState(state),
+				prepareSnapshot: () => this.prepareSnapshot(),
 			},
-			exportGraphState: () => this.exportGraphState(),
-			restoreGraphState: (state) => super.restoreGraphState(state),
-			prepareSnapshot: () => this.prepareSnapshot(),
-		}, restoreFileOperations);
+			restoreFileOperations,
+		);
 	}
 
 	protected override afterOutlineStructureChanged(): void {
@@ -95,7 +99,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		occurrence: Occurrence,
 	): Promise<void> {
 		await this.persistence.mutate(() =>
-			super.createWorkBundle(work, branch, workingCopy, occurrence)
+			super.createWorkBundle(work, branch, workingCopy, occurrence),
 		);
 	}
 
@@ -113,7 +117,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		workingCopy: WorkingCopy,
 	): Promise<void> {
 		await this.persistence.mutateWithRollback(() =>
-			super.createUnplacedWork(work, branch, workingCopy)
+			super.createUnplacedWork(work, branch, workingCopy),
 		);
 	}
 
@@ -127,7 +131,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		updatedAt: string,
 	): Promise<void> {
 		await this.persistence.mutateWithRollback(() =>
-			super.setWorkHistoricalTime(workId, value, updatedAt)
+			super.setWorkHistoricalTime(workId, value, updatedAt),
 		);
 	}
 
@@ -171,11 +175,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		await this.persistence.mutate(() => super.updateBranchWorkingCopy(branchId, text, updatedAt));
 	}
 
-	override async updateWorkingCopy(
-		workId: string,
-		text: string,
-		updatedAt: string,
-	): Promise<void> {
+	override async updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
 		await this.persistence.mutate(() => super.updateWorkingCopy(workId, text, updatedAt));
 	}
 
@@ -197,7 +197,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		updatedAt: string,
 	): Promise<void> {
 		await this.persistence.mutateWithRollback(() =>
-			super.restoreRecoverySnapshot(snapshotId, beforeRestore, updatedAt)
+			super.restoreRecoverySnapshot(snapshotId, beforeRestore, updatedAt),
 		);
 	}
 
@@ -208,7 +208,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		protectedAt: string,
 	): Promise<void> {
 		await this.persistence.mutateWithRollback(() =>
-			super.promoteRecoverySnapshot(snapshotId, revision, branchId, protectedAt)
+			super.promoteRecoverySnapshot(snapshotId, revision, branchId, protectedAt),
 		);
 	}
 
@@ -273,7 +273,7 @@ export class JsonGraphStore extends MemoryGraphStore {
 		reason?: string,
 	): Promise<void> {
 		await this.persistence.mutateWithRollback(() =>
-			super.resolveEmergenceSuggestion(id, action, link, reason)
+			super.resolveEmergenceSuggestion(id, action, link, reason),
 		);
 	}
 
@@ -290,9 +290,10 @@ export class JsonGraphStore extends MemoryGraphStore {
 	}
 
 	private async protectVersionInput(version: number): Promise<void> {
-		const backup = typeof this.path === "string"
-			? `${this.path}.v${version}.bak`
-			: new URL(`${this.path.href}.v${version}.bak`);
+		const backup =
+			typeof this.path === "string"
+				? `${this.path}.v${version}.bak`
+				: new URL(`${this.path.href}.v${version}.bak`);
 		try {
 			await Deno.stat(backup);
 		} catch (cause) {

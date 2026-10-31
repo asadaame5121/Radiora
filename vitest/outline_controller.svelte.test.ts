@@ -93,7 +93,7 @@ function setup() {
 		bookmarks,
 		ports,
 		treeRequests,
-		setDrafts: (next: WorkingCopyDraft[]) => drafts = next,
+		setDrafts: (next: WorkingCopyDraft[]) => (drafts = next),
 		select: () => selectionGeneration++,
 	};
 }
@@ -120,19 +120,19 @@ test("collapse publication changes only its placement and retains live snapshot 
 	expect(s.ports.prepareTree).not.toHaveBeenCalled();
 });
 
-test.each(["invalidate", "reload"] as const)(
-	"completed collapse corrects saved data across %s without selection or focus publication",
-	async (departure) => {
-		const s = setup();
-		s.controller.restoreCache(snapshot());
-		const publish = s.controller.prepareCollapsed("main");
-		if (departure === "reload") await s.controller.reload();
-		else s.controller[departure]();
-		expect(publish(true)).toBe(true);
-		expect(s.controller.snapshot.items[0].collapsed).toBe(true);
-		expect(s.ports.focus).not.toHaveBeenCalled();
-	},
-);
+test.each([
+	"invalidate",
+	"reload",
+] as const)("completed collapse corrects saved data across %s without selection or focus publication", async (departure) => {
+	const s = setup();
+	s.controller.restoreCache(snapshot());
+	const publish = s.controller.prepareCollapsed("main");
+	if (departure === "reload") await s.controller.reload();
+	else s.controller[departure]();
+	expect(publish(true)).toBe(true);
+	expect(s.controller.snapshot.items[0].collapsed).toBe(true);
+	expect(s.ports.focus).not.toHaveBeenCalled();
+});
 
 test("completed collapse cannot patch a disposed owner or a replaced placement", () => {
 	for (const disposed of [false, true]) {
@@ -179,71 +179,71 @@ test("a collapse saved during an Outline read survives its older response and st
 	expect(s.ports.persist).toHaveBeenLastCalledWith(s.controller.cacheSnapshot);
 });
 
-test.each([false, true])(
-	"a read started during collapse persistence cannot retain stale cache (read already published: %s)",
-	async (alreadyPublished) => {
-		const s = setup();
-		s.controller.restoreCache(snapshot());
-		const display = new OutlineDisplayController();
-		display.expand("main");
-		const write = Promise.withResolvers<void>();
-		const read = Promise.withResolvers<OutlineSnapshot>();
-		const saved = snapshot();
-		const operations = new OutlineOperationsController({
-			api: {
-				moveItem: vi.fn(),
-				setCollapsed: async () => {
-					await write.promise;
-					saved.items[0].collapsed = true;
-				},
-				updateItemText: vi.fn(),
-				createItem: vi.fn(),
-				deleteItem: vi.fn(),
-				createOccurrence: vi.fn(),
-				setContextualHeading: vi.fn(),
+test.each([
+	false,
+	true,
+])("a read started during collapse persistence cannot retain stale cache (read already published: %s)", async (alreadyPublished) => {
+	const s = setup();
+	s.controller.restoreCache(snapshot());
+	const display = new OutlineDisplayController();
+	display.expand("main");
+	const write = Promise.withResolvers<void>();
+	const read = Promise.withResolvers<OutlineSnapshot>();
+	const saved = snapshot();
+	const operations = new OutlineOperationsController({
+		api: {
+			moveItem: vi.fn(),
+			setCollapsed: async () => {
+				await write.promise;
+				saved.items[0].collapsed = true;
 			},
-			getItems: () => s.controller.snapshot.items,
-			getItemById: (id) => s.controller.snapshot.items.find((item) => item.id === id),
-			reload: () => s.controller.reload(),
-			flushAutosave: vi.fn(),
-			reportError: vi.fn(),
-			captureRequest: () => () => true,
-			pendingEmpty: { track: vi.fn(), forget: vi.fn() },
-			prepareClearTemporaryExpansion: (id) => display.prepareClearExpansion(id),
-			prepareCollapsed: (id) => s.controller.prepareCollapsed(id),
-			selection: { current: () => "main", clear: vi.fn() },
-		});
-		const collapse = operations.toggle(s.controller.snapshot.items[0]);
-		s.ports.readOutline.mockReturnValueOnce(read.promise).mockImplementation(async () => saved);
-		const staleRead = s.controller.reload();
-		if (alreadyPublished) {
-			read.resolve(snapshot());
-			await staleRead;
-			// Reconciliation may repeat the same expansion IDs without a new user expansion.
-			display.setExpanded(display.expanded);
-		}
-		write.resolve();
-		await collapse;
-		if (!alreadyPublished) {
-			read.resolve(snapshot());
-			expect(await staleRead).toBe(true);
-		}
-		expect(s.controller.snapshot.items[0].collapsed).toBe(true);
-		expect(s.controller.cacheSnapshot.items[0].collapsed).toBe(true);
-		expect(display.expanded).not.toContain("main");
-		expect(s.ports.focus).not.toHaveBeenCalled();
-		expect(s.ports.readOutline).toHaveBeenCalledTimes(1);
-	},
-);
+			updateItemText: vi.fn(),
+			createItem: vi.fn(),
+			deleteItem: vi.fn(),
+			createOccurrence: vi.fn(),
+			setContextualHeading: vi.fn(),
+		},
+		getItems: () => s.controller.snapshot.items,
+		getItemById: (id) => s.controller.snapshot.items.find((item) => item.id === id),
+		reload: () => s.controller.reload(),
+		flushAutosave: vi.fn(),
+		reportError: vi.fn(),
+		captureRequest: () => () => true,
+		pendingEmpty: { track: vi.fn(), forget: vi.fn() },
+		prepareClearTemporaryExpansion: (id) => display.prepareClearExpansion(id),
+		prepareCollapsed: (id) => s.controller.prepareCollapsed(id),
+		selection: { current: () => "main", clear: vi.fn() },
+	});
+	const collapse = operations.toggle(s.controller.snapshot.items[0]);
+	s.ports.readOutline.mockReturnValueOnce(read.promise).mockImplementation(async () => saved);
+	const staleRead = s.controller.reload();
+	if (alreadyPublished) {
+		read.resolve(snapshot());
+		await staleRead;
+		// Reconciliation may repeat the same expansion IDs without a new user expansion.
+		display.setExpanded(display.expanded);
+	}
+	write.resolve();
+	await collapse;
+	if (!alreadyPublished) {
+		read.resolve(snapshot());
+		expect(await staleRead).toBe(true);
+	}
+	expect(s.controller.snapshot.items[0].collapsed).toBe(true);
+	expect(s.controller.cacheSnapshot.items[0].collapsed).toBe(true);
+	expect(display.expanded).not.toContain("main");
+	expect(s.ports.focus).not.toHaveBeenCalled();
+	expect(s.ports.readOutline).toHaveBeenCalledTimes(1);
+});
 
 for (const failed of [false, true]) {
 	test(`reverse reload ${failed ? "failure" : "success"} cannot replace snapshot/bookmarks/error/focus`, async () => {
 		const s = setup();
 		const old = Promise.withResolvers<OutlineSnapshot>();
 		s.ports.readOutline.mockReturnValueOnce(old.promise).mockResolvedValueOnce(snapshot("latest"));
-		s.ports.readBookmarks.mockResolvedValueOnce([{ id: "old" } as Bookmark]).mockResolvedValueOnce([
-			{ id: "latest" } as Bookmark,
-		]);
+		s.ports.readBookmarks
+			.mockResolvedValueOnce([{ id: "old" } as Bookmark])
+			.mockResolvedValueOnce([{ id: "latest" } as Bookmark]);
 		const first = s.controller.reload({ focusId: "main" });
 		expect(await s.controller.reload()).toBe(true);
 		if (failed) old.reject(new Error("old failure"));
@@ -400,9 +400,9 @@ for (const departure of ["dispose", "startup revoked"] as const) {
 test("an older bookmark response cannot publish after a newer complete reload", async () => {
 	const s = setup();
 	const pending = Promise.withResolvers<Bookmark[]>();
-	s.ports.readBookmarks.mockReturnValueOnce(pending.promise).mockResolvedValueOnce([
-		{ id: "new" } as Bookmark,
-	]);
+	s.ports.readBookmarks
+		.mockReturnValueOnce(pending.promise)
+		.mockResolvedValueOnce([{ id: "new" } as Bookmark]);
 	s.ports.readOutline.mockResolvedValueOnce(snapshot("old")).mockResolvedValueOnce(snapshot("new"));
 	const first = s.controller.reload();
 	await s.controller.reload();
@@ -446,7 +446,8 @@ test("bookmark-only refresh during Outline reload preserves the newer bookmark l
 	const s = setup();
 	const pending = Promise.withResolvers<OutlineSnapshot>();
 	s.ports.readOutline.mockReturnValueOnce(pending.promise);
-	s.ports.readBookmarks.mockResolvedValueOnce([{ id: "old" } as Bookmark])
+	s.ports.readBookmarks
+		.mockResolvedValueOnce([{ id: "old" } as Bookmark])
 		.mockResolvedValueOnce([{ id: "new" } as Bookmark]);
 	const reload = s.controller.reload();
 	await Promise.resolve();

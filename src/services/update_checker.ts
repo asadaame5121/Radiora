@@ -30,7 +30,7 @@ export async function checkForUpdate(
 			headers: { accept: "application/vnd.github+json" },
 		});
 		if (!response.ok) throw new Error(`GitHub release request failed: ${response.ok}`);
-		const payload = await response.json() as {
+		const payload = (await response.json()) as {
 			tag_name?: unknown;
 			html_url?: unknown;
 			published_at?: unknown;
@@ -86,8 +86,11 @@ function parseVersion(value: string): [number, number, number] | null {
 function isSafeReleaseUrl(value: string): boolean {
 	try {
 		const url = new URL(value);
-		return url.protocol === "https:" && url.hostname === "github.com" &&
-			url.pathname.startsWith("/asadaame5121/Radiora/releases/");
+		return (
+			url.protocol === "https:" &&
+			url.hostname === "github.com" &&
+			url.pathname.startsWith("/asadaame5121/Radiora/releases/")
+		);
 	} catch {
 		return false;
 	}

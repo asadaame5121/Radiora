@@ -28,8 +28,9 @@ export class RecoverySnapshotService {
 	async list(workId: string, branchId: string): Promise<RecoverySnapshot[]> {
 		if (!workId || !branchId) return [];
 		await this.requireScope(workId, branchId);
-		return (await this.store.listRecoverySnapshots(workId, branchId)).sort((left, right) =>
-			right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id)
+		return (await this.store.listRecoverySnapshots(workId, branchId)).sort(
+			(left, right) =>
+				right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id),
 		);
 	}
 
@@ -38,11 +39,7 @@ export class RecoverySnapshotService {
 		workId: string,
 		branchId: string,
 	): Promise<RecoverySnapshotPreview> {
-		const { snapshot, workingCopy } = await this.requireSnapshotScope(
-			snapshotId,
-			workId,
-			branchId,
-		);
+		const { snapshot, workingCopy } = await this.requireSnapshotScope(snapshotId, workId, branchId);
 		return {
 			snapshot,
 			workingCopy,
@@ -93,12 +90,12 @@ export class RecoverySnapshotService {
 		// A Snapshot's capture-time source is the most faithful parent. Legacy or
 		// imported snapshots can lack it; in that case the current Branch head is
 		// the safe append-only fallback.
-		const parentId = snapshot.sourceRevisionId &&
-				revisionIds.has(snapshot.sourceRevisionId)
-			? snapshot.sourceRevisionId
-			: branch.headRevisionId && revisionIds.has(branch.headRevisionId)
-			? branch.headRevisionId
-			: null;
+		const parentId =
+			snapshot.sourceRevisionId && revisionIds.has(snapshot.sourceRevisionId)
+				? snapshot.sourceRevisionId
+				: branch.headRevisionId && revisionIds.has(branch.headRevisionId)
+					? branch.headRevisionId
+					: null;
 		const createdAt = this.#now();
 		const revision: Revision = {
 			id: this.#createId(),
@@ -131,8 +128,9 @@ export class RecoverySnapshotService {
 			throw new Error("Recovery Snapshot, Work, and Branch are required");
 		}
 		const { branch, workingCopy } = await this.requireScope(workId, branchId);
-		const snapshot = (await this.store.listRecoverySnapshots(workId, branchId))
-			.find((candidate) => candidate.id === snapshotId);
+		const snapshot = (await this.store.listRecoverySnapshots(workId, branchId)).find(
+			(candidate) => candidate.id === snapshotId,
+		);
 		if (!snapshot || snapshot.workId !== workId || snapshot.branchId !== branchId) {
 			throw new Error("Recovery Snapshot scope does not match selected Work and Branch");
 		}
@@ -143,7 +141,7 @@ export class RecoverySnapshotService {
 async function contentHash(text: string): Promise<string> {
 	const bytes = new TextEncoder().encode(text);
 	const digest = await crypto.subtle.digest("SHA-256", bytes);
-	return `sha256:${
-		[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
-	}`;
+	return `sha256:${[...new Uint8Array(digest)]
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("")}`;
 }

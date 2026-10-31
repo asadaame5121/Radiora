@@ -24,14 +24,17 @@ Deno.test("new saves use the version 8 backup envelope and reload graph data", a
 				revisionSelector: { mode: "branch", branchId: "main" },
 			},
 		);
-		await first.createRevision({
-			id: "revision-one",
-			workId: "one",
-			text: "immutable",
-			parentRevisionIds: [],
-			kind: "edition",
-			createdAt: timestamp,
-		}, "main");
+		await first.createRevision(
+			{
+				id: "revision-one",
+				workId: "one",
+				text: "immutable",
+				parentRevisionIds: [],
+				kind: "edition",
+				createdAt: timestamp,
+			},
+			"main",
+		);
 		await first.createRecoverySnapshot({
 			id: "snapshot-one",
 			workId: "one",
@@ -109,20 +112,10 @@ Deno.test("rejects a future backup version without overwriting it", async () => 
 		await Deno.writeTextFile(path, futureBackup);
 		const store = new JsonGraphStore(path);
 
-		await assertRejects(
-			() => store.initialize(),
-			Error,
-			"Unsupported backup schema version: 9",
-		);
+		await assertRejects(() => store.initialize(), Error, "Unsupported backup schema version: 9");
 		assertEquals(await Deno.readTextFile(path), futureBackup);
-		await assertRejects(
-			() => Deno.stat(`${path}.v0.bak`),
-			Deno.errors.NotFound,
-		);
-		await assertRejects(
-			() => Deno.stat(`${path}.v1.bak`),
-			Deno.errors.NotFound,
-		);
+		await assertRejects(() => Deno.stat(`${path}.v0.bak`), Deno.errors.NotFound);
+		await assertRejects(() => Deno.stat(`${path}.v1.bak`), Deno.errors.NotFound);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -140,16 +133,9 @@ Deno.test("failed version 1 validation does not create a protected migration bac
 		await Deno.writeTextFile(path, invalidInput);
 		const store = new JsonGraphStore(path);
 
-		await assertRejects(
-			() => store.initialize(),
-			Error,
-			"Unsupported backup format",
-		);
+		await assertRejects(() => store.initialize(), Error, "Unsupported backup format");
 		assertEquals(await Deno.readTextFile(path), invalidInput);
-		await assertRejects(
-			() => Deno.stat(`${path}.v1.bak`),
-			Deno.errors.NotFound,
-		);
+		await assertRejects(() => Deno.stat(`${path}.v1.bak`), Deno.errors.NotFound);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -204,27 +190,33 @@ Deno.test("version 1 backup migrates losslessly to version 4 and reloads", async
 	const timestamp = "2026-01-01T00:00:00.000Z";
 	const data = {
 		works: [{ id: "one", createdAt: timestamp, updatedAt: timestamp }],
-		branches: [{
-			id: "one-main",
-			workId: "one",
-			name: "main",
-			headRevisionId: null,
-			createdAt: timestamp,
-		}],
-		workingCopies: [{
-			branchId: "one-main",
-			workId: "one",
-			text: "v1本文",
-			updatedAt: timestamp,
-		}],
-		occurrences: [{
-			id: "one-occurrence",
-			workId: "one",
-			parentOccurrenceId: null,
-			orderKey: 1,
-			collapsed: false,
-			revisionSelector: { mode: "branch", branchId: "one-main" },
-		}],
+		branches: [
+			{
+				id: "one-main",
+				workId: "one",
+				name: "main",
+				headRevisionId: null,
+				createdAt: timestamp,
+			},
+		],
+		workingCopies: [
+			{
+				branchId: "one-main",
+				workId: "one",
+				text: "v1本文",
+				updatedAt: timestamp,
+			},
+		],
+		occurrences: [
+			{
+				id: "one-occurrence",
+				workId: "one",
+				parentOccurrenceId: null,
+				orderKey: 1,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId: "one-main" },
+			},
+		],
 		links: [],
 		systemRelations: [],
 		knots: [],
@@ -305,7 +297,10 @@ Deno.test("loads the complete version 0 JSON fixture without data loss", async (
 		assertEquals(migrated.data.occurrences[3].parentOccurrenceId, items[4].id);
 		assertEquals(migrated.data.occurrences[4].parentOccurrenceId, items[3].id);
 		assertEquals(migrated.data.links[0].status, "asserted");
-		assertEquals(migrated.data.links.some((link: { type: string }) => link.type === "FROM"), false);
+		assertEquals(
+			migrated.data.links.some((link: { type: string }) => link.type === "FROM"),
+			false,
+		);
 		const protectedInput = JSON.parse(await Deno.readTextFile(`${path}.v0.bak`));
 		assertEquals(protectedInput.items.length, 5);
 		assertEquals(protectedInput.schemaVersion, undefined);
@@ -336,12 +331,14 @@ Deno.test("version 0 IN links migrate to system relations, not semantic links", 
 				updatedAt: "2026-01-01T00:00:00.000Z",
 			},
 		],
-		links: [{
-			fromId: "one",
-			toId: "two",
-			type: "IN",
-			createdAt: "2026-01-01T00:00:00.000Z",
-		}],
+		links: [
+			{
+				fromId: "one",
+				toId: "two",
+				type: "IN",
+				createdAt: "2026-01-01T00:00:00.000Z",
+			},
+		],
 		knots: [],
 	});
 
@@ -576,10 +573,7 @@ Deno.test("version 4 round-trip preserves stub metadata and rich text", async ()
 		await second.initialize();
 		const work = (await second.listWorks()).find((candidate) => candidate.id === "stub-work");
 		assertEquals(work?.stub, stub);
-		assertEquals(
-			(await second.listWorkingCopies("stub-work"))[0]?.text,
-			richText,
-		);
+		assertEquals((await second.listWorkingCopies("stub-work"))[0]?.text, richText);
 
 		await second.resolveWorkStub("stub-work", "2026-07-30T02:00:00.000Z");
 		const third = new JsonGraphStore(path);
@@ -650,11 +644,13 @@ Deno.test("version 6 round-trip preserves emergence state, timestamps, reasons, 
 			proposedLinkType: "LIKE" as const,
 			title: "Candidate",
 			explanation: "Evidence",
-			evidence: [{
-				fromId: "context-occurrence",
-				toId: "target-occurrence",
-				relation: "LEXICAL" as const,
-			}],
+			evidence: [
+				{
+					fromId: "context-occurrence",
+					toId: "target-occurrence",
+					relation: "LEXICAL" as const,
+				},
+			],
 			score: 0.8,
 			persistenceStatus: "pending" as const,
 			createdAt: timestamp,
@@ -670,12 +666,7 @@ Deno.test("version 6 round-trip preserves emergence state, timestamps, reasons, 
 			await store.upsertEmergenceSuggestion(candidate(id));
 			await store.resolveEmergenceSuggestion(id, "dismiss", undefined, reason);
 		}
-		await store.resolveEmergenceSuggestion(
-			"dismissed",
-			"dismiss",
-			undefined,
-			"not relevant",
-		);
+		await store.resolveEmergenceSuggestion("dismissed", "dismiss", undefined, "not relevant");
 		await store.resolveEmergenceSuggestion("accepted", "accept", {
 			id: "suggestion-link",
 			fromId: "context",

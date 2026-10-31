@@ -129,10 +129,7 @@ export class SurrealProcess {
 			// biome-ignore lint/plugin/noSwallowedRejection: Closing stdin is best-effort because the child may already have exited.
 			const stdinClose = process.stdin?.close().catch(() => undefined);
 			if (stdinClose) {
-				await Promise.race([
-					stdinClose,
-					new Promise<void>((resolve) => setTimeout(resolve, 750)),
-				]);
+				await Promise.race([stdinClose, new Promise<void>((resolve) => setTimeout(resolve, 750))]);
 			}
 		}
 		try {

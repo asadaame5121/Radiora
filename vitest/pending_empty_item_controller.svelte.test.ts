@@ -185,12 +185,13 @@ test("failed discardEmptyItems RPC retains pending IDs and reports error", async
 	const saved = setupStorage();
 	const cause = new Error("RPC error");
 	const ports = {
-		getSnapshot: () => ({
-			items: [{ id: "empty", workId: "work", text: "", parentId: null }],
-			links: [],
-			knots: [],
-			stashItemIds: [],
-		} as OutlineSnapshot),
+		getSnapshot: () =>
+			({
+				items: [{ id: "empty", workId: "work", text: "", parentId: null }],
+				links: [],
+				knots: [],
+				stashItemIds: [],
+			}) as OutlineSnapshot,
 		flushAutosave: vi.fn().mockResolvedValue(undefined),
 		deleteItem: vi.fn(),
 		discardEmptyItems: vi.fn().mockRejectedValue(cause),

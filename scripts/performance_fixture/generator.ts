@@ -54,7 +54,7 @@ export function createPerformanceFixture(input: PerformanceFixtureOptions): Perf
 		createRandom(options.seed, LINK_RANDOM_SALT),
 	);
 	const links = linkPairs.map(({ fromIndex, toIndex }, index) =>
-		makeLink(options.seed, index, workIds[fromIndex], workIds[toIndex])
+		makeLink(options.seed, index, workIds[fromIndex], workIds[toIndex]),
 	);
 	const state = validatedGraphStateSnapshot({
 		works,
@@ -86,10 +86,7 @@ export function createPerformanceFixture(input: PerformanceFixtureOptions): Perf
 	return { manifest, state };
 }
 
-function buildParentLayout(
-	options: PerformanceFixtureOptions,
-	random: () => number,
-): ParentLayout {
+function buildParentLayout(options: PerformanceFixtureOptions, random: () => number): ParentLayout {
 	const { topicCount, profile } = options;
 	const rootCount = Math.max(80, Math.min(200, Math.floor(topicCount / 80)));
 	const parentIndices: Array<number | null> = Array(rootCount).fill(null);
@@ -201,13 +198,11 @@ function buildInternalReference(
 ): string {
 	if (bodyLength <= 120 || index % 97 !== 0) return "";
 	const targetIndex = (index + 17) % workIds.length;
-	return `Related: ${
-		canonicalInternalReferenceMarkdown(
-			`Topic ${targetIndex.toString().padStart(5, "0")}`,
-			"work",
-			workIds[targetIndex],
-		)
-	}`;
+	return `Related: ${canonicalInternalReferenceMarkdown(
+		`Topic ${targetIndex.toString().padStart(5, "0")}`,
+		"work",
+		workIds[targetIndex],
+	)}`;
 }
 
 function workingCopyText(
@@ -221,13 +216,13 @@ function workingCopyText(
 		bodyLength - (internalReference ? internalReference.length + 1 : 0),
 	);
 	const phrase = `Seed ${seed} topic ${index} records a thought with evidence and context. `;
-	const textBody = phrase.repeat(Math.ceil(textBodyLength / phrase.length)).slice(
-		0,
-		textBodyLength,
-	);
-	const body = textBody || internalReference
-		? `\n\n${textBody}${internalReference ? `\n${internalReference}` : ""}`
-		: "";
+	const textBody = phrase
+		.repeat(Math.ceil(textBodyLength / phrase.length))
+		.slice(0, textBodyLength);
+	const body =
+		textBody || internalReference
+			? `\n\n${textBody}${internalReference ? `\n${internalReference}` : ""}`
+			: "";
 	return `# Topic ${index.toString().padStart(5, "0")}${body}`;
 }
 
@@ -260,8 +255,9 @@ function buildLinkPairs(
 			Math.max(100, Math.floor(topicCount / DENSE_HUB_DEGREE_DIVISOR)),
 			topicCount - hubs.length,
 		);
-		const targets = Array.from({ length: topicCount }, (_, index) => index)
-			.filter((index) => !hubSet.has(index));
+		const targets = Array.from({ length: topicCount }, (_, index) => index).filter(
+			(index) => !hubSet.has(index),
+		);
 		shuffle(targets, random);
 		for (const hub of hubs) {
 			for (const target of targets.slice(0, fanout)) add(hub, target);

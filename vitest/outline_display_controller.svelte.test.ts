@@ -92,9 +92,10 @@ it("uses the pane projection for hoist and includes stash only on request", () =
 	expect(display.visibleRows(saved, projection, false).map((row) => row.item.id)).toEqual([
 		"first",
 	]);
-	expect(display.visibleRows(saved, projection, true).map((row) => [row.item.id, row.stash]))
-		.toEqual([
-			["first", false],
-			["stash", true],
-		]);
+	expect(
+		display.visibleRows(saved, projection, true).map((row) => [row.item.id, row.stash]),
+	).toEqual([
+		["first", false],
+		["stash", true],
+	]);
 });

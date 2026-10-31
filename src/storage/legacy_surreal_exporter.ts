@@ -58,11 +58,8 @@ export async function exportLegacySnapshot(
 	const onLog = options.onLog;
 
 	const port = await findPort();
-	const process = createProcess(
-		copyPath,
-		"127.0.0.1",
-		port,
-		(event, detail) => onLog?.("surrealdb.migration.event", { sourceEvent: event, detail }),
+	const process = createProcess(copyPath, "127.0.0.1", port, (event, detail) =>
+		onLog?.("surrealdb.migration.event", { sourceEvent: event, detail }),
 	);
 	let legacyStore: LegacySurrealStoreHandle | null = null;
 	try {

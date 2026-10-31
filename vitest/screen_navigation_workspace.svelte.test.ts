@@ -76,15 +76,15 @@ function setup(publication?: ScreenNavigationWorkspacePorts["outlinePublication"
 	const workspace = new ScreenNavigationWorkspace({
 		outline: {
 			captureBrowsing: () => browsing,
-			commitBrowsing: (next) => browsing = next,
+			commitBrowsing: (next) => (browsing = next),
 			filter: () => filter,
-			setFilter: (next) => filter = next,
+			setFilter: (next) => (filter = next),
 			expanded: () => expanded,
-			setExpanded: (next) => expanded = next,
+			setExpanded: (next) => (expanded = next),
 			inspector: () => inspector,
-			setInspector: (next) => inspector = next as typeof inspector,
+			setInspector: (next) => (inspector = next as typeof inspector),
 			longForm: () => manuscript,
-			setLongForm: (next) => manuscript = next,
+			setLongForm: (next) => (manuscript = next),
 			capturePosition: () => viewport,
 			restorePosition,
 		},
@@ -92,24 +92,24 @@ function setup(publication?: ScreenNavigationWorkspacePorts["outlinePublication"
 		readOutline,
 		outlinePublication: publication
 			? {
-				invalidate: () => publication.invalidate(),
-				begin: () => {
-					const request = publication.begin();
-					return {
-						current: request.current,
-						publish: (next) => {
-							if (!request.publish(next)) return false;
-							snapshot = next;
-							return true;
-						},
-					};
-				},
-			}
-			: outlinePublicationFixture((next) => snapshot = next),
+					invalidate: () => publication.invalidate(),
+					begin: () => {
+						const request = publication.begin();
+						return {
+							current: request.current,
+							publish: (next) => {
+								if (!request.publish(next)) return false;
+								snapshot = next;
+								return true;
+							},
+						};
+					},
+				}
+			: outlinePublicationFixture((next) => (snapshot = next)),
 		selection: {
 			current: () => selected,
 			guard,
-			commit: (id) => selected = id,
+			commit: (id) => (selected = id),
 			cancelPending: vi.fn(),
 		},
 		editor: { save, flush, version: () => editVersion },
@@ -131,28 +131,28 @@ function setup(publication?: ScreenNavigationWorkspacePorts["outlinePublication"
 		filter: () => filter,
 		inspector: () => inspector,
 		manuscript: () => manuscript,
-		selectAway: () => selected = "other",
-		changeFilter: () => filter.freeText = "away",
+		selectAway: () => (selected = "other"),
+		changeFilter: () => (filter.freeText = "away"),
 		snapshot: () => snapshot,
 		editInline: (text: string) => {
 			editVersion++;
 			snapshot = {
 				...snapshot,
-				items: snapshot.items.map((item) => item.id === "last" ? { ...item, text } : item),
+				items: snapshot.items.map((item) => (item.id === "last" ? { ...item, text } : item)),
 			};
 		},
 		updateSourceText: () =>
-			snapshot = {
+			(snapshot = {
 				...snapshot,
 				items: snapshot.items.map((item) =>
-					item.id === "last" ? { ...item, text: "saved while guarding" } : item
+					item.id === "last" ? { ...item, text: "saved while guarding" } : item,
 				),
-			},
+			}),
 		deleteSelection: () =>
-			snapshot = { ...snapshot, items: snapshot.items.filter((item) => item.id !== "last") },
+			(snapshot = { ...snapshot, items: snapshot.items.filter((item) => item.id !== "last") }),
 		deleteRoot: () =>
-			snapshot = { ...snapshot, items: snapshot.items.filter((item) => item.id !== "root") },
-		setManuscript: () => manuscript = true,
+			(snapshot = { ...snapshot, items: snapshot.items.filter((item) => item.id !== "root") }),
+		setManuscript: () => (manuscript = true),
 	};
 }
 
@@ -281,58 +281,56 @@ test("a rejected selection does not prepare or publish the destination feature",
 	expect(s.presentation).not.toHaveBeenCalled();
 });
 
-test.each(["selection", "refresh", "screen"] as const)(
-	"navigation waits for inline edits queued during %s preparation",
-	async (phase) => {
-		const s = setup();
-		let resumePreparation!: () => void;
-		const preparation = new Promise<void>((resolve) => resumePreparation = resolve);
-		let saveDraft!: () => void;
-		const saving = new Promise<void>((resolve) => saveDraft = resolve);
-		let dirty = false;
-		s.flush.mockImplementation(async () => {
-			if (dirty) {
-				await saving;
-				dirty = false;
-			}
-		});
-		if (phase === "selection") {
-			s.guard.mockImplementationOnce(async () => {
-				await preparation;
-				return true;
-			});
-		} else if (phase === "refresh") {
-			s.readOutline.mockImplementationOnce(async () => {
-				await preparation;
-				return s.snapshot();
-			});
-		} else {
-			s.prepareScreen.mockImplementationOnce(async () => {
-				await preparation;
-				return s.presentation;
-			});
+test.each([
+	"selection",
+	"refresh",
+	"screen",
+] as const)("navigation waits for inline edits queued during %s preparation", async (phase) => {
+	const s = setup();
+	let resumePreparation!: () => void;
+	const preparation = new Promise<void>((resolve) => (resumePreparation = resolve));
+	let saveDraft!: () => void;
+	const saving = new Promise<void>((resolve) => (saveDraft = resolve));
+	let dirty = false;
+	s.flush.mockImplementation(async () => {
+		if (dirty) {
+			await saving;
+			dirty = false;
 		}
-		const navigation = s.workspace.navigate({ view: "outline", occurrenceId: "other" });
-		await vi.waitFor(() => {
-			const pending = phase === "selection"
-				? s.guard
-				: phase === "refresh"
-				? s.readOutline
-				: s.prepareScreen;
-			expect(pending).toHaveBeenCalled();
+	});
+	if (phase === "selection") {
+		s.guard.mockImplementationOnce(async () => {
+			await preparation;
+			return true;
 		});
-		dirty = true;
-		resumePreparation();
-		await vi.waitFor(() => expect(s.flush).toHaveBeenCalledTimes(2));
-		expect(s.selected()).toBe("last");
-		expect(s.presentation).not.toHaveBeenCalled();
-		expect(s.workspace.pendingView).toBe("outline");
-		saveDraft();
-		expect(await navigation).toBe(true);
-		expect(dirty).toBe(false);
-		expect(s.selected()).toBe("other");
-	},
-);
+	} else if (phase === "refresh") {
+		s.readOutline.mockImplementationOnce(async () => {
+			await preparation;
+			return s.snapshot();
+		});
+	} else {
+		s.prepareScreen.mockImplementationOnce(async () => {
+			await preparation;
+			return s.presentation;
+		});
+	}
+	const navigation = s.workspace.navigate({ view: "outline", occurrenceId: "other" });
+	await vi.waitFor(() => {
+		const pending =
+			phase === "selection" ? s.guard : phase === "refresh" ? s.readOutline : s.prepareScreen;
+		expect(pending).toHaveBeenCalled();
+	});
+	dirty = true;
+	resumePreparation();
+	await vi.waitFor(() => expect(s.flush).toHaveBeenCalledTimes(2));
+	expect(s.selected()).toBe("last");
+	expect(s.presentation).not.toHaveBeenCalled();
+	expect(s.workspace.pendingView).toBe("outline");
+	saveDraft();
+	expect(await navigation).toBe(true);
+	expect(dirty).toBe(false);
+	expect(s.selected()).toBe("other");
+});
 
 test("late inline save failure leaves the screen and selection intact and permits retry", async () => {
 	const s = setup();
@@ -351,25 +349,25 @@ test("late inline save failure leaves the screen and selection intact and permit
 	expect(s.workspace.view).toBe("help");
 });
 
-test.each(["outline", "help"] as const)(
-	"%s with an explicit occurrence publishes edits saved after screen preparation",
-	async (view) => {
-		const s = setup();
-		s.readOutline.mockImplementation(async () => structuredClone(s.snapshot()));
-		s.prepareScreen.mockImplementationOnce(async () => {
-			s.editInline("late inline edit");
-			return s.presentation;
-		});
-		expect(await s.workspace.navigate({ view, occurrenceId: "other" })).toBe(true);
-		expect(s.snapshot().items.find((item) => item.id === "last")?.text).toBe("late inline edit");
-		expect(s.selected()).toBe("other");
-	},
-);
+test.each([
+	"outline",
+	"help",
+] as const)("%s with an explicit occurrence publishes edits saved after screen preparation", async (view) => {
+	const s = setup();
+	s.readOutline.mockImplementation(async () => structuredClone(s.snapshot()));
+	s.prepareScreen.mockImplementationOnce(async () => {
+		s.editInline("late inline edit");
+		return s.presentation;
+	});
+	expect(await s.workspace.navigate({ view, occurrenceId: "other" })).toBe(true);
+	expect(s.snapshot().items.find((item) => item.id === "last")?.text).toBe("late inline edit");
+	expect(s.selected()).toBe("other");
+});
 
 test("input during the final snapshot read is saved and fetched again before publication", async () => {
 	const s = setup();
 	let finishRead!: () => void;
-	const reading = new Promise<void>((resolve) => finishRead = resolve);
+	const reading = new Promise<void>((resolve) => (finishRead = resolve));
 	s.readOutline.mockImplementationOnce(async () => structuredClone(s.snapshot()));
 	s.readOutline.mockImplementationOnce(async () => {
 		const old = structuredClone(s.snapshot());
@@ -408,7 +406,7 @@ test("a final snapshot failure retains the current screen and allows retry", asy
 test("a newer request prevents a delayed final snapshot from committing", async () => {
 	const s = setup();
 	let finishRead!: () => void;
-	const reading = new Promise<void>((resolve) => finishRead = resolve);
+	const reading = new Promise<void>((resolve) => (finishRead = resolve));
 	s.readOutline.mockImplementationOnce(async () => structuredClone(s.snapshot()));
 	s.readOutline.mockImplementationOnce(async () => {
 		const old = structuredClone(s.snapshot());
@@ -437,23 +435,23 @@ test("the final refresh reconciles a suspended selection deleted during preparat
 	expect(s.snapshot().items.some((item) => item.id === "last")).toBe(false);
 });
 
-test.each(["outline", "help"] as const)(
-	"%s rejects an explicit occurrence deleted after its selection guard",
-	async (view) => {
-		const s = setup();
-		s.readOutline.mockResolvedValue({
-			...s.snapshot(),
-			items: s.snapshot().items.filter((item) => item.id !== "other"),
-		});
-		expect(await s.workspace.navigate({ view, occurrenceId: "other" })).toBe(false);
-		expect(s.workspace.view).toBe("outline");
-		expect(s.selected()).toBe("last");
-		expect(s.presentation).not.toHaveBeenCalled();
-		expect(s.reportError).toHaveBeenCalledWith(
-			expect.objectContaining({ message: "移動先の項目が見つかりません。" }),
-		);
-	},
-);
+test.each([
+	"outline",
+	"help",
+] as const)("%s rejects an explicit occurrence deleted after its selection guard", async (view) => {
+	const s = setup();
+	s.readOutline.mockResolvedValue({
+		...s.snapshot(),
+		items: s.snapshot().items.filter((item) => item.id !== "other"),
+	});
+	expect(await s.workspace.navigate({ view, occurrenceId: "other" })).toBe(false);
+	expect(s.workspace.view).toBe("outline");
+	expect(s.selected()).toBe("last");
+	expect(s.presentation).not.toHaveBeenCalled();
+	expect(s.reportError).toHaveBeenCalledWith(
+		expect.objectContaining({ message: "移動先の項目が見つかりません。" }),
+	);
+});
 
 function publicationOwner() {
 	return new OutlineController({
@@ -498,7 +496,7 @@ for (const stage of ["guard", "final", "missing target"] as const) {
 				occurrenceId: stage === "missing target" ? "missing" : "other",
 			});
 			await vi.waitFor(() =>
-				expect(s.readOutline).toHaveBeenCalledTimes(stage === "final" ? 2 : 1)
+				expect(s.readOutline).toHaveBeenCalledTimes(stage === "final" ? 2 : 1),
 			);
 			await owner.reload();
 			if (failed) pending.reject(new Error("old navigation"));

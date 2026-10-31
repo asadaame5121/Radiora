@@ -20,12 +20,15 @@ test.beforeEach(async ({ page }) => {
 	await page.route("**/api/rpc/listOutline", (route) =>
 		route.fulfill({
 			json: { result: { items, links: [], knots: [], stashItemIds: [] } },
-		}));
+		}),
+	);
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	await expect(outlineRow(page, "mock-7")).toBeVisible();
 });
 
-test("drop sends the source occurrence and restores its focus after dragend during persistence", async ({ page }) => {
+test("drop sends the source occurrence and restores its focus after dragend during persistence", async ({
+	page,
+}) => {
 	const moves: unknown[] = [];
 	const pendingMove = Promise.withResolvers<void>();
 	await page.route("**/api/rpc/moveItem", async (route) => {
@@ -40,9 +43,9 @@ test("drop sends the source occurrence and restores its focus after dragend duri
 		await expect(source).toHaveClass(/dragging/);
 		await target.dispatchEvent("drop");
 		await source.dispatchEvent("dragend");
-		await expect.poll(() => moves).toEqual([
-			{ args: [{ id: "mock-7", parentId: "mock-2", afterId: "mock-8" }] },
-		]);
+		await expect
+			.poll(() => moves)
+			.toEqual([{ args: [{ id: "mock-7", parentId: "mock-2", afterId: "mock-8" }] }]);
 		await expect(source).not.toHaveClass(/dragging/);
 	} finally {
 		pendingMove.resolve();
@@ -51,7 +54,9 @@ test("drop sends the source occurrence and restores its focus after dragend duri
 	await expect(source).toHaveAttribute("aria-selected", "true");
 });
 
-test("self drop and cancelled drag do not move; blank clicks respect the drag lifecycle", async ({ page }) => {
+test("self drop and cancelled drag do not move; blank clicks respect the drag lifecycle", async ({
+	page,
+}) => {
 	const moves: unknown[] = [];
 	await page.route("**/api/rpc/moveItem", async (route) => {
 		moves.push(route.request().postDataJSON());
@@ -83,7 +88,8 @@ test("native drag reports a failed move and clears drag state", async ({ page })
 		route.fulfill({
 			status: 500,
 			json: { message: "Move persistence failed" },
-		}));
+		}),
+	);
 	const source = outlineRow(page, "mock-7");
 	await source.dragTo(outlineRow(page, "mock-8"));
 	await expect(page.getByText("Move persistence failed")).toBeVisible();
@@ -102,10 +108,13 @@ test("leaving Outline cancels a drag even without a dragend event", async ({ pag
 		await route.fulfill({ json: { result: null } });
 	});
 	await outlineRow(page, "mock-7").dispatchEvent("dragstart");
-	await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
-		name: "Option",
-		exact: true,
-	}).click();
+	await page
+		.getByRole("navigation", { name: "主な画面" })
+		.getByRole("button", {
+			name: "Option",
+			exact: true,
+		})
+		.click();
 	await expect(page.getByRole("heading", { name: "Option", exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "アウトライン", exact: true }).click();
 	const source = outlineRow(page, "mock-7");

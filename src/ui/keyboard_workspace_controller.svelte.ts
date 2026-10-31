@@ -68,7 +68,10 @@ export class KeyboardWorkspaceController {
 		const items = projection.items.filter((item) => item.collapsed !== collapsed);
 		try {
 			if (this.ports.setCollapsedBatch && items.length > 0) {
-				await this.ports.setCollapsedBatch(items.map((item) => item.id), collapsed);
+				await this.ports.setCollapsedBatch(
+					items.map((item) => item.id),
+					collapsed,
+				);
 			} else {
 				for (const item of items) await this.ports.setCollapsed(item.id, collapsed);
 			}
@@ -77,7 +80,7 @@ export class KeyboardWorkspaceController {
 			await this.ports.reload();
 		}
 
-		const id = collapsed ? projection.rootOccurrenceIds[0] ?? null : this.ports.selectedId();
+		const id = collapsed ? (projection.rootOccurrenceIds[0] ?? null) : this.ports.selectedId();
 		if (id && !this.ports.select(id)) return;
 		await focusOutlineEditor(id);
 	};

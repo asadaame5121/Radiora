@@ -30,11 +30,17 @@ function draft(workId: string, branchId: string, text: string): WorkingCopyDraft
 test("overlay isolates Work/branch/pinned selectors, keeps latest empty text and does not mutate input", () => {
 	const main = item("work", "main");
 	const snapshot: OutlineSnapshot = {
-		items: [main, { ...main, id: "mirror" }, item("work", "side"), item("other", "main"), {
-			...main,
-			id: "pinned",
-			revisionSelector: { mode: "pinned", revisionId: "rev" },
-		}],
+		items: [
+			main,
+			{ ...main, id: "mirror" },
+			item("work", "side"),
+			item("other", "main"),
+			{
+				...main,
+				id: "pinned",
+				revisionSelector: { mode: "pinned", revisionId: "rev" },
+			},
+		],
 		links: [],
 		knots: [],
 		stashItemIds: [],
@@ -52,8 +58,9 @@ test("identifiers with delimiters do not collide in overlay or read edit identit
 	const a = item("a,b", "c");
 	const b = item("a", "b,c");
 	const snapshot: OutlineSnapshot = { items: [a, b], links: [], knots: [], stashItemIds: [] };
-	expect(overlayDrafts(snapshot, [draft("a,b", "c", "edited")]).items.map((value) => value.text))
-		.toEqual(["edited", "saved"]);
+	expect(
+		overlayDrafts(snapshot, [draft("a,b", "c", "edited")]).items.map((value) => value.text),
+	).toEqual(["edited", "saved"]);
 	expect(branchKey(a)).not.toBe(branchKey(b));
 	expect(branchKey(a)).toBe(branchKey({ ...a, id: "mirror" }));
 	expect(branchKey(a)).not.toBe(

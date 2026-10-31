@@ -64,14 +64,13 @@ export class OutlineVirtualViewportController {
 		const ids = this.inputs.rowIds();
 		const protectedIds = this.inputs.protectedIds();
 		untrack(() => {
-			const lostFocus = [...this.focusedIds, ...this.composingIds]
-				.find((id) => !ids.includes(id));
-			const oldIndex = lostFocus ? this.rowIndexById.get(lostFocus) ?? 0 : 0;
+			const lostFocus = [...this.focusedIds, ...this.composingIds].find((id) => !ids.includes(id));
+			const oldIndex = lostFocus ? (this.rowIndexById.get(lostFocus) ?? 0) : 0;
 			this.setRows(ids);
 			this.setProtectedIds(protectedIds);
 			if (lostFocus && ids.length) {
-				const target = protectedIds.find((id) => ids.includes(id)) ??
-					ids[Math.min(oldIndex, ids.length - 1)];
+				const target =
+					protectedIds.find((id) => ids.includes(id)) ?? ids[Math.min(oldIndex, ids.length - 1)];
 				this.inputs.focusFallback(target);
 			}
 		});
@@ -104,11 +103,12 @@ export class OutlineVirtualViewportController {
 		const rowTop = this.layout.offsets[index];
 		const rowBottom = this.layout.offsets[index + 1];
 		const { scrollTop, viewportHeight } = this.liveMetrics;
-		const target = rowTop < scrollTop
-			? rowTop
-			: rowBottom > scrollTop + viewportHeight
-			? rowBottom - viewportHeight
-			: scrollTop;
+		const target =
+			rowTop < scrollTop
+				? rowTop
+				: rowBottom > scrollTop + viewportHeight
+					? rowBottom - viewportHeight
+					: scrollTop;
 		return Math.min(Math.max(0, target), Math.max(0, this.layout.totalHeight - viewportHeight));
 	}
 
@@ -116,7 +116,8 @@ export class OutlineVirtualViewportController {
 		if (
 			ids.length === this.liveRowIds.length &&
 			ids.every((id, index) => id === this.liveRowIds[index])
-		) return;
+		)
+			return;
 		this.preserveAnchor();
 		const next = [...ids];
 		const nextIndices = new Map(next.map((id, index) => [id, index]));
@@ -140,7 +141,8 @@ export class OutlineVirtualViewportController {
 		if (
 			next.scrollTop === this.liveMetrics.scrollTop &&
 			next.viewportHeight === this.liveMetrics.viewportHeight
-		) return;
+		)
+			return;
 		if (next.scrollTop !== this.liveMetrics.scrollTop) this.pendingAnchor = null;
 		this.liveMetrics = next;
 		if (!this.pendingAnchor) this.scrollAnchor = this.captureAnchor();
@@ -151,7 +153,8 @@ export class OutlineVirtualViewportController {
 		if (
 			next.length === this.ownerProtectedIds.length &&
 			next.every((id, index) => id === this.ownerProtectedIds[index])
-		) return;
+		)
+			return;
 		this.ownerProtectedIds = next;
 		this.publishProtectedIds();
 	}
@@ -214,8 +217,8 @@ export class OutlineVirtualViewportController {
 		this.pendingAnchor = null;
 		if (!anchor) return 0;
 		if (this.liveRowIds.length === 0) return -this.liveMetrics.scrollTop;
-		const index = this.rowIndexById.get(anchor.id) ??
-			Math.min(anchor.index, this.liveRowIds.length - 1);
+		const index =
+			this.rowIndexById.get(anchor.id) ?? Math.min(anchor.index, this.liveRowIds.length - 1);
 		const rowHeight = this.layout.heights[index];
 		const offset = Math.min(anchor.offset, rowHeight);
 		return this.layout.offsets[index] + offset - this.liveMetrics.scrollTop;
@@ -227,16 +230,13 @@ export class OutlineVirtualViewportController {
 
 	private publishProtectedIds(): void {
 		const next = [
-			...new Set([
-				...this.ownerProtectedIds,
-				...this.focusedIds,
-				...this.composingIds,
-			]),
+			...new Set([...this.ownerProtectedIds, ...this.focusedIds, ...this.composingIds]),
 		];
 		if (
 			next.length === this.liveProtectedIds.length &&
 			next.every((id, index) => id === this.liveProtectedIds[index])
-		) return;
+		)
+			return;
 		this.liveProtectedIds = next;
 	}
 

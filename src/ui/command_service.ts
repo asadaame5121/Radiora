@@ -81,10 +81,10 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 			!ready(context).enabled
 				? ready(context)
 				: context.quickCaptureSubmitting
-				? { enabled: false, reason: "クイック入力を保存しています。" }
-				: context.quickCaptureText.trim()
-				? { enabled: true }
-				: { enabled: false, reason: "クイック入力の本文を入力してください。" },
+					? { enabled: false, reason: "クイック入力を保存しています。" }
+					: context.quickCaptureText.trim()
+						? { enabled: true }
+						: { enabled: false, reason: "クイック入力の本文を入力してください。" },
 	},
 	{
 		id: "hoist",
@@ -125,10 +125,10 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 			!selection(context).enabled
 				? selection(context)
 				: !context.hasSelectedBranch
-				? { enabled: false, reason: "保存対象の別稿を選択してください。" }
-				: !context.hasSelectedRecoverySnapshot
-				? { enabled: false, reason: "保存する復元ポイントを選択してください。" }
-				: { enabled: true },
+					? { enabled: false, reason: "保存対象の別稿を選択してください。" }
+					: !context.hasSelectedRecoverySnapshot
+						? { enabled: false, reason: "保存する復元ポイントを選択してください。" }
+						: { enabled: true },
 	},
 	{
 		id: "createBranch",
@@ -138,8 +138,8 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 			!selection(context).enabled
 				? selection(context)
 				: !context.hasSelectedBranch
-				? { enabled: false, reason: "別稿を作る元の作業中の本文を選択してください。" }
-				: { enabled: true },
+					? { enabled: false, reason: "別稿を作る元の作業中の本文を選択してください。" }
+					: { enabled: true },
 	},
 	{
 		id: "createLink",
@@ -148,8 +148,8 @@ export const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
 			!selection(context).enabled
 				? selection(context)
 				: !context.canOpenLinkEditor
-				? { enabled: false, reason: "関係を追加するメモを選択してください。" }
-				: { enabled: true },
+					? { enabled: false, reason: "関係を追加するメモを選択してください。" }
+					: { enabled: true },
 	},
 	{
 		id: "runQuery",
@@ -172,10 +172,7 @@ export function commandAvailability(
 ): Readonly<Record<CommandId, CommandAvailability>> {
 	return Object.fromEntries(
 		definitions.map((command) => [command.id, command.availability(context)]),
-	) as Record<
-		CommandId,
-		CommandAvailability
-	>;
+	) as Record<CommandId, CommandAvailability>;
 }
 
 export async function dispatchCommand(
@@ -213,7 +210,11 @@ const MODIFIERS: Record<string, string> = {
 };
 
 export function normalizeShortcut(value: string): string | null {
-	const parts = value.trim().split("+").map((part) => part.trim()).filter(Boolean);
+	const parts = value
+		.trim()
+		.split("+")
+		.map((part) => part.trim())
+		.filter(Boolean);
 	if (parts.length < 2) return null;
 	const key = parts.pop()!;
 	const modifiers = new Set<string>();
@@ -223,9 +224,8 @@ export function normalizeShortcut(value: string): string | null {
 		modifiers.add(modifier);
 	}
 	if (modifiers.size === 0 || !key) return null;
-	const normalizedKey = key.length === 1
-		? key.toUpperCase()
-		: key[0].toUpperCase() + key.slice(1).toLowerCase();
+	const normalizedKey =
+		key.length === 1 ? key.toUpperCase() : key[0].toUpperCase() + key.slice(1).toLowerCase();
 	return [
 		...["Ctrl", "Alt", "Shift", "Meta"].filter((modifier) => modifiers.has(modifier)),
 		normalizedKey,
@@ -262,12 +262,16 @@ export function shortcutForKeyboardEvent(event: KeyboardEvent): string | null {
 			event.shiftKey ? "Shift" : "",
 			event.metaKey ? "Meta" : "",
 			event.key,
-		].filter(Boolean).join("+"),
+		]
+			.filter(Boolean)
+			.join("+"),
 	);
 }
 
 export function isEditableTarget(target: EventTarget | null): boolean {
 	if (!(target instanceof Element)) return false;
-	return target.matches("input, textarea, select, [contenteditable], [contenteditable='true']") ||
-		Boolean(target.closest("input, textarea, select, [contenteditable], [contenteditable='true']"));
+	return (
+		target.matches("input, textarea, select, [contenteditable], [contenteditable='true']") ||
+		Boolean(target.closest("input, textarea, select, [contenteditable], [contenteditable='true']"))
+	);
 }

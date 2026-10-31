@@ -37,15 +37,17 @@ if (import.meta.main) {
 			const report = await runAudit(options);
 			if (options.output) {
 				await writeNewJsonFile(options.output, report);
-				console.log(JSON.stringify(
-					{
-						outputPath: options.output,
-						issueCount: report.issueCount,
-						trace: report.trace,
-					},
-					null,
-					2,
-				));
+				console.log(
+					JSON.stringify(
+						{
+							outputPath: options.output,
+							issueCount: report.issueCount,
+							trace: report.trace,
+						},
+						null,
+						2,
+					),
+				);
 			} else {
 				console.log(JSON.stringify(report, null, 2));
 			}
@@ -74,24 +76,19 @@ export async function runAudit(
 			await sendOptional(client, "Page.enable");
 			await sendOptional(client, "Network.enable");
 		}
-		if (options.trace) {
-			await client.send("Tracing.start", {
-				traceConfig: {
-					recordMode: "recordUntilFull",
-					includedCategories: ["devtools.timeline", "blink.user_timing", "v8"],
-				},
-				transferMode: "ReportEvents",
-			});
-		}
+		if (options.trace) await startTracing(client);
 		await wait(options.waitMs);
 		const summary = await evaluate(client, summaryExpression(options.target));
 		const expressionResult = options.expression ? await evaluate(client, options.expression) : null;
-		const screenshot = options.screenshot && options.target === "renderer"
-			? await captureScreenshot(client, options.screenshot)
-			: null;
+		const screenshot =
+			options.screenshot && options.target === "renderer"
+				? await captureScreenshot(client, options.screenshot)
+				: null;
 		const trace = await captureTrace(options, client, inspector, events, traceComplete);
-		const issueCount = events.console.filter((event) => event.type === "error").length +
-			events.exceptions.length + events.failedRequests.length +
+		const issueCount =
+			events.console.filter((event) => event.type === "error").length +
+			events.exceptions.length +
+			events.failedRequests.length +
 			(trace?.dataLossOccurred === true ? 1 : 0);
 		return {
 			generatedAt: new Date().toISOString(),
@@ -126,10 +123,20 @@ async function connectAudit(options: AuditOptions) {
 	return { inspector, ...connection };
 }
 
+async function startTracing(client: CdpClient): Promise<void> {
+	await client.send("Tracing.start", {
+		traceConfig: {
+			recordMode: "recordUntilFull",
+			includedCategories: ["devtools.timeline", "blink.user_timing", "v8"],
+		},
+		transferMode: "ReportEvents",
+	});
+}
+
 function registerAuditListeners(client: CdpClient, traceEnabled: boolean) {
 	let resolveTraceComplete: ((params: JsonRecord) => void) | undefined;
 	const traceComplete = traceEnabled
-		? new Promise<JsonRecord>((resolve) => resolveTraceComplete = resolve)
+		? new Promise<JsonRecord>((resolve) => (resolveTraceComplete = resolve))
 		: undefined;
 	const events: AuditEvents = {
 		console: [],
@@ -146,7 +153,8 @@ function registerAuditListeners(client: CdpClient, traceEnabled: boolean) {
 			requestId: params.requestId,
 			errorText: params.errorText,
 			blockedReason: params.blockedReason ?? null,
-		}));
+		}),
+	);
 	client.on("Tracing.dataCollected", (params) => {
 		if (Array.isArray(params.value)) events.traceEvents.push(...params.value);
 	});
@@ -195,11 +203,11 @@ async function discoverInspector(options: AuditOptions): Promise<InspectorState>
 }
 
 function endpointCandidates(target: TargetKind, inspector: InspectorState): string[] {
-	const page = inspector.targets.find((candidate) =>
-		candidate.type === "page" && candidate.webSocketDebuggerUrl
+	const page = inspector.targets.find(
+		(candidate) => candidate.type === "page" && candidate.webSocketDebuggerUrl,
 	);
-	const worker = inspector.targets.find((candidate) =>
-		candidate.type === "worker" && candidate.webSocketDebuggerUrl
+	const worker = inspector.targets.find(
+		(candidate) => candidate.type === "worker" && candidate.webSocketDebuggerUrl,
 	);
 	const muxPath = target === "renderer" ? "/cef" : "/deno";
 	return unique([
@@ -261,7 +269,10 @@ async function captureScreenshot(client: CdpClient, path: string): Promise<strin
 	if (typeof data !== "string") throw new Error("Page.captureScreenshot returned no image data.");
 	const separator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
 	if (separator > 0) await Deno.mkdir(path.slice(0, separator), { recursive: true });
-	await Deno.writeFile(path, Uint8Array.from(atob(data), (character) => character.charCodeAt(0)));
+	await Deno.writeFile(
+		path,
+		Uint8Array.from(atob(data), (character) => character.charCodeAt(0)),
+	);
 	return path;
 }
 
@@ -307,7 +318,7 @@ function formatRemoteValue(value: unknown): unknown {
 async function fetchJson<T>(url: string): Promise<T> {
 	const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
 	if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}.`);
-	return await response.json() as T;
+	return (await response.json()) as T;
 }
 
 function toWebSocketUrl(baseUrl: string, path: string): string {

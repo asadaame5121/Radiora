@@ -13,7 +13,7 @@ const registration = await Deno.readTextFile(
 Deno.test("OPML UI exports UTF-8 and imports an explicitly selected file", () => {
 	assertMatch(
 		controller,
-		/export =[\s\S]*?this\.operation\.run\(this\.ports\.flush,[\s\S]*?this\.ports\.api\.exportOpml\(\)/,
+		/export =[\s\S]*?this\.operation\.run\(\s*this\.ports\.flush,[\s\S]*?this\.ports\.api\.exportOpml\(\)/,
 	);
 	assertMatch(
 		controller,
@@ -34,14 +34,7 @@ Deno.test("OPML operations use shared bindings and vocabulary", () => {
 	assertMatch(bindings, /importOpml\(source: string\): Promise<OpmlImportResult>/);
 	assertMatch(registration, /exportOpml: \(\) => service\(\)\.exportOpml\(\)/);
 	assertMatch(registration, /importOpml: \(source\) => service\(\)\.importOpml\(source\)/);
-	for (
-		const code of [
-			"opmlExport",
-			"opmlImport",
-			"opmlExportSuccess",
-			"opmlImportSuccess",
-		]
-	) {
+	for (const code of ["opmlExport", "opmlImport", "opmlExportSuccess", "opmlImportSuccess"]) {
 		assertMatch(`${controller}\n${view}`, new RegExp(`vocabulary\\.${code}`));
 	}
 });

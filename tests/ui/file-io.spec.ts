@@ -1,32 +1,30 @@
 import { expect, test } from "@playwright/test";
 import { DEFAULT_UI_VOCABULARY as vocabulary } from "../../src/shared/ui_vocabulary.ts";
 
-test("Options keeps Markdown settings across remount and exports all three formats", async ({ page }) => {
-	await page.route(
-		"**/api/rpc/exportOpml",
-		(route) => route.fulfill({ json: { result: '<opml version="2.0"><body/></opml>' } }),
+test("Options keeps Markdown settings across remount and exports all three formats", async ({
+	page,
+}) => {
+	await page.route("**/api/rpc/exportOpml", (route) =>
+		route.fulfill({ json: { result: '<opml version="2.0"><body/></opml>' } }),
 	);
-	await page.route(
-		"**/api/rpc/exportJsonBackup",
-		(route) => route.fulfill({ json: { result: '{"format":"radiora-backup","schemaVersion":8}' } }),
+	await page.route("**/api/rpc/exportJsonBackup", (route) =>
+		route.fulfill({ json: { result: '{"format":"radiora-backup","schemaVersion":8}' } }),
 	);
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	await page.getByRole("button", { name: "Option", exact: true }).click();
 	const card = page.locator('section[aria-labelledby="option-export-title"]');
 	await card.locator("select").nth(1).selectOption("portable");
-	await expect.poll(() =>
-		page.evaluate(() => localStorage.getItem("radiora.markdownExportPreference"))
-	).toContain('"referenceMode":"portable"');
+	await expect
+		.poll(() => page.evaluate(() => localStorage.getItem("radiora.markdownExportPreference")))
+		.toContain('"referenceMode":"portable"');
 	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
 	await page.getByRole("button", { name: "Option", exact: true }).click();
 	await expect(card.locator("select").nth(1)).toHaveValue("portable");
-	for (
-		const [label, extension, notice] of [
-			[vocabulary.markdownExportAction, ".md", "Markdownをエクスポートしました。"],
-			[vocabulary.opmlExport, ".opml", vocabulary.opmlExportSuccess + "。"],
-			[vocabulary.jsonBackupExport, ".json", vocabulary.jsonBackupExportSuccess + "。"],
-		]
-	) {
+	for (const [label, extension, notice] of [
+		[vocabulary.markdownExportAction, ".md", "Markdownをエクスポートしました。"],
+		[vocabulary.opmlExport, ".opml", vocabulary.opmlExportSuccess + "。"],
+		[vocabulary.jsonBackupExport, ".json", vocabulary.jsonBackupExportSuccess + "。"],
+	]) {
 		const pending = page.waitForEvent("download");
 		await page.getByRole("button", { name: label, exact: true }).click();
 		const download = await pending;
@@ -44,7 +42,9 @@ test("Options keeps Markdown settings across remount and exports all three forma
 	}
 });
 
-test("Options import and restore route through reload and existing relation owners", async ({ page }) => {
+test("Options import and restore route through reload and existing relation owners", async ({
+	page,
+}) => {
 	const steps: string[] = [];
 	let importing = false;
 	await page.route("**/api/rpc/importOpml", (route) => {
@@ -94,7 +94,9 @@ test("Options import and restore route through reload and existing relation owne
 	expect(steps).toEqual(["restore", "relations", "reload"]);
 });
 
-test("restore and reload failures retain the error display without success notices", async ({ page }) => {
+test("restore and reload failures retain the error display without success notices", async ({
+	page,
+}) => {
 	let failRestore = true;
 	let restored = false;
 	await page.route("**/api/rpc/restoreJsonBackup", (route) => {
@@ -102,17 +104,20 @@ test("restore and reload failures retain the error display without success notic
 		return failRestore
 			? route.fulfill({ status: 500, json: { message: "restore failed" } })
 			: route.fulfill({
-				json: {
-					result: { workCount: 3, occurrenceCount: 3, revisionCount: 3, recoverySnapshotCount: 0 },
-				},
-			});
+					json: {
+						result: {
+							workCount: 3,
+							occurrenceCount: 3,
+							revisionCount: 3,
+							recoverySnapshotCount: 0,
+						},
+					},
+				});
 	});
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			restored
-				? route.fulfill({ status: 500, json: { message: "reload failed" } })
-				: route.continue(),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		restored
+			? route.fulfill({ status: 500, json: { message: "reload failed" } })
+			: route.continue(),
 	);
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	await page.getByRole("button", { name: "Option", exact: true }).click();

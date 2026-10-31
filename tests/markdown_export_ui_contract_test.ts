@@ -39,10 +39,7 @@ Deno.test("Markdown export delegates its pending-edit barrier to the editor cont
 Deno.test("Markdown export has a visible command button and success notification", () => {
 	assertMatch(app, /onExportMarkdown=\{exportMarkdown\}/);
 	assertMatch(view, /onclick=\{onExportMarkdown\}/);
-	assertMatch(
-		view,
-		/disabled=\{!markdownExportEnabled \|\| markdownExportSelectionRequired\}/,
-	);
+	assertMatch(view, /disabled=\{!markdownExportEnabled \|\| markdownExportSelectionRequired\}/);
 	assertMatch(view, /<small class="markdown-export-notice" role="status">/);
 	assertMatch(controller, /Markdownをエクスポートしました。/);
 	assertMatch(controller, /Markdownをエクスポートできませんでした/);
@@ -69,10 +66,7 @@ Deno.test("Markdown export exposes persisted selected-node scope and independent
 		/checked=\{markdownExportPreference\.includeSemanticNeighbors\} onchange=\{updateMarkdownExportIncludeSemanticNeighbors\}/,
 	);
 	assertMatch(controller, /saveMarkdownExportPreference\(this\._preference\)/);
-	assertMatch(
-		app,
-		/markdownExport\.preference\.scope === "selected" && !selectedItem/,
-	);
+	assertMatch(app, /markdownExport\.preference\.scope === "selected" && !selectedItem/);
 	assertMatch(view, /vocabulary\.markdownExportSelectionRequired/);
 });
 

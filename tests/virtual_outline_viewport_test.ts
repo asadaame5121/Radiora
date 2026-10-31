@@ -22,7 +22,10 @@ Deno.test("calculateVirtualOutlineWindow limits an unmeasured large dataset to t
 		scrollTop: 0,
 		viewportHeight: 0,
 	});
-	assertEquals(win.entries.map((entry) => entry.index), Array.from({ length: 13 }, (_, i) => i));
+	assertEquals(
+		win.entries.map((entry) => entry.index),
+		Array.from({ length: 13 }, (_, i) => i),
+	);
 	assertEquals(win.trailingGap, 87 * 44);
 	assertEquals(win.entries[0], { index: 0, gapBefore: 0 });
 });
@@ -33,7 +36,10 @@ Deno.test("calculateVirtualOutlineWindow returns all rows for small datasets <= 
 		scrollTop: 100,
 		viewportHeight: 600,
 	});
-	assertEquals(win.entries, Array.from({ length: 30 }, (_, index) => ({ index, gapBefore: 0 })));
+	assertEquals(
+		win.entries,
+		Array.from({ length: 30 }, (_, index) => ({ index, gapBefore: 0 })),
+	);
 	assertEquals(win.trailingGap, 0);
 });
 
@@ -44,7 +50,10 @@ Deno.test("calculateVirtualOutlineWindow keeps small datasets rendered before vi
 		viewportHeight: 0,
 	});
 
-	assertEquals(win.entries, Array.from({ length: 30 }, (_, index) => ({ index, gapBefore: 0 })));
+	assertEquals(
+		win.entries,
+		Array.from({ length: 30 }, (_, index) => ({ index, gapBefore: 0 })),
+	);
 	assertEquals(win.trailingGap, 0);
 });
 
@@ -128,7 +137,7 @@ Deno.test("calculateVirtualOutlineWindow uses a precomputed layout and accounts 
 });
 
 Deno.test("calculateVirtualOutlineWindow clamps beyond-end scrolling and respects row boundaries", () => {
-	const layout = buildVirtualOutlineLayout(100, (index) => index % 2 === 0 ? 10 : 20);
+	const layout = buildVirtualOutlineLayout(100, (index) => (index % 2 === 0 ? 10 : 20));
 	const win = calculateVirtualOutlineWindow({
 		totalRows: 100,
 		scrollTop: Number.POSITIVE_INFINITY,

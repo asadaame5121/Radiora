@@ -167,14 +167,17 @@ Deno.test("manual merge rejects a parent from another Work before writing", asyn
 			revisionSelector: { mode: "branch", branchId: "other-branch" },
 		},
 	);
-	await store.createRevision({
-		id: "other-parent",
-		workId: "other-work",
-		text: "other",
-		parentRevisionIds: [],
-		kind: "checkpoint",
-		createdAt: TIMESTAMP,
-	}, "other-branch");
+	await store.createRevision(
+		{
+			id: "other-parent",
+			workId: "other-work",
+			text: "other",
+			parentRevisionIds: [],
+			kind: "checkpoint",
+			createdAt: TIMESTAMP,
+		},
+		"other-branch",
+	);
 	const before = await store.listRevisions();
 
 	await assertRejects(
@@ -238,10 +241,9 @@ Deno.test("cancelling rewrite creates neither Revision nor Branch nor Working Co
 		revisions: await store.listRevisions("work"),
 	};
 
-	assertEquals(
-		await service.rewriteAsNewBranch("branch", "rewrite", "cancelled"),
-		{ status: "cancelled" },
-	);
+	assertEquals(await service.rewriteAsNewBranch("branch", "rewrite", "cancelled"), {
+		status: "cancelled",
+	});
 	assertEquals(await store.listBranches("work"), before.branches);
 	assertEquals(await store.listWorkingCopies("work"), before.workingCopies);
 	assertEquals(await store.listRevisions("work"), before.revisions);

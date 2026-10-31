@@ -59,23 +59,26 @@ Deno.test("historical schemas reject invalid dates and reversed periods and acce
 			v.safeParse(HistoricalDateSchema, { precision: "day", year, month: 2, day: 29 }).success,
 		);
 	}
-	for (
-		const value of [
-			{ precision: "day", year: 1900, month: 2, day: 29 },
-			{ precision: "day", year: 1604, month: 4, day: 31 },
-			{ precision: "year", year: Infinity },
-			{ precision: "year", year: 1.5 },
-			{ precision: "year", year: 1000000 },
-			{ precision: "month", year: 1, month: 13 },
-			{ precision: "century", era: "ce", century: 0 },
-		]
-	) assert(!v.safeParse(HistoricalDateSchema, value).success);
+	for (const value of [
+		{ precision: "day", year: 1900, month: 2, day: 29 },
+		{ precision: "day", year: 1604, month: 4, day: 31 },
+		{ precision: "year", year: Infinity },
+		{ precision: "year", year: 1.5 },
+		{ precision: "year", year: 1000000 },
+		{ precision: "month", year: 1, month: 13 },
+		{ precision: "century", era: "ce", century: 0 },
+	])
+		assert(!v.safeParse(HistoricalDateSchema, value).success);
 	const start = { precision: "year", year: 1604 };
 	const end = { precision: "year", year: 1867 };
 	const period = v.parse(HistoricalTimeSchema, { kind: "period", start, end });
 	assertEquals(historicalTimeBounds(period), [historicalDay(1604), historicalDay(1868) - 1]);
 	assert(!v.safeParse(HistoricalTimeSchema, { kind: "period", start: end, end: start }).success);
-	for (const pair of [[start, null], [null, end], [null, null]]) {
+	for (const pair of [
+		[start, null],
+		[null, end],
+		[null, null],
+	]) {
 		assert(
 			v.safeParse(HistoricalTimeSchema, { kind: "period", start: pair[0], end: pair[1] }).success,
 		);

@@ -18,9 +18,13 @@ export function findInlineLinkTrigger(
 	selectionEnd = selectionStart,
 ): InlineLinkTrigger | null {
 	if (
-		!Number.isSafeInteger(selectionStart) || !Number.isSafeInteger(selectionEnd) ||
-		selectionStart < 0 || selectionEnd < selectionStart || selectionEnd > source.length
-	) return null;
+		!Number.isSafeInteger(selectionStart) ||
+		!Number.isSafeInteger(selectionEnd) ||
+		selectionStart < 0 ||
+		selectionEnd < selectionStart ||
+		selectionEnd > source.length
+	)
+		return null;
 
 	const at = source.lastIndexOf("@", selectionStart);
 	if (at < 0 || isEscaped(source, at) || !validBoundary(source, at)) return null;
@@ -37,9 +41,13 @@ export function replaceInlineLinkTrigger(
 	markdown: string,
 ): { text: string; caretOffset: number } {
 	if (
-		!Number.isSafeInteger(range.start) || !Number.isSafeInteger(range.end) ||
-		range.start < 0 || range.end < range.start || range.end > source.length
-	) throw new Error("Invalid inline-link replacement range");
+		!Number.isSafeInteger(range.start) ||
+		!Number.isSafeInteger(range.end) ||
+		range.start < 0 ||
+		range.end < range.start ||
+		range.end > source.length
+	)
+		throw new Error("Invalid inline-link replacement range");
 	return {
 		text: source.slice(0, range.start) + markdown + source.slice(range.end),
 		caretOffset: range.start + markdown.length,

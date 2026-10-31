@@ -19,11 +19,10 @@ import { DiscoveryEmergenceOperations } from "./discovery_emergence_operations.t
 import { DiscoveryRuleQueryOperations } from "./discovery_rule_query_operations.ts";
 import { SearchOperations } from "./search_operations.ts";
 
-type DiscoveryOperationsStore =
-	& DiscoveryStorePort
-	& OutlineStorePort
-	& RelationStorePort
-	& Partial<RelationTypeDefinitionStorePort>;
+type DiscoveryOperationsStore = DiscoveryStorePort &
+	OutlineStorePort &
+	RelationStorePort &
+	Partial<RelationTypeDefinitionStorePort>;
 
 /** Search, suggestion, and rule-query operations backed by feature-specific store ports. */
 export class DiscoveryOperations {
@@ -49,9 +48,11 @@ export class DiscoveryOperations {
 		return this.search.listSearchAliases();
 	}
 
-	async saveSearchAlias(
-		input: { id?: string; canonical: string; variants: string[] },
-	): Promise<SearchAlias> {
+	async saveSearchAlias(input: {
+		id?: string;
+		canonical: string;
+		variants: string[];
+	}): Promise<SearchAlias> {
 		return this.search.saveSearchAlias(input);
 	}
 
@@ -82,9 +83,11 @@ export class DiscoveryOperations {
 		return this.ruleQuery.listSavedRuleQueries();
 	}
 
-	async saveRuleQuery(
-		input: { id?: string; name: string; source: string },
-	): Promise<SavedRuleQuery> {
+	async saveRuleQuery(input: {
+		id?: string;
+		name: string;
+		source: string;
+	}): Promise<SavedRuleQuery> {
 		return this.ruleQuery.saveRuleQuery(input);
 	}
 

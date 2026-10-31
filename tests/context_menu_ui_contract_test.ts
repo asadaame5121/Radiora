@@ -4,9 +4,7 @@ const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.
 const menu = await Deno.readTextFile(
 	new URL("../src/ui/occurrence_context_menu_controller.svelte.ts", import.meta.url),
 );
-const tree = await Deno.readTextFile(
-	new URL("../src/ui/PhylogeneticTree.svelte", import.meta.url),
-);
+const tree = await Deno.readTextFile(new URL("../src/ui/PhylogeneticTree.svelte", import.meta.url));
 const inspector = await Deno.readTextFile(
 	new URL("../src/ui/InspectorView.svelte", import.meta.url),
 );
@@ -32,20 +30,18 @@ Deno.test("outline and tree share the occurrence context menu without intercepti
 });
 
 Deno.test("context actions reuse commands and confirmation-gated destructive paths", () => {
-	for (
-		const id of [
-			"long-form",
-			"bookmark",
-			"duplicate",
-			"create-link",
-			"create-branch",
-			"work-lineage",
-			"revision-comparison",
-			"export-selected",
-			"remove-occurrence",
-			"trash-work",
-		]
-	) {
+	for (const id of [
+		"long-form",
+		"bookmark",
+		"duplicate",
+		"create-link",
+		"create-branch",
+		"work-lineage",
+		"revision-comparison",
+		"export-selected",
+		"remove-occurrence",
+		"trash-work",
+	]) {
 		assert(app.includes(`id: "${id}"`));
 	}
 	assertMatch(menu, /"create-branch": "createBranch"/);

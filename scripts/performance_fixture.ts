@@ -74,19 +74,21 @@ async function runCli(args: string[]): Promise<void> {
 	}
 	const manifestPath = options.manifestPath;
 	if (manifestPath) await writeNewJsonFile(manifestPath, fixture.manifest);
-	console.log(JSON.stringify(
-		{
-			manifest: fixture.manifest,
-			generationMs: roundMs(generationMs),
-			databaseSeedMs: databaseSeedMs === null ? null : roundMs(databaseSeedMs),
-			databaseBytes,
-			databasePath: options.databasePath ?? null,
-			outputPath: options.outputPath ?? null,
-			manifestPath: options.manifestPath ?? null,
-		},
-		null,
-		2,
-	));
+	console.log(
+		JSON.stringify(
+			{
+				manifest: fixture.manifest,
+				generationMs: roundMs(generationMs),
+				databaseSeedMs: databaseSeedMs === null ? null : roundMs(databaseSeedMs),
+				databaseBytes,
+				databasePath: options.databasePath ?? null,
+				outputPath: options.outputPath ?? null,
+				manifestPath: options.manifestPath ?? null,
+			},
+			null,
+			2,
+		),
+	);
 }
 
 function parseCliOptions(args: string[]): CliOptions {
@@ -135,7 +137,8 @@ function applyPerformanceFixtureOption(options: CliOptions, flag: string, value:
 
 function validateCliOptions(options: CliOptions): void {
 	if (
-		options.validatePath && (options.outputPath || options.databasePath || options.manifestPath)
+		options.validatePath &&
+		(options.outputPath || options.databasePath || options.manifestPath)
 	) {
 		throw new Error("--validate cannot be combined with output, database, or manifest paths.");
 	}

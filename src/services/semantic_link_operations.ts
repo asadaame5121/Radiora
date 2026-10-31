@@ -14,21 +14,24 @@ import type {
 } from "../storage/graph_store.ts";
 import { fetchActiveMergedLinks } from "./implicit_relation.ts";
 
-type SemanticLinkStore =
-	& OutlineStorePort
-	& RelationStorePort
-	& WorkStorePort
-	& Partial<RelationTypeDefinitionStorePort>;
+type SemanticLinkStore = OutlineStorePort &
+	RelationStorePort &
+	WorkStorePort &
+	Partial<RelationTypeDefinitionStorePort>;
 
 function sameEndpoint(left: LinkEndpoint, right: LinkEndpoint): boolean {
 	if (left.scope !== right.scope || left.workId !== right.workId) return false;
-	return left.scope === "work" ||
-		(right.scope === "revision" && left.revisionId === right.revisionId);
+	return (
+		left.scope === "work" || (right.scope === "revision" && left.revisionId === right.revisionId)
+	);
 }
 
 function validateLinkOrigin(origin: unknown): asserts origin is LinkOrigin | undefined {
 	if (
-		origin !== undefined && origin !== "human" && origin !== "suggestion" && origin !== "import"
+		origin !== undefined &&
+		origin !== "human" &&
+		origin !== "suggestion" &&
+		origin !== "import"
 	) {
 		throw new Error(`Unsupported link origin: ${String(origin)}`);
 	}
@@ -66,9 +69,8 @@ export class SemanticLinkOperations {
 		const definitions = this.store.listRelationTypeDefinitions
 			? await this.store.listRelationTypeDefinitions()
 			: BUILT_IN_RELATION_TYPES;
-		const definition = typeof input.type === "string"
-			? definitions.find((d) => d.name === input.type)
-			: undefined;
+		const definition =
+			typeof input.type === "string" ? definitions.find((d) => d.name === input.type) : undefined;
 		if (!definition) {
 			throw new Error(`Unsupported link type: ${String(input.type)}`);
 		}
@@ -102,9 +104,11 @@ export class SemanticLinkOperations {
 			[fromEndpoint, toEndpoint] = [toEndpoint, fromEndpoint];
 		}
 		if (isSymmetric) {
-			const duplicate = (await this.listActiveLinks()).some((link) =>
-				link.type === input.type && sameEndpoint(link.from, fromEndpoint) &&
-				sameEndpoint(link.to, toEndpoint)
+			const duplicate = (await this.listActiveLinks()).some(
+				(link) =>
+					link.type === input.type &&
+					sameEndpoint(link.from, fromEndpoint) &&
+					sameEndpoint(link.to, toEndpoint),
 			);
 			if (duplicate) return;
 		}
@@ -126,9 +130,8 @@ export class SemanticLinkOperations {
 		const definitions = this.store.listRelationTypeDefinitions
 			? await this.store.listRelationTypeDefinitions()
 			: BUILT_IN_RELATION_TYPES;
-		const definition = typeof type === "string"
-			? definitions.find((d) => d.name === type)
-			: undefined;
+		const definition =
+			typeof type === "string" ? definitions.find((d) => d.name === type) : undefined;
 		if (!definition) {
 			throw new Error(`Unsupported link type: ${String(type)}`);
 		}

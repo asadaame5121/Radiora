@@ -40,12 +40,10 @@ export interface EmergenceSuggestionCalculation {
 	searchResults: readonly SearchResult[];
 }
 
-type CandidateInput =
-	& Omit<
-		EmergenceCandidate,
-		"id" | "contextWorkId" | "targetWorkId" | "contextItemId" | "targetItemId"
-	>
-	& { context: OutlineItem; target: OutlineItem };
+type CandidateInput = Omit<
+	EmergenceCandidate,
+	"id" | "contextWorkId" | "targetWorkId" | "contextItemId" | "targetItemId"
+> & { context: OutlineItem; target: OutlineItem };
 
 /** Calculates discovery candidates without fetching or persisting data. */
 export function calculateEmergenceCandidates(
@@ -69,8 +67,8 @@ export function rankEmergenceSuggestions(
 ): EmergenceSuggestion[] {
 	const boundedLimit = Math.min(Math.max(limit, MIN_SUGGESTION_LIMIT), MAX_SUGGESTION_LIMIT);
 	return [...suggestions]
-		.sort((a, b) =>
-			Number(b.status === "pinned") - Number(a.status === "pinned") || b.score - a.score
+		.sort(
+			(a, b) => Number(b.status === "pinned") - Number(a.status === "pinned") || b.score - a.score,
 		)
 		.slice(0, boundedLimit);
 }
@@ -94,9 +92,9 @@ function addLatentRelations(
 			proposedLinkType: "LIKE",
 			title: "潜在的な関係",
 			explanation: `${shared.length}件の共通リンクを介してつながっています。`,
-			evidence: shared.slice(0, MAX_EVIDENCE_NEIGHBORS).flatMap((workId) =>
-				sharedNeighborEvidence(context, candidate, byWorkId, workId)
-			),
+			evidence: shared
+				.slice(0, MAX_EVIDENCE_NEIGHBORS)
+				.flatMap((workId) => sharedNeighborEvidence(context, candidate, byWorkId, workId)),
 		});
 	}
 }
@@ -127,7 +125,8 @@ function addCrossBranchResonances(
 			contextNeighbors.has(candidate.workId) ||
 			rootId(context, byId) === rootId(candidate, byId) ||
 			result.score < MIN_RESONANCE_SCORE
-		) continue;
+		)
+			continue;
 		addCandidate(target, {
 			kind: "cross-branch-resonance",
 			context,
@@ -172,8 +171,9 @@ function isLikeLinkForContext(link: OutlineLink, contextWorkId: string): boolean
 }
 
 function isTensionLinkForWork(link: OutlineLink, workId: string): boolean {
-	return (link.type === "VS" || link.type === "FIX") &&
-		(link.fromId === workId || link.toId === workId);
+	return (
+		(link.type === "VS" || link.type === "FIX") && (link.fromId === workId || link.toId === workId)
+	);
 }
 
 function tensionEvidence(

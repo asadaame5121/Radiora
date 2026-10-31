@@ -48,27 +48,33 @@ Deno.test("inline link completion keeps its state for an unchanged editor trigge
 Deno.test("inline link trigger identity rejects missing or different items", () => {
 	const trigger = { query: "target", range: { start: 3, end: 10 } };
 	assertEquals(isSameInlineLinkTrigger(null, "item", trigger), false);
-	assertEquals(
-		isSameInlineLinkTrigger({ itemId: "other", ...trigger }, "item", trigger),
-		false,
-	);
+	assertEquals(isSameInlineLinkTrigger({ itemId: "other", ...trigger }, "item", trigger), false);
 });
 
 Deno.test("inline link completion ignores the source, revisions, and blank Works", () => {
 	assertEquals(
-		filterInlineLinkCandidates([
-			candidate("source", "Source"),
-			candidate("blank", "(空の項目)"),
-			candidate("revision", "Revision", "revision"),
-			candidate("target", "Target"),
-		], "source").map((entry) => entry.id),
+		filterInlineLinkCandidates(
+			[
+				candidate("source", "Source"),
+				candidate("blank", "(空の項目)"),
+				candidate("revision", "Revision", "revision"),
+				candidate("target", "Target"),
+			],
+			"source",
+		).map((entry) => entry.id),
 		["target"],
 	);
 });
 
 Deno.test("empty relation type list falls back to built-in types", () => {
-	assertEquals(relationTypeNames(() => []), LINK_TYPES);
-	assertEquals(defaultRelationType(() => []), "RELATED");
+	assertEquals(
+		relationTypeNames(() => []),
+		LINK_TYPES,
+	);
+	assertEquals(
+		defaultRelationType(() => []),
+		"RELATED",
+	);
 });
 
 Deno.test("candidate count includes creation only for a nonempty completed search", () => {

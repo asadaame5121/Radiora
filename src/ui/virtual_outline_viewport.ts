@@ -60,9 +60,10 @@ export function buildVirtualOutlineLayout(
 
 	for (let index = 0; index < rowCount; index++) {
 		const measuredHeight = getRowHeight(index);
-		const height = Number.isFinite(measuredHeight) && measuredHeight > 0
-			? measuredHeight
-			: DEFAULT_OUTLINE_ROW_HEIGHT;
+		const height =
+			Number.isFinite(measuredHeight) && measuredHeight > 0
+				? measuredHeight
+				: DEFAULT_OUTLINE_ROW_HEIGHT;
 		heights[index] = height;
 		offsets[index + 1] = offsets[index] + height;
 	}

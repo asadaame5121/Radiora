@@ -38,8 +38,9 @@ export function parseOptions(args: string[]): AuditOptions {
 	if (options.trace && options.target !== "renderer") {
 		throw new Error("--trace requires --target renderer.");
 	}
-	const outputPaths = [options.trace, options.output, options.screenshot]
-		.filter((path): path is string => path !== undefined);
+	const outputPaths = [options.trace, options.output, options.screenshot].filter(
+		(path): path is string => path !== undefined,
+	);
 	if (new Set(outputPaths).size !== outputPaths.length) {
 		throw new Error("--trace, --output, and --screenshot must use different paths.");
 	}

@@ -69,7 +69,7 @@ it("late Palette close does not restore focus after reopen or dispose", async ()
 	let open = false;
 	const adapter = new PaletteFocusAdapter({
 		open: () => open,
-		afterRender: () => new Promise<void>((resolve) => release = resolve),
+		afterRender: () => new Promise<void>((resolve) => (release = resolve)),
 	});
 	adapter.remember();
 	const closing = adapter.restore();

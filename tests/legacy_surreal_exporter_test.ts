@@ -182,8 +182,8 @@ Deno.test("exportLegacySnapshot guarantees process.stop and reports to onLog whe
 		"store.close",
 		"process.stop",
 	]);
-	const closeFailedLog = logEvents.find((e) =>
-		e.event === "surrealdb.migration_store.close.failed"
+	const closeFailedLog = logEvents.find(
+		(e) => e.event === "surrealdb.migration_store.close.failed",
 	);
 	assert(closeFailedLog);
 	assertEquals(closeFailedLog.cause, closeError);

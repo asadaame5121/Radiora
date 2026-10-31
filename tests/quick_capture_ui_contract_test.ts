@@ -13,18 +13,14 @@ Deno.test("Quick Capture and unplaced inbox remain reachable and expose required
 		new URL("../src/ui/work_list_state.svelte.ts", import.meta.url),
 	);
 	assert(controller.includes("createWorkListState(ports.api)"));
-	const bindings = await Deno.readTextFile(
-		new URL("../src/shared/bindings.ts", import.meta.url),
-	);
+	const bindings = await Deno.readTextFile(new URL("../src/shared/bindings.ts", import.meta.url));
 
-	for (
-		const method of [
-			"quickCapture",
-			"listUnplacedWorks",
-			"updateUnplacedWorkText",
-			"placeUnplacedWork",
-		]
-	) {
+	for (const method of [
+		"quickCapture",
+		"listUnplacedWorks",
+		"updateUnplacedWorkText",
+		"placeUnplacedWork",
+	]) {
 		assert(bindings.includes(`${method}(`));
 		if (method === "listUnplacedWorks") assert(lists.includes(`this.api.${method}(`));
 		else assert(controller.includes(`ports.api.${method}(`));

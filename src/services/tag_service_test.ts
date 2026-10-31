@@ -138,22 +138,22 @@ Deno.test("past Revision tags require explicit history opt-in", async () => {
 			all: ["history", "shared"],
 			historyRevisionIds: ["history"],
 		}),
-		[{
-			scope: { kind: "revision", workId: "work", revisionId: "history" },
-			tags: ["history", "shared"],
-		}],
+		[
+			{
+				scope: { kind: "revision", workId: "work", revisionId: "history" },
+				tags: ["history", "shared"],
+			},
+		],
 	);
 });
 
 Deno.test("tag completion normalizes prefixes and has stable count ordering", async () => {
 	const { tags } = await fixture();
 	assertEquals(await tags.suggest(" ＃SH ", 8), [{ name: "shared", count: 3 }]);
-	assertEquals((await tags.listTags()).map((tag) => tag.name), [
-		"shared",
-		"draft",
-		"fixed",
-		"main-only",
-	]);
+	assertEquals(
+		(await tags.listTags()).map((tag) => tag.name),
+		["shared", "draft", "fixed", "main-only"],
+	);
 	assertEquals(await tags.suggest("", 2), [
 		{ name: "shared", count: 3 },
 		{ name: "draft", count: 1 },
@@ -181,14 +181,17 @@ Deno.test("rename and merge canonicalize display and search without rewriting te
 			{ kind: "working-copy", workId: "work", branchId: "main" },
 		],
 	);
-	assertEquals((await tags.listTags()).map((tag) => tag.name), [
-		"subject",
-		"status",
-		"fixed",
-	]);
+	assertEquals(
+		(await tags.listTags()).map((tag) => tag.name),
+		["subject", "status", "fixed"],
+	);
 	assertEquals(
 		(await tags.search({ all: ["shared"] })).map((match) => match.tags),
-		[["status", "subject"], ["status", "subject"], ["fixed", "subject"]],
+		[
+			["status", "subject"],
+			["status", "subject"],
+			["fixed", "subject"],
+		],
 	);
 	assertEquals(
 		(await tags.listAliases()).map((alias) => ({
@@ -210,9 +213,15 @@ Deno.test("tag aliases are isolated from ordinary search aliases", async () => {
 	const outline = new OutlineService(store);
 	await outline.saveSearchAlias({ canonical: "concept", variants: ["idea"] });
 	await tags.rename("shared", "topic");
-	assertEquals((await outline.listSearchAliases()).map((alias) => alias.canonical), ["concept"]);
+	assertEquals(
+		(await outline.listSearchAliases()).map((alias) => alias.canonical),
+		["concept"],
+	);
 	assertEquals(await outline.searchItems("topic"), []);
-	assertEquals((await tags.listAliases()).map((alias) => alias.canonicalName), ["topic"]);
+	assertEquals(
+		(await tags.listAliases()).map((alias) => alias.canonicalName),
+		["topic"],
+	);
 	await assertRejects(
 		() => outline.saveSearchAlias({ canonical: "#topic", variants: ["#shared"] }),
 		Error,

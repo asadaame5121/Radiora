@@ -51,9 +51,12 @@ export class ScreenNavigationController<Destination extends { view: ViewMode }, 
 			this.ports.cancelPending();
 			const prepared = await this.ports.prepare(destination, current);
 			if (
-				!current() || !await this.ports.guard(prepared, current) || !current() ||
+				!current() ||
+				!(await this.ports.guard(prepared, current)) ||
+				!current() ||
 				this.ports.valid?.(prepared) === false
-			) return false;
+			)
+				return false;
 			this.ports.commit(prepared);
 			this.currentView = destination.view;
 			++this.receipt;

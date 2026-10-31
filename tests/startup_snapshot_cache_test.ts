@@ -7,17 +7,19 @@ import {
 import { StartupSnapshotCacheFile } from "../src/desktop/startup_snapshot_cache_file.ts";
 
 const snapshot: OutlineSnapshot = {
-	items: [{
-		id: "occurrence-1",
-		workId: "work-1",
-		text: "cached outline",
-		parentId: null,
-		orderKey: 0,
-		collapsed: false,
-		revisionSelector: { mode: "branch", branchId: "branch-1" },
-		createdAt: "2026-08-07T00:00:00.000Z",
-		updatedAt: "2026-08-07T00:00:00.000Z",
-	}],
+	items: [
+		{
+			id: "occurrence-1",
+			workId: "work-1",
+			text: "cached outline",
+			parentId: null,
+			orderKey: 0,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "branch-1" },
+			createdAt: "2026-08-07T00:00:00.000Z",
+			updatedAt: "2026-08-07T00:00:00.000Z",
+		},
+	],
 	links: [],
 	knots: [],
 	stashItemIds: [],
@@ -43,12 +45,14 @@ Deno.test("startup snapshot cache ignores malformed and incompatible values", ()
 	assertEquals(parseStartupSnapshotCache("not-json"), null);
 
 	assertEquals(
-		parseStartupSnapshotCache(JSON.stringify({
-			version: 2,
-			savedAt: "2026-08-07T01:00:00.000Z",
-			snapshot,
-			location: { selectedOccurrenceId: null, hoistOccurrenceId: null },
-		})),
+		parseStartupSnapshotCache(
+			JSON.stringify({
+				version: 2,
+				savedAt: "2026-08-07T01:00:00.000Z",
+				snapshot,
+				location: { selectedOccurrenceId: null, hoistOccurrenceId: null },
+			}),
+		),
 		null,
 	);
 });

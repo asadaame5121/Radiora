@@ -48,9 +48,13 @@ Deno.test("A08 - OccurrenceOperations.listOutline is read-only (zero transaction
 			0,
 			"listOutline must not start write transactions",
 		);
-		const knotInserts = counters.getSqlLog().filter((stmt) =>
-			stmt.toUpperCase().includes("INTO KNOT") || stmt.toUpperCase().includes("DELETE FROM KNOT")
-		);
+		const knotInserts = counters
+			.getSqlLog()
+			.filter(
+				(stmt) =>
+					stmt.toUpperCase().includes("INTO KNOT") ||
+					stmt.toUpperCase().includes("DELETE FROM KNOT"),
+			);
 		assertEquals(knotInserts.length, 0, "listOutline must not modify knots in database");
 	} finally {
 		await store.close();

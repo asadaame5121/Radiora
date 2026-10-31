@@ -23,9 +23,10 @@ for (const operation of ["place", "root"] as const) {
 				requestConfirmation: vi.fn(),
 				reportError: f.reportError,
 			});
-			const pending = operation === "place"
-				? controller.placeUnplaced("work-created", null)
-				: controller.performQuickCapture("created", "root");
+			const pending =
+				operation === "place"
+					? controller.placeUnplaced("work-created", null)
+					: controller.performQuickCapture("created", "root");
 			await vi.waitFor(() => expect(f.guard.pending).not.toBeNull());
 			expect(f.selected()).toBe("source");
 			expect(f.guard.item?.id).toBe("source");
@@ -40,7 +41,7 @@ for (const operation of ["place", "root"] as const) {
 	test(`${operation} does not navigate after a domain operation outlives its origin`, async () => {
 		const f = navigationFixture();
 		let finish!: (item: typeof f.created) => void;
-		const result = new Promise<typeof f.created>((resolve) => finish = resolve);
+		const result = new Promise<typeof f.created>((resolve) => (finish = resolve));
 		const api = {
 			createItem: vi.fn(() => result),
 			placeUnplacedWork: vi.fn(() => result),
@@ -55,9 +56,10 @@ for (const operation of ["place", "root"] as const) {
 			requestConfirmation: vi.fn(),
 			reportError: f.reportError,
 		});
-		const pending = operation === "place"
-			? controller.placeUnplaced("work-created", null)
-			: controller.performQuickCapture("created", "root");
+		const pending =
+			operation === "place"
+				? controller.placeUnplaced("work-created", null)
+				: controller.performQuickCapture("created", "root");
 		await f.navigation.navigate({ view: "help" });
 		finish(f.created);
 		await pending;

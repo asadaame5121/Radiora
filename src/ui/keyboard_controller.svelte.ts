@@ -13,9 +13,11 @@ export class KeyboardController {
 	open = $state(false);
 	notice = $state("");
 	private focus: Element | null = null;
-	private selection:
-		| { start: number; end: number; direction: "forward" | "backward" | "none" }
-		| null = null;
+	private selection: {
+		start: number;
+		end: number;
+		direction: "forward" | "backward" | "none";
+	} | null = null;
 
 	constructor(private readonly ports: KeyboardPorts) {}
 
@@ -64,8 +66,8 @@ export class KeyboardController {
 			this.cancel(false);
 			return false;
 		}
-		const prefix = event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey &&
-			event.key === "/";
+		const prefix =
+			event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && event.key === "/";
 		if (!prefix && !this.open) return false;
 		if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return true;
 		event.preventDefault();
@@ -80,7 +82,10 @@ export class KeyboardController {
 	private reserveBrowserBack(event: KeyboardEvent, composing: boolean): boolean {
 		// Reserve browser Back before IME, dialog, or startup guards can skip handling.
 		if (
-			event.key !== "ArrowLeft" || !event.altKey || event.ctrlKey || event.shiftKey ||
+			event.key !== "ArrowLeft" ||
+			!event.altKey ||
+			event.ctrlKey ||
+			event.shiftKey ||
 			event.metaKey
 		) {
 			return false;
@@ -98,20 +103,22 @@ export class KeyboardController {
 			return;
 		}
 		this.focus = document.activeElement;
-		this.selection = this.focus instanceof HTMLTextAreaElement
-			? {
-				start: this.focus.selectionStart,
-				end: this.focus.selectionEnd,
-				direction: this.focus.selectionDirection,
-			}
-			: null;
+		this.selection =
+			this.focus instanceof HTMLTextAreaElement
+				? {
+						start: this.focus.selectionStart,
+						end: this.focus.selectionEnd,
+						direction: this.focus.selectionDirection,
+					}
+				: null;
 		this.open = true;
 	}
 
 	private chooseKey(event: KeyboardEvent): void {
-		const command = !event.ctrlKey && !event.altKey && !event.metaKey
-			? COMMAND_DEFINITIONS.find((entry) => entry.chordKey === event.key.toLowerCase())
-			: undefined;
+		const command =
+			!event.ctrlKey && !event.altKey && !event.metaKey
+				? COMMAND_DEFINITIONS.find((entry) => entry.chordKey === event.key.toLowerCase())
+				: undefined;
 		if (command) void this.choose(command.id).catch(this.ports.reportError);
 		else this.notice = "該当する操作はありません。次のキーを選ぶか、Escで取り消してください。";
 	}
@@ -119,9 +126,13 @@ export class KeyboardController {
 
 export function moveTreeFocus(event: KeyboardEvent, svg: SVGSVGElement): boolean {
 	if (
-		event.isComposing || event.ctrlKey || event.altKey || event.metaKey ||
+		event.isComposing ||
+		event.ctrlKey ||
+		event.altKey ||
+		event.metaKey ||
 		!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
-	) return false;
+	)
+		return false;
 	event.preventDefault();
 	// ponytail: traverse rendered nodes in order; spatial navigation can replace this if needed.
 	const nodes = [...svg.querySelectorAll<SVGElement>(".tree-node")];
@@ -144,18 +155,22 @@ export function focusWorkspacePane(reverse: boolean): void {
 		),
 		document.querySelector<HTMLElement>(".primary-nav button"),
 	].filter((element): element is HTMLElement =>
-		Boolean(element && element.getClientRects().length)
+		Boolean(element && element.getClientRects().length),
 	);
 	if (!panes.length) return;
 	const active = document.activeElement;
-	const index = panes.findIndex((pane) =>
-		pane === active ||
-		pane.closest(".omniwindow, .outline-panel, .tree-root, .inspector, .primary-nav")?.contains(
-			active,
-		)
+	const index = panes.findIndex(
+		(pane) =>
+			pane === active ||
+			pane
+				.closest(".omniwindow, .outline-panel, .tree-root, .inspector, .primary-nav")
+				?.contains(active),
 	);
-	const next = index < 0
-		? (reverse ? panes.length - 1 : 0)
-		: (index + (reverse ? panes.length - 1 : 1)) % panes.length;
+	const next =
+		index < 0
+			? reverse
+				? panes.length - 1
+				: 0
+			: (index + (reverse ? panes.length - 1 : 1)) % panes.length;
 	panes[next].focus();
 }

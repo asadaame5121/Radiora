@@ -25,7 +25,7 @@ export interface TreeFitOptions {
 }
 
 const DEFAULT_PADDING = 60;
-const DEFAULT_MIN_ZOOM = .05;
+const DEFAULT_MIN_ZOOM = 0.05;
 const DEFAULT_MAX_ZOOM = 24;
 
 export function fitTreeNodes(
@@ -45,12 +45,15 @@ export function treeNodeBounds(nodes: readonly TreeLayoutNode[]): TreeBounds | n
 	let maxY = Number.NEGATIVE_INFINITY;
 
 	for (const node of nodes) {
-		const bounds = node.aggregate && node.bounds ? node.bounds : {
-			minX: node.worldX,
-			minY: node.worldY,
-			maxX: node.worldX,
-			maxY: node.worldY,
-		};
+		const bounds =
+			node.aggregate && node.bounds
+				? node.bounds
+				: {
+						minX: node.worldX,
+						minY: node.worldY,
+						maxX: node.worldX,
+						maxY: node.worldY,
+					};
 		minX = Math.min(minX, bounds.minX);
 		minY = Math.min(minY, bounds.minY);
 		maxX = Math.max(maxX, bounds.maxX);

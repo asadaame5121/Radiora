@@ -26,11 +26,10 @@ Deno.test("browsing history goes back and forward and truncates its forward bran
 	state = browseToOccurrence(state, "three");
 	assertEquals(currentBrowsingLocation(state).selectedOccurrenceId, "three");
 	assertEquals(canMoveBrowsingHistory(state, 1), false);
-	assertEquals(state.panes[0].history.map((entry) => entry.selectedOccurrenceId), [
-		null,
-		"one",
-		"three",
-	]);
+	assertEquals(
+		state.panes[0].history.map((entry) => entry.selectedOccurrenceId),
+		[null, "one", "three"],
+	);
 });
 
 Deno.test("opening an occurrence outside the active hoist clears hoist without hiding selection", () => {
@@ -82,9 +81,18 @@ Deno.test("breadcrumb and hoist projection are read-only views of the outline sn
 	const projection = projectBrowsingOutline(snapshot, "child");
 
 	assertEquals(projection.rootOccurrenceIds, ["child"]);
-	assertEquals(projection.items.map((item) => item.id), ["child", "leaf"]);
-	assertEquals(projection.breadcrumb.map((item) => item.id), ["root"]);
-	assertEquals(ancestorBreadcrumb(snapshot, "leaf").map((item) => item.id), ["root", "child"]);
+	assertEquals(
+		projection.items.map((item) => item.id),
+		["child", "leaf"],
+	);
+	assertEquals(
+		projection.breadcrumb.map((item) => item.id),
+		["root"],
+	);
+	assertEquals(
+		ancestorBreadcrumb(snapshot, "leaf").map((item) => item.id),
+		["root", "child"],
+	);
 	assertEquals(snapshot, before);
 	assertNotStrictEquals(projection.items, snapshot.items);
 	assertEquals(projection.items[0], snapshot.items[1]);

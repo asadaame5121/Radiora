@@ -10,7 +10,11 @@ Deno.test("bookmarks and resume are independent and resolve without mutating con
 	const store = new MemoryGraphStore();
 	const root = await bundle(store, "root", "root text", null, 1, true);
 	const child = await bundle(store, "child", "child text", root, 2, false);
-	const service = new NavigationService(store, () => "bookmark", () => NOW);
+	const service = new NavigationService(
+		store,
+		() => "bookmark",
+		() => NOW,
+	);
 	const bookmark = await service.createBookmark(child);
 	await service.saveResumePosition(root, 4);
 	const before = {
@@ -37,7 +41,11 @@ Deno.test("missing preferred Occurrence falls back stably within the same Work, 
 	const preferred = await bundle(store, "work", "text", null, 50, false);
 	const later = await occurrence(store, "work", "later", 10);
 	const stable = await occurrence(store, "work", "stable", 10);
-	const service = new NavigationService(store, () => "bookmark", () => NOW);
+	const service = new NavigationService(
+		store,
+		() => "bookmark",
+		() => NOW,
+	);
 	const bookmark = await service.createBookmark(preferred);
 	await store.deleteOccurrence(preferred);
 
@@ -58,7 +66,11 @@ Deno.test("missing preferred Occurrence falls back stably within the same Work, 
 Deno.test("invalid caret and missing Work fail without replacing the previous resume", async () => {
 	const store = new CorruptibleMemoryGraphStore();
 	const occurrenceId = await bundle(store, "work", "text", null, 1, false);
-	const service = new NavigationService(store, () => "bookmark", () => NOW);
+	const service = new NavigationService(
+		store,
+		() => "bookmark",
+		() => NOW,
+	);
 	await service.saveResumePosition(occurrenceId, 4);
 	await service.saveResumePosition(occurrenceId, 5);
 	await assertRejects(() => service.saveResumePosition(occurrenceId, -1), Error, "Invalid caret");
@@ -77,7 +89,11 @@ Deno.test("invalid caret and missing Work fail without replacing the previous re
 Deno.test("resume resolution clamps a stale caret without changing the stored offset", async () => {
 	const store = new MemoryGraphStore();
 	const occurrenceId = await bundle(store, "work", "long text", null, 1, false);
-	const service = new NavigationService(store, () => "bookmark", () => NOW);
+	const service = new NavigationService(
+		store,
+		() => "bookmark",
+		() => NOW,
+	);
 	await service.saveResumePosition(occurrenceId, 9);
 	await store.updateWorkingCopy("work", "tiny", NOW);
 
@@ -143,7 +159,11 @@ async function occurrence(
 Deno.test("NavigationService uses single occurrence read and avoids listOccurrences for saveResumePosition and createBookmark", async () => {
 	const store = new MemoryGraphStore();
 	const occurrenceId = await bundle(store, "work-nav", "nav text", null, 1, false);
-	const service = new NavigationService(store, () => "bookmark", () => NOW);
+	const service = new NavigationService(
+		store,
+		() => "bookmark",
+		() => NOW,
+	);
 
 	// Spy: listOccurrences を呼んだら例外を投げる
 	store.listOccurrences = () => {

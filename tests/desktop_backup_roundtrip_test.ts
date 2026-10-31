@@ -36,12 +36,14 @@ async function backupSummary(source: string) {
 			occurrences: data.occurrences.map((occurrence) => occurrence.id).sort(),
 			links: data.links.map((link) => link.id).sort(),
 		},
-		linkDirections: data.links.map((link) => ({
-			id: link.id,
-			type: link.type,
-			from: link.from,
-			to: link.to,
-		})).sort((left, right) => left.id.localeCompare(right.id)),
+		linkDirections: data.links
+			.map((link) => ({
+				id: link.id,
+				type: link.type,
+				from: link.from,
+				to: link.to,
+			}))
+			.sort((left, right) => left.id.localeCompare(right.id)),
 		bodyHashes: await Promise.all(
 			[...data.workingCopies]
 				.sort((left, right) => left.workId.localeCompare(right.workId))

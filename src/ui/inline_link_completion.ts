@@ -40,17 +40,23 @@ export function isSameInlineLinkTrigger(
 	itemId: string,
 	trigger: { query: string; range: { start: number; end: number } },
 ): boolean {
-	return current?.itemId === itemId && current.query === trigger.query &&
-		current.range.start === trigger.range.start && current.range.end === trigger.range.end;
+	return (
+		current?.itemId === itemId &&
+		current.query === trigger.query &&
+		current.range.start === trigger.range.start &&
+		current.range.end === trigger.range.end
+	);
 }
 
 export function filterInlineLinkCandidates(
 	candidates: readonly InternalReferenceCompletion[],
 	sourceWorkId: string | undefined,
 ): InternalReferenceCompletion[] {
-	return candidates.filter((candidate) =>
-		candidate.scope === "work" && candidate.workId !== sourceWorkId &&
-		candidate.displayName.trim() !== EMPTY_WORK_DISPLAY_NAME
+	return candidates.filter(
+		(candidate) =>
+			candidate.scope === "work" &&
+			candidate.workId !== sourceWorkId &&
+			candidate.displayName.trim() !== EMPTY_WORK_DISPLAY_NAME,
 	);
 }
 
@@ -66,16 +72,15 @@ export function defaultRelationType(names?: () => readonly LinkType[]): LinkType
 	return "RELATED" as LinkType;
 }
 
-export function isSymmetricType(
-	type: LinkType,
-	custom?: (type: LinkType) => boolean,
-): boolean {
+export function isSymmetricType(type: LinkType, custom?: (type: LinkType) => boolean): boolean {
 	return custom ? custom(type) : isSymmetricLinkType(type);
 }
 
-export function inlineLinkCandidateCount(
-	state: { candidates: readonly InternalReferenceCompletion[]; query: string; searching: boolean },
-): number {
+export function inlineLinkCandidateCount(state: {
+	candidates: readonly InternalReferenceCompletion[];
+	query: string;
+	searching: boolean;
+}): number {
 	return state.candidates.length + (state.query.trim() && !state.searching ? 1 : 0);
 }
 
@@ -83,8 +88,11 @@ export function inlineLinkCandidateFromCreated(
 	work: UnplacedWork,
 	workLabel: string,
 ): InternalReferenceCompletion {
-	const displayName = work.text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ??
-		`(空の${workLabel})`;
+	const displayName =
+		work.text
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.find(Boolean) ?? `(空の${workLabel})`;
 	return {
 		scope: "work",
 		id: work.workId,

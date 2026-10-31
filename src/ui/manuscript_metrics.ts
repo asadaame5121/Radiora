@@ -27,7 +27,7 @@ export function measureManuscript(sections: readonly ManuscriptSection[]): Manus
 		0,
 	);
 	const starts = sections.flatMap((section, index) =>
-		section.depth === 0 || section.depth === 1 ? [{ section, index }] : []
+		section.depth === 0 || section.depth === 1 ? [{ section, index }] : [],
 	);
 	const branches = starts.map(({ section, index }) => {
 		let characterCount = 0;

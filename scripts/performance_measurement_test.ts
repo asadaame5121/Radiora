@@ -31,12 +31,7 @@ Deno.test("parseMeasurementCliOptions parses valid args and rejects invalid or e
 
 	// Invalid case
 	assertThrows(() =>
-		parseMeasurementCliOptions([
-			"--case",
-			"non-existent-case",
-			"--output",
-			"target/out",
-		])
+		parseMeasurementCliOptions(["--case", "non-existent-case", "--output", "target/out"]),
 	);
 
 	// Existing output dir rejection

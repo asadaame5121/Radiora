@@ -37,17 +37,19 @@ if (import.meta.main) {
 			options.expression = buildPerformanceCaseExpression(args.caseName, args.itemId);
 			const report = await runAudit(options);
 			await writeNewJsonFile(options.output, report);
-			console.log(JSON.stringify(
-				{
-					outputPath: options.output,
-					trace: report.trace,
-					issueCount: report.issueCount,
-					case: args.caseName,
-					samples: PERFORMANCE_SAMPLE_COUNT,
-				},
-				null,
-				2,
-			));
+			console.log(
+				JSON.stringify(
+					{
+						outputPath: options.output,
+						trace: report.trace,
+						issueCount: report.issueCount,
+						case: args.caseName,
+						samples: PERFORMANCE_SAMPLE_COUNT,
+					},
+					null,
+					2,
+				),
+			);
 			if (options.strict && report.issueCount > 0) Deno.exit(2);
 		} catch (cause) {
 			console.error(`Desktop performance case failed: ${asError(cause).message}`);

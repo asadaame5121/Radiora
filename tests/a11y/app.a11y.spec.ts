@@ -26,9 +26,9 @@ test("Light theme keeps focused Outline text on the application foreground", asy
 
 	const editor = page.getByRole("textbox", { name: "Markdown編集" }).first();
 	await expect(editor).toBeFocused();
-	await expect.poll(() => editor.evaluate((element) => getComputedStyle(element).color)).toBe(
-		"rgb(17, 17, 17)",
-	);
+	await expect
+		.poll(() => editor.evaluate((element) => getComputedStyle(element).color))
+		.toBe("rgb(17, 17, 17)");
 });
 
 test("Tree view has no automated WCAG A/AA violations", async ({ page }) => {
@@ -38,7 +38,9 @@ test("Tree view has no automated WCAG A/AA violations", async ({ page }) => {
 	await expectNoAxeViolations(page);
 });
 
-test("Options and collapsed navigation have no automated WCAG A/AA violations", async ({ page }) => {
+test("Options and collapsed navigation have no automated WCAG A/AA violations", async ({
+	page,
+}) => {
 	await openReadyApplication(page);
 	const navigation = page.getByRole("navigation", { name: "主な画面" });
 	await navigation.getByRole("button", { name: "Option", exact: true }).click();

@@ -37,14 +37,17 @@ Deno.test("internal references resolve Work and immutable Revision IDs after dis
 		occurrenceId: "occ-target",
 		text: "旧名",
 	});
-	await store.createRevision({
-		id: "revision-fixed",
-		workId: "work-target",
-		text: "固定版",
-		parentRevisionIds: [],
-		kind: "checkpoint",
-		createdAt: NOW,
-	}, "branch-target");
+	await store.createRevision(
+		{
+			id: "revision-fixed",
+			workId: "work-target",
+			text: "固定版",
+			parentRevisionIds: [],
+			kind: "checkpoint",
+			createdAt: NOW,
+		},
+		"branch-target",
+	);
 	await store.updateWorkingCopy("work-target", "改名後", "2026-01-02T04:00:00.000Z");
 	const service = new InternalReferenceService(store);
 
@@ -84,30 +87,36 @@ Deno.test("resolver distinguishes scope mismatch, deleted, and missing reference
 		occurrenceId: "occ-deleted",
 		text: "削除対象",
 	});
-	await store.createRevision({
-		id: "revision-known",
-		workId: "work-deleted",
-		text: "既知の版",
-		parentRevisionIds: [],
-		kind: "checkpoint",
-		createdAt: NOW,
-	}, "branch-deleted");
+	await store.createRevision(
+		{
+			id: "revision-known",
+			workId: "work-deleted",
+			text: "既知の版",
+			parentRevisionIds: [],
+			kind: "checkpoint",
+			createdAt: NOW,
+		},
+		"branch-deleted",
+	);
 	await store.trashWork("work-deleted", NOW);
 	const service = new InternalReferenceService(store);
 
-	const resolutions = await service.resolve([
-		"[deleted](radiora://work/work-deleted)",
-		"[wrong](radiora://work/revision-known)",
-		"[wrong](radiora://revision/work-deleted)",
-		"[missing](radiora://revision/unknown)",
-	].join(" "));
-	assertEquals(resolutions.map((resolution) => resolution.status), [
-		"deleted",
-		"scope-mismatch",
-		"scope-mismatch",
-		"missing",
-	]);
-	assertEquals(resolutions.every((resolution) => !resolution.navigationTarget), true);
+	const resolutions = await service.resolve(
+		[
+			"[deleted](radiora://work/work-deleted)",
+			"[wrong](radiora://work/revision-known)",
+			"[wrong](radiora://revision/work-deleted)",
+			"[missing](radiora://revision/unknown)",
+		].join(" "),
+	);
+	assertEquals(
+		resolutions.map((resolution) => resolution.status),
+		["deleted", "scope-mismatch", "scope-mismatch", "missing"],
+	);
+	assertEquals(
+		resolutions.every((resolution) => !resolution.navigationTarget),
+		true,
+	);
 });
 
 Deno.test("completion lists active Work and Revision with canonical ID-bearing Markdown", async () => {
@@ -118,14 +127,17 @@ Deno.test("completion lists active Work and Revision with canonical ID-bearing M
 		occurrenceId: "occ-active",
 		text: "表示 [名]",
 	});
-	await store.createRevision({
-		id: "revision-abcdefghi",
-		workId: "work-123456789",
-		text: "初稿",
-		parentRevisionIds: [],
-		kind: "checkpoint",
-		createdAt: NOW,
-	}, "branch-active");
+	await store.createRevision(
+		{
+			id: "revision-abcdefghi",
+			workId: "work-123456789",
+			text: "初稿",
+			parentRevisionIds: [],
+			kind: "checkpoint",
+			createdAt: NOW,
+		},
+		"branch-active",
+	);
 	const candidates = await new InternalReferenceService(store).listCompletions();
 
 	assertEquals(
@@ -169,14 +181,17 @@ Deno.test("backlinks scan current Working Copies and fixed Revisions without per
 		occurrenceId: "occ-source",
 		text: "現在 [対象](radiora://work/work-target)",
 	});
-	await store.createRevision({
-		id: "revision-source",
-		workId: "work-source",
-		text: "固定 [対象](radiora://work/work-target) と [対象](radiora://work/work-target)",
-		parentRevisionIds: [],
-		kind: "checkpoint",
-		createdAt: NOW,
-	}, "branch-source");
+	await store.createRevision(
+		{
+			id: "revision-source",
+			workId: "work-source",
+			text: "固定 [対象](radiora://work/work-target) と [対象](radiora://work/work-target)",
+			parentRevisionIds: [],
+			kind: "checkpoint",
+			createdAt: NOW,
+		},
+		"branch-source",
+	);
 	const service = new InternalReferenceService(store);
 
 	const beforeLinks = await store.listLinks();

@@ -46,7 +46,7 @@ function setup(allowCache = () => true) {
 	const reportError = vi.fn();
 	const selection = new OccurrenceSelectionWorkspace({
 		current: () => selectedId,
-		publish: (id) => selectedId = id,
+		publish: (id) => (selectedId = id),
 		snapshot: () => snapshot,
 		publishStartupSnapshot: (next) => {
 			if (!allowCache()) return false;
@@ -62,7 +62,7 @@ function setup(allowCache = () => true) {
 			browsing: () => navigation.captureBrowsing(),
 			publishBrowsing: (next) => navigation.commitBrowsing(next),
 			expanded: () => expanded,
-			publishExpanded: (next) => expanded = next,
+			publishExpanded: (next) => (expanded = next),
 			capturePanels,
 			restorePane,
 		},
@@ -80,8 +80,8 @@ function setup(allowCache = () => true) {
 		selected: () => selectedId,
 		expanded: () => expanded,
 		snapshot: () => snapshot,
-		replace: (items: OutlineItem[]) => snapshot = { ...snapshot, items },
-		hide: () => visible = false,
+		replace: (items: OutlineItem[]) => (snapshot = { ...snapshot, items }),
+		hide: () => (visible = false),
 		dirty: () => {
 			form.draft.start.year = "2026";
 			form.draft.original = "unsaved";
@@ -95,39 +95,40 @@ function setup(allowCache = () => true) {
 	};
 }
 
-test.each(["save", "discard", "cancel"] as const)(
-	"Zoom Out changes selection, scope and focus only after %s accepts its guard",
-	async (choice) => {
-		const s = setup();
-		s.selection.select("b");
-		s.dirty();
-		const focus = vi.fn();
-		const keyboard = new KeyboardWorkspaceController({
-			selectedId: s.selected,
-			hoistId: () => s.navigation.browsingLocation.hoistOccurrenceId,
-			view: () => "outline",
-			navigation: { origin: 0, navigate: vi.fn() },
-			longFormActive: () => false,
-			select: (id, after) => s.selection.select(id, after),
-			focus,
-			setHoist: (id) => s.selection.setHoist(id),
-			projection: vi.fn(),
-			items: () => s.snapshot().items,
-			clearTemporaryExpansion: vi.fn(),
-			setCollapsed: vi.fn(),
-			reload: vi.fn(),
-		});
-		await keyboard.zoomOut();
-		expect(s.selected()).toBe("b");
-		expect(s.navigation.browsingLocation.hoistOccurrenceId).toBe("a");
-		expect(focus).not.toHaveBeenCalled();
-		await s.form.resolvePending(choice);
-		await vi.waitFor(() => expect(focus).toHaveBeenCalledTimes(choice === "cancel" ? 0 : 1));
-		expect(s.selected()).toBe(choice === "cancel" ? "b" : "a");
-		expect(s.navigation.browsingLocation.hoistOccurrenceId).toBe(choice === "cancel" ? "a" : null);
-		expect(s.navigation.browsingLocation.selectedOccurrenceId).toBe(s.selected());
-	},
-);
+test.each([
+	"save",
+	"discard",
+	"cancel",
+] as const)("Zoom Out changes selection, scope and focus only after %s accepts its guard", async (choice) => {
+	const s = setup();
+	s.selection.select("b");
+	s.dirty();
+	const focus = vi.fn();
+	const keyboard = new KeyboardWorkspaceController({
+		selectedId: s.selected,
+		hoistId: () => s.navigation.browsingLocation.hoistOccurrenceId,
+		view: () => "outline",
+		navigation: { origin: 0, navigate: vi.fn() },
+		longFormActive: () => false,
+		select: (id, after) => s.selection.select(id, after),
+		focus,
+		setHoist: (id) => s.selection.setHoist(id),
+		projection: vi.fn(),
+		items: () => s.snapshot().items,
+		clearTemporaryExpansion: vi.fn(),
+		setCollapsed: vi.fn(),
+		reload: vi.fn(),
+	});
+	await keyboard.zoomOut();
+	expect(s.selected()).toBe("b");
+	expect(s.navigation.browsingLocation.hoistOccurrenceId).toBe("a");
+	expect(focus).not.toHaveBeenCalled();
+	await s.form.resolvePending(choice);
+	await vi.waitFor(() => expect(focus).toHaveBeenCalledTimes(choice === "cancel" ? 0 : 1));
+	expect(s.selected()).toBe(choice === "cancel" ? "b" : "a");
+	expect(s.navigation.browsingLocation.hoistOccurrenceId).toBe(choice === "cancel" ? "a" : null);
+	expect(s.navigation.browsingLocation.selectedOccurrenceId).toBe(s.selected());
+});
 
 test("accepted direct selection synchronously aligns the form and pane before its callback", () => {
 	const s = setup();
@@ -142,23 +143,24 @@ test("accepted direct selection synchronously aligns the form and pane before it
 	expect(after).toHaveBeenCalledOnce();
 });
 
-test.each(["save", "discard", "cancel"] as const)(
-	"direct selection waits for %s before publishing",
-	async (choice) => {
-		const s = setup();
-		s.dirty();
-		const after = vi.fn();
-		expect(s.selection.select("b", after)).toBe(false);
-		expect(s.selected()).toBe("a");
-		expect(s.form.item?.id).toBe("a");
-		expect(s.navigation.browsingLocation.selectedOccurrenceId).toBe("a");
-		await s.form.resolvePending(choice);
-		await vi.waitFor(() => expect(after).toHaveBeenCalledTimes(choice === "cancel" ? 0 : 1));
-		expect(s.selected()).toBe(choice === "cancel" ? "a" : "b");
-		expect(s.form.item?.id).toBe(s.selected());
-		expect(s.navigation.browsingLocation.selectedOccurrenceId).toBe(s.selected());
-	},
-);
+test.each([
+	"save",
+	"discard",
+	"cancel",
+] as const)("direct selection waits for %s before publishing", async (choice) => {
+	const s = setup();
+	s.dirty();
+	const after = vi.fn();
+	expect(s.selection.select("b", after)).toBe(false);
+	expect(s.selected()).toBe("a");
+	expect(s.form.item?.id).toBe("a");
+	expect(s.navigation.browsingLocation.selectedOccurrenceId).toBe("a");
+	await s.form.resolvePending(choice);
+	await vi.waitFor(() => expect(after).toHaveBeenCalledTimes(choice === "cancel" ? 0 : 1));
+	expect(s.selected()).toBe(choice === "cancel" ? "a" : "b");
+	expect(s.form.item?.id).toBe(s.selected());
+	expect(s.navigation.browsingLocation.selectedOccurrenceId).toBe(s.selected());
+});
 
 test("save failure keeps selection, pane, form draft and pending guard until retry", async () => {
 	const s = setup();
@@ -178,7 +180,8 @@ test("save failure keeps selection, pane, form draft and pending guard until ret
 test("a superseded guard cannot publish its selection or callback", async () => {
 	const s = setup();
 	s.dirty();
-	const old = vi.fn(), latest = vi.fn();
+	const old = vi.fn(),
+		latest = vi.fn();
 	s.selection.select("b", old);
 	s.selection.select("c", latest);
 	await s.form.resolvePending("discard");
@@ -253,9 +256,11 @@ test("reload preserves current drafts/text and synchronizes clean form metadata 
 		date: { precision: "year", year: 1700, approximate: false },
 	} as const;
 	s.replace(
-		s.snapshot().items.map((value) =>
-			value.id === "a" ? { ...value, text: "editor draft", historicalTime } : value
-		),
+		s
+			.snapshot()
+			.items.map((value) =>
+				value.id === "a" ? { ...value, text: "editor draft", historicalTime } : value,
+			),
 	);
 	s.selection.reconcile();
 	expect(s.snapshot().items[0].text).toBe("editor draft");
@@ -359,10 +364,14 @@ test("cancelled user requests and formal reload close startup restoration author
 	const untouched = setup();
 	untouched.selection.reconcile();
 	expect(
-		untouched.selection.restoreInitial(untouched.snapshot(), {
-			selectedOccurrenceId: "c",
-			hoistOccurrenceId: null,
-		}, () => true),
+		untouched.selection.restoreInitial(
+			untouched.snapshot(),
+			{
+				selectedOccurrenceId: "c",
+				hoistOccurrenceId: null,
+			},
+			() => true,
+		),
 	).toBe(false);
 });
 

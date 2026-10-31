@@ -109,7 +109,10 @@ for (const end of ["pointerup", "pointercancel"]) {
 	});
 }
 
-for (const [clientX, width] of [[1270, 240], [600, 560]]) {
+for (const [clientX, width] of [
+	[1270, 240],
+	[600, 560],
+]) {
 	test(`resize clamps and saves width to ${width}`, () => {
 		const s = fixture();
 		s.adapter.startResize(pointer("pointerdown"));

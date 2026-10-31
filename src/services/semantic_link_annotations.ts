@@ -129,13 +129,15 @@ function compareOccurrences(left: OutlineItem, right: OutlineItem): number {
 }
 
 function compareAnnotations(left: SemanticLinkAnnotation, right: SemanticLinkAnnotation): number {
-	return compareText(left.occurrenceId, right.occurrenceId) ||
+	return (
+		compareText(left.occurrenceId, right.occurrenceId) ||
 		compareText(left.type, right.type) ||
 		compareDirection(left.direction, right.direction) ||
 		compareText(left.otherWorkId, right.otherWorkId) ||
 		compareText(left.otherDisplayName, right.otherDisplayName) ||
 		compareText(left.reason, right.reason) ||
-		compareText(left.linkId, right.linkId);
+		compareText(left.linkId, right.linkId)
+	);
 }
 
 function compareDirection(

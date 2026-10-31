@@ -99,35 +99,35 @@ function assertSnapshotContainer(value: unknown): void {
 		throw new Error("Backup data must be an object");
 	}
 	const source = value as Record<string, unknown>;
-	for (
-		const key of [
-			"works",
-			"branches",
-			"workingCopies",
-			"occurrences",
-			"links",
-			"systemRelations",
-			"knots",
-			"aliases",
-			"emergenceSuggestions",
-			"savedRuleQueries",
-			"purgeManifests",
-			"revisions",
-			"recoverySnapshots",
-			"bookmarks",
-		]
-	) {
+	for (const key of [
+		"works",
+		"branches",
+		"workingCopies",
+		"occurrences",
+		"links",
+		"systemRelations",
+		"knots",
+		"aliases",
+		"emergenceSuggestions",
+		"savedRuleQueries",
+		"purgeManifests",
+		"revisions",
+		"recoverySnapshots",
+		"bookmarks",
+	]) {
 		if (!Array.isArray(source[key])) throw new Error(`Backup data.${key} must be an array`);
 	}
 	if (
-		!source.emergenceFeedback || typeof source.emergenceFeedback !== "object" ||
+		!source.emergenceFeedback ||
+		typeof source.emergenceFeedback !== "object" ||
 		Array.isArray(source.emergenceFeedback)
 	) {
 		throw new Error("Backup data.emergenceFeedback must be an object");
 	}
 	if (
 		source.resumePosition !== null &&
-		(!source.resumePosition || typeof source.resumePosition !== "object" ||
+		(!source.resumePosition ||
+			typeof source.resumePosition !== "object" ||
 			Array.isArray(source.resumePosition))
 	) {
 		throw new Error("Backup data.resumePosition must be an object or null");
@@ -145,15 +145,13 @@ function validateWorks(
 			throw new Error(`Invalid Work: ${work?.id}`);
 		}
 		if (
-			work.mergedIntoWorkId && !workById.has(work.mergedIntoWorkId) &&
+			work.mergedIntoWorkId &&
+			!workById.has(work.mergedIntoWorkId) &&
 			!purgedWorkIds.has(work.mergedIntoWorkId)
 		) {
 			throw new Error(`Merged Work target not found: ${work.mergedIntoWorkId}`);
 		}
-		if (
-			work.mergedIntoWorkId === work.id ||
-			(work.mergedIntoWorkId && !work.mergedAt)
-		) {
+		if (work.mergedIntoWorkId === work.id || (work.mergedIntoWorkId && !work.mergedAt)) {
 			throw new Error(`Invalid Work merge provenance: ${work.id}`);
 		}
 	}
@@ -191,9 +189,7 @@ function validateWorkingCopies(
 		copyBranchIds.add(copy.branchId);
 		const branch = branchById.get(copy.branchId);
 		const parsed = v.safeParse(WorkingCopySchema, copy);
-		if (
-			!parsed.success || !branch || branch.workId !== copy.workId || !workById.has(copy.workId)
-		) {
+		if (!parsed.success || !branch || branch.workId !== copy.workId || !workById.has(copy.workId)) {
 			throw new Error(`Invalid Working Copy: ${copy.branchId}`);
 		}
 	}
@@ -213,7 +209,9 @@ function validateRevisions(
 		for (const parentId of revision.parentRevisionIds) {
 			const parent = revisionById.get(parentId);
 			if (
-				!parent || parent.workId !== revision.workId || parentId === revision.id ||
+				!parent ||
+				parent.workId !== revision.workId ||
+				parentId === revision.id ||
 				parents.has(parentId)
 			) {
 				throw new Error(`Invalid Revision parent: ${revision.id}`);
@@ -237,10 +235,11 @@ function validateRecoverySnapshots(
 			: undefined;
 		const parsed = v.safeParse(RecoverySnapshotSchema, snapshot);
 		if (
-			!parsed.success || !workById.has(snapshot.workId) || !branch ||
+			!parsed.success ||
+			!workById.has(snapshot.workId) ||
+			!branch ||
 			branch.workId !== snapshot.workId ||
-			(snapshot.sourceRevisionId &&
-				(!sourceRevision || sourceRevision.workId !== snapshot.workId))
+			(snapshot.sourceRevisionId && (!sourceRevision || sourceRevision.workId !== snapshot.workId))
 		) {
 			throw new Error(`Invalid Recovery Snapshot: ${snapshot.id}`);
 		}
@@ -297,9 +296,7 @@ function validateSystemRelations(
 ): void {
 	for (const relation of systemRelations) {
 		const parsed = v.safeParse(SystemRelationSchema, relation);
-		if (
-			!parsed.success || !workById.has(relation.fromWorkId) || !workById.has(relation.toWorkId)
-		) {
+		if (!parsed.success || !workById.has(relation.fromWorkId) || !workById.has(relation.toWorkId)) {
 			throw new Error(`Invalid System Relation: ${relation?.id}`);
 		}
 	}
@@ -374,7 +371,9 @@ function validateBookmarks(
 	for (const b of bookmarks) {
 		const occ = occurrenceById.get(b.occurrenceId);
 		if (
-			!v.safeParse(BookmarkSchema, b).success || !workById.has(b.workId) || occ?.workId !== b.workId
+			!v.safeParse(BookmarkSchema, b).success ||
+			!workById.has(b.workId) ||
+			occ?.workId !== b.workId
 		) {
 			throw new Error(`Invalid Bookmark: ${b?.id}`);
 		}
@@ -390,7 +389,8 @@ function validateResumePosition(
 	const occ = occurrenceById.get(resumePosition.occurrenceId);
 	if (
 		!v.safeParse(ResumePositionSchema, resumePosition).success ||
-		!workById.has(resumePosition.workId) || occ?.workId !== resumePosition.workId ||
+		!workById.has(resumePosition.workId) ||
+		occ?.workId !== resumePosition.workId ||
 		resumePosition.caretOffset < 0
 	) {
 		throw new Error("Invalid Resume Position");
@@ -449,7 +449,8 @@ function validateLinkEndpoint(
 ): void {
 	if (!works.has(endpoint.workId)) throw new Error(`Invalid Link Work endpoint: ${linkId}`);
 	if (
-		endpoint.scope === "revision" && revisions.get(endpoint.revisionId)?.workId !== endpoint.workId
+		endpoint.scope === "revision" &&
+		revisions.get(endpoint.revisionId)?.workId !== endpoint.workId
 	) {
 		throw new Error(`Invalid Link Revision endpoint: ${linkId}`);
 	}

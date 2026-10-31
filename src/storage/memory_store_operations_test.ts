@@ -27,10 +27,7 @@ Deno.test("replaceEndpointWork - replaces matching endpoint workId", () => {
 });
 
 Deno.test("endpointKey - formats work and revision scopes correctly", () => {
-	assertEquals(
-		endpointKey({ scope: "work", workId: "w1" }),
-		"work:w1",
-	);
+	assertEquals(endpointKey({ scope: "work", workId: "w1" }), "work:w1");
 	assertEquals(
 		endpointKey({ scope: "revision", workId: "w1", revisionId: "r1" }),
 		"revision:w1:r1",

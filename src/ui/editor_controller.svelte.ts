@@ -96,9 +96,11 @@ export function createEditorController(ports: EditorControllerPorts) {
 		try {
 			const resolutions = await ports.api.resolveInternalReferences(markdown);
 			if (ports.navigation.origin !== origin) return;
-			const resolution = resolutions.find((candidate) =>
-				candidate.reference.scope === scope && candidate.reference.id === id &&
-				(start === undefined || candidate.reference.range.start === start)
+			const resolution = resolutions.find(
+				(candidate) =>
+					candidate.reference.scope === scope &&
+					candidate.reference.id === id &&
+					(start === undefined || candidate.reference.range.start === start),
 			);
 			if (!resolution) {
 				internalReferenceNotice = "参照を解析できませんでした。";
@@ -111,23 +113,28 @@ export function createEditorController(ports: EditorControllerPorts) {
 			internalReferenceNotice = "";
 			if (resolution.reference.scope === "revision" && resolution.revision) {
 				if (resolution.navigationTarget.kind === "work") {
-					internalReferenceNotice =
-						`固定${ports.vocabulary.revision}は存在しますが、所有${ports.vocabulary.work}に表示可能な${ports.vocabulary.occurrence}がありません。`;
+					internalReferenceNotice = `固定${ports.vocabulary.revision}は存在しますが、所有${ports.vocabulary.work}に表示可能な${ports.vocabulary.occurrence}がありません。`;
 					return;
 				}
-				await ports.navigation.navigate({
-					view: "comparison",
-					occurrenceId: resolution.navigationTarget.occurrenceId,
-					comparison: { kind: "revision", revisionId: resolution.revision.id },
-				}, origin);
+				await ports.navigation.navigate(
+					{
+						view: "comparison",
+						occurrenceId: resolution.navigationTarget.occurrenceId,
+						comparison: { kind: "revision", revisionId: resolution.revision.id },
+					},
+					origin,
+				);
 				return;
 			}
 			const target = navigationUiState(resolution.navigationTarget);
-			await ports.navigation.navigate({
-				view: "outline",
-				occurrenceId: target.selectedOccurrenceId,
-				expandedIds: target.temporaryExpandedOccurrenceIds,
-			}, origin);
+			await ports.navigation.navigate(
+				{
+					view: "outline",
+					occurrenceId: target.selectedOccurrenceId,
+					expandedIds: target.temporaryExpandedOccurrenceIds,
+				},
+				origin,
+			);
 		} catch (cause) {
 			internalReferenceNotice = ports.errorMessage(cause);
 		}
@@ -167,10 +174,12 @@ export function createEditorController(ports: EditorControllerPorts) {
 			return workingCopySaveStatuses;
 		},
 		get workingCopySaveStatus() {
-			return workingCopySaveStatuses.find((status) => status.phase === "failed") ??
+			return (
+				workingCopySaveStatuses.find((status) => status.phase === "failed") ??
 				workingCopySaveStatuses.find((status) => status.phase === "saving") ??
 				workingCopySaveStatuses.find((status) => status.phase === "unsaved") ??
-				workingCopySaveStatuses[0];
+				workingCopySaveStatuses[0]
+			);
 		},
 		get internalReferenceCompletion() {
 			return completion.internalReferenceCompletion;

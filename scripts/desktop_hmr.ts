@@ -46,14 +46,15 @@ try {
 }
 
 function inspectorArgs(): string[] {
-	const supported = Deno.args.filter((arg) =>
-		arg === "--inspect" ||
-		arg.startsWith("--inspect=") ||
-		arg === "--inspect-wait" ||
-		arg.startsWith("--inspect-wait=") ||
-		arg === "--inspect-brk" ||
-		arg.startsWith("--inspect-brk=") ||
-		arg.startsWith("--inspect-renderer=")
+	const supported = Deno.args.filter(
+		(arg) =>
+			arg === "--inspect" ||
+			arg.startsWith("--inspect=") ||
+			arg === "--inspect-wait" ||
+			arg.startsWith("--inspect-wait=") ||
+			arg === "--inspect-brk" ||
+			arg.startsWith("--inspect-brk=") ||
+			arg.startsWith("--inspect-renderer="),
 	);
 	const unsupported = Deno.args.filter((arg) => !supported.includes(arg));
 	if (unsupported.length > 0) {

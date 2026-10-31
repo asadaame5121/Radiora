@@ -60,7 +60,7 @@ function createController(overrides?: {
 		requestFocus: vi.fn(),
 		findTextarea: overrides?.findTextarea ?? vi.fn().mockReturnValue(null),
 		reportError: vi.fn(),
-		errorMessage: (cause: unknown) => cause instanceof Error ? cause.message : String(cause),
+		errorMessage: (cause: unknown) => (cause instanceof Error ? cause.message : String(cause)),
 		persistSnapshotCache: vi.fn(),
 		relationTypeNames: overrides?.relationTypeNames,
 		isSymmetricRelationType: overrides?.isSymmetricRelationType,
@@ -90,9 +90,11 @@ if (typeof globalThis.InputEvent === "undefined") {
 		MockInputEvent;
 }
 
-function mockKeyboardEvent(
-	init: { key: string; shiftKey?: boolean; isComposing?: boolean },
-): KeyboardEvent {
+function mockKeyboardEvent(init: {
+	key: string;
+	shiftKey?: boolean;
+	isComposing?: boolean;
+}): KeyboardEvent {
 	return {
 		key: init.key,
 		shiftKey: init.shiftKey ?? false,
@@ -152,7 +154,7 @@ describe("editor controller", () => {
 
 	test("cancel ignores a late internal-reference response", async () => {
 		let resolve!: (candidates: []) => void;
-		const pending = new Promise<[]>((done) => resolve = done);
+		const pending = new Promise<[]>((done) => (resolve = done));
 		const { controller } = createController({
 			api: { listInternalReferenceCompletions: vi.fn().mockReturnValue(pending) },
 		});
@@ -304,9 +306,7 @@ describe("editor controller", () => {
 				stashItemIds: [],
 			};
 			const cause = new Error("disk full");
-			const updateItemText = vi.fn()
-				.mockRejectedValueOnce(cause)
-				.mockResolvedValueOnce(undefined);
+			const updateItemText = vi.fn().mockRejectedValueOnce(cause).mockResolvedValueOnce(undefined);
 			const { controller, api } = createController({ snapshot, api: { updateItemText } });
 			controller.updateLocalText("item-1", mockTextarea("unsaved latest text"));
 
@@ -324,7 +324,7 @@ describe("editor controller", () => {
 		test("selection change ignores a late candidate response", async () => {
 			let selectedId = "item-1";
 			let resolve!: (candidates: []) => void;
-			const pending = new Promise<[]>((done) => resolve = done);
+			const pending = new Promise<[]>((done) => (resolve = done));
 			const { controller } = createController({
 				api: { listInternalReferenceCompletions: vi.fn().mockReturnValue(pending) },
 				ports: { getSelectedId: () => selectedId },
@@ -506,8 +506,8 @@ describe("editor controller", () => {
 		test("commitInlineLink does not restore focus after selection changes during reload", async () => {
 			let selectedId = "item-1";
 			let finishReload!: () => void;
-			const reload = vi.fn(() =>
-				new Promise<boolean>((resolve) => finishReload = () => resolve(true))
+			const reload = vi.fn(
+				() => new Promise<boolean>((resolve) => (finishReload = () => resolve(true))),
 			);
 			const item = {
 				id: "item-1",
@@ -545,54 +545,54 @@ describe("editor controller", () => {
 			expect(ports.requestFocus).not.toHaveBeenCalled();
 		});
 
-		test.each(["cancel", "selection change"])(
-			"%s during link creation finishes the confirmed link without stealing focus",
-			async (change) => {
-				let selectedId = "item-1";
-				let resolve!: () => void;
-				const pending = new Promise<void>((done) => resolve = done);
-				const textarea = mockTextarea("@Target");
-				const item = {
-					id: "item-1",
-					workId: "work-self",
-					text: "@Target",
-					parentId: null,
-					orderKey: 0,
-					collapsed: false,
-					revisionSelector: { mode: "branch" as const, branchId: "b-1" },
-				};
-				const { controller, ports, api } = createController({
-					snapshot: { items: [item], links: [], knots: [], stashItemIds: [] },
-					findTextarea: () => textarea,
-					api: { createLink: vi.fn().mockReturnValue(pending) },
-					ports: { getSelectedId: () => selectedId },
-				});
-				await controller.updateInlineLinkCompletion("item-1", textarea);
-				controller.selectInlineLinkCandidate("item-1", {
-					scope: "work",
-					id: "work-target",
-					workId: "work-target",
-					displayName: "Target",
-					scopeLabel: "Work",
-					shortId: "target",
-					canonicalMarkdown: "[Target](radiora://work/work-target)",
-				});
-				const commit = controller.commitInlineLink("item-1");
-				if (change === "cancel") controller.cancelInlineLinkCompletion();
-				else {
-					selectedId = "item-2";
-					controller.clearCompletions();
-				}
-				resolve();
-				await commit;
+		test.each([
+			"cancel",
+			"selection change",
+		])("%s during link creation finishes the confirmed link without stealing focus", async (change) => {
+			let selectedId = "item-1";
+			let resolve!: () => void;
+			const pending = new Promise<void>((done) => (resolve = done));
+			const textarea = mockTextarea("@Target");
+			const item = {
+				id: "item-1",
+				workId: "work-self",
+				text: "@Target",
+				parentId: null,
+				orderKey: 0,
+				collapsed: false,
+				revisionSelector: { mode: "branch" as const, branchId: "b-1" },
+			};
+			const { controller, ports, api } = createController({
+				snapshot: { items: [item], links: [], knots: [], stashItemIds: [] },
+				findTextarea: () => textarea,
+				api: { createLink: vi.fn().mockReturnValue(pending) },
+				ports: { getSelectedId: () => selectedId },
+			});
+			await controller.updateInlineLinkCompletion("item-1", textarea);
+			controller.selectInlineLinkCandidate("item-1", {
+				scope: "work",
+				id: "work-target",
+				workId: "work-target",
+				displayName: "Target",
+				scopeLabel: "Work",
+				shortId: "target",
+				canonicalMarkdown: "[Target](radiora://work/work-target)",
+			});
+			const commit = controller.commitInlineLink("item-1");
+			if (change === "cancel") controller.cancelInlineLinkCompletion();
+			else {
+				selectedId = "item-2";
+				controller.clearCompletions();
+			}
+			resolve();
+			await commit;
 
-				expect(api.createLink).toHaveBeenCalledTimes(1);
-				expect(textarea.value).toBe("");
-				expect(textarea.setRangeText).toHaveBeenCalledWith("", 0, 7, "preserve");
-				expect(ports.reload).toHaveBeenCalledWith();
-				expect(ports.requestFocus).not.toHaveBeenCalled();
-			},
-		);
+			expect(api.createLink).toHaveBeenCalledTimes(1);
+			expect(textarea.value).toBe("");
+			expect(textarea.setRangeText).toHaveBeenCalledWith("", 0, 7, "preserve");
+			expect(ports.reload).toHaveBeenCalledWith();
+			expect(ports.requestFocus).not.toHaveBeenCalled();
+		});
 
 		test("commitInlineLink rejects linking node to itself", async () => {
 			const item = {
@@ -780,11 +780,14 @@ describe("editor controller", () => {
 				expect.objectContaining({ occurrenceId: resolution.navigationTarget.occurrenceId }),
 				0,
 			);
-			expect(ports.navigation.navigate).toHaveBeenCalledWith({
-				view: "comparison",
-				occurrenceId: "occ-target",
-				comparison: { kind: "revision", revisionId: "rev-1" },
-			}, 0);
+			expect(ports.navigation.navigate).toHaveBeenCalledWith(
+				{
+					view: "comparison",
+					occurrenceId: "occ-target",
+					comparison: { kind: "revision", revisionId: "rev-1" },
+				},
+				0,
+			);
 		});
 
 		test("openEditorInternalReference parses radiora URL", async () => {
@@ -843,9 +846,7 @@ describe("editor controller", () => {
 				source: { scope: "work" as const, workId: "w-new" },
 				target: { scope: "work" as const, workId: "w-target-2" },
 			};
-			const listFn = vi.fn()
-				.mockReturnValueOnce(firstPromise)
-				.mockResolvedValueOnce([backlink2]);
+			const listFn = vi.fn().mockReturnValueOnce(firstPromise).mockResolvedValueOnce([backlink2]);
 
 			const { controller } = createController({
 				api: {
@@ -896,19 +897,24 @@ describe("editor controller", () => {
 		test("openInternalReference handles unresolved states and errors", async () => {
 			const { controller } = createController({
 				api: {
-					resolveInternalReferences: vi.fn()
+					resolveInternalReferences: vi
+						.fn()
 						.mockResolvedValueOnce([]) // empty
-						.mockResolvedValueOnce([{
-							status: "missing",
-							reason: "見つかりません",
-							reference: { scope: "work", id: "w-1", range: { start: 0, end: 5 } },
-						}])
-						.mockResolvedValueOnce([{
-							status: "resolved",
-							reference: { scope: "revision", id: "rev-1", range: { start: 0, end: 5 } },
-							revision: { id: "rev-1" },
-							navigationTarget: { kind: "work", workId: "w-1", fellBack: true },
-						}])
+						.mockResolvedValueOnce([
+							{
+								status: "missing",
+								reason: "見つかりません",
+								reference: { scope: "work", id: "w-1", range: { start: 0, end: 5 } },
+							},
+						])
+						.mockResolvedValueOnce([
+							{
+								status: "resolved",
+								reference: { scope: "revision", id: "rev-1", range: { start: 0, end: 5 } },
+								revision: { id: "rev-1" },
+								navigationTarget: { kind: "work", workId: "w-1", fellBack: true },
+							},
+						])
 						.mockRejectedValueOnce(new Error("Network fail")),
 				},
 			});

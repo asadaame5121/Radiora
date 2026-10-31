@@ -26,8 +26,9 @@ export function rootId(item: OutlineItem, byId: ReadonlyMap<string, OutlineItem>
 }
 
 export function isReservedTagAlias(alias: SearchAlias): boolean {
-	return alias.canonical.startsWith("#") &&
-		alias.variants.every((variant) => variant.startsWith("#"));
+	return (
+		alias.canonical.startsWith("#") && alias.variants.every((variant) => variant.startsWith("#"))
+	);
 }
 
 export function ancestorsOf(item: OutlineItem, byId: ReadonlyMap<string, OutlineItem>): string[] {

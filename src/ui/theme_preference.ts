@@ -53,10 +53,7 @@ export function resolveTheme(
 	return systemPrefersDark ? "dark" : "light";
 }
 
-export function applyThemeToDocument(
-	preference: ThemePreference,
-	doc?: Document,
-): void {
+export function applyThemeToDocument(preference: ThemePreference, doc?: Document): void {
 	const targetDoc = doc ?? (typeof document !== "undefined" ? document : null);
 	if (!targetDoc?.documentElement) return;
 

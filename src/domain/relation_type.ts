@@ -13,9 +13,7 @@ export const LINK_TYPES = [
 
 export const BuiltInRelationTypeNameSchema = v.picklist(LINK_TYPES);
 
-export type BuiltInRelationTypeName = v.InferOutput<
-	typeof BuiltInRelationTypeNameSchema
->;
+export type BuiltInRelationTypeName = v.InferOutput<typeof BuiltInRelationTypeNameSchema>;
 
 export type RelationTypeName = BuiltInRelationTypeName | (string & {});
 
@@ -24,9 +22,7 @@ export const RelationTypeDirectionSchema = v.picklist(
 	"Relation type must have direction 'directed' or 'symmetric'",
 );
 
-export type RelationTypeDirection = v.InferOutput<
-	typeof RelationTypeDirectionSchema
->;
+export type RelationTypeDirection = v.InferOutput<typeof RelationTypeDirectionSchema>;
 
 export const SYMMETRIC_LINK_TYPES = [
 	"RELATED",
@@ -42,9 +38,7 @@ export function isSymmetricLinkType(type: RelationTypeName): boolean {
 	return SYMMETRIC_LINK_TYPES.some((sym) => sym === type);
 }
 
-export type RelationTypeDefinition = v.InferOutput<
-	typeof RelationTypeDefinitionSchema
->;
+export type RelationTypeDefinition = v.InferOutput<typeof RelationTypeDefinitionSchema>;
 
 export const RELATION_TYPE_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
 
@@ -67,10 +61,7 @@ function isValidIsoDate(value: string): boolean {
 
 export const CreatedAtSchema = v.pipe(
 	v.string("Relation type createdAt must be a canonical ISO instant timestamp"),
-	v.check(
-		isValidIsoDate,
-		"Relation type createdAt must be a canonical ISO instant timestamp",
-	),
+	v.check(isValidIsoDate, "Relation type createdAt must be a canonical ISO instant timestamp"),
 );
 
 export const createdAtSchema = CreatedAtSchema;
@@ -81,22 +72,20 @@ export const RelationTypeDefinitionSchema = v.object(
 		direction: RelationTypeDirectionSchema,
 		builtIn: v.boolean("Relation type must have a boolean builtIn flag"),
 		createdAt: CreatedAtSchema,
-		advancesGeneration: v.optional(
-			v.boolean("Relation type advancesGeneration must be a boolean"),
-		),
+		advancesGeneration: v.optional(v.boolean("Relation type advancesGeneration must be a boolean")),
 	},
 	"Relation type definition must be an object",
 );
 
-export const BUILT_IN_RELATION_TYPES: readonly RelationTypeDefinition[] = LINK_TYPES.map((
-	name,
-) => ({
-	name,
-	direction: isSymmetricLinkType(name) ? "symmetric" : "directed",
-	builtIn: true,
-	createdAt: BUILT_IN_CREATED_AT,
-	advancesGeneration: name === "FROM",
-})) satisfies readonly RelationTypeDefinition[];
+export const BUILT_IN_RELATION_TYPES: readonly RelationTypeDefinition[] = LINK_TYPES.map(
+	(name) => ({
+		name,
+		direction: isSymmetricLinkType(name) ? "symmetric" : "directed",
+		builtIn: true,
+		createdAt: BUILT_IN_CREATED_AT,
+		advancesGeneration: name === "FROM",
+	}),
+) satisfies readonly RelationTypeDefinition[];
 
 export function isBuiltInRelationTypeName(name: string): boolean {
 	const normalized = name.trim().toUpperCase();
@@ -119,9 +108,7 @@ export function validateCustomRelationTypeName(
 ): RelationTypeName {
 	const normalized = normalizeRelationTypeName(value);
 	if (isBuiltInRelationTypeName(normalized)) {
-		throw new Error(
-			`Relation type name "${normalized}" conflicts with a built-in relation type`,
-		);
+		throw new Error(`Relation type name "${normalized}" conflicts with a built-in relation type`);
 	}
 	if (existingNames) {
 		for (const existing of existingNames) {
@@ -141,15 +128,11 @@ function assertBuiltInRelationDefinition(
 	advancesGeneration?: boolean,
 ): void {
 	if (!builtIn) {
-		throw new Error(
-			`Built-in relation type "${name}" must have builtIn set to true`,
-		);
+		throw new Error(`Built-in relation type "${name}" must have builtIn set to true`);
 	}
 	const expectedDirection = isSymmetricLinkType(name) ? "symmetric" : "directed";
 	if (direction !== expectedDirection) {
-		throw new Error(
-			`Built-in relation type "${name}" must have direction "${expectedDirection}"`,
-		);
+		throw new Error(`Built-in relation type "${name}" must have direction "${expectedDirection}"`);
 	}
 	if (createdAt !== BUILT_IN_CREATED_AT) {
 		throw new Error(
@@ -157,19 +140,14 @@ function assertBuiltInRelationDefinition(
 		);
 	}
 	const expectedAdvancesGeneration = name === "FROM";
-	if (
-		advancesGeneration !== undefined &&
-		advancesGeneration !== expectedAdvancesGeneration
-	) {
+	if (advancesGeneration !== undefined && advancesGeneration !== expectedAdvancesGeneration) {
 		throw new Error(
 			`Built-in relation type "${name}" must have advancesGeneration set to ${expectedAdvancesGeneration}`,
 		);
 	}
 }
 
-export function validateRelationTypeDefinition(
-	item: unknown,
-): RelationTypeDefinition {
+export function validateRelationTypeDefinition(item: unknown): RelationTypeDefinition {
 	const result = v.safeParse(RelationTypeDefinitionSchema, item);
 	if (!result.success) {
 		throw new Error(result.issues[0].message);
@@ -185,17 +163,13 @@ export function validateRelationTypeDefinition(
 			def.advancesGeneration,
 		);
 	} else if (def.builtIn) {
-		throw new Error(
-			`Custom relation type "${def.name}" must have builtIn set to false`,
-		);
+		throw new Error(`Custom relation type "${def.name}" must have builtIn set to false`);
 	}
 
 	return def;
 }
 
-export function validateRelationTypeDefinitions(
-	input: unknown,
-): RelationTypeDefinition[] {
+export function validateRelationTypeDefinitions(input: unknown): RelationTypeDefinition[] {
 	if (!Array.isArray(input)) {
 		throw new Error("Relation type definitions must be an array");
 	}
@@ -206,9 +180,7 @@ export function validateRelationTypeDefinitions(
 	for (const item of input) {
 		const def = validateRelationTypeDefinition(item);
 		if (seenNames.has(def.name)) {
-			throw new Error(
-				`Duplicate relation type definition found for "${def.name}"`,
-			);
+			throw new Error(`Duplicate relation type definition found for "${def.name}"`);
 		}
 		seenNames.add(def.name);
 		result.push(def);
@@ -225,9 +197,7 @@ export function validateRelationTypeDefinitions(
 
 export const CreateCustomRelationTypeInputSchema = v.object(
 	{
-		name: v.string(
-			"Invalid relation type input: expected object with name string and direction",
-		),
+		name: v.string("Invalid relation type input: expected object with name string and direction"),
 		direction: v.picklist(
 			["directed", "symmetric"],
 			"Invalid relation type input: expected object with name string and direction",
@@ -255,10 +225,7 @@ export function createCustomRelationTypeDefinition(
 		throw new Error(createdAtResult.issues[0].message);
 	}
 	const typed = inputResult.output;
-	const canonicalName = validateCustomRelationTypeName(
-		typed.name,
-		existingNames,
-	);
+	const canonicalName = validateCustomRelationTypeName(typed.name, existingNames);
 	const custom: RelationTypeDefinition = {
 		name: canonicalName,
 		direction: typed.direction,

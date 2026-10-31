@@ -83,8 +83,9 @@ export function createWorkController(ports: WorkControllerPorts) {
 		try {
 			if (destination === "root") {
 				const origin = ports.navigation.origin;
-				const roots = ports.getSnapshot().items
-					.filter((item) => item.parentId === null)
+				const roots = ports
+					.getSnapshot()
+					.items.filter((item) => item.parentId === null)
 					.sort((left, right) => left.orderKey - right.orderKey);
 				const created = await ports.api.createItem({
 					text,
@@ -92,7 +93,7 @@ export function createWorkController(ports: WorkControllerPorts) {
 					afterId: roots.at(-1)?.id ?? null,
 				});
 				clearInput?.();
-				if (await ports.reload() === false) return;
+				if ((await ports.reload()) === false) return;
 				await ports.navigation.navigate({ view: "outline", occurrenceId: created.id }, origin);
 			} else {
 				await ports.api.quickCapture(text);
@@ -248,8 +249,9 @@ export function createWorkController(ports: WorkControllerPorts) {
 	async function trashOccurrence(occurrenceId: string): Promise<void> {
 		const item = ports.getSnapshot().items.find((candidate) => candidate.id === occurrenceId);
 		if (!item) return;
-		const occurrenceCount =
-			ports.getSnapshot().items.filter((candidate) => candidate.workId === item.workId).length;
+		const occurrenceCount = ports
+			.getSnapshot()
+			.items.filter((candidate) => candidate.workId === item.workId).length;
 		await ports.requestConfirmation({ action: "trash", occurrenceId, occurrenceCount });
 	}
 

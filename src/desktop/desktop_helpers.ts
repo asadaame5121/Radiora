@@ -36,8 +36,7 @@ export async function findAvailablePort(): Promise<number> {
 }
 
 export function missingAssetResponse(path: string): Response {
-	const body =
-		`<!doctype html><html lang="ja"><meta charset="utf-8"><title>Radiora 起動エラー</title>
+	const body = `<!doctype html><html lang="ja"><meta charset="utf-8"><title>Radiora 起動エラー</title>
 	<style>body{font:16px system-ui;background:#111310;color:#deddd6;padding:48px;line-height:1.7}code{color:#ffb8af}</style>
 	<h1>Radioraを表示できません</h1><p>UIファイル <code>${path}</code> がbundleに含まれていません。</p>
 	<p><code>deno task desktop</code> で再ビルドしてください。</p></html>`;

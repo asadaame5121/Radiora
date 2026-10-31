@@ -23,10 +23,7 @@ Deno.test("built-in relation definitions derive completely from LINK_TYPES and i
 
 		assertEquals(def.name, linkType);
 		assertEquals(def.builtIn, true);
-		assertEquals(
-			def.direction,
-			isSymmetricLinkType(linkType) ? "symmetric" : "directed",
-		);
+		assertEquals(def.direction, isSymmetricLinkType(linkType) ? "symmetric" : "directed");
 		assertEquals(def.createdAt, "1970-01-01T00:00:00.000Z");
 	}
 });
@@ -43,10 +40,7 @@ Deno.test("normalizeRelationTypeName trims, uppercases, and accepts valid ASCII 
 	assertEquals(normalizeRelationTypeName("  custom_type  "), "CUSTOM_TYPE");
 	assertEquals(normalizeRelationTypeName("a"), "A");
 	assertEquals(normalizeRelationTypeName("A_1"), "A_1");
-	assertEquals(
-		normalizeRelationTypeName("A" + "B".repeat(63)),
-		"A" + "B".repeat(63),
-	);
+	assertEquals(normalizeRelationTypeName("A" + "B".repeat(63)), "A" + "B".repeat(63));
 });
 
 Deno.test("normalizeRelationTypeName throws on invalid names", () => {
@@ -75,16 +69,8 @@ Deno.test("normalizeRelationTypeName throws on invalid names", () => {
 
 Deno.test("validateCustomRelationTypeName rejects built-in names and collisions", () => {
 	for (const builtIn of LINK_TYPES) {
-		assertThrows(
-			() => validateCustomRelationTypeName(builtIn),
-			Error,
-			"built-in",
-		);
-		assertThrows(
-			() => validateCustomRelationTypeName(builtIn.toLowerCase()),
-			Error,
-			"built-in",
-		);
+		assertThrows(() => validateCustomRelationTypeName(builtIn), Error, "built-in");
+		assertThrows(() => validateCustomRelationTypeName(builtIn.toLowerCase()), Error, "built-in");
 	}
 
 	const existing = ["CUSTOM_ONE", "CUSTOM_TWO"];
@@ -93,10 +79,7 @@ Deno.test("validateCustomRelationTypeName rejects built-in names and collisions"
 		Error,
 		"already exists",
 	);
-	assertEquals(
-		validateCustomRelationTypeName("custom_three", existing),
-		"CUSTOM_THREE",
-	);
+	assertEquals(validateCustomRelationTypeName("custom_three", existing), "CUSTOM_THREE");
 });
 
 Deno.test("validateRelationTypeDefinitions accepts valid built-in and custom types, returning fresh objects", () => {
@@ -164,19 +147,19 @@ Deno.test("validateRelationTypeDefinitions rejects malformed, invalid, or tamper
 		{
 			label: "tampered built-in direction",
 			input: BUILT_IN_RELATION_TYPES.map((def) =>
-				def.name === "RELATED" ? { ...def, direction: "directed" } : def
+				def.name === "RELATED" ? { ...def, direction: "directed" } : def,
 			),
 		},
 		{
 			label: "tampered built-in createdAt",
 			input: BUILT_IN_RELATION_TYPES.map((def) =>
-				def.name === "RELATED" ? { ...def, createdAt: "2026-09-01T00:00:00.000Z" } : def
+				def.name === "RELATED" ? { ...def, createdAt: "2026-09-01T00:00:00.000Z" } : def,
 			),
 		},
 		{
 			label: "tampered built-in builtIn flag",
 			input: BUILT_IN_RELATION_TYPES.map((def) =>
-				def.name === "RELATED" ? { ...def, builtIn: false } : def
+				def.name === "RELATED" ? { ...def, builtIn: false } : def,
 			),
 		},
 		{
@@ -234,10 +217,7 @@ Deno.test("createCustomRelationTypeDefinition creates valid definition and rejec
 	);
 	assertThrows(
 		() =>
-			createCustomRelationTypeDefinition(
-				{ name: "EXISTING", direction: "directed" },
-				["EXISTING"],
-			),
+			createCustomRelationTypeDefinition({ name: "EXISTING", direction: "directed" }, ["EXISTING"]),
 		Error,
 		"already exists",
 	);

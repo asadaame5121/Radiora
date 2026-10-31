@@ -11,7 +11,7 @@ function setup() {
 	const focus = vi.fn();
 	vi.stubGlobal("document", {
 		querySelectorAll: () => panels,
-		querySelector: (selector: string) => selector === ".outline-panel" ? panels[0] : { focus },
+		querySelector: (selector: string) => (selector === ".outline-panel" ? panels[0] : { focus }),
 	});
 	vi.stubGlobal("window", {
 		getComputedStyle: () => ({ overflowY: "auto" }),

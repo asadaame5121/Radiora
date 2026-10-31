@@ -9,10 +9,9 @@ function setup() {
 	const commit = vi.fn((destination: { view: ViewMode; selected?: string }) => {
 		if (destination.selected) selected = destination.selected;
 	});
-	const afterCommit = vi.fn(async (
-		_prepared: { view: ViewMode; selected?: string },
-		_current: () => boolean,
-	) => undefined);
+	const afterCommit = vi.fn(
+		async (_prepared: { view: ViewMode; selected?: string }, _current: () => boolean) => undefined,
+	);
 	const navigation = new ScreenNavigationController({
 		prepare,
 		guard,
@@ -47,7 +46,7 @@ test("guard cancellation changes neither selection nor screen", async () => {
 test("an older prepared response cannot change feature state after a newer request", async () => {
 	const { navigation, prepare, commit, selected } = setup();
 	let resolve!: (value: { view: ViewMode; selected?: string }) => void;
-	prepare.mockImplementationOnce(() => new Promise((done) => resolve = done));
+	prepare.mockImplementationOnce(() => new Promise((done) => (resolve = done)));
 	const pending = navigation.navigate({ view: "comparison", selected: "old" });
 	await navigation.navigate({ view: "help" });
 	commit.mockClear();
@@ -61,7 +60,7 @@ test("an older prepared response cannot change feature state after a newer reque
 test("a newer cancelled request still invalidates an older guarded request", async () => {
 	const { navigation, guard, commit } = setup();
 	let accept!: (accepted: boolean) => void;
-	guard.mockImplementationOnce(() => new Promise((resolve) => accept = resolve));
+	guard.mockImplementationOnce(() => new Promise((resolve) => (accept = resolve)));
 	const old = navigation.navigate({ view: "comparison", selected: "old" });
 	await vi.waitFor(() => expect(guard).toHaveBeenCalledOnce());
 	guard.mockResolvedValueOnce(false);
@@ -108,7 +107,7 @@ test("post-render restoration receives a current-request check", async () => {
 test("completion of an already pending screen move expires domain receipts captured mid-flight", async () => {
 	const { navigation, prepare, commit } = setup();
 	let finish!: (destination: { view: ViewMode }) => void;
-	prepare.mockImplementationOnce(() => new Promise((resolve) => finish = resolve));
+	prepare.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
 	const moving = navigation.navigate({ view: "help" });
 	const origin = navigation.origin;
 	finish({ view: "help" });
@@ -122,7 +121,7 @@ test("pending screen covers the whole preparation and rendering lifecycle", asyn
 	const s = setup();
 	let release!: () => void;
 	s.afterCommit.mockImplementationOnce(async () => {
-		await new Promise<void>((resolve) => release = resolve);
+		await new Promise<void>((resolve) => (release = resolve));
 	});
 	const moving = s.navigation.navigate({ view: "today" });
 	expect(s.navigation.pendingView).toBe("today");

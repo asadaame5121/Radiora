@@ -4,22 +4,27 @@ function outlineRow(page: Page, id: string) {
 	return page.getByRole("treeitem").filter({ has: page.locator(`textarea[data-item-id="${id}"]`) });
 }
 
-test("empty editor displays a single placeholder without duplicate overlay on focus", async ({ page }) => {
-	const items = [{
-		id: "empty-item",
-		workId: "empty-item",
-		text: "",
-		parentId: null,
-		orderKey: 0,
-		collapsed: false,
-		revisionSelector: { mode: "branch", branchId: "empty-item" },
-		createdAt: "2026-09-05T00:00:00.000Z",
-		updatedAt: "2026-09-05T00:00:00.000Z",
-	}];
+test("empty editor displays a single placeholder without duplicate overlay on focus", async ({
+	page,
+}) => {
+	const items = [
+		{
+			id: "empty-item",
+			workId: "empty-item",
+			text: "",
+			parentId: null,
+			orderKey: 0,
+			collapsed: false,
+			revisionSelector: { mode: "branch", branchId: "empty-item" },
+			createdAt: "2026-09-05T00:00:00.000Z",
+			updatedAt: "2026-09-05T00:00:00.000Z",
+		},
+	];
 	await page.route("**/api/rpc/listOutline", (route) =>
 		route.fulfill({
 			json: { result: { items, links: [], knots: [], stashItemIds: [] } },
-		}));
+		}),
+	);
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	const row = outlineRow(page, "empty-item");
 	await expect(row).toBeVisible();

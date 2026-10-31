@@ -55,7 +55,10 @@ export class WorkMergeService {
 	private readonly now: () => string;
 	private readonly createAliasId: () => string;
 
-	constructor(private readonly store: WorkMergeStore, options: WorkMergeServiceOptions = {}) {
+	constructor(
+		private readonly store: WorkMergeStore,
+		options: WorkMergeServiceOptions = {},
+	) {
 		this.now = options.now ?? (() => new Date().toISOString());
 		this.createAliasId = options.createAliasId ?? (() => crypto.randomUUID());
 	}
@@ -83,8 +86,8 @@ export class WorkMergeService {
 			throw new Error(`Active survivor Work not found: ${survivorWorkId}`);
 		}
 		const title = (workId: string) => {
-			const main = branches.find((branch) =>
-				branch.workId === workId && branch.name === "main" && !branch.archivedAt
+			const main = branches.find(
+				(branch) => branch.workId === workId && branch.name === "main" && !branch.archivedAt,
 			);
 			const copy = copies.find((entry) => entry.workId === workId && entry.branchId === main?.id);
 			return titleFromText(copy?.text ?? "");
@@ -92,25 +95,29 @@ export class WorkMergeService {
 		const sourceTitle = title(sourceWorkId);
 		const survivorTitle = title(survivorWorkId);
 		const mergedAt = this.now();
-		const relevantAliases = aliases.filter((alias) =>
-			alias.canonical === sourceTitle || alias.canonical === survivorTitle ||
-			alias.variants.includes(sourceTitle) || alias.variants.includes(survivorTitle)
+		const relevantAliases = aliases.filter(
+			(alias) =>
+				alias.canonical === sourceTitle ||
+				alias.canonical === survivorTitle ||
+				alias.variants.includes(sourceTitle) ||
+				alias.variants.includes(survivorTitle),
 		);
 		const variants = [
 			sourceTitle,
 			...relevantAliases.flatMap((alias) => [alias.canonical, ...alias.variants]),
-		].filter((value, index, all) =>
-			value && value !== survivorTitle && all.indexOf(value) === index
+		].filter(
+			(value, index, all) => value && value !== survivorTitle && all.indexOf(value) === index,
 		);
-		const aliasAfterMerge: SearchAlias | undefined = survivorTitle && variants.length > 0
-			? {
-				id: this.createAliasId(),
-				canonical: survivorTitle,
-				variants,
-				createdAt: mergedAt,
-				updatedAt: mergedAt,
-			}
-			: undefined;
+		const aliasAfterMerge: SearchAlias | undefined =
+			survivorTitle && variants.length > 0
+				? {
+						id: this.createAliasId(),
+						canonical: survivorTitle,
+						variants,
+						createdAt: mergedAt,
+						updatedAt: mergedAt,
+					}
+				: undefined;
 		const transformedLinks = links.map((link) => transformLink(link, sourceWorkId, survivorWorkId));
 		const duplicateIds = duplicateActiveLinkIds(transformedLinks);
 		const comparison = new ComparisonService(this.store);
@@ -124,36 +131,38 @@ export class WorkMergeService {
 				source: await comparison.listWorkDocuments(sourceWorkId),
 				survivor: await comparison.listWorkDocuments(survivorWorkId),
 			},
-			occurrenceIds: occurrences.filter((entry) => entry.workId === sourceWorkId).map((entry) =>
-				entry.id
-			),
-			branchRenames: branches.filter((entry) => entry.workId === sourceWorkId).map((branch) => ({
-				branchId: branch.id,
-				from: branch.name,
-				to: `merged/${sourceWorkId}/${branch.name}`,
-			})),
-			revisionIds: revisions.filter((entry) => entry.workId === sourceWorkId).map((entry) =>
-				entry.id
-			),
-			recoverySnapshotIds: snapshots.filter((entry) => entry.workId === sourceWorkId).map(
-				(entry) => entry.id,
-			),
-			links: links.filter((link) =>
-				link.from.workId === sourceWorkId || link.to.workId === sourceWorkId
-			).map((link) => {
-				const after = transformLink(link, sourceWorkId, survivorWorkId);
-				return {
-					id: link.id,
-					type: link.type,
-					from: link.from,
-					to: link.to,
-					afterFrom: after.from,
-					afterTo: after.to,
-					willRetract: duplicateIds.has(link.id),
-				};
-			}),
-			systemRelations: relations.filter((relation) =>
-				relation.fromWorkId === sourceWorkId || relation.toWorkId === sourceWorkId
+			occurrenceIds: occurrences
+				.filter((entry) => entry.workId === sourceWorkId)
+				.map((entry) => entry.id),
+			branchRenames: branches
+				.filter((entry) => entry.workId === sourceWorkId)
+				.map((branch) => ({
+					branchId: branch.id,
+					from: branch.name,
+					to: `merged/${sourceWorkId}/${branch.name}`,
+				})),
+			revisionIds: revisions
+				.filter((entry) => entry.workId === sourceWorkId)
+				.map((entry) => entry.id),
+			recoverySnapshotIds: snapshots
+				.filter((entry) => entry.workId === sourceWorkId)
+				.map((entry) => entry.id),
+			links: links
+				.filter((link) => link.from.workId === sourceWorkId || link.to.workId === sourceWorkId)
+				.map((link) => {
+					const after = transformLink(link, sourceWorkId, survivorWorkId);
+					return {
+						id: link.id,
+						type: link.type,
+						from: link.from,
+						to: link.to,
+						afterFrom: after.from,
+						afterTo: after.to,
+						willRetract: duplicateIds.has(link.id),
+					};
+				}),
+			systemRelations: relations.filter(
+				(relation) => relation.fromWorkId === sourceWorkId || relation.toWorkId === sourceWorkId,
 			),
 			aliases: relevantAliases,
 			mergedAt,

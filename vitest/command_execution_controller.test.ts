@@ -13,10 +13,12 @@ const context: CommandContext = {
 };
 it("shares availability and drops overlapping command/menu execution; failure unlocks retry", async () => {
 	let release!: () => void;
-	const pending = new Promise<void>((resolve) => release = resolve);
-	const operation = vi.fn().mockReturnValueOnce(pending).mockRejectedValueOnce(
-		new Error("write failed"),
-	).mockResolvedValue(undefined);
+	const pending = new Promise<void>((resolve) => (release = resolve));
+	const operation = vi
+		.fn()
+		.mockReturnValueOnce(pending)
+		.mockRejectedValueOnce(new Error("write failed"))
+		.mockResolvedValue(undefined);
 	const error = vi.fn();
 	const unavailable = vi.fn();
 	const controller = new CommandExecutionController({
@@ -42,7 +44,7 @@ it("shares availability and drops overlapping command/menu execution; failure un
 });
 it("dispose rejects new work and suppresses a late error", async () => {
 	let reject!: (cause: unknown) => void;
-	const pending = new Promise<void>((_resolve, no) => reject = no);
+	const pending = new Promise<void>((_resolve, no) => (reject = no));
 	const error = vi.fn();
 	const operation = vi.fn(() => pending);
 	const controller = new CommandExecutionController({

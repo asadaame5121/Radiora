@@ -17,7 +17,8 @@ test("virtual Outline exposes logical sibling counts, positions and levels", asy
 	await page.route("**/api/rpc/listOutline", (route) =>
 		route.fulfill({
 			json: { result: { items, links: [], knots: [], stashItemIds: [] } },
-		}));
+		}),
+	);
 	await page.goto("/");
 	const root = page.locator('[data-outline-row-id="aria-0"]');
 	await expect(root).toHaveAttribute("aria-setsize", "998");
@@ -28,12 +29,9 @@ test("virtual Outline exposes logical sibling counts, positions and levels", asy
 	await expect(child).toHaveAttribute("aria-posinset", "2");
 	await expect(child).toHaveAttribute("aria-level", "2");
 	expect(await page.getByRole("treeitem").count()).toBeLessThan(100);
-	const result = await new AxeBuilder({ page }).withTags([
-		"wcag2a",
-		"wcag2aa",
-		"wcag21a",
-		"wcag21aa",
-	]).analyze();
+	const result = await new AxeBuilder({ page })
+		.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
+		.analyze();
 	expect(result.violations).toEqual([]);
 	await page.route("**/api/rpc/setCollapsed", (route) => route.fulfill({ json: { result: null } }));
 	await page.locator('[data-outline-row-id="aria-1"] .markdown-editor-host').dispatchEvent("click");

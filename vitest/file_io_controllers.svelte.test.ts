@@ -200,10 +200,11 @@ describe.each(["markdown", "opml", "json"] as const)("%s export failures", (kind
 		let release: () => void = () => {
 			throw new Error("Gate not initialized");
 		};
-		f.flush.mockImplementation(() =>
-			new Promise<void>((resolve) => {
-				release = resolve;
-			})
+		f.flush.mockImplementation(
+			() =>
+				new Promise<void>((resolve) => {
+					release = resolve;
+				}),
 		);
 		const pending = f[kind].export();
 		f[kind].dispose();
@@ -251,14 +252,12 @@ describe.each(["opml", "json"] as const)("%s import/restore failures", (kind) =>
 		expect(f[kind].notice).toBe("");
 		expect(f.reportError).not.toHaveBeenCalled();
 	});
-	it.each(
-		[
-			["export", false],
-			["export", true],
-			["dispose", false],
-			["dispose", true],
-		] as const,
-	)("retired reload after %s suppresses late publication (failure=%s)", async (action, failed) => {
+	it.each([
+		["export", false],
+		["export", true],
+		["dispose", false],
+		["dispose", true],
+	] as const)("retired reload after %s suppresses late publication (failure=%s)", async (action, failed) => {
 		const f = fixture();
 		const old = Promise.withResolvers<OutlineSnapshot>();
 		const treeScope = { result: Promise.resolve(), publish: vi.fn(), cancel: vi.fn() };
@@ -310,13 +309,15 @@ describe.each(["opml", "json"] as const)("%s import/restore failures", (kind) =>
 				await gate;
 				return { importedCount: 9, rootOccurrenceIds: [] };
 			});
-		} else {f.api.restoreJsonBackup.mockImplementation(async () => {
+		} else {
+			f.api.restoreJsonBackup.mockImplementation(async () => {
 				await gate;
 				return { workCount: 9, occurrenceCount: 9, revisionCount: 9, recoverySnapshotCount: 0 };
-			});}
+			});
+		}
 		const pending = run(f);
 		await vi.waitFor(() =>
-			expect(kind === "opml" ? f.api.importOpml : f.api.restoreJsonBackup).toHaveBeenCalled()
+			expect(kind === "opml" ? f.api.importOpml : f.api.restoreJsonBackup).toHaveBeenCalled(),
 		);
 		await f[kind].export();
 		const notice = f[kind].notice;

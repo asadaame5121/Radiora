@@ -4,12 +4,7 @@ import { splitTagInput, TagController } from "../src/ui/tag_controller.svelte.ts
 
 describe("splitTagInput", () => {
 	it("splits tags by commas, Japanese commas, or spaces and trims", () => {
-		expect(splitTagInput("tag1, tag2、 tag3   tag4")).toEqual([
-			"tag1",
-			"tag2",
-			"tag3",
-			"tag4",
-		]);
+		expect(splitTagInput("tag1, tag2、 tag3   tag4")).toEqual(["tag1", "tag2", "tag3", "tag4"]);
 	});
 
 	it("returns empty array for empty string", () => {
@@ -21,9 +16,7 @@ describe("TagController", () => {
 	const mockScopes: ScopedTagSet[] = [
 		{ scope: { workId: "w1", branchId: "b1" }, tags: ["tag1", "common"] },
 	];
-	const mockAliases: TagAlias[] = [
-		{ id: "a1", canonical: "tag1", alias: "alias1" },
-	];
+	const mockAliases: TagAlias[] = [{ id: "a1", canonical: "tag1", alias: "alias1" }];
 
 	function createController(overrides?: {
 		listScopedTags?: () => Promise<ScopedTagSet[]>;

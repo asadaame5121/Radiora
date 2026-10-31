@@ -8,16 +8,16 @@ export function reconcileOutlineKnots(
 	restored = false,
 ): void {
 	const activeWorkIds = new Set(
-		state.works.filter((work) => !work.deletedAt && !work.mergedIntoWorkId)
-			.map((work) => work.id),
+		state.works.filter((work) => !work.deletedAt && !work.mergedIntoWorkId).map((work) => work.id),
 	);
-	const items = state.occurrences.filter((occurrence) => activeWorkIds.has(occurrence.workId))
+	const items = state.occurrences
+		.filter((occurrence) => activeWorkIds.has(occurrence.workId))
 		.map((occurrence) => ({ id: occurrence.id, parentId: occurrence.parentOccurrenceId }));
 	const previousByCycle = new Map(
 		state.knots.map((knot) => [JSON.stringify([...knot.cycleIds].sort()), knot]),
 	);
 	const restoredAt = state.works.reduce(
-		(latest, work) => work.updatedAt > latest ? work.updatedAt : latest,
+		(latest, work) => (work.updatedAt > latest ? work.updatedAt : latest),
 		"1970-01-01T00:00:00.000Z",
 	);
 	state.knots = detectOutlineKnots(items, state.knots).map((knot) => {

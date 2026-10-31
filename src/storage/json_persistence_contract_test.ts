@@ -133,10 +133,14 @@ const rollbackMutations: Record<string, (store: JsonGraphStore) => Promise<void>
 		return store.createUnplacedWork(work, branch, workingCopy);
 	},
 	historicalTime: (store) =>
-		store.setWorkHistoricalTime("one", {
-			kind: "point",
-			date: { precision: "year", year: 1604, approximate: false },
-		}, NOW),
+		store.setWorkHistoricalTime(
+			"one",
+			{
+				kind: "point",
+				date: { precision: "year", year: 1604, approximate: false },
+			},
+			NOW,
+		),
 	merge: (store) => store.mergeWorks({ sourceWorkId: "two", survivorWorkId: "one", mergedAt: NOW }),
 	recoveryRestore: (store) =>
 		store.restoreRecoverySnapshot("snapshot", recovery("before", "one"), NOW),
@@ -198,10 +202,7 @@ Deno.test("JSON ordinary save retains mutated memory on direct-write failure", a
 		const disk = await Deno.readTextFile(path);
 		await Deno.rename(path, `${directory}/saved.json`);
 		await Deno.mkdir(path);
-		await assertRejects(
-			() => store.updateWorkingCopy("one", "unsaved", NOW),
-			Error,
-		);
+		await assertRejects(() => store.updateWorkingCopy("one", "unsaved", NOW), Error);
 		assertEquals((await store.listWorkingCopies("one"))[0].text, "unsaved");
 		assertEquals(await Deno.readTextFile(`${directory}/saved.json`), disk);
 		assertEquals(Array.from(Deno.readDirSync(directory), (entry) => entry.name).sort(), [
@@ -248,7 +249,7 @@ for (const useUrl of [false, true]) {
 				const store = new JsonGraphStore(useUrl ? url : path, operations);
 				await store.initialize();
 				const thrown = await assertRejects(() =>
-					store.restoreGraphState(replacement.state.capture())
+					store.restoreGraphState(replacement.state.capture()),
 				);
 				assertStrictEquals(thrown, error);
 				assertEquals(stateAtCleanup, before);
@@ -294,11 +295,14 @@ for (const useUrl of [false, true]) {
 				store.restoreGraphState({
 					...expected,
 					works: [...expected.works, expected.works[0]],
-				})
+				}),
 			);
 			assertEquals(await store.exportGraphState(), expected);
 			assertEquals(await Deno.readTextFile(path), disk);
-			assertEquals(Array.from(Deno.readDirSync(directory), (entry) => entry.name), ["graph.json"]);
+			assertEquals(
+				Array.from(Deno.readDirSync(directory), (entry) => entry.name),
+				["graph.json"],
+			);
 		} finally {
 			await Deno.remove(directory, { recursive: true });
 		}
@@ -421,7 +425,10 @@ Deno.test("JsonGraphStore batch rolls back and cleans temporary file on temp wri
 		);
 
 		assertEquals(await store.exportGraphState(), beforeState);
-		assertEquals(Array.from(Deno.readDirSync(directory), (entry) => entry.name), ["graph.json"]);
+		assertEquals(
+			Array.from(Deno.readDirSync(directory), (entry) => entry.name),
+			["graph.json"],
+		);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -456,7 +463,10 @@ Deno.test("JsonGraphStore batch rolls back and cleans temporary file on rename f
 		);
 
 		assertEquals(await store.exportGraphState(), beforeState);
-		assertEquals(Array.from(Deno.readDirSync(directory), (entry) => entry.name), ["graph.json"]);
+		assertEquals(
+			Array.from(Deno.readDirSync(directory), (entry) => entry.name),
+			["graph.json"],
+		);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -518,11 +528,11 @@ Deno.test("JsonGraphStore batch serializes concurrent external updates", async (
 		await entered.promise;
 
 		let externalSettled = false;
-		const externalPromise = store.updateWorkingCopy("two", "external concurrent text", NOW).then(
-			() => {
+		const externalPromise = store
+			.updateWorkingCopy("two", "external concurrent text", NOW)
+			.then(() => {
 				externalSettled = true;
-			},
-		);
+			});
 
 		await new Promise((resolve) => setTimeout(resolve, EXTERNAL_MUTATION_WAIT_MS));
 		assertEquals(externalSettled, false);

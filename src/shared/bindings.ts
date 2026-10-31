@@ -187,9 +187,11 @@ export interface RadioraBindings {
 	renameTag(from: string, to: string): Promise<TagAlias>;
 	mergeTags(sources: string[], target: string): Promise<TagAlias>;
 	listSearchAliases(): Promise<SearchAlias[]>;
-	saveSearchAlias(
-		input: { id?: string; canonical: string; variants: string[] },
-	): Promise<SearchAlias>;
+	saveSearchAlias(input: {
+		id?: string;
+		canonical: string;
+		variants: string[];
+	}): Promise<SearchAlias>;
 	deleteSearchAlias(id: string): Promise<void>;
 	listEmergenceSuggestions(contextItemId: string, limit?: number): Promise<EmergenceSuggestion[]>;
 	resolveEmergenceSuggestion(id: string, action: EmergenceAction, reason?: string): Promise<void>;

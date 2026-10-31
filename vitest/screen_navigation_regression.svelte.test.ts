@@ -61,7 +61,7 @@ describe("Deterministic regressions discovered through PBT and review audit", ()
 
 		// Wait for longform_save task to appear
 		await vi.waitFor(() =>
-			expect(harness.registry.pendingTasks.some((t) => t.kind === "longform_save")).toBe(true)
+			expect(harness.registry.pendingTasks.some((t) => t.kind === "longform_save")).toBe(true),
 		);
 		const saveTask = harness.registry.pendingTasks.find((t) => t.kind === "longform_save");
 		if (!saveTask) throw new Error("saveTask not found");
@@ -159,10 +159,7 @@ describe("Deterministic regressions discovered through PBT and review audit", ()
 		// User immediately requests help navigation, superseding auto navigation
 		const helpNav = harness.workspace.navigate({ view: "help" });
 
-		await Promise.all([
-			drainUntilSettled(autoNav, harness),
-			drainUntilSettled(helpNav, harness),
-		]);
+		await Promise.all([drainUntilSettled(autoNav, harness), drainUntilSettled(helpNav, harness)]);
 
 		// Navigation moved to help
 		expect(harness.workspace.view).toBe("help");
@@ -176,19 +173,19 @@ it("saves manuscript input entered during the final snapshot read before publish
 	const h = createNavigationHarness();
 	const navigating = h.workspace.navigate({ view: "outline", occurrenceId: "child-1" });
 	await vi.waitFor(() =>
-		expect(h.registry.pendingTasks.some((t) => t.kind === "read_outline")).toBe(true)
+		expect(h.registry.pendingTasks.some((t) => t.kind === "read_outline")).toBe(true),
 	);
 	const firstRead = h.registry.pendingTasks.find((t) => t.kind === "read_outline");
 	if (!firstRead) throw new Error("first read missing");
 	firstRead.resolve(structuredClone(h.state.getSnapshot()));
 	await vi.waitFor(() =>
-		expect(h.registry.pendingTasks.some((t) => t.kind === "screen_prepare")).toBe(true)
+		expect(h.registry.pendingTasks.some((t) => t.kind === "screen_prepare")).toBe(true),
 	);
 	const screen = h.registry.pendingTasks.find((t) => t.kind === "screen_prepare");
 	if (!screen) throw new Error("screen preparation missing");
 	screen.resolve(() => undefined);
 	await vi.waitFor(() =>
-		expect(h.registry.pendingTasks.some((t) => t.kind === "read_outline")).toBe(true)
+		expect(h.registry.pendingTasks.some((t) => t.kind === "read_outline")).toBe(true),
 	);
 	const finalRead = h.registry.pendingTasks.find((t) => t.kind === "read_outline");
 	if (!finalRead) throw new Error("final read missing");

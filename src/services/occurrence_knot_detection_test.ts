@@ -85,7 +85,7 @@ function legacyMarkRecursivePlacementsOracle(items: OutlineItem[]): OutlineItem[
 
 	if (recursiveItemIds.size === 0) return items;
 	return items.map((item) =>
-		recursiveItemIds.has(item.id) ? { ...item, referenceStub: true } : item
+		recursiveItemIds.has(item.id) ? { ...item, referenceStub: true } : item,
 	);
 }
 
@@ -124,9 +124,7 @@ Deno.test("markRecursivePlacements matches legacy oracle across small cycle and 
 		},
 		{
 			name: "self-cycle (A -> A)",
-			items: [
-				makeTestItem("c0", "w0", "c0"),
-			],
+			items: [makeTestItem("c0", "w0", "c0")],
 		},
 		{
 			name: "cycle of 3 with all distinct works (A -> B -> C -> A)",

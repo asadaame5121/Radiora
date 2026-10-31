@@ -102,16 +102,19 @@ Deno.test("historical timeline lays out ranges, unknown endpoints, collisions, a
 	const unknownBoth = item("unknown-both", { kind: "period", start: null, end: null });
 	const other = item("other", pointYear(1867));
 	const result = layoutHistoricalTimeline(
-		snapshot([dated, periodItem, unknownStart, unknownBoth, other], [
-			link("dated", "other"),
-			link("dated", "unknown-both"),
-		]),
+		snapshot(
+			[dated, periodItem, unknownStart, unknownBoth, other],
+			[link("dated", "other"), link("dated", "unknown-both")],
+		),
 		(day) => day,
 		0,
 		100_000,
 	);
 
-	assertEquals(result.undated.map((entry) => entry.id), ["unknown-both"]);
+	assertEquals(
+		result.undated.map((entry) => entry.id),
+		["unknown-both"],
+	);
 	const byId = new Map(result.nodes.map((node) => [node.item.id, node]));
 	const periodNode = byId.get("period");
 	const unknownNode = byId.get("unknown-start");
@@ -123,7 +126,10 @@ Deno.test("historical timeline lays out ranges, unknown endpoints, collisions, a
 	assertEquals(unknownNode.start, 0);
 	assertEquals(unknownNode.anchor, unknownNode.end);
 	assertNotEquals(byId.get("dated")?.y, byId.get("period")?.y);
-	assertEquals(result.edges.map((edge) => edge.id), ["dated-other"]);
+	assertEquals(
+		result.edges.map((edge) => edge.id),
+		["dated-other"],
+	);
 	assertEquals(result.edges[0]?.source.item.id, "dated");
 	assertEquals(result.edges[0]?.target.item.id, "other");
 });
@@ -172,7 +178,10 @@ Deno.test("historical timeline ticks stay inside the supported calendar range", 
 	assertEquals(historicalTimelineTicks([endExclusive, endExclusive + 2], 8), []);
 
 	const lastDay = historicalTimelineTicks([endExclusive - 1, endExclusive], 8);
-	assertEquals(lastDay.map((tick) => tick.value), [endExclusive - 1]);
+	assertEquals(
+		lastDay.map((tick) => tick.value),
+		[endExclusive - 1],
+	);
 
 	const lowerMonthBoundary = historicalTimelineTicks(
 		[firstDay, historicalDay(-MAX_HISTORICAL_YEAR + 1)],
@@ -191,5 +200,8 @@ Deno.test("all unset historical values use the outside-axis domain", () => {
 	assertEquals(historicalTimelineDomain(items), [historicalDay(1), historicalDay(2)]);
 	const result = layoutHistoricalTimeline(snapshot(items), () => 0, 0, 100);
 	assertEquals(result.nodes, []);
-	assertEquals(result.undated.map((entry) => entry.id), ["one", "two"]);
+	assertEquals(
+		result.undated.map((entry) => entry.id),
+		["one", "two"],
+	);
 });

@@ -5,7 +5,7 @@ import { OUTLINE_PIXEL_TOLERANCE } from "./virtual_outline_viewport.ts";
 
 export function outlineEditorId(target: EventTarget | null): string | null {
 	return target instanceof Element
-		? target.closest<HTMLTextAreaElement>("textarea[data-item-id]")?.dataset.itemId ?? null
+		? (target.closest<HTMLTextAreaElement>("textarea[data-item-id]")?.dataset.itemId ?? null)
 		: null;
 }
 
@@ -21,15 +21,18 @@ export class OutlineVirtualViewAdapter extends OutlineScrollAdapter {
 	connectViewport(rows: HTMLElement, viewport: OutlineVirtualViewportController): () => void {
 		this.rows = rows;
 		this.viewport = viewport;
-		this.observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver((entries) => {
-			if (this.rows !== rows) return;
-			for (const entry of entries) {
-				const id = this.ids.get(entry.target);
-				const height = entry.borderBoxSize?.[0]?.blockSize ??
-					entry.target.getBoundingClientRect().height;
-				if (id && viewport.measureRow(id, height)) this.scheduleAnchorAdjustment();
-			}
-		});
+		this.observer =
+			typeof ResizeObserver === "undefined"
+				? null
+				: new ResizeObserver((entries) => {
+						if (this.rows !== rows) return;
+						for (const entry of entries) {
+							const id = this.ids.get(entry.target);
+							const height =
+								entry.borderBoxSize?.[0]?.blockSize ?? entry.target.getBoundingClientRect().height;
+							if (id && viewport.measureRow(id, height)) this.scheduleAnchorAdjustment();
+						}
+					});
 		for (const element of this.elements.values()) this.observer?.observe(element);
 		const stop = this.observeRows(rows, (metrics) => {
 			viewport.observeScroll(metrics);

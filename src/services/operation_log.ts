@@ -64,8 +64,8 @@ export class OperationLog {
 			sessionId: this.#sessionId,
 			event,
 			outcome,
-			durationMs: Math.round(Math.max(0, durationMs) * DURATION_DECIMAL_PLACES) /
-				DURATION_DECIMAL_PLACES,
+			durationMs:
+				Math.round(Math.max(0, durationMs) * DURATION_DECIMAL_PLACES) / DURATION_DECIMAL_PLACES,
 			...(outcome === "error" && errorType ? { errorType: safeErrorType(errorType) } : {}),
 		};
 		const day = timestamp.slice(0, 10);
@@ -83,9 +83,9 @@ export class OperationLog {
 
 	exportJsonl(): string {
 		prune(this.#dir, operationFile, this.#now().getTime());
-		return entries(this.#dir, operationFile).map((file) =>
-			Deno.readTextFileSync(`${this.#dir}/${file.name}`)
-		).join("");
+		return entries(this.#dir, operationFile)
+			.map((file) => Deno.readTextFileSync(`${this.#dir}/${file.name}`))
+			.join("");
 	}
 
 	summary(): OperationSummary {
@@ -121,9 +121,9 @@ export class OperationLog {
 			failed,
 			averageDurationMs: count ? Math.round(duration / count) : 0,
 			byDay: [...byDay].map(([day, count]) => ({ day, count })),
-			byEvent: [...byEvent].map(([event, count]) => ({ event, count })).sort((a, b) =>
-				b.count - a.count
-			),
+			byEvent: [...byEvent]
+				.map(([event, count]) => ({ event, count }))
+				.sort((a, b) => b.count - a.count),
 			recent: recent.reverse(),
 		};
 	}
@@ -144,11 +144,18 @@ function safeErrorType(value: string): string {
 
 function isOperationRecord(value: unknown): value is OperationRecord {
 	if (typeof value !== "object" || value === null) return false;
-	return "timestamp" in value && typeof value.timestamp === "string" &&
-		"sessionId" in value && typeof value.sessionId === "string" &&
-		"event" in value && typeof value.event === "string" &&
-		"outcome" in value && (value.outcome === "ok" || value.outcome === "error") &&
-		"durationMs" in value && typeof value.durationMs === "number";
+	return (
+		"timestamp" in value &&
+		typeof value.timestamp === "string" &&
+		"sessionId" in value &&
+		typeof value.sessionId === "string" &&
+		"event" in value &&
+		typeof value.event === "string" &&
+		"outcome" in value &&
+		(value.outcome === "ok" || value.outcome === "error") &&
+		"durationMs" in value &&
+		typeof value.durationMs === "number"
+	);
 }
 
 export class DiagnosticLogFiles {

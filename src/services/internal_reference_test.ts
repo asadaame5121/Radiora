@@ -27,11 +27,7 @@ Deno.test("[[ completion trigger tracks and replaces the caret range", () => {
 	const trigger = findInternalReferenceTrigger(source, 10, 11);
 	assertEquals(trigger, { query: "検", range: { start: 7, end: 11 } });
 	assertEquals(
-		replaceInternalReferenceTrigger(
-			source,
-			trigger!.range,
-			"[検討](radiora://work/work-1)",
-		),
+		replaceInternalReferenceTrigger(source, trigger!.range, "[検討](radiora://work/work-1)"),
 		{
 			text: "before [検討](radiora://work/work-1)after",
 			caretOffset: 34,

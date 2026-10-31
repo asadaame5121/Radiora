@@ -12,14 +12,17 @@ Deno.test("JSON backup exports every graph entity collection without mutating th
 	});
 	if (item.revisionSelector.mode !== "branch") throw new Error("expected branch");
 	const revisionId = crypto.randomUUID();
-	await store.createRevision({
-		id: revisionId,
-		workId: item.workId,
-		text: item.text,
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: "2026-07-30T00:00:00.000Z",
-	}, item.revisionSelector.branchId);
+	await store.createRevision(
+		{
+			id: revisionId,
+			workId: item.workId,
+			text: item.text,
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: "2026-07-30T00:00:00.000Z",
+		},
+		item.revisionSelector.branchId,
+	);
 	await store.createRecoverySnapshot({
 		id: crypto.randomUUID(),
 		workId: item.workId,
@@ -44,9 +47,7 @@ Deno.test("JSON backup exports every graph entity collection without mutating th
 	await store.setEmergenceFeedback("legacy-fingerprint", "pin");
 	const before = await store.exportGraphState();
 
-	const source = await new JsonBackupService(store).export(
-		new Date("2026-07-30T09:00:00.000Z"),
-	);
+	const source = await new JsonBackupService(store).export(new Date("2026-07-30T09:00:00.000Z"));
 	const parsed = JSON.parse(source) as JsonBackupV8;
 	assertEquals(parsed.format, "radiora-backup");
 	assertEquals(parsed.schemaVersion, 8);
@@ -104,11 +105,7 @@ Deno.test("current JSON backup restores only after complete validation", async (
 	const malformed = JSON.parse(source) as JsonBackupV8;
 	malformed.data.branches[0].workId = "missing-work";
 	const before = await targetStore.exportGraphState();
-	await assertRejects(
-		() => service.restore(JSON.stringify(malformed)),
-		Error,
-		"Invalid Branch",
-	);
+	await assertRejects(() => service.restore(JSON.stringify(malformed)), Error, "Invalid Branch");
 	assertEquals(await targetStore.exportGraphState(), before);
 });
 

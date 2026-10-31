@@ -79,9 +79,11 @@ describe("emergence controller", () => {
 
 	test("toggles loading while a load is in flight", async () => {
 		const pending = deferred<EmergenceSuggestion[]>();
-		const controller = createEmergenceController(createPorts({
-			listEmergenceSuggestions: vi.fn(() => pending.promise),
-		}));
+		const controller = createEmergenceController(
+			createPorts({
+				listEmergenceSuggestions: vi.fn(() => pending.promise),
+			}),
+		);
 
 		const loading = controller.load("item-a");
 		expect(controller.loading).toBe(true);
@@ -93,7 +95,8 @@ describe("emergence controller", () => {
 
 	test("clears suggestions and invalidates an in-flight load", async () => {
 		const first = deferred<EmergenceSuggestion[]>();
-		const listEmergenceSuggestions = vi.fn()
+		const listEmergenceSuggestions = vi
+			.fn()
 			.mockReturnValueOnce(first.promise)
 			.mockResolvedValueOnce([suggestion("sug-late")]);
 		const controller = createEmergenceController(createPorts({ listEmergenceSuggestions }));
@@ -114,7 +117,8 @@ describe("emergence controller", () => {
 	test("ignores a stale load result when a newer load wins", async () => {
 		const first = deferred<EmergenceSuggestion[]>();
 		const second = deferred<EmergenceSuggestion[]>();
-		const listEmergenceSuggestions = vi.fn()
+		const listEmergenceSuggestions = vi
+			.fn()
 			.mockReturnValueOnce(first.promise)
 			.mockReturnValueOnce(second.promise);
 		const controller = createEmergenceController(createPorts({ listEmergenceSuggestions }));
@@ -151,9 +155,11 @@ describe("emergence controller", () => {
 			suggestion("sug-2", { persistenceStatus: "pending" }),
 			suggestion("sug-3", { persistenceStatus: "pending" }),
 		];
-		const controller = createEmergenceController(createPorts({
-			listEmergenceSuggestions: vi.fn(async () => suggestions),
-		}));
+		const controller = createEmergenceController(
+			createPorts({
+				listEmergenceSuggestions: vi.fn(async () => suggestions),
+			}),
+		);
 
 		await controller.load("item-a");
 
@@ -165,9 +171,11 @@ describe("emergence controller", () => {
 	});
 
 	test("reports a single pending suggestion with a singular toast", async () => {
-		const controller = createEmergenceController(createPorts({
-			listEmergenceSuggestions: vi.fn(async () => [suggestion("sug-1")]),
-		}));
+		const controller = createEmergenceController(
+			createPorts({
+				listEmergenceSuggestions: vi.fn(async () => [suggestion("sug-1")]),
+			}),
+		);
 
 		await controller.load("item-a");
 
@@ -179,7 +187,8 @@ describe("emergence controller", () => {
 	});
 
 	test("does not re-notify a suggestion seen in a previous load", async () => {
-		const listEmergenceSuggestions = vi.fn()
+		const listEmergenceSuggestions = vi
+			.fn()
 			.mockResolvedValueOnce([suggestion("sug-1")])
 			.mockResolvedValueOnce([
 				suggestion("sug-1", { persistenceStatus: "accepted" }),
@@ -198,9 +207,11 @@ describe("emergence controller", () => {
 	});
 
 	test("dismisses the current toast", async () => {
-		const controller = createEmergenceController(createPorts({
-			listEmergenceSuggestions: vi.fn(async () => [suggestion("sug-1")]),
-		}));
+		const controller = createEmergenceController(
+			createPorts({
+				listEmergenceSuggestions: vi.fn(async () => [suggestion("sug-1")]),
+			}),
+		);
 		await controller.load("item-a");
 		expect(controller.toast).not.toBeNull();
 
@@ -211,11 +222,16 @@ describe("emergence controller", () => {
 
 	test("reports a load failure through the error port", async () => {
 		const reportError = vi.fn();
-		const controller = createEmergenceController(createPorts({
-			listEmergenceSuggestions: vi.fn(async () => {
-				throw new Error("load failed");
-			}),
-		}, { reportError }));
+		const controller = createEmergenceController(
+			createPorts(
+				{
+					listEmergenceSuggestions: vi.fn(async () => {
+						throw new Error("load failed");
+					}),
+				},
+				{ reportError },
+			),
+		);
 
 		await controller.load("item-a");
 
@@ -226,11 +242,14 @@ describe("emergence controller", () => {
 	test("keeps loading while a stale load settles before the newest load", async () => {
 		const first = deferred<EmergenceSuggestion[]>();
 		const second = deferred<EmergenceSuggestion[]>();
-		const controller = createEmergenceController(createPorts({
-			listEmergenceSuggestions: vi.fn()
-				.mockReturnValueOnce(first.promise)
-				.mockReturnValueOnce(second.promise),
-		}));
+		const controller = createEmergenceController(
+			createPorts({
+				listEmergenceSuggestions: vi
+					.fn()
+					.mockReturnValueOnce(first.promise)
+					.mockReturnValueOnce(second.promise),
+			}),
+		);
 
 		const staleLoad = controller.load("item-a");
 		const newestLoad = controller.load("item-a");
@@ -246,11 +265,17 @@ describe("emergence controller", () => {
 	test("does not report an error for a stale failed load", async () => {
 		const first = deferred<EmergenceSuggestion[]>();
 		const reportError = vi.fn();
-		const controller = createEmergenceController(createPorts({
-			listEmergenceSuggestions: vi.fn()
-				.mockReturnValueOnce(first.promise)
-				.mockResolvedValueOnce([]),
-		}, { reportError }));
+		const controller = createEmergenceController(
+			createPorts(
+				{
+					listEmergenceSuggestions: vi
+						.fn()
+						.mockReturnValueOnce(first.promise)
+						.mockResolvedValueOnce([]),
+				},
+				{ reportError },
+			),
+		);
 
 		const staleLoad = controller.load("item-a");
 		await controller.load("item-a");
@@ -318,11 +343,16 @@ describe("emergence controller", () => {
 
 	test("reports a resolve failure and keeps the resolution reason", async () => {
 		const reportError = vi.fn();
-		const controller = createEmergenceController(createPorts({
-			resolveEmergenceSuggestion: vi.fn(async () => {
-				throw new Error("resolve failed");
-			}),
-		}, { reportError }));
+		const controller = createEmergenceController(
+			createPorts(
+				{
+					resolveEmergenceSuggestion: vi.fn(async () => {
+						throw new Error("resolve failed");
+					}),
+				},
+				{ reportError },
+			),
+		);
 
 		controller.setResolutionReason("sug-1", "メモ");
 		await controller.resolve(suggestion("sug-1"), "pin");

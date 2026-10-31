@@ -30,8 +30,8 @@ export class ResumePositionAutosaveCoordinator {
 		this.#save = options.save;
 		this.#onError = options.onError;
 		this.#delayMs = options.delayMs ?? 250;
-		this.#setTimer = options.setTimer ??
-			((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
+		this.#setTimer =
+			options.setTimer ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
 		this.#clearTimer = options.clearTimer ?? ((timer) => globalThis.clearTimeout(timer));
 	}
 

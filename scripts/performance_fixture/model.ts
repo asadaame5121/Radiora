@@ -9,8 +9,8 @@ export const PERFORMANCE_FIXTURE_PROFILES = [
 ] as const;
 export const PERFORMANCE_TOPIC_COUNTS = [1_000, 10_000] as const;
 
-export type PerformanceFixtureProfile = typeof PERFORMANCE_FIXTURE_PROFILES[number];
-export type PerformanceTopicCount = typeof PERFORMANCE_TOPIC_COUNTS[number];
+export type PerformanceFixtureProfile = (typeof PERFORMANCE_FIXTURE_PROFILES)[number];
+export type PerformanceTopicCount = (typeof PERFORMANCE_TOPIC_COUNTS)[number];
 
 export interface PerformanceFixtureOptions {
 	profile: PerformanceFixtureProfile;
@@ -85,11 +85,7 @@ export function parseTopicCount(value: unknown): PerformanceTopicCount {
 }
 
 export function parseSeed(value: unknown): number {
-	if (
-		typeof value !== "number" ||
-		!Number.isSafeInteger(value) ||
-		value < 0 ||
-		value > 0xffff_ffff
-	) throw new Error("seed must be an integer between 0 and 4294967295.");
+	if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > 0xffff_ffff)
+		throw new Error("seed must be an integer between 0 and 4294967295.");
 	return value;
 }

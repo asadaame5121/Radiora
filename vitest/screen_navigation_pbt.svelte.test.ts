@@ -113,8 +113,9 @@ function handleToggleLongForm(
 ): void {
 	if (harness.workspace.view !== "outline") return;
 	const currentId = harness.state.selectedId();
-	const currentItem = currentId ? harness.store.items.get(currentId) ?? null : null;
-	const wasSameActive = harness.longForm.state.active &&
+	const currentItem = currentId ? (harness.store.items.get(currentId) ?? null) : null;
+	const wasSameActive =
+		harness.longForm.state.active &&
 		harness.longForm.state.dirty &&
 		currentId === model.editingItemId;
 	harness.longForm.setMode(active, currentItem);
@@ -309,44 +310,37 @@ function verifyInvariants(
 }
 
 describe("Screen Navigation State-Machine Property-Based Testing", () => {
-	it(
-		"satisfies all 7 invariants under arbitrary sequences of commands and async interleavings",
-		async () => {
-			await fc.assert(
-				fc.asyncProperty(
-					fc.array(actionArb, { minLength: 5, maxLength: 25 }),
-					async (actions) => {
-						const harness = createNavigationHarness();
-						const initialItem = harness.store.items.get("root-1");
-						if (!initialItem) throw new Error("root-1 not found");
-						harness.longForm.setMode(true, initialItem);
+	it("satisfies all 7 invariants under arbitrary sequences of commands and async interleavings", async () => {
+		await fc.assert(
+			fc.asyncProperty(fc.array(actionArb, { minLength: 5, maxLength: 25 }), async (actions) => {
+				const harness = createNavigationHarness();
+				const initialItem = harness.store.items.get("root-1");
+				if (!initialItem) throw new Error("root-1 not found");
+				harness.longForm.setMode(true, initialItem);
 
-						const model = createInitialModel(
-							initialItem.text,
-							Array.from(harness.store.items.values()),
-						);
+				const model = createInitialModel(
+					initialItem.text,
+					Array.from(harness.store.items.values()),
+				);
 
+				try {
+					for (const action of actions) {
+						await executeAction(action, harness, model);
+					}
+					await drainAllTasks(harness, model);
+					verifyInvariants(harness, model);
+				} finally {
+					harness.registry.resolveAll();
+					for (const p of model.pendingNavs) {
 						try {
-							for (const action of actions) {
-								await executeAction(action, harness, model);
-							}
-							await drainAllTasks(harness, model);
-							verifyInvariants(harness, model);
-						} finally {
-							harness.registry.resolveAll();
-							for (const p of model.pendingNavs) {
-								try {
-									await p.promise;
-								} catch (_cause) {
-									void _cause;
-								}
-							}
+							await p.promise;
+						} catch (_cause) {
+							void _cause;
 						}
-					},
-				),
-				{ numRuns: 100 },
-			);
-		},
-		30000,
-	);
+					}
+				}
+			}),
+			{ numRuns: 100 },
+		);
+	}, 30000);
 });

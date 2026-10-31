@@ -43,13 +43,11 @@ Deno.test("UI layout preference clamps saved and loaded inspector widths", () =>
 
 Deno.test("UI layout preference falls back when stored data or storage is unavailable", () => {
 	const storage = memoryStorage();
-	for (
-		const invalid of [
-			"not-json",
-			"{}",
-			'{"navCollapsed":false,"inspectorCollapsed":true,"inspectorWidth":"320"}',
-		]
-	) {
+	for (const invalid of [
+		"not-json",
+		"{}",
+		'{"navCollapsed":false,"inspectorCollapsed":true,"inspectorWidth":"320"}',
+	]) {
 		storage.values.set(UI_LAYOUT_PREFERENCE_STORAGE_KEY, invalid);
 		assertEquals(loadUiLayoutPreference(storage), DEFAULT_UI_LAYOUT_PREFERENCE);
 	}

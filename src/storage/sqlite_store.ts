@@ -109,7 +109,8 @@ export class SqliteGraphStore extends MemoryGraphStore {
 				throw new Error("SQLite storage metadata row is invalid");
 			}
 			if (
-				metadata !== undefined && metadata.schema_version !== 1 &&
+				metadata !== undefined &&
+				metadata.schema_version !== 1 &&
 				metadata.schema_version !== SQLITE_STORAGE_SCHEMA_VERSION
 			) {
 				throw new Error(`Unsupported SQLite storage schema: ${String(metadata.schema_version)}`);
@@ -120,11 +121,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 			if (metadata !== undefined) {
 				await super.restoreGraphState(state);
 				if (metadata.schema_version === 1) await migrateSqliteHistoricalTime(db, this.path, state);
-				persistSqliteDiff(
-					{ ...state, relationTypeDefinitions: [] },
-					state,
-					db,
-				);
+				persistSqliteDiff({ ...state, relationTypeDefinitions: [] }, state, db);
 			} else {
 				persistSqliteDiff(null, await super.exportGraphState(), db);
 			}
@@ -138,10 +135,9 @@ export class SqliteGraphStore extends MemoryGraphStore {
 				closeCause = error;
 			}
 			if (closeCause !== undefined) {
-				throw new Error(
-					`SQLite database initialization cleanup failed: ${String(closeCause)}`,
-					{ cause },
-				);
+				throw new Error(`SQLite database initialization cleanup failed: ${String(closeCause)}`, {
+					cause,
+				});
 			}
 			throw cause;
 		}
@@ -177,7 +173,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		occurrence: Occurrence,
 	): Promise<void> {
 		return this.persistence.mutate(() =>
-			super.createWorkBundle(work, branch, workingCopy, occurrence)
+			super.createWorkBundle(work, branch, workingCopy, occurrence),
 		);
 	}
 
@@ -235,7 +231,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		updatedAt: string,
 	): Promise<void> {
 		return this.persistence.mutate(() =>
-			super.restoreRecoverySnapshot(snapshotId, beforeRestore, updatedAt)
+			super.restoreRecoverySnapshot(snapshotId, beforeRestore, updatedAt),
 		);
 	}
 
@@ -246,7 +242,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		protectedAt: string,
 	): Promise<void> {
 		return this.persistence.mutate(() =>
-			super.promoteRecoverySnapshot(snapshotId, revision, branchId, protectedAt)
+			super.promoteRecoverySnapshot(snapshotId, revision, branchId, protectedAt),
 		);
 	}
 
@@ -282,10 +278,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		return this.persistence.mutate(() => super.deleteAlias(id));
 	}
 
-	override setEmergenceFeedback(
-		id: string,
-		action: "accept" | "dismiss" | "pin",
-	): Promise<void> {
+	override setEmergenceFeedback(id: string, action: "accept" | "dismiss" | "pin"): Promise<void> {
 		return this.persistence.mutate(() => super.setEmergenceFeedback(id, action));
 	}
 
@@ -300,7 +293,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		reason?: string,
 	): Promise<void> {
 		return this.persistence.mutate(() =>
-			super.resolveEmergenceSuggestion(id, action, link, reason)
+			super.resolveEmergenceSuggestion(id, action, link, reason),
 		);
 	}
 
@@ -322,7 +315,7 @@ export class SqliteGraphStore extends MemoryGraphStore {
 
 	override setResumePosition(position: ResumePosition): Promise<void> {
 		return this.persistence.mutateTargeted(() =>
-			planTargetedResumePositionSet(this.state, position)
+			planTargetedResumePositionSet(this.state, position),
 		);
 	}
 
@@ -336,14 +329,14 @@ export class SqliteGraphStore extends MemoryGraphStore {
 		updatedAt: string,
 	): Promise<void> {
 		return this.persistence.mutateTargeted(() =>
-			planTargetedBranchWorkingCopyUpdate(this.state, branchId, text, updatedAt)
+			planTargetedBranchWorkingCopyUpdate(this.state, branchId, text, updatedAt),
 		);
 	}
 
 	override updateWorkingCopy(workId: string, text: string, updatedAt: string): Promise<void> {
 		return this.persistence.mutateTargeted(() => {
-			const main = this.state.branches.find((branch) =>
-				branch.workId === workId && branch.name === "main"
+			const main = this.state.branches.find(
+				(branch) => branch.workId === workId && branch.name === "main",
 			);
 			if (!main) throw new Error(`Main Branch not found for Work: ${workId}`);
 			return planTargetedBranchWorkingCopyUpdate(this.state, main.id, text, updatedAt);
@@ -352,8 +345,8 @@ export class SqliteGraphStore extends MemoryGraphStore {
 
 	override applyRecoverySnapshot(snapshotId: string, updatedAt: string): Promise<void> {
 		return this.persistence.mutate(() => {
-			const snapshot = this.state.recoverySnapshots.find((candidate) =>
-				candidate.id === snapshotId
+			const snapshot = this.state.recoverySnapshots.find(
+				(candidate) => candidate.id === snapshotId,
 			);
 			if (!snapshot) {
 				return Promise.reject(new Error(`Recovery Snapshot not found: ${snapshotId}`));

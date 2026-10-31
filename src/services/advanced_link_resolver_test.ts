@@ -43,14 +43,17 @@ Deno.test("Advanced Link keeps duplicate names ambiguous and returns all identif
 	assertEquals(resolved.source.status, "ambiguous");
 	assertEquals(resolved.source.selectedWorkId, undefined);
 	assertEquals(resolved.source.candidates.length, 2);
-	const firstCandidate = resolved.source.candidates.find((candidate) =>
-		candidate.workId === first.workId
+	const firstCandidate = resolved.source.candidates.find(
+		(candidate) => candidate.workId === first.workId,
 	)!;
 	assertEquals(firstCandidate.placements.length, 2);
-	assertEquals(firstCandidate.placements.map((placement) => placement.breadcrumb), [
-		["Duplicate", "Second placement"],
-		["Root", "Duplicate"],
-	]);
+	assertEquals(
+		firstCandidate.placements.map((placement) => placement.breadcrumb),
+		[
+			["Duplicate", "Second placement"],
+			["Root", "Duplicate"],
+		],
+	);
 	assertEquals(
 		firstCandidate.placements.every((placement) => Boolean(placement.occurrenceId)),
 		true,
@@ -94,7 +97,10 @@ Deno.test("Advanced Link resolver is read-only for unresolved names and never cr
 	assertEquals(await store.listWorks(), before.works);
 	assertEquals(await store.listOccurrences(), before.occurrences);
 	assertEquals(await store.listLinks(), before.links);
-	assertEquals((await store.listItems()).some((item) => item.referenceStub), false);
+	assertEquals(
+		(await store.listItems()).some((item) => item.referenceStub),
+		false,
+	);
 });
 
 Deno.test("Advanced Link preview follows canonical directed and symmetric semantics", async () => {
@@ -142,10 +148,7 @@ Deno.test("Advanced Link resolves custom directed and symmetric relations with p
 
 	const resolvedDirected = await service.resolveAdvancedLink("Source :: custom_dir :: Target");
 	assertEquals(resolvedDirected.type.value, "CUSTOM_DIR");
-	assertEquals(
-		resolvedDirected.preview,
-		"「Source」は「Target」へ CUSTOM_DIR 関係（有向）です。",
-	);
+	assertEquals(resolvedDirected.preview, "「Source」は「Target」へ CUSTOM_DIR 関係（有向）です。");
 
 	const resolvedSymmetric = await service.resolveAdvancedLink(
 		'Source :: CUSTOM_SYM("理由") :: Target',

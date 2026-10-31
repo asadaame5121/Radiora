@@ -7,10 +7,7 @@ import type { RadioraBindings } from "../shared/bindings.ts";
 
 import type { ComparisonTarget, ScreenNavigator } from "./screen_navigation_destination.ts";
 
-type ComparisonApi = Pick<
-	RadioraBindings,
-	"listWorkComparisonDocuments" | "resolveLinkComparison"
->;
+type ComparisonApi = Pick<RadioraBindings, "listWorkComparisonDocuments" | "resolveLinkComparison">;
 
 export interface ComparisonNavigationContext {
 	preferredRevisionId: string | undefined;
@@ -80,11 +77,12 @@ export class ComparisonController {
 			return { ...empty, link: await this.ports.api.resolveLinkComparison(target.linkId) };
 		}
 		const result = await this.ports.api.listWorkComparisonDocuments(target.workId);
-		const selected = result.documents.find((document) =>
-			document.scope === target.scope &&
-			(target.scope === "branch"
-				? document.branchId === target.id
-				: document.revisionId === target.id)
+		const selected = result.documents.find(
+			(document) =>
+				document.scope === target.scope &&
+				(target.scope === "branch"
+					? document.branchId === target.id
+					: document.revisionId === target.id),
 		);
 		if (!selected) throw new Error(`${this.ports.comparisonPaneLabel()}対象が見つかりません。`);
 		const key = comparisonDocumentKey(selected);

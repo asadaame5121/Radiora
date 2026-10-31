@@ -8,9 +8,7 @@ Deno.test("Duplicate candidates view is reachable and acts only through bindings
 	const controller = await Deno.readTextFile(
 		new URL("../src/ui/work_controller.svelte.ts", import.meta.url),
 	);
-	const bindings = await Deno.readTextFile(
-		new URL("../src/shared/bindings.ts", import.meta.url),
-	);
+	const bindings = await Deno.readTextFile(new URL("../src/shared/bindings.ts", import.meta.url));
 
 	assert(bindings.includes("listDuplicateCandidates("));
 	const lists = await Deno.readTextFile(
@@ -32,9 +30,7 @@ Deno.test("Duplicate candidates view is reachable and acts only through bindings
 
 Deno.test("Duplicate candidates view keeps merge, link adoption, and dismissal explicit", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
-	const bindings = await Deno.readTextFile(
-		new URL("../src/shared/bindings.ts", import.meta.url),
-	);
+	const bindings = await Deno.readTextFile(new URL("../src/shared/bindings.ts", import.meta.url));
 	const desktop = await Deno.readTextFile(
 		new URL("../src/desktop/register_bindings.ts", import.meta.url),
 	);
@@ -48,18 +44,16 @@ Deno.test("Duplicate candidates view keeps merge, link adoption, and dismissal e
 
 	assert(panel.includes("onRequestMerge(candidate.workB.workId, candidate.workA.workId)"));
 	assert(panel.includes("onRequestMerge(candidate.workA.workId, candidate.workB.workId)"));
-	for (
-		const code of [
-			"duplicateCandidateHint",
-			"duplicateCandidateActions",
-			"duplicateMerge",
-			"duplicateKeepLeft",
-			"duplicateKeepRight",
-			"duplicateCreateLike",
-			"duplicateCreateRelated",
-			"duplicateDismiss",
-		]
-	) {
+	for (const code of [
+		"duplicateCandidateHint",
+		"duplicateCandidateActions",
+		"duplicateMerge",
+		"duplicateKeepLeft",
+		"duplicateKeepRight",
+		"duplicateCreateLike",
+		"duplicateCreateRelated",
+		"duplicateDismiss",
+	]) {
 		assert(panel.includes(`vocabulary.${code}`), `missing vocabulary.${code}`);
 	}
 	assertFalse(
@@ -108,9 +102,6 @@ Deno.test("Work list state only calls read-only APIs", async () => {
 	];
 
 	for (const api of writeApis) {
-		assertFalse(
-			lists.includes(`api.${api}(`),
-			`Work list state must not call write API: ${api}`,
-		);
+		assertFalse(lists.includes(`api.${api}(`), `Work list state must not call write API: ${api}`);
 	}
 });

@@ -187,7 +187,7 @@ textarea:focus {
 input:disabled,
 select:disabled,
 textarea:disabled {
-	opacity: .55;
+	opacity: 0.55;
 	cursor: not-allowed;
 }
 button {
@@ -199,7 +199,11 @@ button {
 	color: var(--text);
 	line-height: 1.25;
 	cursor: pointer;
-	transition: border-color .16s ease, background .16s ease, color .16s ease, opacity .16s ease;
+	transition:
+		border-color 0.16s ease,
+		background 0.16s ease,
+		color 0.16s ease,
+		opacity 0.16s ease;
 }
 button:hover:not(:disabled) {
 	border-color: var(--border-bright);
@@ -211,7 +215,7 @@ button:focus-visible {
 	outline-offset: 1px;
 }
 button:disabled {
-	opacity: .55;
+	opacity: 0.55;
 	cursor: not-allowed;
 }
 .shell {
@@ -221,8 +225,11 @@ button:disabled {
 	height: 100vh;
 	min-height: 100vh;
 	background:
-		radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--cyan) 9%, transparent) 0, transparent
-		34%),
+		radial-gradient(
+			circle at 20% 0%,
+			color-mix(in srgb, var(--cyan) 9%, transparent) 0,
+			transparent 34%
+		),
 		var(--bg);
 }
 .shell.nav-collapsed {
@@ -267,7 +274,7 @@ button:disabled {
 }
 .section-title {
 	font-size: 11px;
-	letter-spacing: .08em;
+	letter-spacing: 0.08em;
 	color: var(--muted);
 	margin-bottom: 12px;
 	display: flex;

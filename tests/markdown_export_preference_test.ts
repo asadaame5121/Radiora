@@ -58,15 +58,13 @@ Deno.test("Markdown export preference supplements legacy values with the Radiora
 
 Deno.test("Markdown export preference falls back safely for invalid values", () => {
 	const storage = memoryStorage();
-	for (
-		const invalid of [
-			"not-json",
-			"{}",
-			'{"scope":"selected"}',
-			'{"scope":"unknown"}',
-			'{"scope":"all","referenceMode":"unknown","includeAncestors":true,"includeDescendants":true,"includeSemanticNeighbors":false}',
-		]
-	) {
+	for (const invalid of [
+		"not-json",
+		"{}",
+		'{"scope":"selected"}',
+		'{"scope":"unknown"}',
+		'{"scope":"all","referenceMode":"unknown","includeAncestors":true,"includeDescendants":true,"includeSemanticNeighbors":false}',
+	]) {
 		storage.values.set(MARKDOWN_EXPORT_PREFERENCE_STORAGE_KEY, invalid);
 		assertEquals(loadMarkdownExportPreference(storage), DEFAULT_MARKDOWN_EXPORT_PREFERENCE);
 	}

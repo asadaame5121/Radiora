@@ -13,7 +13,7 @@ const registration = await Deno.readTextFile(
 Deno.test("complete JSON backup flushes edits and downloads a UTF-8 envelope", () => {
 	assertMatch(
 		controller,
-		/export =[\s\S]*?this\.operation\.run\(this\.ports\.flush,[\s\S]*?this\.ports\.api\.exportJsonBackup\(\)/,
+		/export =[\s\S]*?this\.operation\.run\(\s*this\.ports\.flush,[\s\S]*?this\.ports\.api\.exportJsonBackup\(\)/,
 	);
 	assertMatch(
 		controller,
@@ -36,7 +36,10 @@ Deno.test("JSON restore flushes pending edits and reloads only after the binding
 	assertMatch(view, /accept="\.json,application\/json"/);
 	assertMatch(`${controller}\n${view}`, /vocabulary\.jsonBackupRestore/);
 	assertMatch(controller, /vocabulary\.jsonBackupRestoreSuccess/);
-	assertMatch(controller, /errorMessage\(cause\).*vocabulary\.jsonBackupRestoreFailureRecovery/s);
+	assertMatch(
+		controller,
+		/errorMessage\(\s*cause,?\s*\).*vocabulary\.jsonBackupRestoreFailureRecovery/s,
+	);
 	assertMatch(bindings, /restoreJsonBackup\(source: string\): Promise<JsonBackupRestoreResult>/);
 	assertMatch(
 		registration,

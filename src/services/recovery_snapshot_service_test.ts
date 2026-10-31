@@ -64,14 +64,17 @@ Deno.test("confirmed restore saves current WC before apply and leaves history an
 
 Deno.test("Snapshot promotion uses source Revision, protects source, and retains WC text", async () => {
 	const { store, snapshot } = await fixture();
-	await store.createRevision({
-		id: "source",
-		workId: "work",
-		text: "source",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: FIRST,
-	}, "branch");
+	await store.createRevision(
+		{
+			id: "source",
+			workId: "work",
+			text: "source",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: FIRST,
+		},
+		"branch",
+	);
 	await store.createRecoverySnapshot({
 		...snapshot,
 		id: "with-source",
@@ -81,13 +84,7 @@ Deno.test("Snapshot promotion uses source Revision, protects source, and retains
 		now: () => NOW,
 		createId: () => "promoted",
 	});
-	const revision = await service.promote(
-		"with-source",
-		"work",
-		"branch",
-		"confirmed",
-		"稿",
-	);
+	const revision = await service.promote("with-source", "work", "branch", "confirmed", "稿");
 	assertEquals(revision?.parentRevisionIds, ["source"]);
 	assertEquals(revision?.text, snapshot.text);
 	assertEquals((await store.listBranches("work"))[0].headRevisionId, "promoted");

@@ -18,7 +18,8 @@ test.beforeEach(async ({ page }) => {
 	await page.route("**/api/rpc/listOutline", (route) =>
 		route.fulfill({
 			json: { result: { items, links: [], knots: [], stashItemIds: [] } },
-		}));
+		}),
+	);
 	await page.route("**/api/rpc/listGlobalLineage", (route) =>
 		route.fulfill({
 			json: {
@@ -29,7 +30,8 @@ test.beforeEach(async ({ page }) => {
 					filteredWorkCount: items.length,
 				},
 			},
-		}));
+		}),
+	);
 	for (const method of ["listUnplacedWorks", "listStubs", "listDuplicateCandidates"]) {
 		await page.route(`**/api/rpc/${method}`, (route) => route.fulfill({ json: { result: [] } }));
 	}
@@ -47,13 +49,15 @@ test("Option and nested trash return directly to the retained Outline", async ({
 	await expect(back).toBeDisabled();
 });
 
-test("Tree selection and Help do not overwrite suspended Outline Hoist or caret", async ({ page }) => {
+test("Tree selection and Help do not overwrite suspended Outline Hoist or caret", async ({
+	page,
+}) => {
 	await page.goto("/");
 	const editor = page.locator('textarea[data-item-id="mock-1"]');
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
 	await page.keyboard.press("Control+Shift+H");
 	await editor.evaluate((element: HTMLTextAreaElement) =>
-		element.setSelectionRange(element.value.length, element.value.length)
+		element.setSelectionRange(element.value.length, element.value.length),
 	);
 	await page.getByRole("button", { name: "ツリー", exact: true }).click();
 	await expect(page.getByRole("group", { name: "思索の系統樹" })).toBeVisible();
@@ -67,9 +71,10 @@ test("Tree selection and Help do not overwrite suspended Outline Hoist or caret"
 	await expect(editor).toBeFocused();
 	await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]')).toHaveCount(0);
 	expect(
-		await editor.evaluate((
-			element: HTMLTextAreaElement,
-		) => [element.selectionStart, element.selectionEnd]),
+		await editor.evaluate((element: HTMLTextAreaElement) => [
+			element.selectionStart,
+			element.selectionEnd,
+		]),
 	).toEqual([items[0].text.length, items[0].text.length]);
 });
 
@@ -77,25 +82,26 @@ test("every primary screen resumes the same Outline", async ({ page }) => {
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
 	const navigation = page.getByRole("navigation", { name: "主な画面" });
-	for (
-		const name of [
-			"今日",
-			vocabulary.unplacedInbox,
-			vocabulary.stubList,
-			"重複候補",
-			"タグ管理",
-			"Option",
-		]
-	) {
+	for (const name of [
+		"今日",
+		vocabulary.unplacedInbox,
+		vocabulary.stubList,
+		"重複候補",
+		"タグ管理",
+		"Option",
+	]) {
 		await navigation.getByRole("button", { name, exact: true }).click();
-		await expect(page.getByRole("button", { name: "アウトラインに戻る", exact: true }))
-			.toBeEnabled();
+		await expect(
+			page.getByRole("button", { name: "アウトラインに戻る", exact: true }),
+		).toBeEnabled();
 		await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
 		await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
 	}
 });
 
-test("deprecated Query has no navigation entry, palette command, or execution shortcut", async ({ page }) => {
+test("deprecated Query has no navigation entry, palette command, or execution shortcut", async ({
+	page,
+}) => {
 	let executions = 0;
 	await page.route("**/api/rpc/runRuleQuery", (route) => {
 		executions++;
@@ -119,10 +125,12 @@ test("revision comparison returns to the original occurrence and history tab", a
 	await expect(editor).toBeFocused();
 	await editor.evaluate((element: HTMLTextAreaElement) => element.setSelectionRange(3, 7));
 	await page.getByRole("tab", { name: "履歴", exact: true }).click();
-	await page.getByRole("button", {
-		name: `${vocabulary.revision}${vocabulary.comparisonPane}を開く`,
-		exact: true,
-	}).click();
+	await page
+		.getByRole("button", {
+			name: `${vocabulary.revision}${vocabulary.comparisonPane}を開く`,
+			exact: true,
+		})
+		.click();
 	await expect(page.locator(".revision-comparison")).toBeVisible();
 	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
 	await expect(editor).toBeFocused();
@@ -131,17 +139,17 @@ test("revision comparison returns to the original occurrence and history tab", a
 		"true",
 	);
 	expect(
-		await editor.evaluate((
-			element: HTMLTextAreaElement,
-		) => [element.selectionStart, element.selectionEnd]),
+		await editor.evaluate((element: HTMLTextAreaElement) => [
+			element.selectionStart,
+			element.selectionEnd,
+		]),
 	).toEqual([3, 7]);
 });
 
 for (const choice of ["保存して移動", "破棄して移動", "キャンセル"] as const) {
 	test(`Outline resume waits for the guard: ${choice}`, async ({ page }) => {
-		await page.route(
-			"**/api/rpc/setWorkHistoricalTime",
-			(route) => route.fulfill({ json: { result: null } }),
+		await page.route("**/api/rpc/setWorkHistoricalTime", (route) =>
+			route.fulfill({ json: { result: null } }),
 		);
 		await page.goto("/");
 		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
@@ -174,7 +182,9 @@ for (const choice of ["保存して移動", "破棄して移動", "キャンセ�
 }
 for (const operation of ["place", "root capture"] as const) {
 	for (const choice of ["保存して移動", "破棄して移動", "キャンセル"] as const) {
-		test(`${operation} defers navigation until the selection guard resolves: ${choice}`, async ({ page }) => {
+		test(`${operation} defers navigation until the selection guard resolves: ${choice}`, async ({
+			page,
+		}) => {
 			const created = {
 				...items[1],
 				id: "created",
@@ -183,23 +193,22 @@ for (const operation of ["place", "root capture"] as const) {
 				revisionSelector: { mode: "branch", branchId: "created-main" },
 			};
 			let snapshotItems = [...items];
-			let unplaced = [{
-				workId: created.workId,
-				branchId: "created-main",
-				text: created.text,
-				createdAt: created.createdAt,
-				updatedAt: created.updatedAt,
-			}];
-			await page.route(
-				"**/api/rpc/listOutline",
-				(route) =>
-					route.fulfill({
-						json: { result: { items: snapshotItems, links: [], knots: [], stashItemIds: [] } },
-					}),
+			let unplaced = [
+				{
+					workId: created.workId,
+					branchId: "created-main",
+					text: created.text,
+					createdAt: created.createdAt,
+					updatedAt: created.updatedAt,
+				},
+			];
+			await page.route("**/api/rpc/listOutline", (route) =>
+				route.fulfill({
+					json: { result: { items: snapshotItems, links: [], knots: [], stashItemIds: [] } },
+				}),
 			);
-			await page.route(
-				"**/api/rpc/listUnplacedWorks",
-				(route) => route.fulfill({ json: { result: unplaced } }),
+			await page.route("**/api/rpc/listUnplacedWorks", (route) =>
+				route.fulfill({ json: { result: unplaced } }),
 			);
 			for (const method of ["placeUnplacedWork", "createItem"]) {
 				await page.route(`**/api/rpc/${method}`, (route) => {
@@ -208,9 +217,8 @@ for (const operation of ["place", "root capture"] as const) {
 					return route.fulfill({ json: { result: created } });
 				});
 			}
-			await page.route(
-				"**/api/rpc/setWorkHistoricalTime",
-				(route) => route.fulfill({ json: { result: null } }),
+			await page.route("**/api/rpc/setWorkHistoricalTime", (route) =>
+				route.fulfill({ json: { result: null } }),
 			);
 			await page.goto("/");
 			await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
@@ -232,8 +240,9 @@ for (const operation of ["place", "root capture"] as const) {
 			await expect(dialog).toHaveCount(0);
 			const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
 			if (choice === "キャンセル") {
-				await expect(page.getByRole("region", { name: vocabulary.unplacedInbox, exact: true }))
-					.toBeVisible();
+				await expect(
+					page.getByRole("region", { name: vocabulary.unplacedInbox, exact: true }),
+				).toBeVisible();
 				await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue("2026");
 				await back.click();
 				await expect(page.locator('textarea[data-item-id="mock-1"]')).toBeFocused();
@@ -290,12 +299,15 @@ for (const composition of ["isComposing", "keyCode"] as const) {
 		await expect(page.getByRole("heading", { name: "Option", exact: true })).toBeVisible();
 		await page.keyboard.press("Alt+ArrowLeft");
 		await expect(page.getByRole("tree")).toBeVisible();
-		await expect(page.getByRole("button", { name: "アウトラインに戻る", exact: true }))
-			.toBeDisabled();
+		await expect(
+			page.getByRole("button", { name: "アウトラインに戻る", exact: true }),
+		).toBeDisabled();
 	});
 }
 
-test("a delayed comparison cannot replace Help or add an obsolete caller to history", async ({ page }) => {
+test("a delayed comparison cannot replace Help or add an obsolete caller to history", async ({
+	page,
+}) => {
 	const revision = {
 		id: "pending",
 		workId: "mock-7",
@@ -305,9 +317,8 @@ test("a delayed comparison cannot replace Help or add an obsolete caller to hist
 		createdAt: items[1].createdAt,
 		message: "pending",
 	};
-	await page.route(
-		"**/api/rpc/listRevisions",
-		(route) => route.fulfill({ json: { result: [revision] } }),
+	await page.route("**/api/rpc/listRevisions", (route) =>
+		route.fulfill({ json: { result: [revision] } }),
 	);
 	await page.route("**/api/rpc/listWorkLineage", (route) =>
 		route.fulfill({
@@ -318,7 +329,8 @@ test("a delayed comparison cannot replace Help or add an obsolete caller to hist
 					revisions: [revision],
 				},
 			},
-		}));
+		}),
+	);
 	let release!: () => void;
 	let requested = false;
 	const pending = new Promise<void>((resolve) => {
@@ -331,13 +343,15 @@ test("a delayed comparison cannot replace Help or add an obsolete caller to hist
 			json: {
 				result: {
 					workId: "mock-7",
-					documents: [{
-						scope: "revision",
-						workId: "mock-7",
-						revisionId: "pending",
-						title: "pending",
-						text: "pending comparison",
-					}],
+					documents: [
+						{
+							scope: "revision",
+							workId: "mock-7",
+							revisionId: "pending",
+							title: "pending",
+							text: "pending comparison",
+						},
+					],
 				},
 			},
 		});
@@ -346,21 +360,25 @@ test("a delayed comparison cannot replace Help or add an obsolete caller to hist
 		await page.goto("/");
 		await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
 		await page.getByRole("tab", { name: "履歴", exact: true }).click();
-		await page.getByRole("button", { name: `${vocabulary.workLineage}を開く`, exact: true })
+		await page
+			.getByRole("button", { name: `${vocabulary.workLineage}を開く`, exact: true })
 			.click();
-		await page.getByRole("button", {
-			name: `この${vocabulary.revision}を${vocabulary.comparisonPane}`,
-			exact: true,
-		}).click();
+		await page
+			.getByRole("button", {
+				name: `この${vocabulary.revision}を${vocabulary.comparisonPane}`,
+				exact: true,
+			})
+			.click();
 		await expect.poll(() => requested).toBe(true);
 		await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
 		const response = page.waitForResponse("**/api/rpc/listWorkComparisonDocuments");
 		release();
 		await response;
-		await page.evaluate(() =>
-			new Promise<void>((resolve) => {
-				requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-			})
+		await page.evaluate(
+			() =>
+				new Promise<void>((resolve) => {
+					requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+				}),
 		);
 		await expect(page.locator(".help-panel")).toBeVisible();
 		const back = page.getByRole("button", { name: "アウトラインに戻る", exact: true });
@@ -382,10 +400,8 @@ test("last row caret and a scrolled Outline survive resume after Help", async ({
 		orderKey: index,
 		revisionSelector: { mode: "branch", branchId: `scroll-${index}-main` },
 	}));
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({ json: { result: { items: rows, links: [], knots: [], stashItemIds: [] } } }),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: { result: { items: rows, links: [], knots: [], stashItemIds: [] } } }),
 	);
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-0"]').click();
@@ -393,7 +409,7 @@ test("last row caret and a scrolled Outline survive resume after Help", async ({
 	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-44"]').click();
 	const editor = page.locator('textarea[data-item-id="scroll-44"]');
 	await editor.evaluate((element: HTMLTextAreaElement) =>
-		element.setSelectionRange(element.value.length, element.value.length, "backward")
+		element.setSelectionRange(element.value.length, element.value.length, "backward"),
 	);
 	const scrollTop = await page.locator(".outline-panel").evaluate((element) => element.scrollTop);
 	expect(scrollTop).toBeGreaterThan(0);
@@ -403,10 +419,12 @@ test("last row caret and a scrolled Outline survive resume after Help", async ({
 	expect(await editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(
 		rows[44].text.length,
 	);
-	await expect.poll(() => page.locator(".outline-panel").evaluate((element) => element.scrollTop))
+	await expect
+		.poll(() => page.locator(".outline-panel").evaluate((element) => element.scrollTop))
 		.toBe(scrollTop);
-	await expect(page.getByRole("button", { name: `${vocabulary.hoist}を解除`, exact: true }))
-		.toBeVisible();
+	await expect(
+		page.getByRole("button", { name: `${vocabulary.hoist}を解除`, exact: true }),
+	).toBeVisible();
 });
 
 test("manuscript display and caret survive leaving and resuming Outline", async ({ page }) => {
@@ -416,19 +434,23 @@ test("manuscript display and caret survive leaving and resuming Outline", async 
 	const manuscript = page.locator(".long-form-textarea");
 	await expect(manuscript).toBeFocused();
 	await manuscript.evaluate((element: HTMLTextAreaElement) =>
-		element.setSelectionRange(3, 7, "backward")
+		element.setSelectionRange(3, 7, "backward"),
 	);
 	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
 	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
 	await expect(manuscript).toBeFocused();
 	expect(
-		await manuscript.evaluate((
-			element: HTMLTextAreaElement,
-		) => [element.selectionStart, element.selectionEnd, element.selectionDirection]),
+		await manuscript.evaluate((element: HTMLTextAreaElement) => [
+			element.selectionStart,
+			element.selectionEnd,
+			element.selectionDirection,
+		]),
 	).toEqual([3, 7, "backward"]);
 });
 
-test("F1 navigation preserves manuscript edits entered while async save is in-flight", async ({ page }) => {
+test("F1 navigation preserves manuscript edits entered while async save is in-flight", async ({
+	page,
+}) => {
 	let currentText = "mock-7 editable text";
 	let saveBlocked: (() => void) | null = null;
 	const saveGate = new Promise<void>((resolve) => {
@@ -445,7 +467,7 @@ test("F1 navigation preserves manuscript edits entered while async save is in-fl
 	});
 	await page.route("**/api/rpc/listOutline", (route) => {
 		const updatedItems = items.map((item) =>
-			item.id === "mock-7" ? { ...item, text: currentText } : item
+			item.id === "mock-7" ? { ...item, text: currentText } : item,
 		);
 		return route.fulfill({
 			json: { result: { items: updatedItems, links: [], knots: [], stashItemIds: [] } },
@@ -485,7 +507,9 @@ test("F1 navigation preserves manuscript edits entered while async save is in-fl
 	await expect(manuscript).toHaveValue("Text A and B");
 });
 
-test("failed Outline retrieval leaves Help open and a subsequent resume succeeds", async ({ page }) => {
+test("failed Outline retrieval leaves Help open and a subsequent resume succeeds", async ({
+	page,
+}) => {
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
 	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
@@ -502,30 +526,32 @@ test("failed Outline retrieval leaves Help open and a subsequent resume succeeds
 	await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
 });
 
-test("resume uses latest text and clamps the caret without undoing a data change", async ({ page }) => {
+test("resume uses latest text and clamps the caret without undoing a data change", async ({
+	page,
+}) => {
 	let current = [...items];
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({
-				json: { result: { items: current, links: [], knots: [], stashItemIds: [] } },
-			}),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({
+			json: { result: { items: current, links: [], knots: [], stashItemIds: [] } },
+		}),
 	);
 	await page.goto("/");
 	const editor = page.locator('textarea[data-item-id="mock-7"]');
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
 	await editor.evaluate((element: HTMLTextAreaElement) =>
-		element.setSelectionRange(element.value.length, element.value.length)
+		element.setSelectionRange(element.value.length, element.value.length),
 	);
 	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
-	current = items.map((item) => item.id === "mock-7" ? { ...item, text: "短い" } : item);
+	current = items.map((item) => (item.id === "mock-7" ? { ...item, text: "短い" } : item));
 	await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
 	await expect(editor).toHaveValue("短い");
 	await expect(editor).toBeFocused();
 	expect(await editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(2);
 });
 
-test("rewriting a branch creates an explicit Outline destination for subsequent resume", async ({ page }) => {
+test("rewriting a branch creates an explicit Outline destination for subsequent resume", async ({
+	page,
+}) => {
 	const source = items[0];
 	const placement = {
 		...source,
@@ -537,7 +563,8 @@ test("rewriting a branch creates an explicit Outline destination for subsequent 
 	await page.route("**/api/rpc/listOutline", (route) =>
 		route.fulfill({
 			json: { result: { items: snapshotItems, links: [], knots: [], stashItemIds: [] } },
-		}));
+		}),
+	);
 	await page.route("**/api/rpc/projectDates", (route) =>
 		route.fulfill({
 			json: {
@@ -547,26 +574,29 @@ test("rewriting a branch creates an explicit Outline destination for subsequent 
 					updated: [],
 				},
 			},
-		}));
+		}),
+	);
 	await page.route("**/api/rpc/rewriteAsNewBranch", (route) =>
 		route.fulfill({
 			json: {
 				result: { status: "created", branch: { id: "rewritten-branch", name: "rewritten branch" } },
 			},
-		}));
+		}),
+	);
 	await page.route("**/api/rpc/createOccurrence", (route) => {
 		snapshotItems = [...items, placement];
 		return route.fulfill({ json: { result: placement } });
 	});
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
-	await page.getByRole("navigation", { name: "主な画面" }).getByRole("button", {
-		name: "今日",
-		exact: true,
-	}).click();
-	await page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }).fill(
-		"",
-	);
+	await page
+		.getByRole("navigation", { name: "主な画面" })
+		.getByRole("button", {
+			name: "今日",
+			exact: true,
+		})
+		.click();
+	await page.getByRole("textbox", { name: "テキストで絞り込み", exact: true }).fill("");
 	await page.keyboard.press("Control+Shift+S");
 	const dialog = page.getByRole("dialog", { name: "新しい別稿として書き直しますか？" });
 	await expect(dialog).toBeVisible();
@@ -587,15 +617,13 @@ test("rewriting a branch creates an explicit Outline destination for subsequent 
 	await expect(back).toBeDisabled();
 });
 
-for (
-	const action of [
-		"アウトラインで開く",
-		`この${vocabulary.occurrence}に${vocabulary.hoist}`,
-		`${vocabulary.workLineage}を開く`,
-		"原稿として開く",
-		`${vocabulary.revision}${vocabulary.comparisonPane}を開く`,
-	]
-) {
+for (const action of [
+	"アウトラインで開く",
+	`この${vocabulary.occurrence}に${vocabulary.hoist}`,
+	`${vocabulary.workLineage}を開く`,
+	"原稿として開く",
+	`${vocabulary.revision}${vocabulary.comparisonPane}を開く`,
+]) {
 	test(`Tree context-menu destination uses the common gateway: ${action}`, async ({ page }) => {
 		await page.goto("/");
 		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
@@ -613,8 +641,7 @@ for (
 			"アウトラインで開く",
 			`この${vocabulary.occurrence}に${vocabulary.hoist}`,
 			"原稿として開く",
-		]
-			.includes(action);
+		].includes(action);
 		if (explicit) {
 			await expect(back).toBeDisabled();
 			await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
@@ -647,11 +674,11 @@ test("row focus survives toolbar blur independently of the selected item", async
 	await expect(page.getByRole("treeitem", { selected: true })).toContainText("mock-7");
 });
 
-test("an empty Outline restores its first-item focus without creating an item", async ({ page }) => {
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({ json: { result: { items: [], links: [], knots: [], stashItemIds: [] } } }),
+test("an empty Outline restores its first-item focus without creating an item", async ({
+	page,
+}) => {
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: { result: { items: [], links: [], knots: [], stashItemIds: [] } } }),
 	);
 	await page.goto("/");
 	await page.locator(".first-item").focus();
@@ -661,7 +688,9 @@ test("an empty Outline restores its first-item focus without creating an item", 
 	await expect(page.getByRole("treeitem")).toHaveCount(0);
 });
 
-test("Return to Editor restores remembered caret and panel scroll after another Tree selection", async ({ page }) => {
+test("Return to Editor restores remembered caret and panel scroll after another Tree selection", async ({
+	page,
+}) => {
 	const rows = Array.from({ length: 45 }, (_, index) => ({
 		...items[0],
 		id: `scroll-${index}`,
@@ -671,10 +700,8 @@ test("Return to Editor restores remembered caret and panel scroll after another 
 		orderKey: index,
 		revisionSelector: { mode: "branch", branchId: `scroll-${index}-main` },
 	}));
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({ json: { result: { items: rows, links: [], knots: [], stashItemIds: [] } } }),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: { result: { items: rows, links: [], knots: [], stashItemIds: [] } } }),
 	);
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-0"]').click();
@@ -682,7 +709,7 @@ test("Return to Editor restores remembered caret and panel scroll after another 
 	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-44"]').click();
 	const editor = page.locator('textarea[data-item-id="scroll-44"]');
 	await editor.evaluate((element: HTMLTextAreaElement) =>
-		element.setSelectionRange(element.value.length, element.value.length, "backward")
+		element.setSelectionRange(element.value.length, element.value.length, "backward"),
 	);
 	const scrollTop = await page.locator(".outline-panel").evaluate((element) => element.scrollTop);
 	expect(scrollTop).toBeGreaterThan(0);
@@ -696,13 +723,17 @@ test("Return to Editor restores remembered caret and panel scroll after another 
 	expect(await editor.evaluate((element: HTMLTextAreaElement) => element.selectionStart)).toBe(
 		rows[44].text.length,
 	);
-	await expect.poll(() => page.locator(".outline-panel").evaluate((element) => element.scrollTop))
+	await expect
+		.poll(() => page.locator(".outline-panel").evaluate((element) => element.scrollTop))
 		.toBe(scrollTop);
-	await expect(page.getByRole("button", { name: `${vocabulary.hoist}を解除`, exact: true }))
-		.toBeVisible();
+	await expect(
+		page.getByRole("button", { name: `${vocabulary.hoist}を解除`, exact: true }),
+	).toBeVisible();
 });
 
-test("an explicit offscreen target scrolls into view instead of restoring panel position zero", async ({ page }) => {
+test("an explicit offscreen target scrolls into view instead of restoring panel position zero", async ({
+	page,
+}) => {
 	const rows = Array.from({ length: 45 }, (_, index) => ({
 		...items[0],
 		id: `scroll-${index}`,
@@ -713,39 +744,41 @@ test("an explicit offscreen target scrolls into view instead of restoring panel 
 		revisionSelector: { mode: "branch", branchId: `scroll-${index}-main` },
 	}));
 	rows[44] = { ...rows[44], updatedAt: "2026-10-04T00:00:00.000Z" };
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({ json: { result: { items: rows, links: [], knots: [], stashItemIds: [] } } }),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: { result: { items: rows, links: [], knots: [], stashItemIds: [] } } }),
 	);
 
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="scroll-0"]').click();
 	await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
-	await page.getByRole("region", { name: `最近編集した${vocabulary.work}` }).getByRole("button", {
-		name: /row 44 with editable content/,
-	}).click();
+	await page
+		.getByRole("region", { name: `最近編集した${vocabulary.work}` })
+		.getByRole("button", {
+			name: /row 44 with editable content/,
+		})
+		.click();
 
 	const editor = page.locator('textarea[data-item-id="scroll-44"]');
 	await expect(editor).toBeFocused();
 	await expect(editor).toBeInViewport();
-	expect(await page.locator(".outline-panel").evaluate((element) => element.scrollTop))
-		.toBeGreaterThan(0);
+	expect(
+		await page.locator(".outline-panel").evaluate((element) => element.scrollTop),
+	).toBeGreaterThan(0);
 });
 
-test("an existing empty row resumes at caret zero without creating another occurrence", async ({ page }) => {
-	const emptyRows = items.map((item) => item.id === "mock-7" ? { ...item, text: "" } : item);
+test("an existing empty row resumes at caret zero without creating another occurrence", async ({
+	page,
+}) => {
+	const emptyRows = items.map((item) => (item.id === "mock-7" ? { ...item, text: "" } : item));
 	let created = false;
 	await page.route("**/api/rpc/createItem", (route) => {
 		created = true;
 		return route.fulfill({ json: { result: items[0] } });
 	});
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({
-				json: { result: { items: emptyRows, links: [], knots: [], stashItemIds: [] } },
-			}),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({
+			json: { result: { items: emptyRows, links: [], knots: [], stashItemIds: [] } },
+		}),
 	);
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-7"]').click();
@@ -765,26 +798,30 @@ for (const completion of ["reference", "link"] as const) {
 		await page.route("**/api/rpc/listOutline", (route) =>
 			route.fulfill({
 				json: { result: { items: snapshotItems, links: [], knots: [], stashItemIds: [] } },
-			}));
+			}),
+		);
 		await page.route("**/api/rpc/updateItemText", async (route) => {
 			const [id, text] = route.request().postDataJSON().args;
-			snapshotItems = snapshotItems.map((item) => item.id === id ? { ...item, text } : item);
+			snapshotItems = snapshotItems.map((item) => (item.id === id ? { ...item, text } : item));
 			await route.fulfill({ json: { result: null } });
 		});
 		await page.route("**/api/rpc/listInternalReferenceCompletions", (route) =>
 			route.fulfill({
 				json: {
-					result: [{
-						scope: "work",
-						id: "mock-7",
-						workId: "mock-7",
-						displayName: "mock-7 editable text",
-						scopeLabel: "Work",
-						shortId: "mock-7",
-						canonicalMarkdown: "[mock-7](radiora://work/mock-7)",
-					}],
+					result: [
+						{
+							scope: "work",
+							id: "mock-7",
+							workId: "mock-7",
+							displayName: "mock-7 editable text",
+							scopeLabel: "Work",
+							shortId: "mock-7",
+							canonicalMarkdown: "[mock-7](radiora://work/mock-7)",
+						},
+					],
 				},
-			}));
+			}),
+		);
 		await page.goto("/");
 		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
 		const editor = page.locator('textarea[data-item-id="mock-1"]');
@@ -793,19 +830,23 @@ for (const completion of ["reference", "link"] as const) {
 			completion === "reference" ? ".internal-reference-completions" : ".inline-link-completions",
 		);
 		await expect(popup).toBeVisible();
-		await page.getByRole("region", { name: `最近編集した${vocabulary.work}` }).getByRole("button", {
-			name: /mock-7 editable text/,
-		}).click();
+		await page
+			.getByRole("region", { name: `最近編集した${vocabulary.work}` })
+			.getByRole("button", {
+				name: /mock-7 editable text/,
+			})
+			.click();
 		await expect(page.locator('textarea[data-item-id="mock-7"]')).toBeFocused();
 		await expect(popup).toHaveCount(0);
 	});
 }
 
 for (const choice of ["保存して移動", "破棄して移動", "キャンセル"]) {
-	test(`direct Outline selection commits its pane and historical form only after ${choice}`, async ({ page }) => {
-		await page.route(
-			"**/api/rpc/setWorkHistoricalTime",
-			(route) => route.fulfill({ json: { result: null } }),
+	test(`direct Outline selection commits its pane and historical form only after ${choice}`, async ({
+		page,
+	}) => {
+		await page.route("**/api/rpc/setWorkHistoricalTime", (route) =>
+			route.fulfill({ json: { result: null } }),
 		);
 		await page.goto("/");
 		await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
@@ -839,10 +880,11 @@ for (const choice of ["保存して移動", "破棄して移動", "キャンセ�
 	});
 }
 
-test("a direct selection save failure keeps the draft and allows guarded retry", async ({ page }) => {
-	await page.route(
-		"**/api/rpc/setWorkHistoricalTime",
-		(route) => route.fulfill({ status: 503, json: { message: "年代の保存失敗" } }),
+test("a direct selection save failure keeps the draft and allows guarded retry", async ({
+	page,
+}) => {
+	await page.route("**/api/rpc/setWorkHistoricalTime", (route) =>
+		route.fulfill({ status: 503, json: { message: "年代の保存失敗" } }),
 	);
 	await page.goto("/");
 	await page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]').click();
@@ -857,9 +899,8 @@ test("a direct selection save failure keeps the draft and allows guarded retry",
 	await expect(target).toHaveAttribute("aria-selected", "false");
 	await expect(page.getByRole("textbox", { name: "年", exact: true })).toHaveValue("2026");
 	await page.unroute("**/api/rpc/setWorkHistoricalTime");
-	await page.route(
-		"**/api/rpc/setWorkHistoricalTime",
-		(route) => route.fulfill({ json: { result: null } }),
+	await page.route("**/api/rpc/setWorkHistoricalTime", (route) =>
+		route.fulfill({ json: { result: null } }),
 	);
 	await dialog.getByRole("button", { name: "保存して移動", exact: true }).click();
 	await expect(dialog).toHaveCount(0);
@@ -867,13 +908,16 @@ test("a direct selection save failure keeps the draft and allows guarded retry",
 });
 
 for (const source of ["outline", "tree"] as const) {
-	test(`${source} context menu removes its occurrence and refreshes the current screen`, async ({ page }) => {
+	test(`${source} context menu removes its occurrence and refreshes the current screen`, async ({
+		page,
+	}) => {
 		let remaining = [...items];
 		const deleted: string[] = [];
 		await page.route("**/api/rpc/listOutline", (route) =>
 			route.fulfill({
 				json: { result: { items: remaining, links: [], knots: [], stashItemIds: [] } },
-			}));
+			}),
+		);
 		await page.route("**/api/rpc/listGlobalLineage", (route) =>
 			route.fulfill({
 				json: {
@@ -884,7 +928,8 @@ for (const source of ["outline", "tree"] as const) {
 						filteredWorkCount: remaining.length,
 					},
 				},
-			}));
+			}),
+		);
 		await page.route("**/api/rpc/deleteItem", (route) => {
 			const id: string = route.request().postDataJSON().args[0];
 			deleted.push(id);
@@ -919,21 +964,24 @@ for (const source of ["outline", "tree"] as const) {
 		await expect(page.locator('.markdown-editor-host[data-editor-item-id="mock-1"]')).toBeVisible();
 	});
 }
-test("bookmark removal shares the menu/button lock and reports failure before retry", async ({ page }) => {
-	let bookmarks = [{
-		id: "bookmark-1",
-		workId: "mock-7",
-		occurrenceId: "mock-7",
-		createdAt: items[0].createdAt,
-	}];
+test("bookmark removal shares the menu/button lock and reports failure before retry", async ({
+	page,
+}) => {
+	let bookmarks = [
+		{
+			id: "bookmark-1",
+			workId: "mock-7",
+			occurrenceId: "mock-7",
+			createdAt: items[0].createdAt,
+		},
+	];
 	let deletions = 0;
 	let release!: () => void;
-	const pending = new Promise<void>((resolve) => release = resolve);
+	const pending = new Promise<void>((resolve) => (release = resolve));
 	const errors: string[] = [];
 	page.on("pageerror", (error) => errors.push(error.message));
-	await page.route(
-		"**/api/rpc/listBookmarks",
-		(route) => route.fulfill({ json: { result: bookmarks } }),
+	await page.route("**/api/rpc/listBookmarks", (route) =>
+		route.fulfill({ json: { result: bookmarks } }),
 	);
 	await page.route("**/api/rpc/deleteBookmark", async (route) => {
 		deletions++;

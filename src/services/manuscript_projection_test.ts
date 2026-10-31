@@ -143,10 +143,10 @@ Deno.test("ManuscriptProjectionService does not traverse reference stubs or writ
 		},
 	};
 	const service = new ManuscriptProjectionService(source);
-	assertEquals((await service.project(root.id)).map((section) => section.occurrenceId), [
-		"root",
-		"stub",
-	]);
+	assertEquals(
+		(await service.project(root.id)).map((section) => section.occurrenceId),
+		["root", "stub"],
+	);
 	assertEquals(reads, 1);
 	await assertRejects(
 		() => service.project("missing"),

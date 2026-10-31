@@ -5,14 +5,17 @@ Deno.test("Markdown parser extracts Japanese tags at valid boundaries with sourc
 	const source = "#先頭、#句読点 \n#連続 #alpha-2/β _#下線 -#ハイフン";
 	const result = parseMarkdownCandidates(source);
 
-	assertEquals(result.tags.map(({ name, range }) => ({ name, range })), [
-		{ name: "先頭", range: { start: 0, end: 3 } },
-		{ name: "句読点", range: { start: 4, end: 8 } },
-		{ name: "連続", range: { start: 10, end: 13 } },
-		{ name: "alpha-2/β", range: { start: 14, end: 24 } },
-		{ name: "下線", range: { start: 26, end: 29 } },
-		{ name: "ハイフン", range: { start: 31, end: 36 } },
-	]);
+	assertEquals(
+		result.tags.map(({ name, range }) => ({ name, range })),
+		[
+			{ name: "先頭", range: { start: 0, end: 3 } },
+			{ name: "句読点", range: { start: 4, end: 8 } },
+			{ name: "連続", range: { start: 10, end: 13 } },
+			{ name: "alpha-2/β", range: { start: 14, end: 24 } },
+			{ name: "下線", range: { start: 26, end: 29 } },
+			{ name: "ハイフン", range: { start: 31, end: 36 } },
+		],
+	);
 });
 
 Deno.test("Markdown parser rejects invalid, escaped, code, and URL-contained tags", () => {
@@ -27,11 +30,10 @@ Deno.test("Markdown parser rejects invalid, escaped, code, and URL-contained tag
 		"~~~",
 	].join("\n");
 
-	assertEquals(parseMarkdownCandidates(source).tags.map((tag) => tag.name), [
-		"有効",
-		"label",
-		"URL後",
-	]);
+	assertEquals(
+		parseMarkdownCandidates(source).tags.map((tag) => tag.name),
+		["有効", "label", "URL後"],
+	);
 });
 
 Deno.test("Markdown parser extracts canonical Radiora links and URI fragments", () => {
@@ -60,15 +62,16 @@ Deno.test("Markdown parser extracts tags from ordinary and Radiora link labels",
 		"[説明 #外部](https://host.test/x#fragment) [参照 #内部](radiora://work/work-01#fragment)";
 	const result = parseMarkdownCandidates(source);
 
-	assertEquals(result.tags.map(({ name, range }) => ({ name, range })), [
-		{ name: "外部", range: { start: 4, end: 7 } },
-		{ name: "内部", range: { start: 43, end: 46 } },
-	]);
+	assertEquals(
+		result.tags.map(({ name, range }) => ({ name, range })),
+		[
+			{ name: "外部", range: { start: 4, end: 7 } },
+			{ name: "内部", range: { start: 43, end: 46 } },
+		],
+	);
 	assertEquals(
 		result.internalReferences.map(({ scope, id, fragment }) => ({ scope, id, fragment })),
-		[
-			{ scope: "work", id: "work-01", fragment: "fragment" },
-		],
+		[{ scope: "work", id: "work-01", fragment: "fragment" }],
 	);
 });
 

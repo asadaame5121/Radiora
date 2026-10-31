@@ -227,8 +227,8 @@ function mockSnapshot(): OutlineSnapshot {
 
 function mockRevisions(workId: string): Revision[] {
 	const title = MOCK_NODES.find((node) => node.id === workId)?.title ?? "観察から問いが生まれる";
-	const body = MOCK_NODES.find((node) => node.id === workId)?.body ??
-		"まだ名前のない輪郭を記録する。";
+	const body =
+		MOCK_NODES.find((node) => node.id === workId)?.body ?? "まだ名前のない輪郭を記録する。";
 	return [
 		{
 			id: `${workId}-version-1`,
@@ -264,9 +264,8 @@ function mockTagScopes(snapshot: OutlineSnapshot): ScopedTagSet[] {
 		scope: {
 			kind: "working-copy",
 			workId: item.workId,
-			branchId: item.revisionSelector.mode === "branch"
-				? item.revisionSelector.branchId
-				: undefined,
+			branchId:
+				item.revisionSelector.mode === "branch" ? item.revisionSelector.branchId : undefined,
 		},
 		tags: tagSets[index % tagSets.length],
 	}));
@@ -371,7 +370,7 @@ export function mockUiPlugin(): Plugin {
 				const chunks: Uint8Array[] = [];
 				for await (const chunk of request) chunks.push(chunk);
 				const body = chunks.length
-					? JSON.parse(Buffer.concat(chunks).toString("utf8")) as { args?: unknown[] }
+					? (JSON.parse(Buffer.concat(chunks).toString("utf8")) as { args?: unknown[] })
 					: {};
 				const args = body.args ?? [];
 
@@ -392,8 +391,8 @@ export function mockUiPlugin(): Plugin {
 						};
 						const name = String(input?.name ?? "").toUpperCase();
 						const direction = input?.direction === "symmetric" ? "symmetric" : "directed";
-						const advancesGeneration = direction === "directed" &&
-							Boolean(input?.advancesGeneration);
+						const advancesGeneration =
+							direction === "directed" && Boolean(input?.advancesGeneration);
 						const created: RelationTypeDefinition = {
 							name,
 							direction,
@@ -417,17 +416,19 @@ export function mockUiPlugin(): Plugin {
 					case "listGlobalLineage":
 						result = {
 							snapshot,
-							promotedBranches: [{
-								branch: {
-									id: "mock-promoted",
-									workId: "mock-1",
-									name: "展示の公開版",
-									headRevisionId: "mock-1-version-2",
-									createdAt: "2025-09-01T09:00:00.000Z",
-									promotedAt: "2025-10-18T09:00:00.000Z",
+							promotedBranches: [
+								{
+									branch: {
+										id: "mock-promoted",
+										workId: "mock-1",
+										name: "展示の公開版",
+										headRevisionId: "mock-1-version-2",
+										createdAt: "2025-09-01T09:00:00.000Z",
+										promotedAt: "2025-10-18T09:00:00.000Z",
+									},
+									headRevision: mockRevisions("mock-1")[1],
 								},
-								headRevision: mockRevisions("mock-1")[1],
-							}],
+							],
 						};
 						break;
 					case "listWorkLineage": {
@@ -438,13 +439,16 @@ export function mockUiPlugin(): Plugin {
 								createdAt: "2025-09-01T09:00:00.000Z",
 								updatedAt: "2025-09-18T15:30:00.000Z",
 							},
-							branches: [{
-								id: `${workId}-main`,
-								workId,
-								name: "main",
-								headRevisionId: `${workId}-version-2`,
-								createdAt: "2025-09-01T09:00:00.000Z",
-							}, ...(rewriteBranches.get(workId) ?? [])],
+							branches: [
+								{
+									id: `${workId}-main`,
+									workId,
+									name: "main",
+									headRevisionId: `${workId}-version-2`,
+									createdAt: "2025-09-01T09:00:00.000Z",
+								},
+								...(rewriteBranches.get(workId) ?? []),
+							],
 							revisions: mockRevisions(workId),
 						};
 						break;
@@ -456,8 +460,10 @@ export function mockUiPlugin(): Plugin {
 						const sourceBranchId = String(args[0]);
 						const name = String(args[1] ?? "").trim();
 						if (!name) throw new Error("Branch name must not be empty");
-						const source = snapshot.items.find((i) =>
-							i.revisionSelector.mode === "branch" && i.revisionSelector.branchId === sourceBranchId
+						const source = snapshot.items.find(
+							(i) =>
+								i.revisionSelector.mode === "branch" &&
+								i.revisionSelector.branchId === sourceBranchId,
 						);
 						if (!source) throw new Error(`Branch not found: ${sourceBranchId}`);
 						const baseRevision = mockRevisions(source.workId).at(-1) ?? { id: "mock-rev-0" };
@@ -498,8 +504,8 @@ export function mockUiPlugin(): Plugin {
 							parentId: string | null;
 							contextualHeading?: string;
 						};
-						const source = snapshot.items.find((i) => i.workId === input.workId) ??
-							snapshot.items[0];
+						const source =
+							snapshot.items.find((i) => i.workId === input.workId) ?? snapshot.items[0];
 						const created = {
 							...source,
 							id: `mock-${crypto.randomUUID()}`,
@@ -539,10 +545,16 @@ export function mockUiPlugin(): Plugin {
 						result = [];
 						break;
 					case "suggestItems": {
-						const prefix = String(args[0] ?? "").normalize("NFKC").toLocaleLowerCase();
+						const prefix = String(args[0] ?? "")
+							.normalize("NFKC")
+							.toLocaleLowerCase();
 						result = snapshot.items
 							.filter((item) =>
-								item.text.split(/\r?\n/)[0].normalize("NFKC").toLocaleLowerCase().startsWith(prefix)
+								item.text
+									.split(/\r?\n/)[0]
+									.normalize("NFKC")
+									.toLocaleLowerCase()
+									.startsWith(prefix),
 							)
 							.slice(0, Number(args[1] ?? 8))
 							.map((item) => ({ item, title: item.text.split(/\r?\n/)[0], ancestorIds: [] }));
@@ -550,8 +562,9 @@ export function mockUiPlugin(): Plugin {
 					}
 					case "searchItems": {
 						const input = args[0] as { query?: string } | string;
-						const query = (typeof input === "string" ? input : input?.query ?? "")
-							.toLocaleLowerCase();
+						const query = (
+							typeof input === "string" ? input : (input?.query ?? "")
+						).toLocaleLowerCase();
 						result = snapshot.items
 							.filter((item) => item.text.toLocaleLowerCase().includes(query))
 							.map((item) => ({
@@ -575,30 +588,31 @@ export function mockUiPlugin(): Plugin {
 						break;
 					case "listEmergenceSuggestions": {
 						const contextId = String(args[0] ?? snapshot.items[0]?.id ?? "mock-1");
-						const context = snapshot.items.find((item) => item.id === contextId) ??
-							snapshot.items[0];
-						const target = snapshot.items.find((item) => item.id !== contextId) ??
-							snapshot.items[1] ?? context;
+						const context =
+							snapshot.items.find((item) => item.id === contextId) ?? snapshot.items[0];
+						const target =
+							snapshot.items.find((item) => item.id !== contextId) ?? snapshot.items[1] ?? context;
 						const contextTitle = context.text.split(/\r?\n/)[0];
 						const targetTitle = target.text.split(/\r?\n/)[0];
-						result = [{
-							id: `bridge:${context.id}:${target.id}`,
-							kind: "cross-branch-resonance",
-							title: "離れた話題をつなぐ接点",
-							explanation:
-								`「${contextTitle}」と「${targetTitle}」は、共通する語と近接リンクから一緒に眺める価値があります。`,
-							score: 0.82,
-							contextItemId: context.id,
-							targetItemId: target.id,
-							proposedLinkType: "LIKE",
-							evidence: [
-								{
-									fromId: context.id,
-									toId: target.id,
-									relation: "LEXICAL",
-								},
-							],
-						}];
+						result = [
+							{
+								id: `bridge:${context.id}:${target.id}`,
+								kind: "cross-branch-resonance",
+								title: "離れた話題をつなぐ接点",
+								explanation: `「${contextTitle}」と「${targetTitle}」は、共通する語と近接リンクから一緒に眺める価値があります。`,
+								score: 0.82,
+								contextItemId: context.id,
+								targetItemId: target.id,
+								proposedLinkType: "LIKE",
+								evidence: [
+									{
+										fromId: context.id,
+										toId: target.id,
+										relation: "LEXICAL",
+									},
+								],
+							},
+						];
 						break;
 					}
 					case "runRuleQuery":

@@ -20,13 +20,15 @@ const meta = {
 	args: {
 		collapsed: false,
 		activeView: "outline",
-		recentItems: [{
-			workId: "work-1",
-			id: "occurrence-1",
-			title: "アクセシビリティ検証を整える",
-			parentLabel: "品質改善",
-			editedAtLabel: "今日 09:30",
-		}],
+		recentItems: [
+			{
+				workId: "work-1",
+				id: "occurrence-1",
+				title: "アクセシビリティ検証を整える",
+				parentLabel: "品質改善",
+				editedAtLabel: "今日 09:30",
+			},
+		],
 		selectedId: "occurrence-1",
 		...callbacks,
 	},

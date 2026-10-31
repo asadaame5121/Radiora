@@ -61,31 +61,27 @@ export async function isLegacyStorageMigrationComplete(
 	if (!targetExists || !marker) {
 		return {
 			complete: false,
-			reason:
-				`Legacy SurrealDB source exists (${options.sourcePath}) but migration target or marker is missing.`,
+			reason: `Legacy SurrealDB source exists (${options.sourcePath}) but migration target or marker is missing.`,
 		};
 	}
 	if (marker.sourcePath !== options.sourcePath) {
 		return {
 			complete: false,
-			reason:
-				`Migration marker sourcePath (${marker.sourcePath}) does not match current source (${options.sourcePath}).`,
+			reason: `Migration marker sourcePath (${marker.sourcePath}) does not match current source (${options.sourcePath}).`,
 		};
 	}
 	const currentSourceVersion = await readStorageVersion(options.sourceVersionMarkerPath);
 	if (marker.sourceStorageVersion !== currentSourceVersion) {
 		return {
 			complete: false,
-			reason:
-				`Legacy SurrealDB schema version (${currentSourceVersion}) differs from migration marker (${marker.sourceStorageVersion}).`,
+			reason: `Legacy SurrealDB schema version (${currentSourceVersion}) differs from migration marker (${marker.sourceStorageVersion}).`,
 		};
 	}
 	const currentFingerprint = await fingerprintStoragePath(options.sourcePath);
 	if (marker.sourceFingerprint !== currentFingerprint) {
 		return {
 			complete: false,
-			reason:
-				`Legacy SurrealDB source fingerprint differs from migration marker (source data was modified after migration).`,
+			reason: `Legacy SurrealDB source fingerprint differs from migration marker (source data was modified after migration).`,
 		};
 	}
 	return { complete: true };
@@ -166,9 +162,7 @@ export async function importGraphStateToTurso(
 		const roundTrip = await store.exportGraphState();
 		const roundTripHash = await graphStateHash(roundTrip);
 		if (roundTripHash !== snapshotHash) {
-			throw new Error(
-				`Turso migration verification failed: ${snapshotHash} != ${roundTripHash}`,
-			);
+			throw new Error(`Turso migration verification failed: ${snapshotHash} != ${roundTripHash}`);
 		}
 		await store.close();
 		await Deno.rename(temporaryPath, targetPath);
@@ -205,9 +199,10 @@ async function createColdBackup(
 ): Promise<string> {
 	await Deno.mkdir(backupRoot, { recursive: true });
 	const timestamp = new Date().toISOString().replaceAll(/[:.]/g, "-");
-	const base = `${backupRoot}/surreal-v${version}-${timestamp}-${
-		fingerprint.slice(0, BACKUP_FINGERPRINT_LENGTH)
-	}`;
+	const base = `${backupRoot}/surreal-v${version}-${timestamp}-${fingerprint.slice(
+		0,
+		BACKUP_FINGERPRINT_LENGTH,
+	)}`;
 	let backupPath = base;
 	for (let attempt = 0; await storagePathExists(backupPath); attempt++) {
 		backupPath = `${base}-${attempt + 1}`;
@@ -285,13 +280,15 @@ export async function readMigrationMarker(path: string): Promise<TursoMigrationM
 function isMigrationMarker(value: unknown): value is TursoMigrationMarker {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
 	const record = value as Record<string, unknown>;
-	return record.markerVersion === TURSO_MIGRATION_MARKER_VERSION &&
+	return (
+		record.markerVersion === TURSO_MIGRATION_MARKER_VERSION &&
 		typeof record.sourcePath === "string" &&
 		Number.isSafeInteger(record.sourceStorageVersion) &&
 		typeof record.sourceFingerprint === "string" &&
 		typeof record.snapshotHash === "string" &&
 		typeof record.backupPath === "string" &&
-		typeof record.migratedAt === "string";
+		typeof record.migratedAt === "string"
+	);
 }
 
 async function writeJsonAtomically(path: string, value: unknown): Promise<void> {

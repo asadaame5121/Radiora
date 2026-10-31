@@ -134,9 +134,9 @@ Deno.test("overview aggregates screen cells and merges duplicate projected links
 	const layout = calculateTreeLayout(data, {
 		width: 30,
 		height: 120,
-		projectX: (timestamp) => timestamp === Date.parse("2025-01-04T00:00:00.000Z") ? 200 : 10,
+		projectX: (timestamp) => (timestamp === Date.parse("2025-01-04T00:00:00.000Z") ? 200 : 10),
 		// Zoomed out enough that lane spacing falls below one 36px cell.
-		camera: { k: .45, x: 0, y: 0 },
+		camera: { k: 0.45, x: 0, y: 0 },
 	});
 	assertEquals(layout.lod, "overview");
 	assert(layout.nodes.some((node) => node.aggregate));
@@ -207,10 +207,7 @@ Deno.test("structural closure follows active FROM links but ignores other semant
 		link("root", "leaf", "RELATED"),
 	);
 
-	assertEquals(
-		buildStructuralClosure(data, "branch"),
-		new Set(["branch", "root", "leaf"]),
-	);
+	assertEquals(buildStructuralClosure(data, "branch"), new Set(["branch", "root", "leaf"]));
 });
 
 Deno.test("FROM draws from parent source to child target", () => {
@@ -268,10 +265,7 @@ Deno.test("Lineage keeps a source with multiple FROM targets at G0", () => {
 		item("target-a", "2026-03-01T00:00:00.000Z"),
 		item("target-b", "2026-02-01T00:00:00.000Z"),
 	]);
-	data.links.push(
-		link("improvement", "target-a", "FROM"),
-		link("improvement", "target-b", "FROM"),
-	);
+	data.links.push(link("improvement", "target-a", "FROM"), link("improvement", "target-b", "FROM"));
 
 	const lineage = calculateLineageProjection(data);
 	assertEquals(lineage.generationByWorkId.get("improvement"), 0);
@@ -285,10 +279,7 @@ Deno.test("Lineage advances generation for custom directed relations with advanc
 		item("child", "2026-01-02T00:00:00.000Z"),
 		item("grandchild", "2026-01-03T00:00:00.000Z"),
 	]);
-	data.links.push(
-		link("parent", "child", "FATHER_OF"),
-		link("child", "grandchild", "MOTHER_OF"),
-	);
+	data.links.push(link("parent", "child", "FATHER_OF"), link("child", "grandchild", "MOTHER_OF"));
 
 	const customDefinitions = [
 		{
@@ -319,9 +310,7 @@ Deno.test("Lineage keeps generation unchanged for directed relations with advanc
 		item("elder", "2026-01-01T00:00:00.000Z"),
 		item("younger", "2026-01-02T00:00:00.000Z"),
 	]);
-	data.links.push(
-		link("elder", "younger", "OLDER_BROTHER_OF"),
-	);
+	data.links.push(link("elder", "younger", "OLDER_BROTHER_OF"));
 
 	const customDefinitions = [
 		{
@@ -346,11 +335,7 @@ Deno.test("Lineage detects FROM cycles and deterministically isolates them in a 
 		item("root", "2026-01-01T00:00:00.000Z"),
 		item("descendant", "2026-01-04T00:00:00.000Z"),
 	]);
-	data.links.push(
-		link("b", "a", "FROM"),
-		link("a", "b", "FROM"),
-		link("descendant", "a", "FROM"),
-	);
+	data.links.push(link("b", "a", "FROM"), link("a", "b", "FROM"), link("descendant", "a", "FROM"));
 
 	const lineage = calculateLineageProjection(data);
 	assertEquals(lineage.knotWorkIds, new Set(["a", "b"]));
@@ -394,10 +379,7 @@ Deno.test("Work links project to one visible Occurrence while neighborhood inclu
 
 	assertEquals(edge?.source.id, source.id);
 	assertEquals(edge?.target.id, target.id);
-	assertEquals(
-		buildDirectNeighborSet(data, target.id),
-		new Set([target.id, source.id, mirror.id]),
-	);
+	assertEquals(buildDirectNeighborSet(data, target.id), new Set([target.id, source.id, mirror.id]));
 });
 
 Deno.test("moving an Occurrence does not change projected semantic link endpoints", () => {
@@ -415,8 +397,9 @@ Deno.test("moving an Occurrence does not change projected semantic link endpoint
 	);
 
 	const options = { width: 600, height: 300, projectX: () => 280 };
-	const before = calculateTreeLayout(data, options).edges.map((edge) =>
-		`${edge.type}:${edge.source.item.workId}:${edge.source.id}->${edge.target.item.workId}:${edge.target.id}`
+	const before = calculateTreeLayout(data, options).edges.map(
+		(edge) =>
+			`${edge.type}:${edge.source.item.workId}:${edge.source.id}->${edge.target.item.workId}:${edge.target.id}`,
 	);
 
 	// This changes only the occurrence hierarchy, as OutlineService.moveItem does.
@@ -425,10 +408,10 @@ Deno.test("moving an Occurrence does not change projected semantic link endpoint
 	const after = calculateTreeLayout(
 		{ ...data, items: [target, source, container, sourceMirror] },
 		options,
-	)
-		.edges.map((edge) =>
-			`${edge.type}:${edge.source.item.workId}:${edge.source.id}->${edge.target.item.workId}:${edge.target.id}`
-		);
+	).edges.map(
+		(edge) =>
+			`${edge.type}:${edge.source.item.workId}:${edge.source.id}->${edge.target.item.workId}:${edge.target.id}`,
+	);
 
 	assertEquals(before, [
 		"RELATED:source-work:source-primary->target-work:target",
@@ -448,17 +431,14 @@ Deno.test("cluster ids derive from sorted item ids and survive panning and reord
 		width: 300,
 		height: 200,
 		projectX: () => 50,
-		camera: { k: .4, x: 0, y: 0 },
+		camera: { k: 0.4, x: 0, y: 0 },
 	};
 	const first = calculateTreeLayout(data, options);
 	const panned = calculateTreeLayout(data, {
 		...options,
-		camera: { k: .4, x: 123, y: -77 },
+		camera: { k: 0.4, x: 123, y: -77 },
 	});
-	const reordered = calculateTreeLayout(
-		{ ...data, items: [...data.items].reverse() },
-		options,
-	);
+	const reordered = calculateTreeLayout({ ...data, items: [...data.items].reverse() }, options);
 	const clusterOf = (layout: ReturnType<typeof calculateTreeLayout>): string | undefined =>
 		layout.nodes.find((node) => node.aggregate)?.id;
 
@@ -478,7 +458,7 @@ Deno.test("cluster nodes expose their constituent item ids and world-space bound
 		width: 300,
 		height: 200,
 		projectX: () => 50,
-		camera: { k: .4, x: 0, y: 0 },
+		camera: { k: 0.4, x: 0, y: 0 },
 	});
 	const cluster = layout.nodes.find((node) => node.aggregate);
 	assert(cluster);
@@ -530,10 +510,7 @@ Deno.test("same-generation items are ordered by FROM component then orderKey and
 		item("d", "2026-01-01T00:00:00.000Z", null, "component-b"),
 		item("c", "2026-01-01T00:00:00.000Z", null, "component-b"),
 	]);
-	data.links.push(
-		link("a", "b", "FROM"),
-		link("c", "d", "FROM"),
-	);
+	data.links.push(link("a", "b", "FROM"), link("c", "d", "FROM"));
 	// Component {a,b} has the smallest orderKey (a=1, b=2) so it is placed first.
 	const layout = calculateTreeLayout(data, {
 		width: 600,
@@ -541,7 +518,10 @@ Deno.test("same-generation items are ordered by FROM component then orderKey and
 		projectX: () => 280,
 	});
 	assertEquals(layout.lod, "detail");
-	assertEquals(layout.nodes.map((node) => node.id), ["a", "b", "c", "d"]);
+	assertEquals(
+		layout.nodes.map((node) => node.id),
+		["a", "b", "c", "d"],
+	);
 	assertEquals(
 		layout.nodes.map((node) => node.lane),
 		[0, 1, 2, 3],
@@ -578,15 +558,20 @@ Deno.test("P6 characterization: camera pan preserves world geometry and lane ass
 		first.nodes.map((n) => [n.id, n.worldX, n.worldY, n.lane]),
 		second.nodes.map((n) => [n.id, n.worldX, n.worldY, n.lane]),
 	);
-	assertEquals(first.nodes.map((n) => [n.x - 300, n.y + 250]), second.nodes.map((n) => [n.x, n.y]));
-	assertEquals(first.edges.map((e) => e.id), second.edges.map((e) => e.id));
+	assertEquals(
+		first.nodes.map((n) => [n.x - 300, n.y + 250]),
+		second.nodes.map((n) => [n.x, n.y]),
+	);
+	assertEquals(
+		first.edges.map((e) => e.id),
+		second.edges.map((e) => e.id),
+	);
 });
 
 Deno.test("P6 characterization: Lineage generations are independent of item and link order", () => {
 	const data = snapshot(
-		Array.from(
-			{ length: 120 },
-			(_, i) => item(`n${i}`, "2026-01-01T00:00:00.000Z", i ? `n${i - 1}` : null),
+		Array.from({ length: 120 }, (_, i) =>
+			item(`n${i}`, "2026-01-01T00:00:00.000Z", i ? `n${i - 1}` : null),
 		),
 	);
 	for (let i = 1; i < 120; i++) data.links.push(link(`n${i}`, `n${i - 1}`, "FROM"));
@@ -605,9 +590,8 @@ Deno.test("P6 characterization: Lineage generations are independent of item and 
 Deno.test("P6 graph traversal handles a 6,000-node FROM chain without recursion", () => {
 	const count = 6000;
 	const data = snapshot(
-		Array.from(
-			{ length: count },
-			(_, i) => item(`w-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? `w-${i - 1}` : null),
+		Array.from({ length: count }, (_, i) =>
+			item(`w-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? `w-${i - 1}` : null),
 		),
 	);
 	for (let i = 1; i < count; i++) data.links.push(link(`w-${i}`, `w-${i - 1}`, "FROM"));
@@ -617,9 +601,8 @@ Deno.test("P6 graph traversal handles a 6,000-node FROM chain without recursion"
 
 Deno.test("P6b: calculateTreeLayout handles dense simultaneous hub nodes without quadratic blowup", () => {
 	const count = 2000;
-	const items = Array.from(
-		{ length: count },
-		(_, i) => item(`hub-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? "hub-0" : null),
+	const items = Array.from({ length: count }, (_, i) =>
+		item(`hub-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? "hub-0" : null),
 	);
 	const data = snapshot(items);
 	for (let i = 1; i < count; i++) {
@@ -662,18 +645,39 @@ Deno.test("calculateTreeWorldLayout separates world layout from camera pan", () 
 
 	// Pan 1
 	const screen1 = applyTreeCamera(worldLayout, { k: 1, x: 100, y: 50 });
-	assertEquals(screen1.nodes.map((n) => n.x), worldLayout.nodes.map((n) => n.worldX + 100));
-	assertEquals(screen1.nodes.map((n) => n.y), worldLayout.nodes.map((n) => n.worldY + 50));
+	assertEquals(
+		screen1.nodes.map((n) => n.x),
+		worldLayout.nodes.map((n) => n.worldX + 100),
+	);
+	assertEquals(
+		screen1.nodes.map((n) => n.y),
+		worldLayout.nodes.map((n) => n.worldY + 50),
+	);
 
 	// Pan 2 (pure pan does not recompute lanes or generations)
 	const screen2 = applyTreeCamera(worldLayout, { k: 1, x: -200, y: 300 });
-	assertEquals(screen2.nodes.map((n) => n.x), worldLayout.nodes.map((n) => n.worldX - 200));
-	assertEquals(screen2.nodes.map((n) => n.y), worldLayout.nodes.map((n) => n.worldY + 300));
+	assertEquals(
+		screen2.nodes.map((n) => n.x),
+		worldLayout.nodes.map((n) => n.worldX - 200),
+	);
+	assertEquals(
+		screen2.nodes.map((n) => n.y),
+		worldLayout.nodes.map((n) => n.worldY + 300),
+	);
 
 	// All world positions match exactly
-	assertEquals(screen1.nodes.map((n) => n.worldX), screen2.nodes.map((n) => n.worldX));
-	assertEquals(screen1.nodes.map((n) => n.worldY), screen2.nodes.map((n) => n.worldY));
-	assertEquals(screen1.nodes.map((n) => n.lane), screen2.nodes.map((n) => n.lane));
+	assertEquals(
+		screen1.nodes.map((n) => n.worldX),
+		screen2.nodes.map((n) => n.worldX),
+	);
+	assertEquals(
+		screen1.nodes.map((n) => n.worldY),
+		screen2.nodes.map((n) => n.worldY),
+	);
+	assertEquals(
+		screen1.nodes.map((n) => n.lane),
+		screen2.nodes.map((n) => n.lane),
+	);
 
 	// Backward-compatible calculateTreeLayout produces matching screen coordinates
 	const fullLayout = calculateTreeLayout(data, {
@@ -684,15 +688,20 @@ Deno.test("calculateTreeWorldLayout separates world layout from camera pan", () 
 		projectGeneration: (g: number) => g * 100 + 50,
 		camera: { k: 1, x: 100, y: 50 },
 	});
-	assertEquals(fullLayout.nodes.map((n) => n.x), screen1.nodes.map((n) => n.x));
-	assertEquals(fullLayout.nodes.map((n) => n.y), screen1.nodes.map((n) => n.y));
+	assertEquals(
+		fullLayout.nodes.map((n) => n.x),
+		screen1.nodes.map((n) => n.x),
+	);
+	assertEquals(
+		fullLayout.nodes.map((n) => n.y),
+		screen1.nodes.map((n) => n.y),
+	);
 });
 
 Deno.test("P6b: calculateTreeWorldLayout handles deep 6,000-node FROM chain without stack overflow", () => {
 	const count = 6000;
-	const items = Array.from(
-		{ length: count },
-		(_, i) => item(`w-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? `w-${i - 1}` : null),
+	const items = Array.from({ length: count }, (_, i) =>
+		item(`w-${i}`, "2026-01-01T00:00:00.000Z", i > 0 ? `w-${i - 1}` : null),
 	);
 	const data = snapshot(items);
 	for (let i = 0; i < count - 1; i++) {

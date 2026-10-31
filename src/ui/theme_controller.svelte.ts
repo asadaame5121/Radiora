@@ -32,9 +32,7 @@ export function createThemeController(ports: ThemeControllerPorts = {}): ThemeCo
 
 	let preference = $state<ThemePreference>(loadThemePreference(storage));
 
-	const resolvedTheme = $derived<ResolvedTheme>(
-		resolveTheme(preference, systemPrefersDark()),
-	);
+	const resolvedTheme = $derived<ResolvedTheme>(resolveTheme(preference, systemPrefersDark()));
 
 	function setPreference(next: ThemePreference): void {
 		preference = next;

@@ -16,40 +16,25 @@ Deno.test("migration backups are isolated and reused by recorded source version"
 		await Deno.mkdir(database);
 		await Deno.writeTextFile(`${database}/CURRENT`, "legacy");
 
-		assertEquals(
-			await prepareStorageMigrationBackup(database, backupRoot, marker, 1),
-			backupV0,
-		);
+		assertEquals(await prepareStorageMigrationBackup(database, backupRoot, marker, 1), backupV0);
 		assertEquals(await Deno.readTextFile(`${backupV0}/CURRENT`), "legacy");
 
 		await Deno.writeTextFile(`${database}/CURRENT`, "must not replace v0");
-		assertEquals(
-			await prepareStorageMigrationBackup(database, backupRoot, marker, 1),
-			backupV0,
-		);
+		assertEquals(await prepareStorageMigrationBackup(database, backupRoot, marker, 1), backupV0);
 		assertEquals(await Deno.readTextFile(`${backupV0}/CURRENT`), "legacy");
 
 		await recordStorageVersion(marker, 1);
 		await Deno.writeTextFile(`${database}/CURRENT`, "version-one");
-		assertEquals(
-			await prepareStorageMigrationBackup(database, backupRoot, marker, 2),
-			backupV1,
-		);
+		assertEquals(await prepareStorageMigrationBackup(database, backupRoot, marker, 2), backupV1);
 		assertEquals(await Deno.readTextFile(`${backupV1}/CURRENT`), "version-one");
 		assertEquals(await Deno.readTextFile(`${backupV0}/CURRENT`), "legacy");
 
 		await Deno.writeTextFile(`${database}/CURRENT`, "must not replace v1");
-		assertEquals(
-			await prepareStorageMigrationBackup(database, backupRoot, marker, 2),
-			backupV1,
-		);
+		assertEquals(await prepareStorageMigrationBackup(database, backupRoot, marker, 2), backupV1);
 		assertEquals(await Deno.readTextFile(`${backupV1}/CURRENT`), "version-one");
 
 		await recordStorageVersion(marker, 2);
-		assertEquals(
-			await prepareStorageMigrationBackup(database, backupRoot, marker, 2),
-			null,
-		);
+		assertEquals(await prepareStorageMigrationBackup(database, backupRoot, marker, 2), null);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -80,16 +65,10 @@ Deno.test("failed migration restores the cold backup and can restart cleanly", a
 		);
 		assertEquals(await pathExists(marker), false);
 
-		assertEquals(
-			await prepareStorageMigrationBackup(database, backupRoot, marker, 1),
-			backup,
-		);
+		assertEquals(await prepareStorageMigrationBackup(database, backupRoot, marker, 1), backup);
 		await Deno.writeTextFile(`${database}/CURRENT`, "migration-complete");
 		await recordStorageVersion(marker, 1);
-		assertEquals(
-			await prepareStorageMigrationBackup(database, backupRoot, marker, 1),
-			null,
-		);
+		assertEquals(await prepareStorageMigrationBackup(database, backupRoot, marker, 1), null);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}
@@ -114,10 +93,7 @@ Deno.test("failed version 1 to 2 migration restores its exact v1 backup and mark
 		assertEquals(await Deno.readTextFile(`${database}/CURRENT`), "version-one");
 		assertEquals(await Deno.readTextFile(marker), "1\n");
 
-		assertEquals(
-			await prepareStorageMigrationBackup(database, backupRoot, marker, 2),
-			backupV1,
-		);
+		assertEquals(await prepareStorageMigrationBackup(database, backupRoot, marker, 2), backupV1);
 	} finally {
 		await Deno.remove(directory, { recursive: true });
 	}

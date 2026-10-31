@@ -106,17 +106,19 @@ Deno.test("duplicate merge preview enumerates documents, placements, links, revi
 
 	assertEquals(preview.sourceTitle, "旧名称");
 	assertEquals(preview.survivorTitle, "正準名");
-	assertEquals(preview.documents.source.documents.map((document) => document.scope), [
-		"branch",
-		"revision",
-	]);
+	assertEquals(
+		preview.documents.source.documents.map((document) => document.scope),
+		["branch", "revision"],
+	);
 	assertEquals(preview.occurrenceIds, ["source-occ"]);
 	assertEquals(preview.revisionIds, ["source-rev"]);
-	assertEquals(preview.branchRenames, [{
-		branchId: "source-main",
-		from: "main",
-		to: "merged/source/main",
-	}]);
+	assertEquals(preview.branchRenames, [
+		{
+			branchId: "source-main",
+			from: "main",
+			to: "merged/source/main",
+		},
+	]);
 	assertEquals(preview.links[0].afterFrom, {
 		scope: "revision",
 		workId: "survivor",
@@ -138,13 +140,16 @@ Deno.test("same-title duplicate merge succeeds without creating a redundant alia
 	assertEquals(preview.aliasAfterMerge, undefined);
 	await service.merge(preview);
 
-	assertEquals((await store.listWorks(true)).find((work) => work.id === "source"), {
-		id: "source",
-		createdAt: NOW,
-		updatedAt: NOW,
-		mergedIntoWorkId: "survivor",
-		mergedAt: NOW,
-	});
+	assertEquals(
+		(await store.listWorks(true)).find((work) => work.id === "source"),
+		{
+			id: "source",
+			createdAt: NOW,
+			updatedAt: NOW,
+			mergedIntoWorkId: "survivor",
+			mergedAt: NOW,
+		},
+	);
 	assertEquals(await store.listAliases(), []);
 });
 
@@ -205,30 +210,38 @@ Deno.test("duplicate merge moves all scoped state, retains provenance and retrac
 	});
 	await service.merge(await service.preview("source", "survivor"));
 
-	assertEquals(await store.listWorks(), [{
-		id: "survivor",
-		createdAt: NOW,
-		updatedAt: NOW,
-	}]);
-	assertEquals((await store.listWorks(true)).find((work) => work.id === "source"), {
-		id: "source",
-		createdAt: NOW,
-		updatedAt: NOW,
-		mergedIntoWorkId: "survivor",
-		mergedAt: NOW,
-	});
-	assertEquals((await store.listOccurrences()).map((entry) => entry.workId), [
-		"survivor",
-		"survivor",
+	assertEquals(await store.listWorks(), [
+		{
+			id: "survivor",
+			createdAt: NOW,
+			updatedAt: NOW,
+		},
 	]);
-	assertEquals((await store.listBranches("survivor")).map((branch) => [branch.id, branch.name]), [
-		["source-main", "merged/source/main"],
-		["survivor-main", "main"],
-	]);
-	assertEquals((await store.listRevisions("survivor")).map((revision) => revision.id), [
-		"source-rev",
-		"survivor-rev",
-	]);
+	assertEquals(
+		(await store.listWorks(true)).find((work) => work.id === "source"),
+		{
+			id: "source",
+			createdAt: NOW,
+			updatedAt: NOW,
+			mergedIntoWorkId: "survivor",
+			mergedAt: NOW,
+		},
+	);
+	assertEquals(
+		(await store.listOccurrences()).map((entry) => entry.workId),
+		["survivor", "survivor"],
+	);
+	assertEquals(
+		(await store.listBranches("survivor")).map((branch) => [branch.id, branch.name]),
+		[
+			["source-main", "merged/source/main"],
+			["survivor-main", "main"],
+		],
+	);
+	assertEquals(
+		(await store.listRevisions("survivor")).map((revision) => revision.id),
+		["source-rev", "survivor-rev"],
+	);
 	assertEquals((await store.listRecoverySnapshots("survivor"))[0].id, "source-snapshot");
 	assertEquals((await store.listBookmarks())[0].workId, "survivor");
 	assertEquals((await store.getResumePosition())?.workId, "survivor");
@@ -248,10 +261,13 @@ Deno.test("duplicate merge moves all scoped state, retains provenance and retrac
 			createdAt: NOW,
 		},
 	]);
-	assertEquals((await store.listLinks()).map((link) => [link.id, link.status]), [
-		["existing", "asserted"],
-		["rewired-duplicate", "retracted"],
-	]);
+	assertEquals(
+		(await store.listLinks()).map((link) => [link.id, link.status]),
+		[
+			["existing", "asserted"],
+			["rewired-duplicate", "retracted"],
+		],
+	);
 	assertEquals((await store.listAliases()).find((alias) => alias.id === "merge-alias")?.variants, [
 		"旧名称",
 	]);

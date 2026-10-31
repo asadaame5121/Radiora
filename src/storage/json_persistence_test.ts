@@ -54,16 +54,18 @@ for (const synchronous of [false, true]) {
 					return Promise.reject(error);
 				};
 				const thrown = await assertRejects(() =>
-					rollback ? policy.mutateWithRollback(operation) : policy.mutate(operation)
+					rollback ? policy.mutateWithRollback(operation) : policy.mutate(operation),
 				);
 				assertStrictEquals(thrown, error);
 				assertEquals(await Deno.readTextFile(path), disk);
 				assertEquals(
 					await store.exportGraphState(),
-					rollback ? before : {
-						...before,
-						emergenceFeedback: { changed: "pin" },
-					},
+					rollback
+						? before
+						: {
+								...before,
+								emergenceFeedback: { changed: "pin" },
+							},
 				);
 			} finally {
 				await Deno.remove(directory, { recursive: true });

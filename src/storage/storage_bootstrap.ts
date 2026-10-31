@@ -93,8 +93,8 @@ async function requireCompletedLegacyMigration(
 	const reason = !targetExists
 		? "migrated SQLite database is missing"
 		: !marker
-		? "migration completion marker is missing"
-		: "migration marker sourcePath does not match the legacy source";
+			? "migration completion marker is missing"
+			: "migration marker sourcePath does not match the legacy source";
 	throw new Error(
 		`Legacy SurrealDB data detected at ${sourcePath}: ${reason}. ` +
 			`For first-time migration, close older versions of Radiora and run 'deno task storage:migrate:legacy'. ` +

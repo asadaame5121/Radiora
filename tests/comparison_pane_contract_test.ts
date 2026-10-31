@@ -8,15 +8,11 @@ Deno.test("FROM FIX VS Revision and Branch use one read-only comparison pane", a
 	const linkEditor = await Deno.readTextFile(
 		new URL("../src/ui/LinkEditor.svelte", import.meta.url),
 	);
-	const pane = await Deno.readTextFile(
-		new URL("../src/ui/ComparisonPane.svelte", import.meta.url),
-	);
+	const pane = await Deno.readTextFile(new URL("../src/ui/ComparisonPane.svelte", import.meta.url));
 	const revision = await Deno.readTextFile(
 		new URL("../src/ui/RevisionComparison.svelte", import.meta.url),
 	);
-	const lineage = await Deno.readTextFile(
-		new URL("../src/ui/WorkLineage.svelte", import.meta.url),
-	);
+	const lineage = await Deno.readTextFile(new URL("../src/ui/WorkLineage.svelte", import.meta.url));
 
 	assertMatch(controller, /resolveLinkComparison\(target\.linkId\)/);
 	assertMatch(linkEditor, /isComparableLinkType\(link\.type\)/);
@@ -49,9 +45,7 @@ Deno.test("comparison entry points invalidate stale async responses before openi
 });
 
 Deno.test("comparison UI uses UiVocabulary and has no persistence calls", async () => {
-	const pane = await Deno.readTextFile(
-		new URL("../src/ui/ComparisonPane.svelte", import.meta.url),
-	);
+	const pane = await Deno.readTextFile(new URL("../src/ui/ComparisonPane.svelte", import.meta.url));
 	const vocabulary = await Deno.readTextFile(
 		new URL("../src/shared/ui_vocabulary.ts", import.meta.url),
 	);

@@ -16,7 +16,9 @@ function item(index: number): OutlineItem {
 	};
 }
 
-test("Tree gestures and selection survive projection, filter, and viewport changes", async ({ page }) => {
+test("Tree gestures and selection survive projection, filter, and viewport changes", async ({
+	page,
+}) => {
 	const items = Array.from({ length: 512 }, (_, index) => item(index));
 	const filters: unknown[] = [];
 	await page.addInitScript(() => Reflect.set(window, "__treeWorldLayoutCalls", 0));
@@ -25,25 +27,23 @@ test("Tree gestures and selection survive projection, filter, and viewport chang
 		const source = await response.text();
 		await route.fulfill({
 			response,
-			body: `${source}\nconst originalCalculateTreeWorldLayout = calculateTreeWorldLayout;\n` +
+			body:
+				`${source}\nconst originalCalculateTreeWorldLayout = calculateTreeWorldLayout;\n` +
 				`calculateTreeWorldLayout = (...args) => {\n` +
 				`  Reflect.set(globalThis, "__treeWorldLayoutCalls", Number(Reflect.get(globalThis, "__treeWorldLayoutCalls") ?? 0) + 1);\n` +
 				`  return originalCalculateTreeWorldLayout(...args);\n` +
 				`};\n`,
 		});
 	});
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } }),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } }),
 	);
 	await page.route("**/api/rpc/listGlobalLineage", (route) => {
 		const args = Reflect.get(route.request().postDataJSON(), "args");
 		const filter = Array.isArray(args) ? args[0] : null;
 		filters.push(filter);
-		const includeIsolated = typeof filter === "object" && filter !== null
-			? Reflect.get(filter, "includeIsolated")
-			: true;
+		const includeIsolated =
+			typeof filter === "object" && filter !== null ? Reflect.get(filter, "includeIsolated") : true;
 		const visibleItems = includeIsolated === false ? items.slice(0, 1) : items;
 		return route.fulfill({
 			json: {
@@ -74,10 +74,11 @@ test("Tree gestures and selection survive projection, filter, and viewport chang
 		});
 	const worldLayoutCalls = () =>
 		page.evaluate(() => Number(Reflect.get(window, "__treeWorldLayoutCalls") ?? 0));
-	await page.evaluate(() =>
-		new Promise<void>((resolve) =>
-			requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-		)
+	await page.evaluate(
+		() =>
+			new Promise<void>((resolve) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+			),
 	);
 	const beforePan = await camera();
 	const worldLayoutCallsBeforePan = await worldLayoutCalls();
@@ -88,10 +89,11 @@ test("Tree gestures and selection survive projection, filter, and viewport chang
 	await page.mouse.move(x + 30, y - 18, { steps: 4 });
 	await page.mouse.up();
 	await expect.poll(camera).not.toEqual(beforePan);
-	await page.evaluate(() =>
-		new Promise<void>((resolve) =>
-			requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-		)
+	await page.evaluate(
+		() =>
+			new Promise<void>((resolve) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+			),
 	);
 	expect(await worldLayoutCalls()).toBe(worldLayoutCallsBeforePan);
 	const beforeZoom = await camera();
@@ -121,7 +123,8 @@ test("Tree gestures and selection survive projection, filter, and viewport chang
 	const widthBeforeResize = await svg.evaluate((element) => element.clientWidth);
 	const beforeResizeCalls = await worldLayoutCalls();
 	await page.setViewportSize({ width: 800, height: 900 });
-	await expect.poll(() => svg.evaluate((element) => element.clientWidth))
+	await expect
+		.poll(() => svg.evaluate((element) => element.clientWidth))
 		.not.toBe(widthBeforeResize);
 	await expect.poll(worldLayoutCalls).toBeGreaterThan(beforeResizeCalls);
 	await expect(svg).toBeVisible();
@@ -129,10 +132,8 @@ test("Tree gestures and selection survive projection, filter, and viewport chang
 
 test("zoomed same-time nodes expose keyboard-operable cluster inspection", async ({ page }) => {
 	const items = Array.from({ length: 512 }, (_, index) => item(index));
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } }),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } }),
 	);
 	await page.route("**/api/rpc/listGlobalLineage", (route) =>
 		route.fulfill({
@@ -144,7 +145,8 @@ test("zoomed same-time nodes expose keyboard-operable cluster inspection", async
 					filteredWorkCount: items.length,
 				},
 			},
-		}));
+		}),
+	);
 	await page.goto("/");
 	await page.getByRole("button", { name: "ツリー", exact: true }).click();
 	const svg = page.getByRole("group", { name: "思索の系統樹" });

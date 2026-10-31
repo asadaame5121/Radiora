@@ -24,7 +24,9 @@ function gate() {
 	return { promise, release };
 }
 
-test("collapse persists the saved snapshot without replacing an unsaved editor draft", async ({ page }) => {
+test("collapse persists the saved snapshot without replacing an unsaved editor draft", async ({
+	page,
+}) => {
 	let cached: OutlineSnapshot | null = null;
 	const cachedItem = () => cached?.items[0];
 	let collapsed = false;
@@ -50,9 +52,8 @@ test("collapse persists the saved snapshot without replacing an unsaved editor d
 		writes++;
 		return route.fulfill({ json: { result: null } });
 	});
-	await page.route(
-		"**/api/rpc/updateItemText",
-		(route) => route.fulfill({ status: 500, json: { message: "save offline" } }),
+	await page.route("**/api/rpc/updateItemText", (route) =>
+		route.fulfill({ status: 500, json: { message: "save offline" } }),
 	);
 	await page.route("**/api/rpc/setCollapsed", (route) => {
 		collapsed = true;
@@ -89,17 +90,17 @@ test("accepted cache remains inert through a core load failure and retry", async
 					location: { selectedOccurrenceId: "startup-item", hoistOccurrenceId: "startup-item" },
 				},
 			},
-		}));
+		}),
+	);
 	await page.route("**/api/rpc/getStartupStatus", (route) =>
 		route.fulfill({
 			json: {
 				result: { phase: ready ? "ready" : "starting" },
 			},
-		}));
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({ json: retry ? { result: outline("fresh") } : { error: "outline offline" } }),
+		}),
+	);
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: retry ? { result: outline("fresh") } : { error: "outline offline" } }),
 	);
 	await page.route("**/api/rpc/retryStartup", (route) => {
 		retry = true;
@@ -107,15 +108,17 @@ test("accepted cache remains inert through a core load failure and retry", async
 	});
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	await expect(page.locator(".shell")).toHaveAttribute("inert", "");
-	await expect(page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]'))
-		.toContainText("cached");
+	await expect(
+		page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]'),
+	).toContainText("cached");
 	ready = true;
 	await expect(page.locator(".startup-cache-status")).toContainText("起動に失敗しました");
 	await page.getByRole("button", { name: "再試行", exact: true }).click();
 	await expect(page.locator(".shell")).not.toHaveAttribute("inert", "");
 	await expect(page.locator(".startup-cache-status")).toHaveCount(0);
-	await expect(page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]'))
-		.toContainText("fresh");
+	await expect(
+		page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]'),
+	).toContainText("fresh");
 });
 
 test("a cache reload revokes the delayed initial Outline response", async ({ page }) => {
@@ -132,7 +135,8 @@ test("a cache reload revokes the delayed initial Outline response", async ({ pag
 					location: { selectedOccurrenceId: "startup-item", hoistOccurrenceId: null },
 				},
 			},
-		}));
+		}),
+	);
 	// Let cache restoration finish before the formal startup load.
 	const readiness = gate();
 	await page.route("**/api/rpc/getStartupStatus", async (route) => {
@@ -161,52 +165,51 @@ test("a cache reload revokes the delayed initial Outline response", async ({ pag
 
 test("without a cache, a core load failure exposes a working retry", async ({ page }) => {
 	let retry = false;
-	await page.route(
-		"**/api/rpc/loadStartupSnapshotCache",
-		(route) => route.fulfill({ json: { result: null } }),
+	await page.route("**/api/rpc/loadStartupSnapshotCache", (route) =>
+		route.fulfill({ json: { result: null } }),
 	);
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({
-				json: retry ? { result: outline("recovered") } : { error: "outline offline" },
-			}),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({
+			json: retry ? { result: outline("recovered") } : { error: "outline offline" },
+		}),
 	);
 	await page.route("**/api/rpc/retryStartup", (route) => {
 		retry = true;
 		return route.fulfill({ json: { result: { phase: "ready" } } });
 	});
 	await page.goto("/", { waitUntil: "domcontentloaded" });
-	await expect(page.getByRole("heading", { name: "初期データの読み込みに失敗しました。" }))
-		.toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "初期データの読み込みに失敗しました。" }),
+	).toBeVisible();
 	await page.getByRole("button", { name: "再試行", exact: true }).click();
-	await expect(page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]'))
-		.toContainText("recovered");
+	await expect(
+		page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]'),
+	).toContainText("recovered");
 	await expect(page.locator(".startup-card")).toHaveCount(0);
 });
 
-test("autosaved inline text survives cache startup when the next formal load fails", async ({ page }) => {
+test("autosaved inline text survives cache startup when the next formal load fails", async ({
+	page,
+}) => {
 	let cached: OutlineSnapshot | null = null;
 	const cachedText = () => cached?.items[0].text;
 	let restarting = false;
 	let reads = 0;
 	let saving = false;
 	const save = gate();
-	await page.route(
-		"**/api/rpc/loadStartupSnapshotCache",
-		(route) =>
-			route.fulfill({
-				json: {
-					result: cached
-						? {
+	await page.route("**/api/rpc/loadStartupSnapshotCache", (route) =>
+		route.fulfill({
+			json: {
+				result: cached
+					? {
 							version: 1,
 							savedAt: "now",
 							snapshot: cached,
 							location: { selectedOccurrenceId: "startup-item", hoistOccurrenceId: null },
 						}
-						: null,
-				},
-			}),
+					: null,
+			},
+		}),
 	);
 	await page.route("**/api/rpc/listOutline", (route) => {
 		reads++;
@@ -238,6 +241,7 @@ test("autosaved inline text survives cache startup when the next formal load fai
 	await expect(page.locator(".startup-cache-status")).toContainText(
 		"前回の内容を表示しています。起動に失敗しました。",
 	);
-	await expect(page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]'))
-		.toContainText("autosaved text");
+	await expect(
+		page.locator('.markdown-editor-host[data-editor-item-id="startup-item"]'),
+	).toContainText("autosaved text");
 });

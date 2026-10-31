@@ -12,7 +12,7 @@ export const ACCEPTANCE_SHAPES = [
 	"deep-cycle",
 ] as const;
 
-export type AcceptanceShape = typeof ACCEPTANCE_SHAPES[number];
+export type AcceptanceShape = (typeof ACCEPTANCE_SHAPES)[number];
 
 export interface ShapeLayoutMetadata {
 	shape: AcceptanceShape;
@@ -25,10 +25,7 @@ export interface ShapeLayoutResult extends ShapeLayoutMetadata {
 	parentIndices: Array<number | null>;
 }
 
-export function computeShapeLayout(
-	nodeCount: number,
-	shape: AcceptanceShape,
-): ShapeLayoutResult {
+export function computeShapeLayout(nodeCount: number, shape: AcceptanceShape): ShapeLayoutResult {
 	if (nodeCount <= 0) return emptyShapeLayout(shape);
 	if (shape === "all-roots") return allRootsLayout(nodeCount);
 	if (shape === "wide") return wideLayout(nodeCount);

@@ -25,12 +25,12 @@ describe("confirmation controller", () => {
 	test("allows only one pending request", () => {
 		const controller = createConfirmationController();
 
-		expect(
-			controller.request({ action: "trash", occurrenceId: "one", occurrenceCount: 1 }),
-		).toBe(true);
-		expect(
-			controller.request({ action: "trash", occurrenceId: "two", occurrenceCount: 1 }),
-		).toBe(false);
+		expect(controller.request({ action: "trash", occurrenceId: "one", occurrenceCount: 1 })).toBe(
+			true,
+		);
+		expect(controller.request({ action: "trash", occurrenceId: "two", occurrenceCount: 1 })).toBe(
+			false,
+		);
 		expect(controller.pending?.action).toBe("trash");
 	});
 

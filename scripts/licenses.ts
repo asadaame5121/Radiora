@@ -1,10 +1,7 @@
 const repoRoot = new URL("../", import.meta.url);
 const nodeModules = new URL("node_modules/", repoRoot);
 const docsLicenses = new URL("docs/licenses/", repoRoot);
-const outputs = [
-	new URL("dist-desktop/licenses/", repoRoot),
-	new URL("dist/licenses/", repoRoot),
-];
+const outputs = [new URL("dist-desktop/licenses/", repoRoot), new URL("dist/licenses/", repoRoot)];
 
 interface LockPackage {
 	name?: string;

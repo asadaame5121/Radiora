@@ -12,27 +12,33 @@ function createTestSnapshot(): GraphStateSnapshot {
 	const occId = "o-cli-test";
 	return validatedGraphStateSnapshot({
 		works: [{ id: workId, createdAt: CREATED_AT, updatedAt: CREATED_AT }],
-		branches: [{
-			id: branchId,
-			workId,
-			name: "main",
-			headRevisionId: null,
-			createdAt: CREATED_AT,
-		}],
-		workingCopies: [{
-			branchId,
-			workId,
-			text: "CLI migration text",
-			updatedAt: CREATED_AT,
-		}],
-		occurrences: [{
-			id: occId,
-			workId,
-			parentOccurrenceId: null,
-			orderKey: 1000,
-			collapsed: false,
-			revisionSelector: { mode: "branch", branchId },
-		}],
+		branches: [
+			{
+				id: branchId,
+				workId,
+				name: "main",
+				headRevisionId: null,
+				createdAt: CREATED_AT,
+			},
+		],
+		workingCopies: [
+			{
+				branchId,
+				workId,
+				text: "CLI migration text",
+				updatedAt: CREATED_AT,
+			},
+		],
+		occurrences: [
+			{
+				id: occId,
+				workId,
+				parentOccurrenceId: null,
+				orderKey: 1000,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId },
+			},
+		],
 		links: [],
 		systemRelations: [],
 		knots: [],
@@ -70,11 +76,7 @@ Deno.test("parseCliArgs validates trust boundary: accepts default and --data-dir
 	});
 
 	// 3. Missing value for --data-dir
-	assertThrows(
-		() => parseCliArgs(["--data-dir"]),
-		Error,
-		"Missing value for --data-dir option.",
-	);
+	assertThrows(() => parseCliArgs(["--data-dir"]), Error, "Missing value for --data-dir option.");
 
 	// 4. Empty value for --data-dir
 	assertThrows(

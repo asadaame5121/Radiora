@@ -61,30 +61,33 @@ describe("HistoricalTimeController", () => {
 		expect(controller.item?.id).toBe("third");
 	});
 
-	it.each(["save", "discard", "cancel"] as const)(
-		"settles a waiting selection only after %s resolves the dirty form",
-		async (choice) => {
-			const controller = new HistoricalTimeController(ports());
-			controller.select(item("first", "first", POINT));
-			controller.draft.original = "unsaved";
-			const commit = vi.fn();
-			const finished = vi.fn();
-			const pending = controller.selectWhenReady(item("second"), commit).then(finished);
-			await Promise.resolve();
-			expect(commit).not.toHaveBeenCalled();
-			expect(finished).not.toHaveBeenCalled();
-			await controller.resolvePending(choice);
-			await pending;
-			expect(finished).toHaveBeenCalledWith(choice !== "cancel");
-			expect(commit).toHaveBeenCalledTimes(choice === "cancel" ? 0 : 1);
-			expect(controller.item?.id).toBe(choice === "cancel" ? "first" : "second");
-		},
-	);
+	it.each([
+		"save",
+		"discard",
+		"cancel",
+	] as const)("settles a waiting selection only after %s resolves the dirty form", async (choice) => {
+		const controller = new HistoricalTimeController(ports());
+		controller.select(item("first", "first", POINT));
+		controller.draft.original = "unsaved";
+		const commit = vi.fn();
+		const finished = vi.fn();
+		const pending = controller.selectWhenReady(item("second"), commit).then(finished);
+		await Promise.resolve();
+		expect(commit).not.toHaveBeenCalled();
+		expect(finished).not.toHaveBeenCalled();
+		await controller.resolvePending(choice);
+		await pending;
+		expect(finished).toHaveBeenCalledWith(choice !== "cancel");
+		expect(commit).toHaveBeenCalledTimes(choice === "cancel" ? 0 : 1);
+		expect(controller.item?.id).toBe(choice === "cancel" ? "first" : "second");
+	});
 
 	it("keeps a waiting selection pending after a failed save and allows cancellation", async () => {
-		const controller = new HistoricalTimeController(ports(async () => {
-			throw new Error("save failed");
-		}));
+		const controller = new HistoricalTimeController(
+			ports(async () => {
+				throw new Error("save failed");
+			}),
+		);
 		controller.select(item("first", "first", POINT));
 		controller.draft.original = "unsaved";
 		const commit = vi.fn();
@@ -263,7 +266,8 @@ test("navigation permission does not apply the target form even after accepting 
 		reload: vi.fn(),
 		select: vi.fn(),
 	});
-	const first = item("first"), second = item("second");
+	const first = item("first"),
+		second = item("second");
 	controller.reset(first);
 	controller.draft.start.year = "2026";
 	const permission = controller.canSelect(second, () => true);
@@ -311,9 +315,11 @@ test("save preserves newer input and keeps its selection guard pending until the
 });
 
 test("data correction retains an orphaned dirty form and reports missing Work save failures", async () => {
-	const controller = new HistoricalTimeController(ports(async () => {
-		throw new Error("missing Work");
-	}));
+	const controller = new HistoricalTimeController(
+		ports(async () => {
+			throw new Error("missing Work");
+		}),
+	);
 	controller.reset(item("deleted"));
 	controller.draft.start.year = "2026";
 	controller.reconcileSelection(null);

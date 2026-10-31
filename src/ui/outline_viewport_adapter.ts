@@ -63,7 +63,7 @@ export class OutlineViewportAdapter extends OutlineScrollAdapter {
 	}
 
 	async restorePane(itemId: string | null, current: () => boolean): Promise<void> {
-		const mounted = !itemId || await this.ensureMounted(itemId, current);
+		const mounted = !itemId || (await this.ensureMounted(itemId, current));
 		if (!current()) return;
 		if (mounted) await focusOutlineEditor(itemId, undefined, current, false);
 		else this.restoreOtherFocus({ focus: "rows" });
@@ -91,9 +91,11 @@ export class OutlineViewportAdapter extends OutlineScrollAdapter {
 		const scroll = owner ? readScroll(owner) : null;
 		let editorPosition = selectedId ? captureEditorPosition(selectedId, hoistId) : undefined;
 		if (
-			selectedId && this.focusedItem === selectedId &&
+			selectedId &&
+			this.focusedItem === selectedId &&
 			!document.querySelector(`textarea[data-item-id="${CSS.escape(selectedId)}"]`)
-		) editorPosition = this.focusedPosition;
+		)
+			editorPosition = this.focusedPosition;
 		if (longForm && selectedId) editorPosition = this.captureManuscript(selectedId, hoistId);
 		return {
 			editorPosition,
@@ -123,10 +125,7 @@ export class OutlineViewportAdapter extends OutlineScrollAdapter {
 		textarea.scrollLeft = position.scrollLeft;
 	}
 
-	private async restoreEditor(
-		viewport: OutlineViewport,
-		current: () => boolean,
-	): Promise<boolean> {
+	private async restoreEditor(viewport: OutlineViewport, current: () => boolean): Promise<boolean> {
 		const position = viewport.editorPosition;
 		if (position?.itemId && !(await this.ensureMounted(position.itemId, current))) {
 			if (!current()) return false;
@@ -144,15 +143,14 @@ export class OutlineViewportAdapter extends OutlineScrollAdapter {
 	}
 
 	private restoreOtherFocus(viewport: Pick<OutlineViewport, "focus">): void {
-		document.querySelector<HTMLElement>(
-			viewport.focus === "first-item" ? ".first-item" : ".rows, .first-item",
-		)?.focus({ preventScroll: true });
+		document
+			.querySelector<HTMLElement>(
+				viewport.focus === "first-item" ? ".first-item" : ".rows, .first-item",
+			)
+			?.focus({ preventScroll: true });
 	}
 
-	private async restoreFocus(
-		viewport: OutlineViewport,
-		current: () => boolean,
-	): Promise<boolean> {
+	private async restoreFocus(viewport: OutlineViewport, current: () => boolean): Promise<boolean> {
 		if (viewport.focus === "long-form") {
 			this.restoreLongForm(viewport.editorPosition);
 			return true;

@@ -49,7 +49,7 @@ function normalVisibleRows(
 		const entry = stack.pop();
 		if (!entry) continue;
 		const { item, depth } = entry;
-		const descendants = item.referenceStub ? [] : children.get(item.id) ?? [];
+		const descendants = item.referenceStub ? [] : (children.get(item.id) ?? []);
 		rows.push({ item, depth, hasChildren: descendants.length > 0, stash: false });
 		if (!item.collapsed || transientExpandedSet.has(item.id)) {
 			for (let i = descendants.length - 1; i >= 0; i--) {
@@ -72,9 +72,9 @@ export function buildVisibleRows(
 	const roots = rootItems(projection.rootOccurrenceIds, hierarchy.itemById);
 	const rows = normalVisibleRows(roots, hierarchy.children, transientExpandedIds);
 	if (showStash) {
-		const stashItems = snapshot.items.filter((item) => stash.has(item.id)).sort((a, b) =>
-			a.orderKey - b.orderKey
-		);
+		const stashItems = snapshot.items
+			.filter((item) => stash.has(item.id))
+			.sort((a, b) => a.orderKey - b.orderKey);
 		for (const item of stashItems) rows.push({ item, depth: 0, hasChildren: false, stash: true });
 	}
 	return rows;

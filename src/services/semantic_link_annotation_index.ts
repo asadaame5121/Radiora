@@ -35,7 +35,8 @@ export function indexSemanticLinkAnnotations(
 		});
 		next.set(
 			id,
-			before && before.length === reusable.length &&
+			before &&
+				before.length === reusable.length &&
 				before.every((annotation, index) => annotation === reusable[index])
 				? before
 				: reusable,
@@ -49,12 +50,14 @@ export function indexSemanticLinkAnnotations(
 }
 
 function sameAnnotation(left: SemanticLinkAnnotation, right: SemanticLinkAnnotation): boolean {
-	return left.occurrenceId === right.occurrenceId &&
+	return (
+		left.occurrenceId === right.occurrenceId &&
 		left.workId === right.workId &&
 		left.linkId === right.linkId &&
 		left.type === right.type &&
 		left.direction === right.direction &&
 		left.otherWorkId === right.otherWorkId &&
 		left.otherDisplayName === right.otherDisplayName &&
-		left.reason === right.reason;
+		left.reason === right.reason
+	);
 }

@@ -16,8 +16,8 @@ Deno.test("サザエさんの家系図バックアップJSONがRadioraのバリ�
 	assertEquals(backup.schemaVersion, BACKUP_SCHEMA_VERSION);
 
 	// カスタム関係型定義が登録されていること
-	const customDefs = backup.data.relationTypeDefinitions?.filter((d: RelationTypeDefinition) =>
-		!d.builtIn
+	const customDefs = backup.data.relationTypeDefinitions?.filter(
+		(d: RelationTypeDefinition) => !d.builtIn,
 	);
 	assertEquals((customDefs?.length ?? 0) >= MIN_CUSTOM_DEFS_SAZAE, true);
 	const customNames = new Set(customDefs?.map((d: RelationTypeDefinition) => d.name));
@@ -43,8 +43,8 @@ Deno.test("伊藤誠の家系図バックアップJSONがRadioraのバリデー�
 	assertEquals(backup.format, "radiora-backup");
 	assertEquals(backup.schemaVersion, BACKUP_SCHEMA_VERSION);
 
-	const customDefs = backup.data.relationTypeDefinitions?.filter((d: RelationTypeDefinition) =>
-		!d.builtIn
+	const customDefs = backup.data.relationTypeDefinitions?.filter(
+		(d: RelationTypeDefinition) => !d.builtIn,
 	);
 	assertEquals((customDefs?.length ?? 0) >= MIN_CUSTOM_DEFS_MAKOTO, true);
 

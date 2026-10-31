@@ -63,8 +63,8 @@ export class WorkingCopyAutosaveCoordinator {
 		this.#save = options.save;
 		this.#onStatusChange = options.onStatusChange;
 		this.#delayMs = options.delayMs ?? 250;
-		this.#setTimer = options.setTimer ??
-			((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
+		this.#setTimer =
+			options.setTimer ?? ((callback, delayMs) => globalThis.setTimeout(callback, delayMs));
 		this.#clearTimer = options.clearTimer ?? ((timer) => globalThis.clearTimeout(timer));
 	}
 
@@ -86,19 +86,21 @@ export class WorkingCopyAutosaveCoordinator {
 		entry.status = { workId, branchId, phase: "unsaved" };
 		entry.timer = this.#setTimer(() => {
 			entry.timer = undefined;
-			void this.#flushEntry(entry).then((result) => {
-				// The retained draft and failed status are the timer's recovery path.
-				if (result.isErr()) return;
-			}).catch((cause: unknown) => {
-				if (entry.savedVersion < entry.version) {
-					entry.status = {
-						workId: entry.workId,
-						branchId: entry.branchId,
-						phase: "unsaved",
-					};
-				}
-				console.error("Working Copy autosave internal error", cause);
-			});
+			void this.#flushEntry(entry)
+				.then((result) => {
+					// The retained draft and failed status are the timer's recovery path.
+					if (result.isErr()) return;
+				})
+				.catch((cause: unknown) => {
+					if (entry.savedVersion < entry.version) {
+						entry.status = {
+							workId: entry.workId,
+							branchId: entry.branchId,
+							phase: "unsaved",
+						};
+					}
+					console.error("Working Copy autosave internal error", cause);
+				});
 		}, this.#delayMs);
 		this.#entries.set(branchId, entry);
 		this.#emit();
@@ -110,12 +112,11 @@ export class WorkingCopyAutosaveCoordinator {
 	}
 
 	async flushResult(workId?: string): Promise<Result<void, WorkingCopySaveError>> {
-		const entries = workId === undefined
-			? [...this.#entries.values()]
-			: [...this.#entries.values()].filter((entry) => entry.workId === workId);
-		const results = await Promise.allSettled(
-			entries.map((entry) => this.#flushEntry(entry)),
-		);
+		const entries =
+			workId === undefined
+				? [...this.#entries.values()]
+				: [...this.#entries.values()].filter((entry) => entry.workId === workId);
+		const results = await Promise.allSettled(entries.map((entry) => this.#flushEntry(entry)));
 		for (const result of results) {
 			if (result.status === "rejected") throw result.reason;
 			if (result.value.isErr()) return result.value;

@@ -16,7 +16,10 @@ interface OutlinePorts {
 		cancel(): void;
 	};
 	drafts(): readonly WorkingCopyDraft[];
-	prepareTree(current: () => boolean, required: boolean): {
+	prepareTree(
+		current: () => boolean,
+		required: boolean,
+	): {
 		result: Promise<void>;
 		publish(): void;
 		cancel(): void;
@@ -151,12 +154,14 @@ export class OutlineController {
 		};
 	}
 
-	async reload(options: {
-		focusId?: string;
-		canFocus?: () => boolean;
-		current?: () => boolean;
-		treeRequired?: boolean;
-	} = {}): Promise<boolean> {
+	async reload(
+		options: {
+			focusId?: string;
+			canFocus?: () => boolean;
+			current?: () => boolean;
+			treeRequired?: boolean;
+		} = {},
+	): Promise<boolean> {
 		const publication = this.begin(options.current);
 		const { current } = publication;
 		if (!current()) return false;

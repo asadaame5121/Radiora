@@ -17,16 +17,14 @@ Deno.test("emergence decisions stay explicit and use injected vocabulary", async
 	assert(inspector.includes("InspectorRelationTab"), "renders relation tab in inspector");
 
 	assert(section.length > 0, "emergence suggestion section not found");
-	for (
-		const code of [
-			"emergenceLoading",
-			"emergenceAccept",
-			"emergenceHold",
-			"emergenceDismiss",
-			"emergenceResolutionReason",
-			"noEmergenceSuggestion",
-		]
-	) {
+	for (const code of [
+		"emergenceLoading",
+		"emergenceAccept",
+		"emergenceHold",
+		"emergenceDismiss",
+		"emergenceResolutionReason",
+		"noEmergenceSuggestion",
+	]) {
 		assert(section.includes(`vocabulary.${code}`), `missing vocabulary.${code}`);
 	}
 	assert(section.includes('onResolveEmergence(suggestion, "accept")'));

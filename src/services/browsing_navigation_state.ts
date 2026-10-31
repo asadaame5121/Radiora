@@ -62,7 +62,9 @@ export function browseToOutlineOccurrence(
 	selectedOccurrenceId: string | null,
 ): BrowsingNavigationState {
 	const current = currentBrowsingLocation(state);
-	const remainsInHoist = !current.hoistOccurrenceId || !selectedOccurrenceId ||
+	const remainsInHoist =
+		!current.hoistOccurrenceId ||
+		!selectedOccurrenceId ||
 		isDescendantOrSelf(snapshot.items, selectedOccurrenceId, current.hoistOccurrenceId);
 	return pushLocation(state, {
 		selectedOccurrenceId,
@@ -91,10 +93,7 @@ export function moveBrowsingHistory(
 	}));
 }
 
-export function canMoveBrowsingHistory(
-	state: BrowsingNavigationState,
-	delta: -1 | 1,
-): boolean {
+export function canMoveBrowsingHistory(state: BrowsingNavigationState, delta: -1 | 1): boolean {
 	const pane = activeBrowsingPane(state);
 	const nextIndex = pane.historyIndex + delta;
 	return nextIndex >= 0 && nextIndex < pane.history.length;
@@ -134,19 +133,21 @@ export function reconcileBrowsingState(
 		panes: state.panes.map((pane) => {
 			const current = pane.history[pane.historyIndex];
 			if (!current) return pane;
-			const selectedOccurrenceId = current.selectedOccurrenceId &&
-					ids.has(current.selectedOccurrenceId)
-				? current.selectedOccurrenceId
-				: null;
-			const hoistOccurrenceId = current.hoistOccurrenceId && ids.has(current.hoistOccurrenceId)
-				? current.hoistOccurrenceId
-				: null;
+			const selectedOccurrenceId =
+				current.selectedOccurrenceId && ids.has(current.selectedOccurrenceId)
+					? current.selectedOccurrenceId
+					: null;
+			const hoistOccurrenceId =
+				current.hoistOccurrenceId && ids.has(current.hoistOccurrenceId)
+					? current.hoistOccurrenceId
+					: null;
 			if (
 				selectedOccurrenceId === current.selectedOccurrenceId &&
 				hoistOccurrenceId === current.hoistOccurrenceId
-			) return pane;
+			)
+				return pane;
 			const history = pane.history.map((entry, index) =>
-				index === pane.historyIndex ? { selectedOccurrenceId, hoistOccurrenceId } : entry
+				index === pane.historyIndex ? { selectedOccurrenceId, hoistOccurrenceId } : entry,
 			);
 			return { ...pane, history };
 		}),
@@ -161,9 +162,9 @@ export function projectBrowsingOutline(
 	if (!hoistOccurrenceId || !byId.has(hoistOccurrenceId)) {
 		return {
 			items: snapshot.items,
-			rootOccurrenceIds: snapshot.items.filter((item) => item.parentId === null).map((item) =>
-				item.id
-			),
+			rootOccurrenceIds: snapshot.items
+				.filter((item) => item.parentId === null)
+				.map((item) => item.id),
 			breadcrumb: [],
 		};
 	}
@@ -219,7 +220,8 @@ function pushLocation(
 	if (
 		current.selectedOccurrenceId === location.selectedOccurrenceId &&
 		current.hoistOccurrenceId === location.hoistOccurrenceId
-	) return state;
+	)
+		return state;
 	return updateActivePane(state, (pane) => {
 		const history = [...pane.history.slice(0, pane.historyIndex + 1), location];
 		return { ...pane, history, historyIndex: history.length - 1 };
@@ -232,7 +234,7 @@ function updateActivePane(
 ): BrowsingNavigationState {
 	return {
 		...state,
-		panes: state.panes.map((pane) => pane.id === state.activePaneId ? update(pane) : pane),
+		panes: state.panes.map((pane) => (pane.id === state.activePaneId ? update(pane) : pane)),
 	};
 }
 

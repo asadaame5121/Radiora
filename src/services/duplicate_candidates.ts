@@ -19,12 +19,11 @@ import type {
 import { normalizeSearchText, titleFromText } from "./search_text.ts";
 import { TagService } from "./tag_service.ts";
 
-type DuplicateCandidateStore =
-	& DiscoveryStorePort
-	& OutlineStorePort
-	& RelationStorePort
-	& WorkStorePort
-	& Partial<RelationTypeDefinitionStorePort>;
+type DuplicateCandidateStore = DiscoveryStorePort &
+	OutlineStorePort &
+	RelationStorePort &
+	WorkStorePort &
+	Partial<RelationTypeDefinitionStorePort>;
 
 export interface DuplicateWorkRef {
 	workId: string;
@@ -95,8 +94,8 @@ export class DuplicateCandidateService {
 		for (const work of works) {
 			if (work.deletedAt) continue;
 
-			const main = branches.find((branch) =>
-				branch.workId === work.id && branch.name === "main" && !branch.archivedAt
+			const main = branches.find(
+				(branch) => branch.workId === work.id && branch.name === "main" && !branch.archivedAt,
 			);
 			if (!main) continue;
 
@@ -125,8 +124,8 @@ export class DuplicateCandidateService {
 	}
 
 	private resolveTitle(work: Work, branches: Branch[], copies: WorkingCopy[]): string {
-		const main = branches.find((branch) =>
-			branch.workId === work.id && branch.name === "main" && !branch.archivedAt
+		const main = branches.find(
+			(branch) => branch.workId === work.id && branch.name === "main" && !branch.archivedAt,
 		);
 		if (!main) return "";
 		const copy = copies.find((candidate) => candidate.branchId === main.id);
@@ -143,8 +142,9 @@ export class DuplicateCandidateService {
 	): DuplicateCandidate[] {
 		this.populateLinkKeys(contexts, links, definitions);
 
-		const sorted = [...contexts].sort((left, right) =>
-			left.title.localeCompare(right.title) || left.work.id.localeCompare(right.work.id)
+		const sorted = [...contexts].sort(
+			(left, right) =>
+				left.title.localeCompare(right.title) || left.work.id.localeCompare(right.work.id),
 		);
 
 		const candidates: DuplicateCandidate[] = [];
@@ -167,12 +167,13 @@ export class DuplicateCandidateService {
 			}
 		}
 
-		return candidates.sort((left, right) =>
-			right.score - left.score ||
-			left.workA.title.localeCompare(right.workA.title) ||
-			left.workB.title.localeCompare(right.workB.title) ||
-			left.workA.workId.localeCompare(right.workA.workId) ||
-			left.workB.workId.localeCompare(right.workB.workId)
+		return candidates.sort(
+			(left, right) =>
+				right.score - left.score ||
+				left.workA.title.localeCompare(right.workA.title) ||
+				left.workB.title.localeCompare(right.workB.title) ||
+				left.workA.workId.localeCompare(right.workA.workId) ||
+				left.workB.workId.localeCompare(right.workB.workId),
 		);
 	}
 
@@ -214,7 +215,8 @@ export class DuplicateCandidateService {
 		const reasons: DuplicateReason[] = [];
 
 		if (
-			contextA.normalizedTitle && contextB.normalizedTitle &&
+			contextA.normalizedTitle &&
+			contextB.normalizedTitle &&
 			contextA.normalizedTitle === contextB.normalizedTitle
 		) {
 			reasons.push({
@@ -246,12 +248,16 @@ export class DuplicateCandidateService {
 		// タグ用 alias (canonical が # で始まり variants も全て # 始まり) は対象外
 		// tag_service.ts の isTagAlias 参照
 		const searchAliases = aliases
-			.filter((alias) =>
-				!(alias.canonical.startsWith("#") &&
-					alias.variants.every((variant) => variant.startsWith("#")))
+			.filter(
+				(alias) =>
+					!(
+						alias.canonical.startsWith("#") &&
+						alias.variants.every((variant) => variant.startsWith("#"))
+					),
 			)
-			.sort((left, right) =>
-				left.canonical.localeCompare(right.canonical) || left.id.localeCompare(right.id)
+			.sort(
+				(left, right) =>
+					left.canonical.localeCompare(right.canonical) || left.id.localeCompare(right.id),
 			);
 
 		for (const alias of searchAliases) {
@@ -291,11 +297,12 @@ export class DuplicateCandidateService {
 				const [type, thirdWorkId] = key.split(":", 2) as [LinkType, string];
 				return { type, thirdWorkId };
 			})
-			.filter(({ thirdWorkId }) =>
-				thirdWorkId !== contextA.work.id && thirdWorkId !== contextB.work.id
+			.filter(
+				({ thirdWorkId }) => thirdWorkId !== contextA.work.id && thirdWorkId !== contextB.work.id,
 			)
-			.sort((left, right) =>
-				left.type.localeCompare(right.type) || left.thirdWorkId.localeCompare(right.thirdWorkId)
+			.sort(
+				(left, right) =>
+					left.type.localeCompare(right.type) || left.thirdWorkId.localeCompare(right.thirdWorkId),
 			)
 			.map(({ type, thirdWorkId }) => {
 				const thirdTitle = titleByWorkId.get(thirdWorkId) || thirdWorkId;

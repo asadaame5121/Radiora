@@ -126,12 +126,12 @@ export interface ResumePosition {
 
 export type NavigationTarget =
 	| {
-		kind: "occurrence";
-		workId: string;
-		occurrenceId: string;
-		ancestorOccurrenceIds: string[];
-		fellBack: boolean;
-	}
+			kind: "occurrence";
+			workId: string;
+			occurrenceId: string;
+			ancestorOccurrenceIds: string[];
+			fellBack: boolean;
+	  }
 	| { kind: "work"; workId: string; fellBack: true };
 
 export interface ResolvedBookmark {

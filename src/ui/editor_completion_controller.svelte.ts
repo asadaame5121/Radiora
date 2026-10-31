@@ -24,7 +24,8 @@ export type {
 	InternalReferenceCompletionState,
 };
 
-const REFERENCE_LIMIT = 12, LINK_LIMIT = 16;
+const REFERENCE_LIMIT = 12,
+	LINK_LIMIT = 16;
 
 function dispatchReplacementInput(textarea: HTMLTextAreaElement, data: string): void {
 	textarea.dispatchEvent(
@@ -160,7 +161,8 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 			inlineLinkCompletion = { ...current, query, candidates, activeIndex: 0, searching: false };
 		} catch (cause) {
 			if (
-				request === inlineLinkCompletionRequest && ports.getSelectedId() === selectedId &&
+				request === inlineLinkCompletionRequest &&
+				ports.getSelectedId() === selectedId &&
 				inlineLinkCompletion
 			) {
 				inlineLinkCompletion = { ...inlineLinkCompletion, searching: false };
@@ -173,17 +175,24 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 		const state = inlineLinkCompletion;
 		const query = state?.query.trim() ?? "";
 		if (
-			!state || state.itemId !== itemId || state.phase !== "candidate" || !query || state.creating
-		) return;
+			!state ||
+			state.itemId !== itemId ||
+			state.phase !== "candidate" ||
+			!query ||
+			state.creating
+		)
+			return;
 		const request = ++inlineLinkCompletionRequest;
 		const selectedId = ports.getSelectedId();
 		inlineLinkCompletion = { ...state, creating: true };
 		try {
 			const created = await ports.api.quickCapture(query);
 			if (
-				request !== inlineLinkCompletionRequest || ports.getSelectedId() !== selectedId ||
+				request !== inlineLinkCompletionRequest ||
+				ports.getSelectedId() !== selectedId ||
 				!inlineLinkCompletion
-			) return;
+			)
+				return;
 			inlineLinkCompletion = {
 				...inlineLinkCompletion,
 				phase: "type",
@@ -196,7 +205,8 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 			await ports.loadUnplacedWorks();
 		} catch (cause) {
 			if (
-				request === inlineLinkCompletionRequest && ports.getSelectedId() === selectedId &&
+				request === inlineLinkCompletionRequest &&
+				ports.getSelectedId() === selectedId &&
 				inlineLinkCompletion
 			) {
 				inlineLinkCompletion = { ...inlineLinkCompletion, creating: false };
@@ -248,7 +258,9 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 		const candidate = state.candidates[state.activeIndex];
 		if (candidate) selectInlineLinkCandidate(itemId, candidate);
 		else if (
-			state.activeIndex === state.candidates.length && state.query.trim() && !state.searching
+			state.activeIndex === state.candidates.length &&
+			state.query.trim() &&
+			!state.searching
 		) {
 			void createInlineLinkTarget(itemId);
 		}
@@ -269,8 +281,11 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 			return;
 		}
 		if (
-			state.phase === "candidate" && event.key === "Enter" && event.shiftKey &&
-			state.query.trim() && !state.searching
+			state.phase === "candidate" &&
+			event.key === "Enter" &&
+			event.shiftKey &&
+			state.query.trim() &&
+			!state.searching
 		) {
 			event.preventDefault();
 			void createInlineLinkTarget(itemId);
@@ -280,22 +295,25 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 			event.preventDefault();
 			const names = relationTypeNames(ports.relationTypeNames);
 			const current = state.selectedType
-				? Math.max(0, names.findIndex((type) => type === state.selectedType))
+				? Math.max(
+						0,
+						names.findIndex((type) => type === state.selectedType),
+					)
 				: 0;
-			state.selectedType = names[
-				(current + (event.key === "ArrowDown" ? 1 : -1) + names.length) % names.length
-			];
+			state.selectedType =
+				names[(current + (event.key === "ArrowDown" ? 1 : -1) + names.length) % names.length];
 			return;
 		}
 		if (
 			state.phase === "direction" &&
-			(event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "ArrowUp" ||
+			(event.key === "ArrowLeft" ||
+				event.key === "ArrowRight" ||
+				event.key === "ArrowUp" ||
 				event.key === "ArrowDown")
 		) {
 			event.preventDefault();
-			state.direction = event.key === "ArrowLeft" || event.key === "ArrowUp"
-				? "reverse"
-				: "forward";
+			state.direction =
+				event.key === "ArrowLeft" || event.key === "ArrowUp" ? "reverse" : "forward";
 			return;
 		}
 		if (event.key !== "Enter" && event.key !== "Tab") return;
@@ -311,9 +329,14 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 		const candidate = state?.selectedCandidate;
 		const type = state?.selectedType;
 		if (
-			!state || state.itemId !== itemId || !item || !candidate || !type ||
+			!state ||
+			state.itemId !== itemId ||
+			!item ||
+			!candidate ||
+			!type ||
 			candidate.scope !== "work"
-		) return;
+		)
+			return;
 		if (item.workId === candidate.workId) {
 			ports.reportError(
 				`同じ${ports.vocabulary.work}には${ports.vocabulary.semanticLink}を追加できません。`,
@@ -325,7 +348,9 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 			? findInlineLinkTrigger(textarea.value, state.range.end, state.range.end)
 			: null;
 		if (
-			!textarea || !currentTrigger || currentTrigger.range.start !== state.range.start ||
+			!textarea ||
+			!currentTrigger ||
+			currentTrigger.range.start !== state.range.start ||
 			currentTrigger.range.end !== state.range.end
 		) {
 			ports.reportError(
@@ -341,12 +366,13 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 		const triggerText = textarea.value.slice(state.range.start, state.range.end);
 		try {
 			await ports.api.createLink({ fromId, toId, type, origin: "human", status: "asserted" });
-			const current = request === inlineLinkCompletionRequest &&
-				ports.getSelectedId() === selectedId;
+			const current =
+				request === inlineLinkCompletionRequest && ports.getSelectedId() === selectedId;
 			if (current) cancelInlineLinkCompletion();
 			const trigger = findInlineLinkTrigger(textarea.value, state.range.end, state.range.end);
 			if (
-				trigger?.range.start === state.range.start && trigger.range.end === state.range.end &&
+				trigger?.range.start === state.range.start &&
+				trigger.range.end === state.range.end &&
 				textarea.value.slice(state.range.start, state.range.end) === triggerText
 			) {
 				if (current) textarea.focus();
@@ -375,7 +401,9 @@ export function createEditorCompletionController(ports: EditorCompletionPorts) {
 		if (!textarea) return;
 		const trigger = findInternalReferenceTrigger(textarea.value, state.range.end, state.range.end);
 		if (
-			!trigger || trigger.range.start !== state.range.start || trigger.range.end !== state.range.end
+			!trigger ||
+			trigger.range.start !== state.range.start ||
+			trigger.range.end !== state.range.end
 		) {
 			cancelInternalReferenceCompletion();
 			return;

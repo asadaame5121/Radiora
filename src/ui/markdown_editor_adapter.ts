@@ -11,11 +11,7 @@ export interface MarkdownEditorAdapterOptions {
 	value: string;
 	textareaAttributes?: Record<string, string>;
 	onChange(value: string, textarea: HTMLTextAreaElement): void;
-	onKeydown?(
-		event: KeyboardEvent,
-		textarea: HTMLTextAreaElement,
-		compositionGuard: boolean,
-	): void;
+	onKeydown?(event: KeyboardEvent, textarea: HTMLTextAreaElement, compositionGuard: boolean): void;
 	onSelectionChange?(textarea: HTMLTextAreaElement): void;
 	onFocus?(textarea: HTMLTextAreaElement): void;
 	onBlur?(textarea: HTMLTextAreaElement): void;

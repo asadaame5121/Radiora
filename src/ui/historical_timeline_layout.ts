@@ -15,7 +15,7 @@ export function historicalTimelineDomain(items: readonly OutlineItem[]): [number
 	const values = items.flatMap((item) =>
 		item.historicalTime
 			? historicalTimeBounds(item.historicalTime).filter((value): value is number => value !== null)
-			: []
+			: [],
 	);
 	if (values.length === 0) return [historicalDay(1), historicalDay(2)];
 	let min = values[0];
@@ -91,12 +91,10 @@ function createTimelineNode(
 		anchor,
 		start: start === null ? Math.min(left, anchor) : project(start),
 		end: end === null ? Math.max(right, anchor) : project(end),
-		startLatest: time.kind === "period" && time.start
-			? project(historicalDateBounds(time.start)[1])
-			: anchor,
-		endEarliest: time.kind === "period" && time.end
-			? project(historicalDateBounds(time.end)[0])
-			: anchor,
+		startLatest:
+			time.kind === "period" && time.start ? project(historicalDateBounds(time.start)[1]) : anchor,
+		endEarliest:
+			time.kind === "period" && time.end ? project(historicalDateBounds(time.end)[0]) : anchor,
 		unknownStart: start === null,
 		unknownEnd: end === null,
 		y: 0,

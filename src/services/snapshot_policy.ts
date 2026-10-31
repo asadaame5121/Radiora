@@ -41,12 +41,14 @@ export class DefaultSnapshotPolicy implements SnapshotPolicy {
 
 		if (latest?.contentHash === request.contentHash) return { create: false, reason: "unchanged" };
 		if (
-			now - asTime(request.workingCopy.updatedAt, "Working Copy updatedAt") < SNAPSHOT_EDIT_IDLE_MS
+			now - asTime(request.workingCopy.updatedAt, "Working Copy updatedAt") <
+			SNAPSHOT_EDIT_IDLE_MS
 		) {
 			return { create: false, reason: "editing" };
 		}
 		if (
-			latest && now - asTime(latest.createdAt, "Snapshot createdAt") < SNAPSHOT_MINIMUM_INTERVAL_MS
+			latest &&
+			now - asTime(latest.createdAt, "Snapshot createdAt") < SNAPSHOT_MINIMUM_INTERVAL_MS
 		) {
 			return { create: false, reason: "minimum-interval" };
 		}
@@ -86,8 +88,9 @@ function latestForWorkingCopy(
 	workingCopy: WorkingCopy,
 ): RecoverySnapshot | undefined {
 	return snapshots
-		.filter((snapshot) =>
-			snapshot.workId === workingCopy.workId && snapshot.branchId === workingCopy.branchId
+		.filter(
+			(snapshot) =>
+				snapshot.workId === workingCopy.workId && snapshot.branchId === workingCopy.branchId,
 		)
 		.reduce<RecoverySnapshot | undefined>(
 			(latest, snapshot) =>
@@ -97,25 +100,26 @@ function latestForWorkingCopy(
 }
 
 function compareSnapshotOrder(left: RecoverySnapshot, right: RecoverySnapshot): number {
-	const byTime = asTime(left.createdAt, "Snapshot createdAt") -
-		asTime(right.createdAt, "Snapshot createdAt");
+	const byTime =
+		asTime(left.createdAt, "Snapshot createdAt") - asTime(right.createdAt, "Snapshot createdAt");
 	return byTime || left.id.localeCompare(right.id);
 }
 
-function compareSnapshotScopeAndOrder(
-	left: RecoverySnapshot,
-	right: RecoverySnapshot,
-): number {
-	return left.workId.localeCompare(right.workId) ||
+function compareSnapshotScopeAndOrder(left: RecoverySnapshot, right: RecoverySnapshot): number {
+	return (
+		left.workId.localeCompare(right.workId) ||
 		left.branchId.localeCompare(right.branchId) ||
-		compareSnapshotOrder(left, right);
+		compareSnapshotOrder(left, right)
+	);
 }
 
 function isProtected(snapshot: RecoverySnapshot, now: number): boolean {
 	if (snapshot.name !== undefined) return true;
 	if (!snapshot.protection) return false;
-	return snapshot.protection.expiresAt === undefined ||
-		asTime(snapshot.protection.expiresAt, "Snapshot protection expiresAt") > now;
+	return (
+		snapshot.protection.expiresAt === undefined ||
+		asTime(snapshot.protection.expiresAt, "Snapshot protection expiresAt") > now
+	);
 }
 
 function retentionBucket(snapshot: RecoverySnapshot, age: number): string {

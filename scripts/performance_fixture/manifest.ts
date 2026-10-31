@@ -113,8 +113,12 @@ function measureTopology(
 		maximumDepth: Math.max(0, ...depthById.values()),
 		depthDistribution: countDepths(depthById),
 		childCountDistribution: countChildCounts(occurrences, childCounts),
-		deepestOccurrenceIds: sortCounts(depthById).slice(0, 5).map(([id]) => id),
-		widestParentOccurrenceIds: sortCounts(childCounts).slice(0, 5).map(([id]) => id),
+		deepestOccurrenceIds: sortCounts(depthById)
+			.slice(0, 5)
+			.map(([id]) => id),
+		widestParentOccurrenceIds: sortCounts(childCounts)
+			.slice(0, 5)
+			.map(([id]) => id),
 	};
 }
 
@@ -189,7 +193,8 @@ function measureLinks(links: GraphStateSnapshot["links"], workIds: ReadonlySet<s
 			!workIds.has(link.from.workId) ||
 			!workIds.has(link.to.workId) ||
 			link.from.workId === link.to.workId
-		) throw new Error(`Performance fixture has invalid link endpoints: ${link.id}`);
+		)
+			throw new Error(`Performance fixture has invalid link endpoints: ${link.id}`);
 		const [left, right] = isSymmetricLinkType(link.type)
 			? [link.from.workId, link.to.workId].sort()
 			: [link.from.workId, link.to.workId];
@@ -204,7 +209,9 @@ function measureLinks(links: GraphStateSnapshot["links"], workIds: ReadonlySet<s
 	return {
 		uniqueAdjacentTopics: adjacent.size,
 		maximumDegree: Math.max(0, ...degree.values()),
-		highestDegreeWorkIds: sortCounts(degree).slice(0, 5).map(([id]) => id),
+		highestDegreeWorkIds: sortCounts(degree)
+			.slice(0, 5)
+			.map(([id]) => id),
 	};
 }
 
@@ -244,8 +251,8 @@ function countInternalReferences(text: string, workIds: ReadonlySet<string>): nu
 }
 
 function sortCounts(counts: ReadonlyMap<string, number>): Array<[string, number]> {
-	return [...counts.entries()].sort((left, right) =>
-		right[1] - left[1] || left[0].localeCompare(right[0])
+	return [...counts.entries()].sort(
+		(left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
 	);
 }
 
@@ -332,7 +339,8 @@ export function validateProfileShape(manifest: PerformanceFixtureManifest): void
 	if (
 		requiresDense &&
 		manifest.maximumDegree < Math.max(100, Math.floor(topicCount / DENSE_HUB_DEGREE_DIVISOR))
-	) throw new Error(`Profile ${profile} is missing its high-degree link hubs.`);
+	)
+		throw new Error(`Profile ${profile} is missing its high-degree link hubs.`);
 	if (manifest.linkCount !== topicCount * LINK_COUNT_PER_TOPIC) {
 		throw new Error(`Profile ${profile} has an unexpected link count.`);
 	}

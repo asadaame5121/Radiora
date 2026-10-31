@@ -7,10 +7,7 @@ export interface StartupApi {
 	getStartupStatus(): Promise<StartupStatus>;
 	retryStartup(): Promise<StartupStatus>;
 	loadStartupSnapshotCache(): Promise<StartupSnapshotCache | null>;
-	saveStartupSnapshotCache(
-		snapshot: OutlineSnapshot,
-		location?: BrowsingLocation,
-	): Promise<void>;
+	saveStartupSnapshotCache(snapshot: OutlineSnapshot, location?: BrowsingLocation): Promise<void>;
 }
 
 export interface StartupControllerOptions {
@@ -63,11 +60,7 @@ export class StartupController {
 		location?: BrowsingLocation,
 		canSave: () => boolean = () => true,
 	): void => {
-		if (
-			this.cacheActive ||
-			this.#cancelled || this.status.phase !== "ready" ||
-			!canSave()
-		) {
+		if (this.cacheActive || this.#cancelled || this.status.phase !== "ready" || !canSave()) {
 			return;
 		}
 		// biome-ignore lint/plugin/noSwallowedRejection: Startup acceleration is optional and must not interrupt editing.
@@ -82,7 +75,7 @@ export class StartupController {
 		this.#cancelWait?.();
 	};
 
-	#current = (): () => boolean => {
+	#current = (): (() => boolean) => {
 		const generation = this.#generation;
 		return () => !this.#cancelled && generation === this.#generation;
 	};

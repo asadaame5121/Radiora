@@ -8,40 +8,50 @@ Deno.test("lists only the selected Work's immutable versions in a stable order",
 	const service = new OutlineService(store);
 	const selected = await service.createItem({ text: "編集中", parentId: null });
 	const other = await service.createItem({ text: "別の思索", parentId: null });
-	const selectedBranch = selected.revisionSelector.mode === "branch"
-		? selected.revisionSelector.branchId
-		: "";
-	const otherBranch = other.revisionSelector.mode === "branch"
-		? other.revisionSelector.branchId
-		: "";
-	await store.createRevision({
-		id: "later",
-		workId: selected.workId,
-		text: "第二版",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: "2026-07-28T02:00:00.000Z",
-	}, selectedBranch);
-	await store.createRevision({
-		id: "other",
-		workId: other.workId,
-		text: "対象外",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: "2026-07-28T00:00:00.000Z",
-	}, otherBranch);
-	await store.createRevision({
-		id: "earlier",
-		workId: selected.workId,
-		text: "第一版",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: "2026-07-28T01:00:00.000Z",
-	}, selectedBranch);
+	const selectedBranch =
+		selected.revisionSelector.mode === "branch" ? selected.revisionSelector.branchId : "";
+	const otherBranch =
+		other.revisionSelector.mode === "branch" ? other.revisionSelector.branchId : "";
+	await store.createRevision(
+		{
+			id: "later",
+			workId: selected.workId,
+			text: "第二版",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: "2026-07-28T02:00:00.000Z",
+		},
+		selectedBranch,
+	);
+	await store.createRevision(
+		{
+			id: "other",
+			workId: other.workId,
+			text: "対象外",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: "2026-07-28T00:00:00.000Z",
+		},
+		otherBranch,
+	);
+	await store.createRevision(
+		{
+			id: "earlier",
+			workId: selected.workId,
+			text: "第一版",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: "2026-07-28T01:00:00.000Z",
+		},
+		selectedBranch,
+	);
 
 	const revisions = await service.listRevisions(selected.workId);
 
-	assertEquals(revisions.map((revision) => revision.id), ["earlier", "later"]);
+	assertEquals(
+		revisions.map((revision) => revision.id),
+		["earlier", "later"],
+	);
 	revisions[0].text = "呼び出し側から変更";
 	assertEquals((await service.listRevisions(selected.workId))[0].text, "第一版");
 });
@@ -63,9 +73,13 @@ Deno.test("deleting a parent promotes children in relative order", async () => {
 	const a = await service.createItem({ text: "a", parentId: parent.id });
 	const b = await service.createItem({ text: "b", parentId: parent.id, afterId: a.id });
 	await service.deleteItem(parent.id);
-	const roots = (await service.listOutline()).items.filter((item) => item.parentId === null)
+	const roots = (await service.listOutline()).items
+		.filter((item) => item.parentId === null)
 		.sort((x, y) => x.orderKey - y.orderKey);
-	assertEquals(roots.map((item) => item.id), [a.id, b.id]);
+	assertEquals(
+		roots.map((item) => item.id),
+		[a.id, b.id],
+	);
 });
 
 Deno.test("cycles are projected into stash knots", async () => {
@@ -85,7 +99,10 @@ Deno.test("orphaned Occurrences are isolated in Stash without being deleted", as
 
 	const snapshot = await service.listOutline();
 
-	assertEquals(snapshot.items.some((item) => item.id === orphan.id), true);
+	assertEquals(
+		snapshot.items.some((item) => item.id === orphan.id),
+		true,
+	);
 	assertEquals(snapshot.stashItemIds, [orphan.id]);
 });
 
@@ -105,7 +122,10 @@ Deno.test("title suggestions are normalized strict prefixes", async () => {
 	await service.createItem({ text: "検索から始まる", parentId: null });
 	await service.createItem({ text: "本文だけ\nBM25", parentId: null });
 	const results = await service.suggestItems("bm", 8);
-	assertEquals(results.map((result) => result.item.id), [prefix.id]);
+	assertEquals(
+		results.map((result) => result.item.id),
+		[prefix.id],
+	);
 });
 
 Deno.test("manual aliases expand lexical search with an explanation", async () => {
@@ -123,20 +143,19 @@ Deno.test("emergence finds an unlinked item through two shared neighbors", async
 	const target = await service.createItem({ text: "Target", parentId: null });
 	const first = await service.createItem({ text: "First bridge", parentId: null });
 	const second = await service.createItem({ text: "Second bridge", parentId: null });
-	for (
-		const [fromId, toId] of [
-			[context.id, first.id],
-			[target.id, first.id],
-			[context.id, second.id],
-			[target.id, second.id],
-		]
-	) {
+	for (const [fromId, toId] of [
+		[context.id, first.id],
+		[target.id, first.id],
+		[context.id, second.id],
+		[target.id, second.id],
+	]) {
 		await service.createLink({ fromId, toId, type: "LIKE" });
 	}
 	const suggestions = await service.listEmergenceSuggestions(context.id);
 	assert(
-		suggestions.some((suggestion) =>
-			suggestion.kind === "latent-relation" && suggestion.targetItemId === target.id
+		suggestions.some(
+			(suggestion) =>
+				suggestion.kind === "latent-relation" && suggestion.targetItemId === target.id,
 		),
 	);
 });
@@ -148,32 +167,31 @@ Deno.test("emergence decisions persist without automatic promotion and acceptanc
 	const target = await service.createItem({ text: "Target", parentId: null });
 	const first = await service.createItem({ text: "First bridge", parentId: null });
 	const second = await service.createItem({ text: "Second bridge", parentId: null });
-	for (
-		const [fromId, toId] of [
-			[context.id, first.id],
-			[target.id, first.id],
-			[context.id, second.id],
-			[target.id, second.id],
-		]
-	) {
+	for (const [fromId, toId] of [
+		[context.id, first.id],
+		[target.id, first.id],
+		[context.id, second.id],
+		[target.id, second.id],
+	]) {
 		await service.createLink({ fromId, toId, type: "LIKE" });
 	}
-	const [candidate] = (await service.listEmergenceSuggestions(context.id)).filter((suggestion) =>
-		suggestion.kind === "latent-relation" && suggestion.targetWorkId === target.workId
+	const [candidate] = (await service.listEmergenceSuggestions(context.id)).filter(
+		(suggestion) =>
+			suggestion.kind === "latent-relation" && suggestion.targetWorkId === target.workId,
 	);
 	assert(candidate);
 	assertEquals(candidate.contextWorkId, context.workId);
 	assertEquals(candidate.persistenceStatus, "pending");
 	assertEquals(
-		(await store.listLinks()).some((link) =>
-			link.from.workId === context.workId && link.to.workId === target.workId
+		(await store.listLinks()).some(
+			(link) => link.from.workId === context.workId && link.to.workId === target.workId,
 		),
 		false,
 	);
 
 	await service.resolveEmergenceSuggestion(candidate.id, "pin");
-	const held = (await service.listEmergenceSuggestions(context.id)).find((item) =>
-		item.id === candidate.id
+	const held = (await service.listEmergenceSuggestions(context.id)).find(
+		(item) => item.id === candidate.id,
 	);
 	assertEquals(held?.persistenceStatus, "held");
 	assertEquals(held?.status, "pinned");
@@ -184,16 +202,13 @@ Deno.test("emergence decisions persist without automatic promotion and acceptanc
 			?.persistenceStatus,
 		"accepted",
 	);
-	const accepted = (await store.listLinks()).filter((link) =>
-		link.origin === "suggestion" && link.status === "asserted"
+	const accepted = (await store.listLinks()).filter(
+		(link) => link.origin === "suggestion" && link.status === "asserted",
 	);
 	assertEquals(accepted.length, 1);
 	assertEquals(accepted[0].type, "LIKE");
 	await store.resolveEmergenceSuggestion(candidate.id, "accept", accepted[0]);
-	assertEquals(
-		(await store.listLinks()).filter((link) => link.origin === "suggestion").length,
-		1,
-	);
+	assertEquals((await store.listLinks()).filter((link) => link.origin === "suggestion").length, 1);
 });
 
 Deno.test("legacy occurrence fingerprint feedback lazily materializes a held Work suggestion", async () => {
@@ -203,14 +218,12 @@ Deno.test("legacy occurrence fingerprint feedback lazily materializes a held Wor
 	const target = await service.createItem({ text: "Target", parentId: null });
 	const first = await service.createItem({ text: "First bridge", parentId: null });
 	const second = await service.createItem({ text: "Second bridge", parentId: null });
-	for (
-		const [fromId, toId] of [
-			[context.id, first.id],
-			[target.id, first.id],
-			[context.id, second.id],
-			[target.id, second.id],
-		]
-	) {
+	for (const [fromId, toId] of [
+		[context.id, first.id],
+		[target.id, first.id],
+		[context.id, second.id],
+		[target.id, second.id],
+	]) {
 		await service.createLink({ fromId, toId, type: "LIKE" });
 	}
 	const fingerprint = (value: string): string => {
@@ -226,8 +239,8 @@ Deno.test("legacy occurrence fingerprint feedback lazily materializes a held Wor
 		"pin",
 	);
 
-	const candidate = (await service.listEmergenceSuggestions(context.id)).find((suggestion) =>
-		suggestion.targetWorkId === target.workId
+	const candidate = (await service.listEmergenceSuggestions(context.id)).find(
+		(suggestion) => suggestion.targetWorkId === target.workId,
 	);
 	assertEquals(candidate?.persistenceStatus, "held");
 	assertEquals((await store.listEmergenceSuggestions())[0].persistenceStatus, "held");
@@ -277,10 +290,14 @@ Deno.test("symmetric links are normalized, deduplicated, and retracted without l
 	await service.createLink({ fromId: first.id, toId: second.id, type: "RELATED" });
 	const history = await store.listLinks();
 	assertEquals(history.length, 2);
-	assertEquals(history.filter((link) => link.status === "retracted").map((link) => link.id), [
-		original.id,
-	]);
-	assertEquals((await service.listOutline()).links.map((link) => link.status), ["asserted"]);
+	assertEquals(
+		history.filter((link) => link.status === "retracted").map((link) => link.id),
+		[original.id],
+	);
+	assertEquals(
+		(await service.listOutline()).links.map((link) => link.status),
+		["asserted"],
+	);
 });
 
 Deno.test("duplicate candidate adoption preserves explicit human evidence for LIKE and RELATED", async () => {
@@ -309,7 +326,7 @@ Deno.test("duplicate candidate adoption preserves explicit human evidence for LI
 	});
 
 	const adopted = (await store.listLinks()).sort((left, right) =>
-		left.type.localeCompare(right.type)
+		left.type.localeCompare(right.type),
 	);
 	assertEquals(
 		adopted.map(({ type, origin, status, reason }) => ({
@@ -339,7 +356,10 @@ Deno.test("one Work can appear in multiple independent Occurrences with shared t
 	const items = (await service.listOutline()).items.filter((item) => item.workId === first.workId);
 
 	assertEquals(items.length, 2);
-	assertEquals(items.map((item) => item.text), ["どちらからでも更新", "どちらからでも更新"]);
+	assertEquals(
+		items.map((item) => item.text),
+		["どちらからでも更新", "どちらからでも更新"],
+	);
 	assertEquals(items.find((item) => item.id === second.id)?.contextualHeading, "別の文脈");
 	assertEquals(await store.listRevisions(first.workId), []);
 });
@@ -359,7 +379,10 @@ Deno.test("contextual heading stays local to its placement", async () => {
 
 	const items = (await service.listOutline()).items.filter((item) => item.workId === source.workId);
 	const updated = items.find((item) => item.id === mirror.id);
-	assertEquals(items.map((item) => item.text), ["共有本文\n本文", "共有本文\n本文"]);
+	assertEquals(
+		items.map((item) => item.text),
+		["共有本文\n本文", "共有本文\n本文"],
+	);
 	assertEquals(updated?.contextualHeading, "更新した文脈");
 	assertEquals(updated?.revisionSelector, before?.revisionSelector);
 	assertEquals(await service.listSearchAliases(), [alias]);
@@ -390,7 +413,10 @@ Deno.test("removing an Occurrence leaves its Work and other Occurrences intact",
 	await service.deleteItem(first.id);
 
 	assertEquals((await store.listWorks()).length, 1);
-	assertEquals((await service.listOutline()).items.map((item) => item.id), [second.id]);
+	assertEquals(
+		(await service.listOutline()).items.map((item) => item.id),
+		[second.id],
+	);
 });
 
 Deno.test("trash and restore preserve Occurrences and semantic links", async () => {
@@ -431,7 +457,10 @@ Deno.test("complete purge removes content and leaves an ID-only impact manifest"
 	assertEquals(manifest.occurrenceIds.length, 2);
 	assertEquals(manifest.linkIds.length, 1);
 	assertEquals("text" in manifest, false);
-	assertEquals((await store.listWorks(true)).some((work) => work.id === source.workId), false);
+	assertEquals(
+		(await store.listWorks(true)).some((work) => work.id === source.workId),
+		false,
+	);
 	assertEquals((await store.listPurgeManifests())[0], manifest);
 });
 
@@ -444,7 +473,10 @@ Deno.test("complete purge only accepts Work already in trash", async () => {
 		Error,
 		"Work must be in trash before it can be purged",
 	);
-	assertEquals((await service.listOutline()).items.map((item) => item.id), [source.id]);
+	assertEquals(
+		(await service.listOutline()).items.map((item) => item.id),
+		[source.id],
+	);
 });
 
 Deno.test("purging a Work detaches other Works from its removed Occurrences", async () => {
@@ -469,9 +501,10 @@ Deno.test("each Occurrence owns an independent child structure", async () => {
 	const items = (await service.listOutline()).items;
 
 	assertEquals(items.filter((item) => item.parentId === parent.id).length, 0);
-	assertEquals(items.filter((item) => item.parentId === mirror.id).map((item) => item.id), [
-		child.id,
-	]);
+	assertEquals(
+		items.filter((item) => item.parentId === mirror.id).map((item) => item.id),
+		[child.id],
+	);
 });
 
 Deno.test("placing a Work below its descendant projects the recursive placement as a reference stub", async () => {

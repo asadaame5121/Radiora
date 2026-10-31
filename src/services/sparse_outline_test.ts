@@ -181,7 +181,7 @@ Deno.test("sparse outline: cyclic parent chain does not overflow", async () => {
 	const items = await store.listItems();
 
 	const circularAncestor = { ...itemA, parentId: itemB.id };
-	const circularItems = items.map((item) => item.id === itemA.id ? circularAncestor : item);
+	const circularItems = items.map((item) => (item.id === itemA.id ? circularAncestor : item));
 
 	const result: SearchResult = {
 		item: itemB,

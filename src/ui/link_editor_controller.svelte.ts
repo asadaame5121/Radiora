@@ -142,10 +142,7 @@ export class LinkEditorController {
 		const isSymmetric = this.ports.isSymmetricRelationType
 			? this.ports.isSymmetricRelationType(link.type)
 			: isSymmetricLinkType(link.type);
-		if (
-			this.activeLinkId || this.submitting || isSymmetric ||
-			link.origin === "derived"
-		) return;
+		if (this.activeLinkId || this.submitting || isSymmetric || link.origin === "derived") return;
 		try {
 			this.activeLinkId = link.id;
 			this.searchError = "";

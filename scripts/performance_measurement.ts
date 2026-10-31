@@ -218,10 +218,7 @@ export async function runMeasurementCase(
 	);
 
 	await Deno.mkdir(options.outputDir, { recursive: true });
-	await Deno.writeTextFile(
-		`${options.outputDir}/result.json`,
-		JSON.stringify(result, null, 2),
-	);
+	await Deno.writeTextFile(`${options.outputDir}/result.json`, JSON.stringify(result, null, 2));
 
 	return result;
 }
@@ -287,9 +284,9 @@ if (import.meta.main) {
 			outputDir: cliOpts.outputDir,
 		});
 		console.log(
-			`Done. Median: ${result.stats.median.toFixed(2)}ms, p95: ${
-				result.stats.p95.toFixed(2)
-			}ms, max: ${result.stats.max.toFixed(2)}ms`,
+			`Done. Median: ${result.stats.median.toFixed(2)}ms, p95: ${result.stats.p95.toFixed(
+				2,
+			)}ms, max: ${result.stats.max.toFixed(2)}ms`,
 		);
 	} catch (error) {
 		console.error("Measurement failed:", error);

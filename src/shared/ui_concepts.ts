@@ -21,10 +21,7 @@ export type UiConcepts = Readonly<Record<UiConceptCode, UiConceptDefinition>>;
 export function freezeUiConcepts(concepts: UiConcepts): UiConcepts {
 	return Object.freeze(
 		Object.fromEntries(
-			UI_CONCEPT_CODES.map((code) => [
-				code,
-				Object.freeze({ ...concepts[code] }),
-			]),
+			UI_CONCEPT_CODES.map((code) => [code, Object.freeze({ ...concepts[code] })]),
 		),
 	) as Record<UiConceptCode, UiConceptDefinition>;
 }

@@ -9,25 +9,26 @@ const harness = `<!doctype html><html lang="ja"><body>
 </body></html>`;
 
 test.beforeEach(async ({ page }) => {
-	await page.route(
-		"**/acceptance-harness",
-		(route) => route.fulfill({ contentType: "text/html", body: harness }),
+	await page.route("**/acceptance-harness", (route) =>
+		route.fulfill({ contentType: "text/html", body: harness }),
 	);
 	await page.goto("/acceptance-harness");
 	await expect(page.getByRole("button", { name: "Option", exact: true })).toBeEnabled();
 });
 
-test("#312 unmount during resize releases listeners without saving from later pointer events", async ({ page }) => {
+test("#312 unmount during resize releases listeners without saving from later pointer events", async ({
+	page,
+}) => {
 	const handle = page.getByRole("button", { name: "右ペインの幅を変更", exact: true });
 	await expect(handle).toBeVisible();
 	await handle.dispatchEvent("pointerdown", { button: 0, pointerId: 1, clientX: 960 });
 	await page.evaluate(() =>
-		window.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, clientX: 880 }))
+		window.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, clientX: 880 })),
 	);
 	// Do not send pointerup as part of a normal mouse click: the gesture must still be active at unmount.
-	await page.getByRole("button", { name: "Unmount App", exact: true }).evaluate((
-		element: HTMLButtonElement,
-	) => element.click());
+	await page
+		.getByRole("button", { name: "Unmount App", exact: true })
+		.evaluate((element: HTMLButtonElement) => element.click());
 	const remount = page.getByRole("button", { name: "Mount App", exact: true });
 	await expect(remount).toBeEnabled();
 	await page.evaluate(() => {
@@ -40,7 +41,9 @@ test("#312 unmount during resize releases listeners without saving from later po
 });
 
 for (const status of [200, 503]) {
-	test(`#313 pending license index ${status} cannot open a dialog after App unmount`, async ({ page }) => {
+	test(`#313 pending license index ${status} cannot open a dialog after App unmount`, async ({
+		page,
+	}) => {
 		const errors: string[] = [];
 		page.on("pageerror", (error) => errors.push(error.message));
 		let release: () => void = () => {
@@ -57,9 +60,9 @@ for (const status of [200, 503]) {
 		const request = page.waitForRequest("**/licenses/index.json");
 		await page.getByRole("button", { name: "ライセンス情報を表示", exact: true }).click();
 		await request;
-		await page.getByRole("button", { name: "Unmount App", exact: true }).evaluate((
-			element: HTMLButtonElement,
-		) => element.click());
+		await page
+			.getByRole("button", { name: "Unmount App", exact: true })
+			.evaluate((element: HTMLButtonElement) => element.click());
 		const remount = page.getByRole("button", { name: "Mount App", exact: true });
 		await expect(remount).toBeEnabled();
 		const response = page.waitForResponse("**/licenses/index.json");

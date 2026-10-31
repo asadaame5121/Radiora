@@ -44,8 +44,8 @@ export class OccurrenceContextMenuController {
 		this.menu = {
 			targetId: id,
 			source,
-			x: event instanceof MouseEvent ? event.clientX : rect?.left ?? MENU_FALLBACK_POSITION,
-			y: event instanceof MouseEvent ? event.clientY : rect?.bottom ?? MENU_FALLBACK_POSITION,
+			x: event instanceof MouseEvent ? event.clientX : (rect?.left ?? MENU_FALLBACK_POSITION),
+			y: event instanceof MouseEvent ? event.clientY : (rect?.bottom ?? MENU_FALLBACK_POSITION),
 			triggerElement,
 		};
 	}

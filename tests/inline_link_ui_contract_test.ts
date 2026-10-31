@@ -30,7 +30,7 @@ Deno.test("@ semantic relation search finds Works before selecting type and dire
 	assertMatch(completionView, /inline-link-omniwindow/);
 	assertMatch(app, /updateInlineLinkSearch/);
 	assertMatch(completionView, /Shift\+Enterで新規作成できます/);
-	assertMatch(controller, /event\.key === "Enter" && event\.shiftKey/);
+	assertMatch(controller, /event\.key === "Enter" &&\s*event\.shiftKey/);
 	assertMatch(completionView, /activeIndex === completion\.candidates\.length/);
 	assertMatch(controller, /ports\.api\.quickCapture\(query\)/);
 	assertMatch(controller, /isSymmetricType\(state\.selectedType/);

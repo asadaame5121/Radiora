@@ -97,21 +97,23 @@ Deno.test("semantic body grammar preserves UTF-16 diagnostic positions and valid
 		},
 	] as const;
 	for (const { body, start, end, code = "SYNTAX_ERROR", ...failure } of cases) {
-		assertEquals(parseInlineSemanticLinkBody(body, offset), {
-			kind: "failure",
-			failure: { ...failure, code, start: start + offset, end: end + offset },
-		}, body);
+		assertEquals(
+			parseInlineSemanticLinkBody(body, offset),
+			{
+				kind: "failure",
+				failure: { ...failure, code, start: start + offset, end: end + offset },
+			},
+			body,
+		);
 	}
 });
 
 Deno.test("semantic body grammar distinguishes empty endpoints from empty reason", () => {
 	const offset = 3;
-	for (
-		const { body, field, start, end } of [
-			{ body: '"" \t::RELATED::B', field: "source", start: 0, end: 4 },
-			{ body: 'A::RELATED::"" \t', field: "target", start: 12, end: 16 },
-		] as const
-	) {
+	for (const { body, field, start, end } of [
+		{ body: '"" \t::RELATED::B', field: "source", start: 0, end: 4 },
+		{ body: 'A::RELATED::"" \t', field: "target", start: 12, end: 16 },
+	] as const) {
 		assertEquals(parseInlineSemanticLinkBody(body, offset), {
 			kind: "failure",
 			failure: {
@@ -172,29 +174,29 @@ Deno.test("semantic body grammar rejects endpoint boundaries and unfinished fiel
 		},
 	] as const;
 	for (const { body, ...failure } of cases) {
-		assertEquals(parseInlineSemanticLinkBody(body, 0), {
-			kind: "failure",
-			failure: { code: "SYNTAX_ERROR", ...failure },
-		}, body);
+		assertEquals(
+			parseInlineSemanticLinkBody(body, 0),
+			{
+				kind: "failure",
+				failure: { code: "SYNTAX_ERROR", ...failure },
+			},
+			body,
+		);
 	}
 });
 
 Deno.test("semantic body grammar rejects invalid escapes and line breaks in every quoted field", () => {
 	const offset = 5;
-	for (
-		const [prefix, suffix, field] of [
-			["", "::RELATED::B", "source"],
-			["A::RELATED(", ")::B", "reason"],
-			["A::RELATED::", "", "target"],
-		] as const
-	) {
-		for (
-			const [contents, width, message] of [
-				[String.raw`\q`, 2, "Only escaped quotes and backslashes are allowed in quoted fields"],
-				["\r\n", 1, "Quoted inline semantic-link fields cannot contain a line break"],
-				["\n", 1, "Quoted inline semantic-link fields cannot contain a line break"],
-			] as const
-		) {
+	for (const [prefix, suffix, field] of [
+		["", "::RELATED::B", "source"],
+		["A::RELATED(", ")::B", "reason"],
+		["A::RELATED::", "", "target"],
+	] as const) {
+		for (const [contents, width, message] of [
+			[String.raw`\q`, 2, "Only escaped quotes and backslashes are allowed in quoted fields"],
+			["\r\n", 1, "Quoted inline semantic-link fields cannot contain a line break"],
+			["\n", 1, "Quoted inline semantic-link fields cannot contain a line break"],
+		] as const) {
 			const start = prefix.length + 2;
 			assertEquals(parseInlineSemanticLinkBody(`${prefix}"A${contents}"${suffix}`, offset), {
 				kind: "failure",

@@ -80,6 +80,12 @@ Deno.test("search ranking: graph context and lexical scores determine order with
 		expansionHits: [],
 	});
 
-	assertEquals(results.map((result) => result.item.workId), ["direct", "lexical"]);
-	assertEquals(results[0].reasons.map((reason) => reason.kind), ["title", "direct-link"]);
+	assertEquals(
+		results.map((result) => result.item.workId),
+		["direct", "lexical"],
+	);
+	assertEquals(
+		results[0].reasons.map((reason) => reason.kind),
+		["title", "direct-link"],
+	);
 });

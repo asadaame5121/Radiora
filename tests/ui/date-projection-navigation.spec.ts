@@ -13,18 +13,16 @@ const item = {
 };
 function gate() {
 	let resolve!: () => void;
-	const promise = new Promise<void>((done) => resolve = done);
+	const promise = new Promise<void>((done) => (resolve = done));
 	return { promise, resolve };
 }
 async function setup(page: Page) {
 	let calls = 0;
 	const requests = new Map<number, { promise: Promise<void>; fail: boolean }>();
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({
-				json: { result: { items: [item], links: [], knots: [], stashItemIds: [] } },
-			}),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({
+			json: { result: { items: [item], links: [], knots: [], stashItemIds: [] } },
+		}),
 	);
 	await page.route("**/api/rpc/projectDates", async (route) => {
 		const request = ++calls;
@@ -40,11 +38,13 @@ async function setup(page: Page) {
 			json: {
 				result: {
 					range,
-					created: [{
-						work: { id: item.workId, createdAt: item.createdAt, updatedAt: item.updatedAt },
-						representative,
-						placements: [{ occurrence: representative, breadcrumb: [] }],
-					}],
+					created: [
+						{
+							work: { id: item.workId, createdAt: item.createdAt, updatedAt: item.updatedAt },
+							representative,
+							placements: [{ occurrence: representative, breadcrumb: [] }],
+						},
+					],
 					updated: [],
 				},
 			},
@@ -70,10 +70,14 @@ async function setup(page: Page) {
 	};
 }
 
-test("a slow day request hides old results and accepts range and results together", async ({ page }) => {
-	const s = await setup(page), release = s.pause(2);
+test("a slow day request hides old results and accepts range and results together", async ({
+	page,
+}) => {
+	const s = await setup(page),
+		release = s.pause(2);
 	try {
-		const start = s.today.getByLabel("開始", { exact: true }), before = await start.inputValue();
+		const start = s.today.getByLabel("開始", { exact: true }),
+			before = await start.inputValue();
 		await s.today.getByRole("button", { name: "翌日", exact: true }).click();
 		await expect.poll(s.calls).toBe(2);
 		await expect(start).toHaveValue(before);
@@ -93,10 +97,14 @@ test("a slow day request hides old results and accepts range and results togethe
 	}
 });
 
-test("failed day movement preserves accepted dates and results and can be retried", async ({ page }) => {
-	const s = await setup(page), release = s.pause(2, true);
+test("failed day movement preserves accepted dates and results and can be retried", async ({
+	page,
+}) => {
+	const s = await setup(page),
+		release = s.pause(2, true);
 	try {
-		const start = s.today.getByLabel("開始", { exact: true }), before = await start.inputValue();
+		const start = s.today.getByLabel("開始", { exact: true }),
+			before = await start.inputValue();
 		await s.today.getByRole("button", { name: "翌日", exact: true }).click();
 		await expect.poll(s.calls).toBe(2);
 		release();
@@ -112,10 +120,14 @@ test("failed day movement preserves accepted dates and results and can be retrie
 	}
 });
 
-test("editing a custom draft and a failed load do not relabel the displayed period", async ({ page }) => {
-	const s = await setup(page), release = s.pause(2, true);
+test("editing a custom draft and a failed load do not relabel the displayed period", async ({
+	page,
+}) => {
+	const s = await setup(page),
+		release = s.pause(2, true);
 	try {
-		const period = s.today.locator(".date-result-range"), before = await period.textContent();
+		const period = s.today.locator(".date-result-range"),
+			before = await period.textContent();
 		await s.today.getByLabel("開始", { exact: true }).fill("2026-11-01");
 		await s.today.getByLabel("終了（含まない）", { exact: true }).fill("2026-11-03");
 		await expect(period).toHaveText(before ?? "");
@@ -134,8 +146,12 @@ test("editing a custom draft and a failed load do not relabel the displayed peri
 });
 
 for (const fail of [false, true]) {
-	test(`an older ${fail ? "failed" : "successful"} request cannot finish a newer Today loading state`, async ({ page }) => {
-		const s = await setup(page), releaseOld = s.pause(2, fail), releaseNew = s.pause(3);
+	test(`an older ${fail ? "failed" : "successful"} request cannot finish a newer Today loading state`, async ({
+		page,
+	}) => {
+		const s = await setup(page),
+			releaseOld = s.pause(2, fail),
+			releaseNew = s.pause(3);
 		try {
 			await s.today.getByRole("button", { name: "翌日", exact: true }).click();
 			await expect.poll(s.calls).toBe(2);
@@ -162,19 +178,17 @@ for (const fail of [false, true]) {
 test("empty Tree focuses its SVG root after opening from the top bar", async ({ page }) => {
 	const empty = { items: [], links: [], knots: [], stashItemIds: [] };
 	await page.route("**/api/rpc/listOutline", (route) => route.fulfill({ json: { result: empty } }));
-	await page.route(
-		"**/api/rpc/listGlobalLineage",
-		(route) =>
-			route.fulfill({
-				json: {
-					result: {
-						snapshot: empty,
-						promotedBranches: [],
-						totalWorkCount: 0,
-						filteredWorkCount: 0,
-					},
+	await page.route("**/api/rpc/listGlobalLineage", (route) =>
+		route.fulfill({
+			json: {
+				result: {
+					snapshot: empty,
+					promotedBranches: [],
+					totalWorkCount: 0,
+					filteredWorkCount: 0,
 				},
-			}),
+			},
+		}),
 	);
 	await page.goto("/");
 	await page.getByRole("button", { name: "ツリー", exact: true }).click();

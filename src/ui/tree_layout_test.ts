@@ -36,7 +36,11 @@ Deno.test("an overview cluster keeps a stable id across camera changes", () => {
 
 Deno.test("screen collisions include nodes across spatial-hash cell boundaries", () => {
 	assertEquals(
-		lodForScreenCollisions([{ x: 0, y: 0 }, { x: 95, y: 100 }, { x: 96, y: 100 }]),
+		lodForScreenCollisions([
+			{ x: 0, y: 0 },
+			{ x: 95, y: 100 },
+			{ x: 96, y: 100 },
+		]),
 		"overview",
 	);
 
@@ -50,7 +54,10 @@ Deno.test("screen collisions include nodes across spatial-hash cell boundaries",
 		camera: { k: 0.4, x: 0, y: 0 },
 	});
 	assertEquals(layout.lod, "overview");
-	assertEquals(layout.nodes.map((node) => node.count), [2]);
+	assertEquals(
+		layout.nodes.map((node) => node.count),
+		[2],
+	);
 });
 
 Deno.test("lane reservation converts screen-fixed label widths at low zoom", () => {
@@ -71,17 +78,19 @@ Deno.test("lane reservation converts screen-fixed label widths at low zoom", () 
 
 function outline(ids: string[]): OutlineSnapshot {
 	return {
-		items: ids.map((id, orderKey): OutlineItem => ({
-			id,
-			workId: id,
-			text: `${id} の内容`,
-			parentId: null,
-			orderKey,
-			collapsed: false,
-			revisionSelector: { mode: "branch", branchId: `${id}-branch` },
-			createdAt: "2026-08-05T00:00:00.000Z",
-			updatedAt: "2026-08-05T00:00:00.000Z",
-		})),
+		items: ids.map(
+			(id, orderKey): OutlineItem => ({
+				id,
+				workId: id,
+				text: `${id} の内容`,
+				parentId: null,
+				orderKey,
+				collapsed: false,
+				revisionSelector: { mode: "branch", branchId: `${id}-branch` },
+				createdAt: "2026-08-05T00:00:00.000Z",
+				updatedAt: "2026-08-05T00:00:00.000Z",
+			}),
+		),
 		links: [],
 		knots: [],
 		stashItemIds: [],

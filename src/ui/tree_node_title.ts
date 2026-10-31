@@ -5,9 +5,9 @@ export function nodeTitle(node: TreeLayoutNode): string {
 	const parsed = new Date(node.item.createdAt);
 	const createdAt = Number.isFinite(parsed.getTime())
 		? new Intl.DateTimeFormat("ja-JP", {
-			dateStyle: "medium",
-			timeStyle: "short",
-		}).format(parsed)
+				dateStyle: "medium",
+				timeStyle: "short",
+			}).format(parsed)
 		: node.item.createdAt;
 	const knot = node.isLineageKnot ? "\nFROM循環を検出：Knot帯へ退避" : "";
 	return `${node.item.text}\n作成: ${createdAt}${knot}`;

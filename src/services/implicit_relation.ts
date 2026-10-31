@@ -5,9 +5,8 @@ function workPairKey(workA: string, workB: string): string {
 	return JSON.stringify(workA <= workB ? [workA, workB] : [workB, workA]);
 }
 
-type ImplicitRelationReadPort =
-	& Pick<OutlineStorePort, "listItems">
-	& Pick<RelationStorePort, "listLinks">;
+type ImplicitRelationReadPort = Pick<OutlineStorePort, "listItems"> &
+	Pick<RelationStorePort, "listLinks">;
 
 /**
  * Merges outline parent-child relationships as implicit FROM semantic links

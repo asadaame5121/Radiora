@@ -40,9 +40,9 @@ export async function prepareWindowsLaunchers(bundleDir: URL): Promise<void> {
 		}).output();
 		if (!result.success) {
 			throw new Error(
-				`Windows launcherの整合性レベルを設定できません: ${entry.name}: ${
-					new TextDecoder().decode(result.stderr)
-				}`,
+				`Windows launcherの整合性レベルを設定できません: ${entry.name}: ${new TextDecoder().decode(
+					result.stderr,
+				)}`,
 			);
 		}
 	}

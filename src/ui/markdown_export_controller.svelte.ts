@@ -58,9 +58,10 @@ export class MarkdownExportController {
 				selectedOccurrenceId: selectedOccurrenceId ?? this.ports.selectedId(),
 			});
 			const rendered = renderOutlineSnapshotMarkdown(exportSnapshot);
-			const resolutions = preference.referenceMode === "obsidian"
-				? await this.ports.api.resolveInternalReferences(rendered)
-				: [];
+			const resolutions =
+				preference.referenceMode === "obsidian"
+					? await this.ports.api.resolveInternalReferences(rendered)
+					: [];
 			const markdown = rewriteMarkdownExportReferences(
 				rendered,
 				preference.referenceMode,
@@ -81,11 +82,8 @@ export class MarkdownExportController {
 				);
 			}
 		} finally {
-			void this.ports.api.recordClientOperation(
-				"export.markdown",
-				outcome,
-				performance.now() - started,
-			)
+			void this.ports.api
+				.recordClientOperation("export.markdown", outcome, performance.now() - started)
 				.catch(() => console.warn("Could not record Markdown export."));
 		}
 	};

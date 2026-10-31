@@ -188,13 +188,12 @@ Deno.test("MemoryGraphStore - failed mutation does not notify structure change",
 
 	const countBefore = store.structureChangedCount;
 	// Attempt to merge non-existent works
-	await assertRejects(
-		() =>
-			store.mergeWorks({
-				sourceWorkId: "missing-1",
-				survivorWorkId: "missing-2",
-				mergedAt: "2026-01-01T00:00:00.000Z",
-			}),
+	await assertRejects(() =>
+		store.mergeWorks({
+			sourceWorkId: "missing-1",
+			survivorWorkId: "missing-2",
+			mergedAt: "2026-01-01T00:00:00.000Z",
+		}),
 	);
 	assertEquals(store.structureChangedCount, countBefore);
 	assertEquals(store.reconcileCount, countBefore);

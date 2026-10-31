@@ -164,7 +164,11 @@ export interface RelationTypeDefinitionStorePort {
 }
 
 export interface GraphStore
-	extends BackupStorePort, OutlineStorePort, WorkStorePort, RelationStorePort, DiscoveryStorePort {
+	extends BackupStorePort,
+		OutlineStorePort,
+		WorkStorePort,
+		RelationStorePort,
+		DiscoveryStorePort {
 	initialize(): Promise<void>;
 	close(): Promise<void>;
 }

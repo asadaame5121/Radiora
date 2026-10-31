@@ -66,14 +66,18 @@ export class HistoryController {
 		try {
 			const next = await this.api.listRecoverySnapshots(workId, branchId);
 			if (
-				request === this.recoveryRequest && this.getSelectedWorkId() === workId &&
+				request === this.recoveryRequest &&
+				this.getSelectedWorkId() === workId &&
 				this.getSelectedBranchId() === branchId
-			) this.recoverySnapshots = next;
+			)
+				this.recoverySnapshots = next;
 		} catch (cause) {
 			if (
-				request === this.recoveryRequest && this.getSelectedWorkId() === workId &&
+				request === this.recoveryRequest &&
+				this.getSelectedWorkId() === workId &&
 				this.getSelectedBranchId() === branchId
-			) this.reportError(cause);
+			)
+				this.reportError(cause);
 		}
 	}
 

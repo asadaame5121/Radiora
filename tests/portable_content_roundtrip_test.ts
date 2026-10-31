@@ -12,9 +12,7 @@ interface PortableContentFixture {
 }
 
 const fixture = JSON.parse(
-	await Deno.readTextFile(
-		new URL("./fixtures/portable-content-roundtrip.json", import.meta.url),
-	),
+	await Deno.readTextFile(new URL("./fixtures/portable-content-roundtrip.json", import.meta.url)),
 ) as PortableContentFixture;
 
 const utf8RoundTrip = (source: string): string =>
@@ -46,10 +44,7 @@ Deno.test("Japanese Markdown and internal references survive JSON, Markdown, and
 
 	const markdown = utf8RoundTrip(renderOutlineSnapshotMarkdown(restoredSnapshot));
 	assertEquals(markdown, fixture.expectedMarkdown);
-	assertStringIncludes(
-		markdown,
-		"radiora://work/22222222-2222-4222-8222-222222222222",
-	);
+	assertStringIncludes(markdown, "radiora://work/22222222-2222-4222-8222-222222222222");
 
 	const opml = utf8RoundTrip(renderOutlineSnapshotOpml(restoredSnapshot));
 	assertEquals(parseOpml(opml), [

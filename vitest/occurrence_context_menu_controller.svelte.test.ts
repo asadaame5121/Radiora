@@ -64,7 +64,7 @@ it("removes from Tree under the shared lock while keyboard removal stays Outline
 	vi.stubGlobal("HTMLElement", class {});
 	vi.stubGlobal("SVGElement", class {});
 	let release!: () => void;
-	const pending = new Promise<void>((resolve) => release = resolve);
+	const pending = new Promise<void>((resolve) => (release = resolve));
 	const remove = vi.fn(() => pending);
 	const unavailable = vi.fn();
 	const execution = new CommandExecutionController({

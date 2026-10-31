@@ -42,5 +42,8 @@ Deno.test("emergence toast summarizes unseen suggestions for one context", () =>
 			message: "Alpha ほか1件の候補が見つかりました。",
 		},
 	);
-	assertEquals(emergenceToastContent([], (id) => id), null);
+	assertEquals(
+		emergenceToastContent([], (id) => id),
+		null,
+	);
 });

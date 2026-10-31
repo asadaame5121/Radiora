@@ -31,10 +31,7 @@ export type MutableMergeGraphState = Pick<
 	| "relationTypeDefinitions"
 >;
 
-export function applyMergeWorks(
-	state: MutableMergeGraphState,
-	input: MergeWorksInput,
-): void {
+export function applyMergeWorks(state: MutableMergeGraphState, input: MergeWorksInput): void {
 	const source = state.works.find((work) => work.id === input.sourceWorkId);
 	const survivor = state.works.find((work) => work.id === input.survivorWorkId);
 	validateMergeInput(input, source, survivor, state.aliases);
@@ -70,9 +67,9 @@ export function applyMergeWorks(
 
 function rewireMergedBranches(branches: Branch[], input: MergeWorksInput): void {
 	const takenNames = new Set(
-		branches.filter((branch) => branch.workId === input.survivorWorkId).map((branch) =>
-			branch.name
-		),
+		branches
+			.filter((branch) => branch.workId === input.survivorWorkId)
+			.map((branch) => branch.name),
 	);
 	for (const branch of branches.filter((entry) => entry.workId === input.sourceWorkId)) {
 		branch.workId = input.survivorWorkId;
@@ -170,8 +167,9 @@ export function validateMergeInput(
 		if (!alias.id || !alias.canonical.trim() || alias.variants.length === 0) {
 			throw new Error("Duplicate merge alias requires a non-empty old name");
 		}
-		const collidingAlias = aliases.find((existingAlias) =>
-			existingAlias.id === alias.id && existingAlias.canonical !== alias.canonical
+		const collidingAlias = aliases.find(
+			(existingAlias) =>
+				existingAlias.id === alias.id && existingAlias.canonical !== alias.canonical,
 		);
 		if (collidingAlias) throw new Error(`Search Alias ID collision: ${alias.id}`);
 	}
@@ -189,10 +187,7 @@ export function mergedBranchName(
 	return candidate;
 }
 
-export function replaceEndpointWork(
-	endpoint: LinkEndpoint,
-	input: MergeWorksInput,
-): LinkEndpoint {
+export function replaceEndpointWork(endpoint: LinkEndpoint, input: MergeWorksInput): LinkEndpoint {
 	if (endpoint.workId !== input.sourceWorkId) return endpoint;
 	return {
 		...endpoint,
@@ -259,9 +254,10 @@ export function projectOutlineItems(
 	return occurrences.flatMap((occurrence): OutlineItem[] => {
 		const work = workById.get(occurrence.workId);
 		if (!work) return [];
-		const text = occurrence.revisionSelector.mode === "branch"
-			? copyByBranchId.get(occurrence.revisionSelector.branchId)?.text ?? ""
-			: revisionById.get(occurrence.revisionSelector.revisionId)?.text ?? "";
+		const text =
+			occurrence.revisionSelector.mode === "branch"
+				? (copyByBranchId.get(occurrence.revisionSelector.branchId)?.text ?? "")
+				: (revisionById.get(occurrence.revisionSelector.revisionId)?.text ?? "");
 		return [projectSingleOutlineItem(occurrence, work, text)];
 	});
 }

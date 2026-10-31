@@ -28,15 +28,15 @@ export function runRuleQuery(
 	const relations = buildBaseRelations(items, links);
 	let tupleCount = [...relations.values()].reduce((sum, values) => sum + values.size, 0);
 
-	for (let changed = true; changed;) {
+	for (let changed = true; changed; ) {
 		changed = false;
 		assertWithinLimits(started, tupleCount);
 		for (const rule of rules) {
 			for (const binding of evaluateBody(rule.body, relations, items)) {
 				const tuple = rule.head.terms.map((term) => resolveTerm(term, binding));
 				if (tuple.some((value) => value == null)) continue;
-				const relation = relations.get(relationKey(rule.head.name, tuple.length)) ??
-					new Set<string>();
+				const relation =
+					relations.get(relationKey(rule.head.name, tuple.length)) ?? new Set<string>();
 				const key = encodeTuple(tuple as string[]);
 				if (!relation.has(key)) {
 					relation.add(key);
@@ -52,9 +52,9 @@ export function runRuleQuery(
 	const columns = [
 		...new Set(
 			query.flatMap((atom) =>
-				atom.terms.filter((term) => term.kind === "variable" && term.value !== "_").map((term) =>
-					term.value
-				)
+				atom.terms
+					.filter((term) => term.kind === "variable" && term.value !== "_")
+					.map((term) => term.value),
 			),
 		),
 	];
@@ -169,11 +169,7 @@ function buildBaseRelations(items: OutlineItem[], links: OutlineLink[]): Relatio
 	return relations;
 }
 
-function evaluateBody(
-	atoms: Atom[],
-	relations: RelationMap,
-	items: OutlineItem[],
-): Binding[] {
+function evaluateBody(atoms: Atom[], relations: RelationMap, items: OutlineItem[]): Binding[] {
 	let bindings: Binding[] = [new Map()];
 	for (const atom of atoms) {
 		const tuples = tuplesFor(atom, relations, items);
@@ -196,19 +192,20 @@ function evaluateBody(
 function tuplesFor(atom: Atom, relations: RelationMap, items: OutlineItem[]): string[][] {
 	if (atom.name === "title_prefix" || atom.name === "text_match") {
 		if (atom.terms.length !== 2) throw new SyntaxError(`${atom.name} expects two arguments.`);
-		const pattern = atom.terms[1].kind === "constant"
-			? normalizeSearchText(atom.terms[1].value)
-			: "";
+		const pattern =
+			atom.terms[1].kind === "constant" ? normalizeSearchText(atom.terms[1].value) : "";
 		if (!pattern) {
 			throw new SyntaxError(`${atom.name}'s second argument must be a non-empty string.`);
 		}
-		return items.filter((item) => {
-			const value = atom.name === "title_prefix" ? titleOf(item) : item.text;
-			const normalized = normalizeSearchText(value);
-			return atom.name === "title_prefix"
-				? normalized.startsWith(pattern)
-				: normalized.includes(pattern);
-		}).map((item) => [item.id, atom.terms[1].value]);
+		return items
+			.filter((item) => {
+				const value = atom.name === "title_prefix" ? titleOf(item) : item.text;
+				const normalized = normalizeSearchText(value);
+				return atom.name === "title_prefix"
+					? normalized.startsWith(pattern)
+					: normalized.includes(pattern);
+			})
+			.map((item) => [item.id, atom.terms[1].value]);
 	}
 	const relation = relations.get(relationKey(atom.name, atom.terms.length));
 	return relation ? [...relation].map(decodeTuple) : [];
@@ -231,7 +228,7 @@ function matchTuple(terms: Term[], tuple: string[], original: Binding): Binding 
 }
 
 function resolveTerm(term: Term, binding: Binding): string | null {
-	return term.kind === "constant" ? term.value : binding.get(term.value) ?? null;
+	return term.kind === "constant" ? term.value : (binding.get(term.value) ?? null);
 }
 
 function relationKey(name: string, arity: number): string {

@@ -104,9 +104,10 @@ Deno.test("emergence calculation: filters same-branch, direct, and weak lexical 
 		],
 	});
 
-	assertEquals(candidates.map(({ kind, targetWorkId }) => ({ kind, targetWorkId })), [
-		{ kind: "cross-branch-resonance", targetWorkId: "target" },
-	]);
+	assertEquals(
+		candidates.map(({ kind, targetWorkId }) => ({ kind, targetWorkId })),
+		[{ kind: "cross-branch-resonance", targetWorkId: "target" }],
+	);
 });
 
 Deno.test("emergence ranking: pinned candidates precede score and the limit is applied", () => {

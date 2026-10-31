@@ -71,7 +71,7 @@ for (const kind of ["work", "link"] as const) {
 	test(`${kind} delayed response cannot publish after Help is requested`, async () => {
 		const s = setup();
 		let finish!: () => void;
-		const waiting = new Promise<void>((resolve) => finish = resolve);
+		const waiting = new Promise<void>((resolve) => (finish = resolve));
 		if (kind === "work") {
 			s.api.listWorkComparisonDocuments.mockImplementationOnce(async () => {
 				await waiting;
@@ -84,12 +84,12 @@ for (const kind of ["work", "link"] as const) {
 				return result;
 			});
 		}
-		const pending = kind === "work"
-			? s.controller.openWork("revision", "b")
-			: s.controller.openLink("link");
+		const pending =
+			kind === "work" ? s.controller.openWork("revision", "b") : s.controller.openLink("link");
 		await vi.waitFor(() =>
-			expect(s.api[kind === "work" ? "listWorkComparisonDocuments" : "resolveLinkComparison"])
-				.toHaveBeenCalled()
+			expect(
+				s.api[kind === "work" ? "listWorkComparisonDocuments" : "resolveLinkComparison"],
+			).toHaveBeenCalled(),
 		);
 		await s.navigation.navigate({ view: "help" });
 		finish();

@@ -41,10 +41,27 @@ test("changed rows retain their unchanged annotation objects and remove obsolete
 });
 
 test("display-name reuse is independent of insertion order and invalidates changed or missing names", () => {
-	const before = new Map([["a", "A"], ["b", "B"]]);
-	expect(reuseSemanticLinkDisplayNames(new Map([["b", "B"], ["a", "A"]]), before)).toBe(before);
-	expect(reuseSemanticLinkDisplayNames(new Map([["a", "Renamed"], ["b", "B"]]), before)).not.toBe(
-		before,
-	);
+	const before = new Map([
+		["a", "A"],
+		["b", "B"],
+	]);
+	expect(
+		reuseSemanticLinkDisplayNames(
+			new Map([
+				["b", "B"],
+				["a", "A"],
+			]),
+			before,
+		),
+	).toBe(before);
+	expect(
+		reuseSemanticLinkDisplayNames(
+			new Map([
+				["a", "Renamed"],
+				["b", "B"],
+			]),
+			before,
+		),
+	).not.toBe(before);
 	expect(reuseSemanticLinkDisplayNames(new Map([["a", "A"]]), before)).not.toBe(before);
 });

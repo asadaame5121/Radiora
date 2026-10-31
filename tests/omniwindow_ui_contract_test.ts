@@ -19,9 +19,7 @@ const overtype = await Deno.readTextFile(
 	new URL("../src/ui/overtype_markdown_editor_adapter.ts", import.meta.url),
 );
 
-const topBar = await Deno.readTextFile(
-	new URL("../src/ui/AppTopBar.svelte", import.meta.url),
-);
+const topBar = await Deno.readTextFile(new URL("../src/ui/AppTopBar.svelte", import.meta.url));
 
 Deno.test("Omniwindow shares the quick-capture command value with search", () => {
 	assertNotMatch(app, /let searchQuery/);

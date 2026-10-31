@@ -29,13 +29,14 @@ export function visibleContextLabels(
 	const visible = new Set<string>();
 	const accepted: ScreenRectangle[] = [];
 	const grid = buildTreeSpatialIndex(nodes);
-	const emphasized = (node: LabelNode) => node.itemIds.some((id) => highlightedIds.has(id)) ? 0 : 1;
+	const emphasized = (node: LabelNode) =>
+		node.itemIds.some((id) => highlightedIds.has(id)) ? 0 : 1;
 	const candidates = [...nodes].sort((a, b) => emphasized(a) - emphasized(b) || a.x - b.x);
 	for (const node of candidates) {
 		const rectangle = labelRectangle(node);
 		if (!insideViewport(rectangle, viewport)) continue;
-		const hitsNode = nodesNearRectangle(grid, rectangle).some((other) =>
-			other.id !== node.id && screenRectanglesOverlap(rectangle, nodeRectangle(other))
+		const hitsNode = nodesNearRectangle(grid, rectangle).some(
+			(other) => other.id !== node.id && screenRectanglesOverlap(rectangle, nodeRectangle(other)),
 		);
 		if (hitsNode || accepted.some((other) => screenRectanglesOverlap(rectangle, other))) continue;
 		visible.add(node.id);
@@ -59,6 +60,10 @@ function nodeRectangle(node: LabelNode): ScreenRectangle {
 }
 
 function insideViewport(rect: ScreenRectangle, { width, height }: TreeViewport): boolean {
-	return rect.x1 >= VIEW_MARGIN && rect.x2 <= width - RIGHT_MARGIN &&
-		rect.y1 >= VIEW_MARGIN && rect.y2 <= height - AXIS_HEIGHT;
+	return (
+		rect.x1 >= VIEW_MARGIN &&
+		rect.x2 <= width - RIGHT_MARGIN &&
+		rect.y1 >= VIEW_MARGIN &&
+		rect.y2 <= height - AXIS_HEIGHT
+	);
 }

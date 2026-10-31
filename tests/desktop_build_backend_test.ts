@@ -22,11 +22,7 @@ Deno.test("resolveBackend: returns explicit backend when --backend is passed wit
 });
 
 Deno.test("resolveBackend: throws error when --backend is at end of args without value", () => {
-	assertThrows(
-		() => resolveBackend(["--backend"]),
-		Error,
-		"Missing value for --backend option",
-	);
+	assertThrows(() => resolveBackend(["--backend"]), Error, "Missing value for --backend option");
 	assertThrows(
 		() => resolveBackend(["--foo", "--backend"]),
 		Error,
@@ -35,11 +31,7 @@ Deno.test("resolveBackend: throws error when --backend is at end of args without
 });
 
 Deno.test("resolveBackend: throws error when invalid backend is passed", () => {
-	assertThrows(
-		() => resolveBackend(["--backend", "invalid"]),
-		Error,
-		"Invalid backend 'invalid'",
-	);
+	assertThrows(() => resolveBackend(["--backend", "invalid"]), Error, "Invalid backend 'invalid'");
 });
 
 Deno.test("deno.json: deprecated surreal desktop tasks are removed", async () => {
@@ -131,9 +123,7 @@ Deno.test("MSIX rejects a development bundle", async () => {
 });
 
 Deno.test("package.json: surrealdb is completely removed from dependencies and devDependencies", async () => {
-	const packageJsonText = await Deno.readTextFile(
-		new URL("../package.json", import.meta.url),
-	);
+	const packageJsonText = await Deno.readTextFile(new URL("../package.json", import.meta.url));
 	const packageJson = JSON.parse(packageJsonText);
 	assertEquals("surrealdb" in (packageJson.dependencies ?? {}), false);
 	assertEquals("surrealdb" in (packageJson.devDependencies ?? {}), false);

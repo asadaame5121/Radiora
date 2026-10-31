@@ -33,10 +33,14 @@ export class FileOperationState {
 		action: (source: string, current: () => boolean) => Promise<string | undefined>,
 		reportError: (cause: unknown) => void,
 	): Promise<void> {
-		await this.run(flush, async (current) => {
-			const source = await file.text();
-			return current() ? action(source, current) : undefined;
-		}, reportError);
+		await this.run(
+			flush,
+			async (current) => {
+				const source = await file.text();
+				return current() ? action(source, current) : undefined;
+			},
+			reportError,
+		);
 	}
 
 	dispose(): void {

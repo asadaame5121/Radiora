@@ -25,12 +25,16 @@ function collect(predicate: (node: ts.Node) => boolean): string[] {
 }
 
 function callsIdentifier(node: ts.Node, name: string): node is ts.CallExpression {
-	return ts.isCallExpression(node) && ts.isIdentifier(node.expression) &&
-		node.expression.text === name;
+	return (
+		ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === name
+	);
 }
 
 Deno.test("#312 App delegates preference writing instead of owning the layout storage writer", () => {
-	assertEquals(collect((node) => callsIdentifier(node, "saveUiLayoutPreference")), []);
+	assertEquals(
+		collect((node) => callsIdentifier(node, "saveUiLayoutPreference")),
+		[],
+	);
 });
 
 Deno.test("#312 resize gesture listeners belong to the Layout View lifetime, not App", () => {
@@ -41,8 +45,11 @@ Deno.test("#312 resize gesture listeners belong to the Layout View lifetime, not
 			}
 			if (node.expression.name.text !== "addEventListener") return false;
 			const event = node.arguments[0];
-			return event !== undefined && ts.isStringLiteral(event) &&
-				/^pointer(move|up|cancel)$/.test(event.text);
+			return (
+				event !== undefined &&
+				ts.isStringLiteral(event) &&
+				/^pointer(move|up|cancel)$/.test(event.text)
+			);
 		}),
 		[],
 	);
@@ -50,10 +57,13 @@ Deno.test("#312 resize gesture listeners belong to the Layout View lifetime, not
 
 Deno.test("#313 App does not own dialog license result, error, loading or open state", () => {
 	assertEquals(
-		collect((node) =>
-			ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) &&
-			/license/i.test(node.name.text) &&
-			node.initializer !== undefined && callsIdentifier(node.initializer, "$state")
+		collect(
+			(node) =>
+				ts.isVariableDeclaration(node) &&
+				ts.isIdentifier(node.name) &&
+				/license/i.test(node.name.text) &&
+				node.initializer !== undefined &&
+				callsIdentifier(node.initializer, "$state"),
 		),
 		[],
 	);
@@ -69,16 +79,13 @@ Deno.test("#313 App delegates license acquisition instead of fetching dialog dat
 Deno.test("#314 App API connections are single-expression port delegation, not feature workflows", () => {
 	assertEquals(
 		collect((node) => {
-			if (
-				!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)
-			) return false;
-			if (
-				!ts.isIdentifier(node.expression.expression) || node.expression.expression.text !== "api"
-			) return false;
+			if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression))
+				return false;
+			if (!ts.isIdentifier(node.expression.expression) || node.expression.expression.text !== "api")
+				return false;
 			// Operation logging observes the composition root; it neither loads nor mutates feature state.
-			if (
-				["recordViewChange", "recordClientOperation"].includes(node.expression.name.text)
-			) return false;
+			if (["recordViewChange", "recordClientOperation"].includes(node.expression.name.text))
+				return false;
 			return !(ts.isArrowFunction(node.parent) && node.parent.body === node);
 		}),
 		[],
@@ -90,17 +97,23 @@ Deno.test("#314 App has no format-specific file reading or download procedure", 
 		collect((node) => {
 			if (callsIdentifier(node, "Blob")) return true;
 			if (
-				ts.isNewExpression(node) && ts.isIdentifier(node.expression) &&
+				ts.isNewExpression(node) &&
+				ts.isIdentifier(node.expression) &&
 				node.expression.text === "Blob"
-			) return true;
+			)
+				return true;
 			if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) {
 				return false;
 			}
 			const target = node.expression.expression;
-			return (ts.isIdentifier(target) && target.text === "file" &&
-				node.expression.name.text === "text") ||
-				(ts.isIdentifier(target) && target.text === "URL" &&
-					["createObjectURL", "revokeObjectURL"].includes(node.expression.name.text));
+			return (
+				(ts.isIdentifier(target) &&
+					target.text === "file" &&
+					node.expression.name.text === "text") ||
+				(ts.isIdentifier(target) &&
+					target.text === "URL" &&
+					["createObjectURL", "revokeObjectURL"].includes(node.expression.name.text))
+			);
 		}),
 		[],
 	);

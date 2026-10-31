@@ -94,8 +94,8 @@ export function selectMarkdownExportSnapshot(
 	const includedWorkIds = new Set(items.map((item) => item.workId));
 	return {
 		items,
-		links: snapshot.links.filter((link) =>
-			includedWorkIds.has(link.from.workId) && includedWorkIds.has(link.to.workId)
+		links: snapshot.links.filter(
+			(link) => includedWorkIds.has(link.from.workId) && includedWorkIds.has(link.to.workId),
 		),
 		knots: snapshot.knots.filter((knot) => knot.cycleIds.some((id) => includedIds.has(id))),
 		stashItemIds: snapshot.stashItemIds.filter((id) => includedIds.has(id)),
@@ -127,9 +127,8 @@ export function renderOutlineSnapshotMarkdown(snapshot: OutlineSnapshot): string
 	const children = new Map<number, ExportNode[]>();
 	const roots: ExportNode[] = [];
 	for (const node of nodes) {
-		const parent = node.item.parentId === null
-			? undefined
-			: primaryNodeById.get(node.item.parentId);
+		const parent =
+			node.item.parentId === null ? undefined : primaryNodeById.get(node.item.parentId);
 		if (!parent || parent.index === node.index) {
 			roots.push(node);
 			continue;
@@ -202,22 +201,22 @@ function compareNodes(left: ExportNode, right: ExportNode): number {
 	const rightOrder = Number.isFinite(right.item.orderKey)
 		? right.item.orderKey
 		: Number.POSITIVE_INFINITY;
-	return leftOrder - rightOrder ||
-		left.item.id.localeCompare(right.item.id) ||
-		left.index - right.index;
+	return (
+		leftOrder - rightOrder || left.item.id.localeCompare(right.item.id) || left.index - right.index
+	);
 }
 
 function renderItem(item: OutlineItem, depth: number, stashed: boolean): string {
 	const lines = item.text.split(/\r?\n/);
 	const firstContentIndex = lines.findIndex((line) => line.trim().length > 0);
 	const contextualHeading = item.contextualHeading?.trim();
-	const heading = contextualHeading ||
-		(firstContentIndex >= 0 ? lines[firstContentIndex].trim() : "(空の項目)");
+	const heading =
+		contextualHeading || (firstContentIndex >= 0 ? lines[firstContentIndex].trim() : "(空の項目)");
 	const body = contextualHeading
 		? item.text.replaceAll("\r\n", "\n")
 		: firstContentIndex < 0
-		? ""
-		: lines.slice(firstContentIndex + 1).join("\n");
+			? ""
+			: lines.slice(firstContentIndex + 1).join("\n");
 	const level = Math.min(depth + 1, 6);
 	const depthMarker = depth >= 6 ? `↳ 深さ ${depth + 1}: ` : "";
 	const stashMarker = stashed ? "[Stash] " : "";

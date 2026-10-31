@@ -30,8 +30,8 @@ Deno.test("SqliteGraphStore rolls back an invalid restore without changing store
 	const store = new SqliteGraphStore(path);
 	await store.initialize();
 	const before = await store.exportGraphState();
-	await assertRejects(
-		() => store.restoreGraphState({ ...before, works: [{ id: "invalid" }] } as never),
+	await assertRejects(() =>
+		store.restoreGraphState({ ...before, works: [{ id: "invalid" }] } as never),
 	);
 	assertEquals(await store.exportGraphState(), before);
 	await store.close();
@@ -64,7 +64,10 @@ Deno.test("SQLite records map custom relation type definitions by name to relati
 	const diff = calculateSqliteDiff(legacyState, nextState);
 	const relationDiffs = diff.upserts.filter((u) => u.table === "relation_type_definition");
 	assertEquals(relationDiffs.length, 1);
-	assertEquals(relationDiffs.some((u) => u.id === "CUSTOM_RELATION"), true);
+	assertEquals(
+		relationDiffs.some((u) => u.id === "CUSTOM_RELATION"),
+		true,
+	);
 });
 
 Deno.test("SqliteGraphStore persists custom relation type definitions across reopen", async () => {

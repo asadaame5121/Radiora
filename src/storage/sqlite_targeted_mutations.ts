@@ -29,13 +29,15 @@ export interface TargetedMutationStep<T = void> {
 
 function validateOccurrenceSelector(state: TargetedMutableState, occurrence: Occurrence): void {
 	const selector = occurrence.revisionSelector;
-	const valid = selector.mode === "branch"
-		? state.branches.some((branch) =>
-			branch.id === selector.branchId && branch.workId === occurrence.workId
-		)
-		: state.revisions.some((revision) =>
-			revision.id === selector.revisionId && revision.workId === occurrence.workId
-		);
+	const valid =
+		selector.mode === "branch"
+			? state.branches.some(
+					(branch) => branch.id === selector.branchId && branch.workId === occurrence.workId,
+				)
+			: state.revisions.some(
+					(revision) =>
+						revision.id === selector.revisionId && revision.workId === occurrence.workId,
+				);
 	if (!valid) {
 		const name = selector.mode === "branch" ? "Branch" : "Revision";
 		throw new Error(`Invalid Occurrence ${name} selector: ${occurrence.id}`);
@@ -94,12 +96,14 @@ export function planTargetedOccurrenceUpdate(
 		},
 		diff: {
 			deletes: [],
-			upserts: [{
-				table: "occurrence",
-				id: occurrence.id,
-				position: occIndex,
-				payload: nextOccurrence,
-			}],
+			upserts: [
+				{
+					table: "occurrence",
+					id: occurrence.id,
+					position: occIndex,
+					payload: nextOccurrence,
+				},
+			],
 		},
 	};
 }
@@ -112,8 +116,8 @@ export function planTargetedResumePositionSet(
 		throw new Error(`Invalid caret offset: ${position.caretOffset}`);
 	}
 	const occurrence = state.occurrences.find((candidate) => candidate.id === position.occurrenceId);
-	const work = state.works.find((candidate) =>
-		candidate.id === position.workId && !candidate.deletedAt
+	const work = state.works.find(
+		(candidate) => candidate.id === position.workId && !candidate.deletedAt,
 	);
 	if (!work || occurrence?.workId !== position.workId) {
 		throw new Error("Resume Work and Occurrence must exist and match");
@@ -132,19 +136,19 @@ export function planTargetedResumePositionSet(
 		},
 		diff: {
 			deletes: [],
-			upserts: [{
-				table: "resume_position",
-				id: "current",
-				position: 0,
-				payload: nextPosition,
-			}],
+			upserts: [
+				{
+					table: "resume_position",
+					id: "current",
+					position: 0,
+					payload: nextPosition,
+				},
+			],
 		},
 	};
 }
 
-export function planTargetedResumePositionClear(
-	state: TargetedMutableState,
-): TargetedMutationStep {
+export function planTargetedResumePositionClear(state: TargetedMutableState): TargetedMutationStep {
 	const prevPosition = state.resumePosition;
 	return {
 		execute: () => {

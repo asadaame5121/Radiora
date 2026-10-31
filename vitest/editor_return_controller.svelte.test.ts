@@ -9,12 +9,12 @@ test("editor return passes remembered coordinates to the sole navigation boundar
 		querySelector: (selector: string) =>
 			selector.startsWith("textarea")
 				? {
-					selectionStart: 3,
-					selectionEnd: 7,
-					selectionDirection: "backward",
-					scrollTop: 19,
-					scrollLeft: 5,
-				}
+						selectionStart: 3,
+						selectionEnd: 7,
+						selectionDirection: "backward",
+						scrollTop: 19,
+						scrollLeft: 5,
+					}
 				: { scrollTop: 91 },
 	});
 	const navigate = vi.fn(async () => false);

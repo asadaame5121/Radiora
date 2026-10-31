@@ -24,8 +24,8 @@ import {
 	QuickCaptureInputSchema,
 } from "../domain/input_schemas.ts";
 
-export interface BindingContext extends
-	Pick<
+export interface BindingContext
+	extends Pick<
 		RadioraBindings,
 		| "getOperationSummary"
 		| "exportOperationLog"
@@ -92,13 +92,7 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		restoreRecoverySnapshot: (snapshotId, workId, branchId, confirmation) =>
 			service().restoreRecoverySnapshot(snapshotId, workId, branchId, confirmation),
 		promoteRecoverySnapshot: (snapshotId, workId, branchId, confirmation, message) =>
-			service().promoteRecoverySnapshot(
-				snapshotId,
-				workId,
-				branchId,
-				confirmation,
-				message,
-			),
+			service().promoteRecoverySnapshot(snapshotId, workId, branchId, confirmation, message),
 		listGlobalLineage: async (filter) => {
 			const current = service();
 			const defs = await current.listRelationTypeDefinitions();
@@ -139,10 +133,7 @@ export function createBindingHandlers(context: BindingContext): RadioraBindings 
 		purgeWork: (workId) => service().purgeWork(workId),
 		setCollapsed: (id, collapsed) => service().setCollapsed(id, collapsed),
 		setCollapsedBatch: (ids, collapsed) =>
-			service().setCollapsedBatch(
-				v.parse(v.array(IdSchema), ids),
-				v.parse(v.boolean(), collapsed),
-			),
+			service().setCollapsedBatch(v.parse(v.array(IdSchema), ids), v.parse(v.boolean(), collapsed)),
 		createLink: async (input) => service().createLink(v.parse(CreateLinkInputSchema, input)),
 		resolveAdvancedLink: (input, selections) => service().resolveAdvancedLink(input, selections),
 		listInternalReferenceCompletions: (query, limit) =>

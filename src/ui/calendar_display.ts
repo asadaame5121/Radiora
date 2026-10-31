@@ -7,12 +7,14 @@ export function formatCreatedAt(value: string): string {
 
 export function formatRecentEditAt(value: string): string {
 	const date = new Date(value);
-	return Number.isNaN(date.getTime()) ? "更新日時不明" : date.toLocaleString("ja-JP", {
-		month: "numeric",
-		day: "numeric",
-		hour: "2-digit",
-		minute: "2-digit",
-	});
+	return Number.isNaN(date.getTime())
+		? "更新日時不明"
+		: date.toLocaleString("ja-JP", {
+				month: "numeric",
+				day: "numeric",
+				hour: "2-digit",
+				minute: "2-digit",
+			});
 }
 
 export function localDateValue(date: Date): string {

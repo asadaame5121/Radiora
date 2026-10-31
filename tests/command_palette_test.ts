@@ -50,11 +50,7 @@ Deno.test("command palette omits deprecated Query execution and saving", () => {
 });
 
 Deno.test("command palette includes Markdown export", () => {
-	const [exportMarkdown] = commandPaletteItems(
-		"Markdown",
-		context(),
-		DEFAULT_UI_VOCABULARY,
-	);
+	const [exportMarkdown] = commandPaletteItems("Markdown", context(), DEFAULT_UI_VOCABULARY);
 	assertEquals(exportMarkdown.id, "exportMarkdown");
 	assertEquals(exportMarkdown.label, "Markdownでエクスポート");
 	assertEquals(exportMarkdown.availability, { enabled: true });

@@ -19,7 +19,7 @@ const validHistoricalDateArbitrary = fc
 				month,
 				day,
 			}));
-		})
+		}),
 	);
 
 const minCoordinate = historicalDay(-MAX_HISTORICAL_YEAR, 1, 1);
@@ -107,17 +107,14 @@ Deno.test("Property: Out-of-bounds coordinates throw RangeError", () => {
 
 Deno.test("Property: formatHistoricalYear produces correct Japanese era representations", () => {
 	void fc.assert(
-		fc.property(
-			fc.integer({ min: -MAX_HISTORICAL_YEAR, max: MAX_HISTORICAL_YEAR }),
-			(year) => {
-				const formatted = formatHistoricalYear(year);
-				if (year <= 0) {
-					assertEquals(formatted, `紀元前${1 - year}年`);
-				} else {
-					assertEquals(formatted, `${year}年`);
-				}
-			},
-		),
+		fc.property(fc.integer({ min: -MAX_HISTORICAL_YEAR, max: MAX_HISTORICAL_YEAR }), (year) => {
+			const formatted = formatHistoricalYear(year);
+			if (year <= 0) {
+				assertEquals(formatted, `紀元前${1 - year}年`);
+			} else {
+				assertEquals(formatted, `${year}年`);
+			}
+		}),
 		{ numRuns: 100 },
 	);
 });

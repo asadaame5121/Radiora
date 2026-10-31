@@ -49,9 +49,11 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 			transformLinkUrl: (url) => url,
 			onChange: (value, current) => {
 				if (
-					generation !== this.#generation || this.#suppressChange > 0 ||
+					generation !== this.#generation ||
+					this.#suppressChange > 0 ||
 					current !== this.#instance
-				) return;
+				)
+					return;
 				if (this.#compositionGuard) {
 					this.#compositionDirty = true;
 					return;
@@ -165,25 +167,36 @@ export class OvertypeMarkdownEditorAdapter implements MarkdownEditorAdapter {
 				}
 			}, 0);
 		});
-		this.#listen(this.textarea, "keydown", (rawEvent) => {
-			const event = rawEvent as KeyboardEvent;
-			const compositionGuard = this.#compositionGuard || event.isComposing || event.keyCode === 229;
-			this.#options.onKeydown?.(event, this.textarea, compositionGuard);
-			if (event.defaultPrevented) event.stopImmediatePropagation();
-		}, { capture: true });
+		this.#listen(
+			this.textarea,
+			"keydown",
+			(rawEvent) => {
+				const event = rawEvent as KeyboardEvent;
+				const compositionGuard =
+					this.#compositionGuard || event.isComposing || event.keyCode === 229;
+				this.#options.onKeydown?.(event, this.textarea, compositionGuard);
+				if (event.defaultPrevented) event.stopImmediatePropagation();
+			},
+			{ capture: true },
+		);
 		const notifySelection = () => this.#options.onSelectionChange?.(this.textarea);
 		for (const type of ["select", "keyup", "click", "input", "scroll"]) {
 			this.#listen(this.textarea, type, notifySelection);
 		}
 		this.#listen(this.textarea, "focus", () => this.#options.onFocus?.(this.textarea));
 		this.#listen(this.textarea, "blur", () => this.#options.onBlur?.(this.textarea));
-		this.#listen(this.#options.host, "click", (event) => {
-			const destination = internalReferenceDestination(event);
-			if (!destination) return;
-			event.preventDefault();
-			event.stopImmediatePropagation();
-			this.#options.onInternalReference?.(destination);
-		}, { capture: true });
+		this.#listen(
+			this.#options.host,
+			"click",
+			(event) => {
+				const destination = internalReferenceDestination(event);
+				if (!destination) return;
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				this.#options.onInternalReference?.(destination);
+			},
+			{ capture: true },
+		);
 	}
 
 	#installPreviewAccessibility(): void {
@@ -246,14 +259,18 @@ export class TextareaMarkdownEditorAdapter implements MarkdownEditorAdapter {
 				}
 			}, 0);
 		});
-		this.#listen("keydown", (rawEvent) => {
-			const event = rawEvent as KeyboardEvent;
-			options.onKeydown?.(
-				event,
-				this.textarea,
-				this.#compositionGuard || event.isComposing || event.keyCode === 229,
-			);
-		}, { capture: true });
+		this.#listen(
+			"keydown",
+			(rawEvent) => {
+				const event = rawEvent as KeyboardEvent;
+				options.onKeydown?.(
+					event,
+					this.textarea,
+					this.#compositionGuard || event.isComposing || event.keyCode === 229,
+				);
+			},
+			{ capture: true },
+		);
 		for (const type of ["select", "keyup", "click", "input", "scroll"]) {
 			this.#listen(type, () => options.onSelectionChange?.(this.textarea));
 		}
@@ -326,8 +343,8 @@ function internalReferenceDestination(event: Event): string | null {
 	const tooltip = target.closest(".overtype-link-tooltip");
 	const href = anchor?.getAttribute("href") ?? "";
 	const renderedUrlPart = anchor?.querySelector(".url-part")?.textContent ?? "";
-	const tooltipText = tooltip?.querySelector(".overtype-link-tooltip-url")?.textContent?.trim() ??
-		"";
+	const tooltipText =
+		tooltip?.querySelector(".overtype-link-tooltip-url")?.textContent?.trim() ?? "";
 	return recoverRadioraDestination(href, renderedUrlPart, tooltipText);
 }
 
@@ -336,13 +353,11 @@ export function recoverRadioraDestination(
 	renderedUrlPart = "",
 	tooltipText = "",
 ): string | null {
-	for (
-		const candidate of [
-			href,
-			tooltipText,
-			/^\]\((.*)\)$/u.exec(renderedUrlPart.trim())?.[1] ?? "",
-		]
-	) {
+	for (const candidate of [
+		href,
+		tooltipText,
+		/^\]\((.*)\)$/u.exec(renderedUrlPart.trim())?.[1] ?? "",
+	]) {
 		if (RADIORA_DESTINATION.test(candidate)) return candidate;
 	}
 	return null;

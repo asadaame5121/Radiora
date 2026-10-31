@@ -20,12 +20,15 @@ for (const choice of ["save", "discard", "cancel"] as const) {
 			reload: vi.fn(async () => true),
 			refreshHistory,
 		});
-		const pending = controller.confirmRewrite({
-			action: "rewrite",
-			occurrenceId: "source",
-			sourceBranchId: "branch-source",
-			workId: "work-source",
-		}, "new");
+		const pending = controller.confirmRewrite(
+			{
+				action: "rewrite",
+				occurrenceId: "source",
+				sourceBranchId: "branch-source",
+				workId: "work-source",
+			},
+			"new",
+		);
 		await vi.waitFor(() => expect(f.guard.pending).not.toBeNull());
 		expect(f.selected()).toBe("source");
 		await f.guard.resolvePending(choice);
@@ -52,12 +55,15 @@ test("failed branch creation preserves the origin and Outline return state", asy
 		refreshHistory: vi.fn(),
 	});
 	await expect(
-		controller.confirmRewrite({
-			action: "rewrite",
-			occurrenceId: "source",
-			sourceBranchId: "branch-source",
-			workId: "work-source",
-		}, "new"),
+		controller.confirmRewrite(
+			{
+				action: "rewrite",
+				occurrenceId: "source",
+				sourceBranchId: "branch-source",
+				workId: "work-source",
+			},
+			"new",
+		),
 	).rejects.toThrow("offline");
 	await f.navigation.goBack();
 	expect(f.location().hoistOccurrenceId).toBe("source");
@@ -66,7 +72,7 @@ test("failed branch creation preserves the origin and Outline return state", asy
 test("a persisted rewrite refreshes history even when its navigation origin is stale", async () => {
 	const f = navigationFixture();
 	let finishCreation!: () => void;
-	const creating = new Promise<void>((resolve) => finishCreation = resolve);
+	const creating = new Promise<void>((resolve) => (finishCreation = resolve));
 	const api = {
 		rewriteAsNewBranch: vi.fn(async () => {
 			await creating;
@@ -82,12 +88,15 @@ test("a persisted rewrite refreshes history even when its navigation origin is s
 		reload: vi.fn(async () => true),
 		refreshHistory,
 	});
-	const rewriting = controller.confirmRewrite({
-		action: "rewrite",
-		occurrenceId: "source",
-		sourceBranchId: "branch-source",
-		workId: "work-source",
-	}, "new");
+	const rewriting = controller.confirmRewrite(
+		{
+			action: "rewrite",
+			occurrenceId: "source",
+			sourceBranchId: "branch-source",
+			workId: "work-source",
+		},
+		"new",
+	);
 	await f.navigation.navigate({ view: "help" });
 	finishCreation();
 	await rewriting;

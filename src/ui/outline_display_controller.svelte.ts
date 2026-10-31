@@ -24,7 +24,8 @@ export class OutlineDisplayController {
 		if (
 			next.length === this.liveExpanded.length &&
 			next.every((id, index) => id === this.liveExpanded[index])
-		) return;
+		)
+			return;
 		this.liveExpanded = next;
 	}
 	expand(id: string): void {

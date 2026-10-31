@@ -6,28 +6,20 @@ import type { TreeLayoutNode } from "./tree_layout.ts";
 
 Deno.test("fitTreeBounds centers world bounds inside the padded viewport", () => {
 	assertEquals(
-		fitTreeBounds(
-			{ minX: 0, minY: 0, maxX: 200, maxY: 100 },
-			{ width: 400, height: 300 },
-		),
+		fitTreeBounds({ minX: 0, minY: 0, maxX: 200, maxY: 100 }, { width: 400, height: 300 }),
 		{ k: 1.4, x: 60, y: 80 },
 	);
 });
 
 Deno.test("fitTreeBounds clamps extreme zoom levels", () => {
 	assertEquals(
-		fitTreeBounds(
-			{ minX: 0, minY: 0, maxX: 1, maxY: 1 },
-			{ width: 1_000, height: 1_000 },
-		).k,
+		fitTreeBounds({ minX: 0, minY: 0, maxX: 1, maxY: 1 }, { width: 1_000, height: 1_000 }).k,
 		24,
 	);
 	assertEquals(
-		fitTreeBounds(
-			{ minX: 0, minY: 0, maxX: 100_000, maxY: 100_000 },
-			{ width: 100, height: 100 },
-		).k,
-		.05,
+		fitTreeBounds({ minX: 0, minY: 0, maxX: 100_000, maxY: 100_000 }, { width: 100, height: 100 })
+			.k,
+		0.05,
 	);
 });
 

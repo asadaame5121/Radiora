@@ -87,13 +87,12 @@ import { ManuscriptProjectionService, type ManuscriptSection } from "./manuscrip
 import { type OpmlImportResult, OpmlService } from "./opml_service.ts";
 import { type JsonBackupRestoreResult, JsonBackupService } from "./json_backup.ts";
 
-type OutlineServiceStore =
-	& BackupStorePort
-	& OutlineStorePort
-	& WorkStorePort
-	& RelationStorePort
-	& DiscoveryStorePort
-	& Partial<RelationTypeDefinitionStorePort>;
+type OutlineServiceStore = BackupStorePort &
+	OutlineStorePort &
+	WorkStorePort &
+	RelationStorePort &
+	DiscoveryStorePort &
+	Partial<RelationTypeDefinitionStorePort>;
 
 /** Compatibility façade for the desktop binding contract. */
 export class OutlineService {
@@ -119,7 +118,10 @@ export class OutlineService {
 		}
 
 		const current = await this.store.listRelationTypeDefinitions();
-		const definition = createCustomRelationTypeDefinition(input, current.map((d) => d.name));
+		const definition = createCustomRelationTypeDefinition(
+			input,
+			current.map((d) => d.name),
+		);
 		await this.store.createRelationTypeDefinition(definition);
 		return definition;
 	}
@@ -346,9 +348,11 @@ export class OutlineService {
 	listSearchAliases(): Promise<SearchAlias[]> {
 		return this.discovery.listSearchAliases();
 	}
-	saveSearchAlias(
-		input: { id?: string; canonical: string; variants: string[] },
-	): Promise<SearchAlias> {
+	saveSearchAlias(input: {
+		id?: string;
+		canonical: string;
+		variants: string[];
+	}): Promise<SearchAlias> {
 		return this.discovery.saveSearchAlias(input);
 	}
 	deleteSearchAlias(id: string): Promise<void> {

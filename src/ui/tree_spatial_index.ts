@@ -48,10 +48,7 @@ export function nodesNearRectangle<T extends ScreenPositionedNode>(
 	return result;
 }
 
-export function screenRectanglesOverlap(
-	left: ScreenRectangle,
-	right: ScreenRectangle,
-): boolean {
+export function screenRectanglesOverlap(left: ScreenRectangle, right: ScreenRectangle): boolean {
 	return left.x1 < right.x2 && left.x2 > right.x1 && left.y1 < right.y2 && left.y2 > right.y1;
 }
 

@@ -12,11 +12,7 @@ import {
 } from "./internal_reference_display.ts";
 import { normalizeSearchText, titleFromText } from "./search_text.ts";
 
-export type InternalReferenceStatus =
-	| "resolved"
-	| "missing"
-	| "deleted"
-	| "scope-mismatch";
+export type InternalReferenceStatus = "resolved" | "missing" | "deleted" | "scope-mismatch";
 
 type InternalReferenceStore = OutlineStorePort & WorkStorePort;
 
@@ -79,7 +75,8 @@ export class InternalReferenceService {
 		const [works, branches, copies, revisions] = await this.loadReferenceData();
 		const activeWorkIds = new Set(works.map((work) => work.id));
 		const activeBranches = new Set(
-			branches.filter((branch) => !branch.archivedAt && activeWorkIds.has(branch.workId))
+			branches
+				.filter((branch) => !branch.archivedAt && activeWorkIds.has(branch.workId))
 				.map((branch) => branch.id),
 		);
 		return { activeWorkIds, activeBranches, copies, revisions };
@@ -96,24 +93,22 @@ export class InternalReferenceService {
 		for (const revision of revisions) {
 			if (!activeWorkIds.has(revision.workId)) continue;
 			const displayName = titleFromText(revision.text) || EMPTY_REVISION_DISPLAY_NAME;
-			completions.push(this.completion(
-				"revision",
-				revision.id,
-				revision.workId,
-				displayName,
-			));
+			completions.push(this.completion("revision", revision.id, revision.workId, displayName));
 		}
 		const normalizedQuery = normalizeSearchText(query);
 		return completions
-			.filter((candidate) =>
-				!normalizedQuery ||
-				normalizeSearchText(
-					`${candidate.displayName} ${candidate.scope} ${candidate.id} ${candidate.workId}`,
-				).includes(normalizedQuery)
+			.filter(
+				(candidate) =>
+					!normalizedQuery ||
+					normalizeSearchText(
+						`${candidate.displayName} ${candidate.scope} ${candidate.id} ${candidate.workId}`,
+					).includes(normalizedQuery),
 			)
-			.sort((left, right) =>
-				left.displayName.localeCompare(right.displayName, "ja") ||
-				left.scope.localeCompare(right.scope) || left.id.localeCompare(right.id)
+			.sort(
+				(left, right) =>
+					left.displayName.localeCompare(right.displayName, "ja") ||
+					left.scope.localeCompare(right.scope) ||
+					left.id.localeCompare(right.id),
 			)
 			.slice(0, safeLimit);
 	}
@@ -225,9 +220,10 @@ export class InternalReferenceService {
 				});
 			}
 		}
-		return result.sort((left, right) =>
-			left.displayName.localeCompare(right.displayName, "ja") ||
-			left.source.scope.localeCompare(right.source.scope)
+		return result.sort(
+			(left, right) =>
+				left.displayName.localeCompare(right.displayName, "ja") ||
+				left.source.scope.localeCompare(right.source.scope),
 		);
 	}
 
@@ -288,9 +284,10 @@ export class InternalReferenceService {
 		}
 
 		for (const list of byTargetId.values()) {
-			list.sort((left, right) =>
-				left.displayName.localeCompare(right.displayName, "ja") ||
-				left.source.scope.localeCompare(right.source.scope)
+			list.sort(
+				(left, right) =>
+					left.displayName.localeCompare(right.displayName, "ja") ||
+					left.source.scope.localeCompare(right.source.scope),
 			);
 		}
 		return byTargetId;
@@ -319,8 +316,8 @@ function matchingReferences(
 	scope: RadioraReferenceScope,
 	id: string,
 ): RadioraInternalReferenceCandidate[] {
-	return parseMarkdownCandidates(text).internalReferences.filter((reference) =>
-		reference.scope === scope && reference.id === id
+	return parseMarkdownCandidates(text).internalReferences.filter(
+		(reference) => reference.scope === scope && reference.id === id,
 	);
 }
 
@@ -329,14 +326,14 @@ function activeMainTitle(
 	branches: Awaited<ReturnType<WorkStorePort["listBranches"]>>,
 	copies: Awaited<ReturnType<WorkStorePort["listWorkingCopies"]>>,
 ): string {
-	const mains = branches.filter((branch) =>
-		branch.workId === workId && branch.name === "main" && !branch.archivedAt
+	const mains = branches.filter(
+		(branch) => branch.workId === workId && branch.name === "main" && !branch.archivedAt,
 	);
 	if (mains.length !== 1) {
 		throw new Error(`Expected one active main Branch for Work: ${workId}`);
 	}
-	const matchingCopies = copies.filter((copy) =>
-		copy.workId === workId && copy.branchId === mains[0].id
+	const matchingCopies = copies.filter(
+		(copy) => copy.workId === workId && copy.branchId === mains[0].id,
 	);
 	if (matchingCopies.length !== 1) {
 		throw new Error(`Expected one Working Copy for active main Branch: ${mains[0].id}`);
@@ -348,7 +345,8 @@ function navigationTarget(
 	workId: string,
 	occurrences: Awaited<ReturnType<OutlineStorePort["listOccurrences"]>>,
 ): NavigationTarget {
-	const active = occurrences.filter((occurrence) => occurrence.workId === workId)
+	const active = occurrences
+		.filter((occurrence) => occurrence.workId === workId)
 		.sort((left, right) => left.orderKey - right.orderKey || left.id.localeCompare(right.id));
 	const target = active[0];
 	if (!target) return { kind: "work", workId, fellBack: true };

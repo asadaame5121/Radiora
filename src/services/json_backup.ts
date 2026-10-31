@@ -118,11 +118,13 @@ const decodeBackupInput = Result.fromThrowable(
 		return decodeBackupState(parsed);
 	},
 	(cause) =>
-		cause instanceof BackupRestoreError ? cause : new BackupRestoreError(
-			"invalid-backup",
-			cause instanceof Error ? cause.message : String(cause),
-			{ cause },
-		),
+		cause instanceof BackupRestoreError
+			? cause
+			: new BackupRestoreError(
+					"invalid-backup",
+					cause instanceof Error ? cause.message : String(cause),
+					{ cause },
+				),
 );
 
 export function decodeBackupState(envelope: Record<string, unknown>): GraphStateSnapshot {
@@ -130,17 +132,15 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 		if (!isLegacyBackupV0(envelope)) {
 			throw new Error("旧形式のバックアップ構造が不正です。");
 		}
-		return validatedGraphStateSnapshot(migrateBackupV6(
-			migrateBackupV5(
-				migrateBackupV4(
-					migrateBackupV3(
-						migrateBackupV2(
-							migrateBackupV1(migrateBackupV0(envelope)),
-						),
+		return validatedGraphStateSnapshot(
+			migrateBackupV6(
+				migrateBackupV5(
+					migrateBackupV4(
+						migrateBackupV3(migrateBackupV2(migrateBackupV1(migrateBackupV0(envelope)))),
 					),
 				),
 			),
-		));
+		);
 	}
 	if (envelope.format !== "radiora-backup") {
 		throw new Error("Radioraバックアップ形式ではありません。");
@@ -161,26 +161,18 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 		case 1:
 			migrated = migrateBackupV6(
 				migrateBackupV5(
-					migrateBackupV4(
-						migrateBackupV3(
-							migrateBackupV2(migrateBackupV1(data as StoredGraphV1)),
-						),
-					),
+					migrateBackupV4(migrateBackupV3(migrateBackupV2(migrateBackupV1(data as StoredGraphV1)))),
 				),
 			);
 			break;
 		case 2:
 			migrated = migrateBackupV6(
-				migrateBackupV5(
-					migrateBackupV4(migrateBackupV3(migrateBackupV2(data as StoredGraphV2))),
-				),
+				migrateBackupV5(migrateBackupV4(migrateBackupV3(migrateBackupV2(data as StoredGraphV2)))),
 			);
 			break;
 		case 3:
 			migrated = migrateBackupV6(
-				migrateBackupV5(
-					migrateBackupV4(migrateBackupV3(data as StoredGraphV3)),
-				),
+				migrateBackupV5(migrateBackupV4(migrateBackupV3(data as StoredGraphV3))),
 			);
 			break;
 		case 4:
@@ -212,10 +204,14 @@ export function decodeBackupState(envelope: Record<string, unknown>): GraphState
 function isLegacyBackupV0(
 	value: Record<string, unknown>,
 ): value is Record<string, unknown> & BackupV0 {
-	return Array.isArray(value.items) && Array.isArray(value.links) && Array.isArray(value.knots) &&
+	return (
+		Array.isArray(value.items) &&
+		Array.isArray(value.links) &&
+		Array.isArray(value.knots) &&
 		(value.aliases === undefined || Array.isArray(value.aliases)) &&
 		(value.emergenceFeedback === undefined || isRecord(value.emergenceFeedback)) &&
-		(value.savedRuleQueries === undefined || Array.isArray(value.savedRuleQueries));
+		(value.savedRuleQueries === undefined || Array.isArray(value.savedRuleQueries))
+	);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

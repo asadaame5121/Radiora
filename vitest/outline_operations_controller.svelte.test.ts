@@ -74,10 +74,10 @@ function fixture(items: OutlineItem[]) {
 			vi.fn((collapsed: boolean) => {
 				events.push(`publish-collapse:${collapsed}`);
 				return true;
-			})
+			}),
 		),
 		prepareClearTemporaryExpansion: vi.fn((_id: string) =>
-			vi.fn(() => events.push("clear-expansion"))
+			vi.fn(() => events.push("clear-expansion")),
 		),
 		selection: {
 			current: vi.fn((): string | null => null),
@@ -96,14 +96,17 @@ function fixture(items: OutlineItem[]) {
 	};
 }
 
-function keyEvent(key: string, modifiers: Partial<{
-	ctrlKey: boolean;
-	metaKey: boolean;
-	shiftKey: boolean;
-	altKey: boolean;
-	isComposing: boolean;
-	keyCode: number;
-}> = {}) {
+function keyEvent(
+	key: string,
+	modifiers: Partial<{
+		ctrlKey: boolean;
+		metaKey: boolean;
+		shiftKey: boolean;
+		altKey: boolean;
+		isComposing: boolean;
+		keyCode: number;
+	}> = {},
+) {
 	return {
 		key,
 		ctrlKey: false,
@@ -215,11 +218,7 @@ describe("OutlineOperationsController - structure operations", () => {
 	});
 
 	it("moves sibling up and down", async () => {
-		const items = [
-			createItem("1", null, 10),
-			createItem("2", null, 20),
-			createItem("3", null, 30),
-		];
+		const items = [createItem("1", null, 10), createItem("2", null, 20), createItem("3", null, 30)];
 		const moveItem = vi.fn().mockResolvedValue(undefined);
 		const reload = vi.fn().mockResolvedValue(undefined);
 		const controller = new OutlineOperationsController({
@@ -385,52 +384,54 @@ describe("OutlineOperationsController - structure operations", () => {
 });
 
 describe("OutlineOperationsController - current ownership contracts", () => {
-	it.each(["row", "other", null])(
-		"deletes and clears only the deleted selection (selected: %s)",
-		async (selected) => {
-			const item = createItem("row", null, 10);
-			const { controller, ports, events } = fixture([item]);
-			ports.selection.current.mockReturnValue(selected);
-			await controller.remove(item.id);
-			expect(ports.flushAutosave).toHaveBeenCalledWith(item.workId);
-			expect(ports.api.deleteItem).toHaveBeenCalledWith(item.id);
-			expect(ports.pendingEmpty.forget).toHaveBeenCalledWith(item.id);
-			expect(ports.reload).toHaveBeenCalledWith();
-			expect(ports.selection.clear).toHaveBeenCalledTimes(selected === item.id ? 1 : 0);
-			expect(events).toEqual(
-				selected === item.id
-					? ["flush", "delete", "forget", "clear-selection", "reload"]
-					: ["flush", "delete", "forget", "reload"],
-			);
-		},
-	);
+	it.each([
+		"row",
+		"other",
+		null,
+	])("deletes and clears only the deleted selection (selected: %s)", async (selected) => {
+		const item = createItem("row", null, 10);
+		const { controller, ports, events } = fixture([item]);
+		ports.selection.current.mockReturnValue(selected);
+		await controller.remove(item.id);
+		expect(ports.flushAutosave).toHaveBeenCalledWith(item.workId);
+		expect(ports.api.deleteItem).toHaveBeenCalledWith(item.id);
+		expect(ports.pendingEmpty.forget).toHaveBeenCalledWith(item.id);
+		expect(ports.reload).toHaveBeenCalledWith();
+		expect(ports.selection.clear).toHaveBeenCalledTimes(selected === item.id ? 1 : 0);
+		expect(events).toEqual(
+			selected === item.id
+				? ["flush", "delete", "forget", "clear-selection", "reload"]
+				: ["flush", "delete", "forget", "reload"],
+		);
+	});
 
-	it.each(["row", "other"])(
-		"corrects persisted deletion after receipt expiry without clearing a new selection (%s)",
-		async (selectedAfterDelete) => {
-			const item = createItem("row", null, 10);
-			const { controller, ports, invalidate, events } = fixture([item]);
-			ports.selection.current.mockReturnValue(item.id);
-			let release: () => void = () => {
-				throw new Error("Delete has not started");
-			};
-			ports.api.deleteItem.mockImplementation(() =>
+	it.each([
+		"row",
+		"other",
+	])("corrects persisted deletion after receipt expiry without clearing a new selection (%s)", async (selectedAfterDelete) => {
+		const item = createItem("row", null, 10);
+		const { controller, ports, invalidate, events } = fixture([item]);
+		ports.selection.current.mockReturnValue(item.id);
+		let release: () => void = () => {
+			throw new Error("Delete has not started");
+		};
+		ports.api.deleteItem.mockImplementation(
+			() =>
 				new Promise<void>((resolve) => {
 					events.push("delete");
 					release = resolve;
-				})
-			);
-			const removal = controller.remove(item.id);
-			await vi.waitFor(() => expect(ports.api.deleteItem).toHaveBeenCalled());
-			invalidate();
-			ports.selection.current.mockReturnValue(selectedAfterDelete);
-			release();
-			await removal;
-			expect(ports.pendingEmpty.forget).toHaveBeenCalledWith(item.id);
-			expect(ports.selection.clear).toHaveBeenCalledTimes(selectedAfterDelete === item.id ? 1 : 0);
-			expect(ports.reload).toHaveBeenCalledWith();
-		},
-	);
+				}),
+		);
+		const removal = controller.remove(item.id);
+		await vi.waitFor(() => expect(ports.api.deleteItem).toHaveBeenCalled());
+		invalidate();
+		ports.selection.current.mockReturnValue(selectedAfterDelete);
+		release();
+		await removal;
+		expect(ports.pendingEmpty.forget).toHaveBeenCalledWith(item.id);
+		expect(ports.selection.clear).toHaveBeenCalledTimes(selectedAfterDelete === item.id ? 1 : 0);
+		expect(ports.reload).toHaveBeenCalledWith();
+	});
 
 	it("preserves selection and pending records when remove persistence fails", async () => {
 		const item = createItem("row", null, 10);
@@ -469,23 +470,23 @@ describe("OutlineOperationsController - current ownership contracts", () => {
 		expect(ports.pendingEmpty.track).not.toHaveBeenCalled();
 	});
 
-	it.each(["split", "delete"])(
-		"autosave failure prevents %s writes and preserves pending records",
-		async (operation) => {
-			const item = createItem("row", null, 10, operation === "split" ? "body" : "");
-			const { controller, ports } = fixture([createItem("prev", null, 5), item]);
-			const cause = new Error("save failed");
-			ports.flushAutosave.mockRejectedValue(cause);
-			if (operation === "split") await controller.splitRow(item, () => ({ start: 2, end: 2 }));
-			else await controller.deleteEmptyRow(item);
-			expect(ports.reportError).toHaveBeenCalledWith(cause);
-			expect(ports.api.updateItemText).not.toHaveBeenCalled();
-			expect(ports.api.createItem).not.toHaveBeenCalled();
-			expect(ports.api.deleteItem).not.toHaveBeenCalled();
-			expect(ports.pendingEmpty.forget).not.toHaveBeenCalled();
-			expect(ports.reload).not.toHaveBeenCalled();
-		},
-	);
+	it.each([
+		"split",
+		"delete",
+	])("autosave failure prevents %s writes and preserves pending records", async (operation) => {
+		const item = createItem("row", null, 10, operation === "split" ? "body" : "");
+		const { controller, ports } = fixture([createItem("prev", null, 5), item]);
+		const cause = new Error("save failed");
+		ports.flushAutosave.mockRejectedValue(cause);
+		if (operation === "split") await controller.splitRow(item, () => ({ start: 2, end: 2 }));
+		else await controller.deleteEmptyRow(item);
+		expect(ports.reportError).toHaveBeenCalledWith(cause);
+		expect(ports.api.updateItemText).not.toHaveBeenCalled();
+		expect(ports.api.createItem).not.toHaveBeenCalled();
+		expect(ports.api.deleteItem).not.toHaveBeenCalled();
+		expect(ports.pendingEmpty.forget).not.toHaveBeenCalled();
+		expect(ports.reload).not.toHaveBeenCalled();
+	});
 
 	it("forgets an empty row only after deletion succeeds, before reload", async () => {
 		const item = createItem("row", null, 10, "");
@@ -701,63 +702,65 @@ it("updates heading and reloads", async () => {
 	expect(setContextualHeading).toHaveBeenCalledWith("item-1", "New Title");
 	expect(ports.reload).toHaveBeenCalledWith("item-1", expect.any(Function));
 });
-it.each(["duplicate", "heading"] as const)(
-	"expires %s publication after persistence without undoing the write",
-	async (operation) => {
+it.each([
+	"duplicate",
+	"heading",
+] as const)("expires %s publication after persistence without undoing the write", async (operation) => {
+	const item = createItem("row", null, 10);
+	const { controller, ports, invalidate } = fixture([item]);
+	const pending = Promise.withResolvers<void>();
+	ports.api.createOccurrence.mockImplementation(async () => {
+		await pending.promise;
+		return { id: "saved-duplicate" };
+	});
+	ports.api.setContextualHeading.mockImplementation(() => pending.promise);
+	const mutation =
+		operation === "duplicate"
+			? controller.duplicateOccurrence(item)
+			: controller.updateHeading(item.id, "Saved heading");
+	await vi.waitFor(() =>
+		expect(
+			operation === "duplicate" ? ports.api.createOccurrence : ports.api.setContextualHeading,
+		).toHaveBeenCalled(),
+	);
+	invalidate();
+	pending.resolve();
+	await mutation;
+	expect(ports.reload).not.toHaveBeenCalled();
+	expect(ports.reportError).not.toHaveBeenCalled();
+});
+
+it.each([
+	"duplicate",
+	"heading",
+] as const)("reports only current %s persistence failures", async (operation) => {
+	for (const stale of [false, true]) {
 		const item = createItem("row", null, 10);
 		const { controller, ports, invalidate } = fixture([item]);
 		const pending = Promise.withResolvers<void>();
+		const cause = new Error("write failed");
 		ports.api.createOccurrence.mockImplementation(async () => {
 			await pending.promise;
-			return { id: "saved-duplicate" };
+			return { id: "never-created" };
 		});
 		ports.api.setContextualHeading.mockImplementation(() => pending.promise);
-		const mutation = operation === "duplicate"
-			? controller.duplicateOccurrence(item)
-			: controller.updateHeading(item.id, "Saved heading");
+		const mutation =
+			operation === "duplicate"
+				? controller.duplicateOccurrence(item)
+				: controller.updateHeading(item.id, "Heading");
 		await vi.waitFor(() =>
 			expect(
 				operation === "duplicate" ? ports.api.createOccurrence : ports.api.setContextualHeading,
-			).toHaveBeenCalled()
+			).toHaveBeenCalled(),
 		);
-		invalidate();
-		pending.resolve();
+		if (stale) invalidate();
+		pending.reject(cause);
 		await mutation;
+		expect(ports.reportError).toHaveBeenCalledTimes(stale ? 0 : 1);
+		if (!stale) expect(ports.reportError).toHaveBeenCalledWith(cause);
 		expect(ports.reload).not.toHaveBeenCalled();
-		expect(ports.reportError).not.toHaveBeenCalled();
-	},
-);
-
-it.each(["duplicate", "heading"] as const)(
-	"reports only current %s persistence failures",
-	async (operation) => {
-		for (const stale of [false, true]) {
-			const item = createItem("row", null, 10);
-			const { controller, ports, invalidate } = fixture([item]);
-			const pending = Promise.withResolvers<void>();
-			const cause = new Error("write failed");
-			ports.api.createOccurrence.mockImplementation(async () => {
-				await pending.promise;
-				return { id: "never-created" };
-			});
-			ports.api.setContextualHeading.mockImplementation(() => pending.promise);
-			const mutation = operation === "duplicate"
-				? controller.duplicateOccurrence(item)
-				: controller.updateHeading(item.id, "Heading");
-			await vi.waitFor(() =>
-				expect(
-					operation === "duplicate" ? ports.api.createOccurrence : ports.api.setContextualHeading,
-				).toHaveBeenCalled()
-			);
-			if (stale) invalidate();
-			pending.reject(cause);
-			await mutation;
-			expect(ports.reportError).toHaveBeenCalledTimes(stale ? 0 : 1);
-			if (!stale) expect(ports.reportError).toHaveBeenCalledWith(cause);
-			expect(ports.reload).not.toHaveBeenCalled();
-		}
-	},
-);
+	}
+});
 
 it("does not publish a duplicate autosave failure after selection expires", async () => {
 	const item = createItem("row", null, 10);
@@ -772,25 +775,26 @@ it("does not publish a duplicate autosave failure after selection expires", asyn
 	expect(ports.reportError).not.toHaveBeenCalled();
 	expect(ports.reload).not.toHaveBeenCalled();
 });
-it.each(["duplicate", "heading"] as const)(
-	"expires %s focus authority while reload is pending",
-	async (operation) => {
-		const item = createItem("row", null, 10);
-		const { controller, ports, invalidate } = fixture([item]);
-		const pending = Promise.withResolvers<boolean>();
-		let focusAllowed = true;
-		ports.reload.mockImplementation(async (_id, current) => {
-			await pending.promise;
-			focusAllowed = current?.() ?? true;
-			return true;
-		});
-		const mutation = operation === "duplicate"
+it.each([
+	"duplicate",
+	"heading",
+] as const)("expires %s focus authority while reload is pending", async (operation) => {
+	const item = createItem("row", null, 10);
+	const { controller, ports, invalidate } = fixture([item]);
+	const pending = Promise.withResolvers<boolean>();
+	let focusAllowed = true;
+	ports.reload.mockImplementation(async (_id, current) => {
+		await pending.promise;
+		focusAllowed = current?.() ?? true;
+		return true;
+	});
+	const mutation =
+		operation === "duplicate"
 			? controller.duplicateOccurrence(item)
 			: controller.updateHeading(item.id, "Heading");
-		await vi.waitFor(() => expect(ports.reload).toHaveBeenCalled());
-		invalidate();
-		pending.resolve(true);
-		await mutation;
-		expect(focusAllowed).toBe(false);
-	},
-);
+	await vi.waitFor(() => expect(ports.reload).toHaveBeenCalled());
+	invalidate();
+	pending.resolve(true);
+	await mutation;
+	expect(focusAllowed).toBe(false);
+});

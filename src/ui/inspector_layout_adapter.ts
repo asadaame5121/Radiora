@@ -75,9 +75,14 @@ export class InspectorLayoutAdapter {
 		await this.afterRender();
 		const element = this.element;
 		if (
-			this.disposed || request !== this.request || revision !== this.layout.inspectorRevision ||
-			!current() || this.layout.inspectorCollapsed || !element?.isConnected
-		) return;
+			this.disposed ||
+			request !== this.request ||
+			revision !== this.layout.inspectorRevision ||
+			!current() ||
+			this.layout.inspectorCollapsed ||
+			!element?.isConnected
+		)
+			return;
 		element.scrollIntoView({ behavior: "smooth", block: "start" });
 		if (focusRelation) {
 			element.querySelector<HTMLInputElement>(".link-editor input[type=search]")?.focus();

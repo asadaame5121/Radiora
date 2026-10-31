@@ -22,7 +22,9 @@ export function navigationFixture() {
 		createdAt: "2026-10-03T00:00:00Z",
 		updatedAt: "2026-10-03T00:00:00Z",
 	});
-	const source = item("source"), other = item("other"), created = item("created");
+	const source = item("source"),
+		other = item("other"),
+		created = item("created");
 	let snapshot: OutlineSnapshot = {
 		items: [source, other, created],
 		links: [],
@@ -41,15 +43,15 @@ export function navigationFixture() {
 	});
 	guard.reset(source);
 	const presentation = vi.fn();
-	const prepare = vi.fn(async (_destination: ScreenDestination): Promise<() => void> =>
-		presentation
+	const prepare = vi.fn(
+		async (_destination: ScreenDestination): Promise<() => void> => presentation,
 	);
 	const reportError = vi.fn();
 	const save = vi.fn(async () => true);
 	const navigation = new ScreenNavigationWorkspace({
 		outline: {
 			captureBrowsing: () => browsing,
-			commitBrowsing: (next) => browsing = next,
+			commitBrowsing: (next) => (browsing = next),
 			filter: () => ({ freeText: "", tagsAll: "", tagsNone: "" }),
 			setFilter: vi.fn(),
 			expanded: () => [],
@@ -76,7 +78,7 @@ export function navigationFixture() {
 		},
 		snapshot: () => snapshot,
 		readOutline: async () => snapshot,
-		outlinePublication: outlinePublicationFixture((next) => snapshot = next),
+		outlinePublication: outlinePublicationFixture((next) => (snapshot = next)),
 		selection: {
 			current: () => selected,
 			guard: (next, current) => guard.canSelect(next, current),
@@ -89,7 +91,7 @@ export function navigationFixture() {
 	});
 	const selection = new OccurrenceSelectionWorkspace({
 		current: () => selected,
-		publish: (id) => selected = id,
+		publish: (id) => (selected = id),
 		snapshot: () => snapshot,
 		publishStartupSnapshot: (next) => {
 			snapshot = next;
@@ -101,7 +103,7 @@ export function navigationFixture() {
 		outline: {
 			visible: () => navigation.view === "outline",
 			browsing: () => browsing,
-			publishBrowsing: (next) => browsing = next,
+			publishBrowsing: (next) => (browsing = next),
 			expanded: () => [],
 			publishExpanded: vi.fn(),
 			capturePanels: vi.fn(),

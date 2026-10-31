@@ -5,9 +5,7 @@ import { applyWorkPurge, applyWorkRestore, applyWorkTrash } from "./memory_work_
 Deno.test("applyWorkTrash and applyWorkRestore - updates deletedAt and clears orphans", () => {
 	const state = new MemoryStateContainer();
 	const now = "2026-08-01T00:00:00.000Z";
-	state.works = [
-		{ id: "w1", createdAt: now, updatedAt: now },
-	];
+	state.works = [{ id: "w1", createdAt: now, updatedAt: now }];
 	state.occurrences = [
 		{
 			id: "o1",
@@ -31,15 +29,9 @@ Deno.test("applyWorkTrash and applyWorkRestore - updates deletedAt and clears or
 Deno.test("applyWorkPurge - removes work and cascade-deletes related resources", () => {
 	const state = new MemoryStateContainer();
 	const now = "2026-08-01T00:00:00.000Z";
-	state.works = [
-		{ id: "w1", createdAt: now, updatedAt: now, deletedAt: now },
-	];
-	state.branches = [
-		{ id: "b1", workId: "w1", name: "main", headRevisionId: null, createdAt: now },
-	];
-	state.workingCopies = [
-		{ workId: "w1", branchId: "b1", text: "text", updatedAt: now },
-	];
+	state.works = [{ id: "w1", createdAt: now, updatedAt: now, deletedAt: now }];
+	state.branches = [{ id: "b1", workId: "w1", name: "main", headRevisionId: null, createdAt: now }];
+	state.workingCopies = [{ workId: "w1", branchId: "b1", text: "text", updatedAt: now }];
 	state.occurrences = [
 		{
 			id: "o1",
@@ -63,9 +55,7 @@ Deno.test("applyWorkPurge - removes work and cascade-deletes related resources",
 Deno.test("applyWorkPurge - throws error when work is not in trash", () => {
 	const state = new MemoryStateContainer();
 	const now = "2026-08-01T00:00:00.000Z";
-	state.works = [
-		{ id: "w1", createdAt: now, updatedAt: now },
-	];
+	state.works = [{ id: "w1", createdAt: now, updatedAt: now }];
 	assertThrows(
 		() => applyWorkPurge(state, "w1"),
 		Error,

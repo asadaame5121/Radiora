@@ -67,15 +67,17 @@ Deno.test("applyRecoverySnapshotRestore - restores working copy text and appends
 	const now = "2026-08-01T00:00:00.000Z";
 	state.works = [{ id: "w1", createdAt: now, updatedAt: now }];
 	state.workingCopies = [{ workId: "w1", branchId: "b1", text: "current-text", updatedAt: now }];
-	state.recoverySnapshots = [{
-		id: "snap-1",
-		workId: "w1",
-		branchId: "b1",
-		text: "restored-text",
-		contentHash: "hash-1",
-		createdAt: now,
-		sourceRevisionId: null,
-	}];
+	state.recoverySnapshots = [
+		{
+			id: "snap-1",
+			workId: "w1",
+			branchId: "b1",
+			text: "restored-text",
+			contentHash: "hash-1",
+			createdAt: now,
+			sourceRevisionId: null,
+		},
+	];
 
 	applyRecoverySnapshotRestore(
 		state,
@@ -101,15 +103,17 @@ Deno.test("applyRecoverySnapshotPromotion - creates revision and protects snapsh
 	const state = new MemoryStateContainer();
 	const now = "2026-08-01T00:00:00.000Z";
 	state.branches = [{ id: "b1", workId: "w1", name: "main", headRevisionId: null, createdAt: now }];
-	state.recoverySnapshots = [{
-		id: "snap-1",
-		workId: "w1",
-		branchId: "b1",
-		text: "content",
-		contentHash: "hash-1",
-		createdAt: now,
-		sourceRevisionId: null,
-	}];
+	state.recoverySnapshots = [
+		{
+			id: "snap-1",
+			workId: "w1",
+			branchId: "b1",
+			text: "content",
+			contentHash: "hash-1",
+			createdAt: now,
+			sourceRevisionId: null,
+		},
+	];
 
 	const rev: Revision = {
 		id: "r1",

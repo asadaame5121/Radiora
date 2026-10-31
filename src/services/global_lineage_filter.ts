@@ -86,8 +86,8 @@ export function applyGlobalLineageFilter(
 		: new Set([...connectedWorkIds, ...filter.includeWorkIds]);
 	const keptItems = items.filter((item) => keptWorkIds.has(item.workId));
 	const keptSet = new Set(keptItems.map((item) => item.workId));
-	const keptLinks = valid.filter((link) =>
-		keptSet.has(link.from.workId) && keptSet.has(link.to.workId)
+	const keptLinks = valid.filter(
+		(link) => keptSet.has(link.from.workId) && keptSet.has(link.to.workId),
 	);
 	return { items: keptItems, links: keptLinks };
 }

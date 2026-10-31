@@ -15,11 +15,8 @@ type TimeUnit = "year" | "month" | "day";
 function calculateUnitAndStride(span: number, count: number): { unit: TimeUnit; stride: number } {
 	const step = Math.max(1, span / Math.max(2, count));
 	const unit: TimeUnit = step >= YEAR_DAYS ? "year" : step >= MONTH_DAYS ? "month" : "day";
-	const rawStride = unit === "year"
-		? step / YEAR_DAYS
-		: unit === "month"
-		? step / MONTH_DAYS
-		: step;
+	const rawStride =
+		unit === "year" ? step / YEAR_DAYS : unit === "month" ? step / MONTH_DAYS : step;
 	const power = 10 ** Math.floor(Math.log10(rawStride));
 	const stride = Math.max(1, Math.ceil(rawStride / power) * power);
 	return { unit, stride };
@@ -46,7 +43,7 @@ function formatTickLabel(unit: TimeUnit, value: number): string {
 function tickValueAt(unit: TimeUnit, cursor: number): number {
 	if (unit === "day") return cursor;
 	const year = unit === "year" ? cursor : Math.floor(cursor / MONTHS_PER_YEAR);
-	const month = ((cursor % MONTHS_PER_YEAR) + MONTHS_PER_YEAR) % MONTHS_PER_YEAR + 1;
+	const month = (((cursor % MONTHS_PER_YEAR) + MONTHS_PER_YEAR) % MONTHS_PER_YEAR) + 1;
 	return historicalDay(year, unit === "month" ? month : 1);
 }
 

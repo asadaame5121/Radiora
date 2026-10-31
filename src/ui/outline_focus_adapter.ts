@@ -15,16 +15,22 @@ export class OutlineFocusAdapter {
 		const context = this.ports.context();
 		const stillCurrent = () => {
 			const next = this.ports.context();
-			return !this.disposed && current() && context.pane === next.pane &&
-				context.origin === next.origin && this.ports.canFocus(id);
+			return (
+				!this.disposed &&
+				current() &&
+				context.pane === next.pane &&
+				context.origin === next.origin &&
+				this.ports.canFocus(id)
+			);
 		};
 		this.timer = setTimeout(() => {
 			this.timer = undefined;
 			const dispatch = () => {
 				if (!stillCurrent()) return;
-				document.querySelector<HTMLElement>(
-					`.markdown-editor-host[data-editor-item-id="${CSS.escape(id)}"]`,
-				)
+				document
+					.querySelector<HTMLElement>(
+						`.markdown-editor-host[data-editor-item-id="${CSS.escape(id)}"]`,
+					)
 					?.dispatchEvent(new CustomEvent("radiora:focus-editor", { detail: { caretOffset } }));
 			};
 			if (!stillCurrent()) return;
@@ -32,11 +38,14 @@ export class OutlineFocusAdapter {
 				dispatch();
 				return;
 			}
-			void this.ports.ensureMounted(id, stillCurrent).then((mounted) => {
-				if (mounted) dispatch();
-			}).catch((cause) => {
-				console.error("Outlineの対象行をmountできませんでした", cause);
-			});
+			void this.ports
+				.ensureMounted(id, stillCurrent)
+				.then((mounted) => {
+					if (mounted) dispatch();
+				})
+				.catch((cause) => {
+					console.error("Outlineの対象行をmountできませんでした", cause);
+				});
 		}, 0);
 	}
 	dispose(): void {

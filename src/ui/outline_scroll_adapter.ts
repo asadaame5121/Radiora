@@ -78,10 +78,12 @@ export class OutlineScrollAdapter {
 	): void {
 		const target = event.target;
 		if (
-			!draggedId || !rowsElement ||
+			!draggedId ||
+			!rowsElement ||
 			(target !== event.currentTarget &&
 				!(target instanceof Element && target.closest("[data-virtual-gap]")))
-		) return;
+		)
+			return;
 		const index = virtualOutlineIndexAtOffset(
 			layout,
 			event.clientY - rowsElement.getBoundingClientRect().top,

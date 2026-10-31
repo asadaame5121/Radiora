@@ -26,13 +26,7 @@ Deno.test("Overtype 2.4.0 differences stay explicit against a fixed CommonMark 0
 	const renderer = new commonmark.HtmlRenderer();
 	for (const example of fixture.examples) {
 		const canonical = renderer.render(parser.parse(example.markdown));
-		const actual = OverType.MarkdownParser.parse(
-			example.markdown,
-			-1,
-			false,
-			null,
-			true,
-		) as string;
+		const actual = OverType.MarkdownParser.parse(example.markdown, -1, false, null, true) as string;
 		assertEquals(canonical, example.commonmarkHtml, `${example.name}: CommonMark baseline`);
 		assertEquals(actual, example.overtypeHtml, example.name);
 		assertNotEquals(actual, canonical, example.name);

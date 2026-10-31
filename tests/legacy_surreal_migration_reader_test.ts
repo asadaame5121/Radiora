@@ -38,45 +38,53 @@ Deno.test("parseSurrealSqlResponse correctly transforms Surreal HTTP rows into G
 		// 0: work
 		{
 			status: "OK",
-			result: [{
-				id: "11111111-1111-4111-8111-111111111111",
-				created_at: CREATED_AT,
-				updated_at: CREATED_AT,
-				deleted_at: null,
-			}],
+			result: [
+				{
+					id: "11111111-1111-4111-8111-111111111111",
+					created_at: CREATED_AT,
+					updated_at: CREATED_AT,
+					deleted_at: null,
+				},
+			],
 		},
 		// 1: branch
 		{
 			status: "OK",
-			result: [{
-				id: "22222222-2222-4222-8222-222222222222",
-				work_id: "11111111-1111-4111-8111-111111111111",
-				name: "main",
-				head_revision: null,
-				created_at: CREATED_AT,
-			}],
+			result: [
+				{
+					id: "22222222-2222-4222-8222-222222222222",
+					work_id: "11111111-1111-4111-8111-111111111111",
+					name: "main",
+					head_revision: null,
+					created_at: CREATED_AT,
+				},
+			],
 		},
 		// 2: working_copy
 		{
 			status: "OK",
-			result: [{
-				branch_id: "22222222-2222-4222-8222-222222222222",
-				work_id: "11111111-1111-4111-8111-111111111111",
-				text: "Migrated legacy text",
-				updated_at: CREATED_AT,
-			}],
+			result: [
+				{
+					branch_id: "22222222-2222-4222-8222-222222222222",
+					work_id: "11111111-1111-4111-8111-111111111111",
+					text: "Migrated legacy text",
+					updated_at: CREATED_AT,
+				},
+			],
 		},
 		// 3: occurrence
 		{
 			status: "OK",
-			result: [{
-				id: "33333333-3333-4333-8333-333333333333",
-				work_id: "11111111-1111-4111-8111-111111111111",
-				parent_occurrence_id: null,
-				order_key: 1000,
-				collapsed: false,
-				branch_id: "22222222-2222-4222-8222-222222222222",
-			}],
+			result: [
+				{
+					id: "33333333-3333-4333-8333-333333333333",
+					work_id: "11111111-1111-4111-8111-111111111111",
+					parent_occurrence_id: null,
+					order_key: 1000,
+					collapsed: false,
+					branch_id: "22222222-2222-4222-8222-222222222222",
+				},
+			],
 		},
 		// 4: semantic_link
 		{ status: "OK", result: [] },
@@ -103,12 +111,14 @@ Deno.test("parseSurrealSqlResponse correctly transforms Surreal HTTP rows into G
 		// 15: resume_position
 		{
 			status: "OK",
-			result: [{
-				work_id: "11111111-1111-4111-8111-111111111111",
-				occurrence_id: "33333333-3333-4333-8333-333333333333",
-				caret_offset: 42,
-				updated_at: CREATED_AT,
-			}],
+			result: [
+				{
+					work_id: "11111111-1111-4111-8111-111111111111",
+					occurrence_id: "33333333-3333-4333-8333-333333333333",
+					caret_offset: 42,
+					updated_at: CREATED_AT,
+				},
+			],
 		},
 	];
 

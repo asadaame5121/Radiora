@@ -27,8 +27,8 @@ Deno.test("createStub records an unplaced Work with an empty Working Copy", asyn
 	assertEquals((await store.listWorkingCopies(created.workId))[0].text, "");
 
 	const withoutContext = await service.createStub("advanced-link-editor");
-	const work = (await store.listWorks()).find((candidate) =>
-		candidate.id === withoutContext.workId
+	const work = (await store.listWorks()).find(
+		(candidate) => candidate.id === withoutContext.workId,
 	);
 	assertEquals(work?.stub, { createdAt: CREATED_AT, createdVia: "advanced-link-editor" });
 	assertEquals(Object.hasOwn(work?.stub ?? {}, "context"), false);
@@ -58,7 +58,10 @@ Deno.test("listStubs projects creation context, body state, and backlinks", asyn
 	);
 
 	const entries = await service.listStubs();
-	assertEquals(entries.map((entry) => entry.workId), [first.workId, second.workId]);
+	assertEquals(
+		entries.map((entry) => entry.workId),
+		[first.workId, second.workId],
+	);
 	assertEquals(entries[1].createdVia, "advanced-link-editor");
 	assertEquals(entries[1].context, "未解決の名前");
 	assertEquals(entries[1].createdAt, CREATED_AT);
@@ -79,7 +82,10 @@ Deno.test("listStubs projects creation context, body state, and backlinks", asyn
 
 	await store.resolveWorkStub(second.workId, UPDATED_AT);
 	const remaining = await service.listStubs();
-	assertEquals(remaining.map((entry) => entry.workId), [first.workId]);
+	assertEquals(
+		remaining.map((entry) => entry.workId),
+		[first.workId],
+	);
 });
 
 Deno.test("resolveStub requires a non-empty Working Copy and is not repeatable", async () => {
@@ -87,19 +93,11 @@ Deno.test("resolveStub requires a non-empty Working Copy and is not repeatable",
 	const service = new StubService(store, () => CREATED_AT, ids());
 
 	const created = await service.createStub("stub-list");
-	await assertRejects(
-		() => service.resolveStub(created.workId),
-		Error,
-		"non-empty Working Copy",
-	);
+	await assertRejects(() => service.resolveStub(created.workId), Error, "non-empty Working Copy");
 	assertEquals((await store.listWorks())[0].stub?.createdVia, "stub-list");
 
 	await store.updateWorkingCopy(created.workId, "   ", UPDATED_AT);
-	await assertRejects(
-		() => service.resolveStub(created.workId),
-		Error,
-		"non-empty Working Copy",
-	);
+	await assertRejects(() => service.resolveStub(created.workId), Error, "non-empty Working Copy");
 
 	await store.updateWorkingCopy(created.workId, "本文を書き足した", UPDATED_AT);
 	await service.resolveStub(created.workId);
@@ -107,11 +105,7 @@ Deno.test("resolveStub requires a non-empty Working Copy and is not repeatable",
 	assertEquals(work.stub, undefined);
 	assertEquals(work.updatedAt, CREATED_AT);
 
-	await assertRejects(
-		() => service.resolveStub(created.workId),
-		Error,
-		"Stub Work not found",
-	);
+	await assertRejects(() => service.resolveStub(created.workId), Error, "Stub Work not found");
 	await assertRejects(
 		() => service.resolveStub("00000000-0000-4000-8000-999999999999"),
 		Error,

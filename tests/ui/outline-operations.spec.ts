@@ -41,9 +41,8 @@ test("reload shows progress while preserving the editor and focus", async ({ pag
 			},
 		});
 	});
-	await page.route(
-		"**/api/rpc/createItem",
-		(route) => route.fulfill({ json: { result: item("new", 20, "") } }),
+	await page.route("**/api/rpc/createItem", (route) =>
+		route.fulfill({ json: { result: item("new", 20, "") } }),
 	);
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	await page.getByRole("button", { name: "＋ ルートに追加", exact: true }).click();
@@ -99,16 +98,16 @@ test("adding and removing a bookmark reads only bookmarks", async ({ page }) => 
 	await page.getByRole("button", { name: "☆ 栞", exact: true }).click();
 	await expect(page.getByRole("button", { name: "栞を削除", exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "栞を削除", exact: true }).click();
-	await expect(page.getByRole("button", { name: "栞を削除", exact: true })).toHaveCount(
-		0,
-	);
+	await expect(page.getByRole("button", { name: "栞を削除", exact: true })).toHaveCount(0);
 	expect(bookmarkReads).toBe(initial.bookmarkReads + 2);
 	expect(outlineReads).toBe(initial.outlineReads);
 	expect(treeReads).toBe(initial.treeReads);
 });
 
 for (const departure of ["selection", "screen", "reload-selection"] as const) {
-	test(`a persisted Enter does not reclaim selection or focus after ${departure}`, async ({ page }) => {
+	test(`a persisted Enter does not reclaim selection or focus after ${departure}`, async ({
+		page,
+	}) => {
 		const items = [item("A", 10), item("B", 20)];
 		const gate = deferred();
 		let created = false;
@@ -120,9 +119,8 @@ for (const departure of ["selection", "screen", "reload-selection"] as const) {
 			}
 			await route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } });
 		});
-		await page.route(
-			"**/api/rpc/updateItemText",
-			(route) => route.fulfill({ json: { result: null } }),
+		await page.route("**/api/rpc/updateItemText", (route) =>
+			route.fulfill({ json: { result: null } }),
 		);
 		await page.route("**/api/rpc/createItem", async (route) => {
 			const row = item("new", 15, "");
@@ -144,8 +142,9 @@ for (const departure of ["selection", "screen", "reload-selection"] as const) {
 		try {
 			if (departure === "screen") {
 				await page.getByRole("button", { name: "ヘルプ", exact: true }).click();
-				await expect(page.getByRole("button", { name: "アウトラインに戻る", exact: true }))
-					.toBeEnabled();
+				await expect(
+					page.getByRole("button", { name: "アウトラインに戻る", exact: true }),
+				).toBeEnabled();
 			} else {
 				await page.locator('.markdown-editor-host[data-editor-item-id="B"]').click();
 				await expect(page.locator('textarea[data-item-id="B"]')).toBeFocused();
@@ -153,9 +152,8 @@ for (const departure of ["selection", "screen", "reload-selection"] as const) {
 		} finally {
 			gate.release();
 		}
-		await expect.poll(() =>
-			page.evaluate(() => localStorage.getItem("radiora.pendingEmptyItemIds"))
-		)
+		await expect
+			.poll(() => page.evaluate(() => localStorage.getItem("radiora.pendingEmptyItemIds")))
 			.toContain("new");
 		if (departure === "screen") {
 			await page.getByRole("button", { name: "アウトラインに戻る", exact: true }).click();
@@ -165,28 +163,29 @@ for (const departure of ["selection", "screen", "reload-selection"] as const) {
 			await expect(page.locator('textarea[data-item-id="B"]')).toBeFocused();
 			await expect(
 				page.getByRole("treeitem").filter({ has: page.locator('textarea[data-item-id="B"]') }),
-			)
-				.toHaveAttribute("aria-selected", "true");
+			).toHaveAttribute("aria-selected", "true");
 		}
 	});
 }
 
-test("empty Backspace removes its pending record and focuses the previous sibling", async ({ page }) => {
+test("empty Backspace removes its pending record and focuses the previous sibling", async ({
+	page,
+}) => {
 	const items = [item("A", 10)];
 	await page.addInitScript(() => localStorage.setItem("radiora.pendingEmptyItemIds", "[]"));
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) =>
-			route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } }),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } }),
 	);
 	await page.route("**/api/rpc/deleteItem", (route) => {
 		const id: string = route.request().postDataJSON().args[0];
-		items.splice(items.findIndex((row) => row.id === id), 1);
+		items.splice(
+			items.findIndex((row) => row.id === id),
+			1,
+		);
 		return route.fulfill({ json: { result: null } });
 	});
-	await page.route(
-		"**/api/rpc/updateItemText",
-		(route) => route.fulfill({ json: { result: null } }),
+	await page.route("**/api/rpc/updateItemText", (route) =>
+		route.fulfill({ json: { result: null } }),
 	);
 	await page.route("**/api/rpc/createItem", (route) => {
 		const row = item("empty", 20, "");
@@ -199,12 +198,14 @@ test("empty Backspace removes its pending record and focuses the previous siblin
 	await page.locator('textarea[data-item-id="A"]').press("Enter");
 	const editor = page.locator('textarea[data-item-id="empty"]');
 	await expect(editor).toBeFocused();
-	await expect.poll(() => page.evaluate(() => localStorage.getItem("radiora.pendingEmptyItemIds")))
+	await expect
+		.poll(() => page.evaluate(() => localStorage.getItem("radiora.pendingEmptyItemIds")))
 		.toContain("empty");
 	await editor.press("Backspace");
 	await expect(editor).toHaveCount(0);
 	await expect(page.locator('textarea[data-item-id="A"]')).toBeFocused();
-	await expect.poll(() => page.evaluate(() => localStorage.getItem("radiora.pendingEmptyItemIds")))
+	await expect
+		.poll(() => page.evaluate(() => localStorage.getItem("radiora.pendingEmptyItemIds")))
 		.toBe("[]");
 });
 
@@ -234,26 +235,32 @@ test("collapsing a row does not reload the Outline or unrelated views", async ({
 	const disclosure = page.getByRole("button", { name: "Aを折りたたむ", exact: true });
 	await expect(disclosure).toBeVisible();
 	const unrelatedEditor = await page.locator('textarea[data-item-id="B"]').elementHandle();
-	const unrelatedUpdates = await page.locator(".row").filter({
-		has: page.locator('textarea[data-item-id="B"]'),
-	}).evaluateHandle((row) => {
-		const records: MutationRecord[] = [];
-		const observer = new MutationObserver((changes) => {
-			// OverType dismisses link tooltips on every document click, independently of row updates.
-			records.push(
-				...changes.filter((change) =>
-					!(change.target instanceof Element && change.target.closest(".overtype-link-tooltip"))
-				),
-			);
+	const unrelatedUpdates = await page
+		.locator(".row")
+		.filter({
+			has: page.locator('textarea[data-item-id="B"]'),
+		})
+		.evaluateHandle((row) => {
+			const records: MutationRecord[] = [];
+			const observer = new MutationObserver((changes) => {
+				// OverType dismisses link tooltips on every document click, independently of row updates.
+				records.push(
+					...changes.filter(
+						(change) =>
+							!(
+								change.target instanceof Element && change.target.closest(".overtype-link-tooltip")
+							),
+					),
+				);
+			});
+			observer.observe(row, {
+				attributes: true,
+				characterData: true,
+				childList: true,
+				subtree: true,
+			});
+			return { observer, records };
 		});
-		observer.observe(row, {
-			attributes: true,
-			characterData: true,
-			childList: true,
-			subtree: true,
-		});
-		return { observer, records };
-	});
 	const initialReads = { ...reads };
 	await disclosure.click();
 	await expect(page.locator('textarea[data-item-id="child"]')).toHaveCount(0);
@@ -267,7 +274,9 @@ test("collapsing a row does not reload the Outline or unrelated views", async ({
 	await unrelatedUpdates.dispose();
 });
 
-test("collapse saved during Outline return preparation does not cancel the newer navigation", async ({ page }) => {
+test("collapse saved during Outline return preparation does not cancel the newer navigation", async ({
+	page,
+}) => {
 	const items = [item("A", 10), { ...item("child", 20), parentId: "A" }];
 	const write = deferred();
 	const navigationRead = deferred();
@@ -309,8 +318,8 @@ test("collapse saved during Outline return preparation does not cancel the newer
 		const response = page.waitForResponse("**/api/rpc/setCollapsed");
 		write.release();
 		await response;
-		await page.evaluate(() =>
-			new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+		await page.evaluate(
+			() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
 		);
 	} finally {
 		navigationRead.release();
@@ -320,7 +329,9 @@ test("collapse saved during Outline return preparation does not cancel the newer
 	await expect(page.locator('textarea[data-item-id="child"]')).toHaveCount(0);
 });
 
-test("a failed disclosure click reports its cause without an unhandled rejection or reload", async ({ page }) => {
+test("a failed disclosure click reports its cause without an unhandled rejection or reload", async ({
+	page,
+}) => {
 	const items = [item("A", 10), { ...item("child", 20), parentId: "A" }];
 	let reads = 0;
 	const pageErrors: string[] = [];
@@ -329,9 +340,8 @@ test("a failed disclosure click reports its cause without an unhandled rejection
 		reads++;
 		return route.fulfill({ json: { result: { items, links: [], knots: [], stashItemIds: [] } } });
 	});
-	await page.route(
-		"**/api/rpc/setCollapsed",
-		(route) => route.fulfill({ status: 500, json: { message: "collapse failed" } }),
+	await page.route("**/api/rpc/setCollapsed", (route) =>
+		route.fulfill({ status: 500, json: { message: "collapse failed" } }),
 	);
 	await page.goto("/", { waitUntil: "domcontentloaded" });
 	const disclosure = page.getByRole("button", { name: "Aを折りたたむ", exact: true });
@@ -344,7 +354,9 @@ test("a failed disclosure click reports its cause without an unhandled rejection
 	expect(reads).toBe(initialReads);
 });
 
-test("typing in an item updates only the matching branch placements and does not reload Outline or unrelated views", async ({ page }) => {
+test("typing in an item updates only the matching branch placements and does not reload Outline or unrelated views", async ({
+	page,
+}) => {
 	const items = [
 		item("A1", 10, "first placement"),
 		{
@@ -379,25 +391,31 @@ test("typing in an item updates only the matching branch placements and does not
 
 	const unrelatedEditor = await page.locator('textarea[data-item-id="B"]').elementHandle();
 	const pinnedEditor = await page.locator('textarea[data-item-id="A-pin"]').elementHandle();
-	const unrelatedUpdates = await page.locator(".row").filter({
-		has: page.locator('textarea[data-item-id="B"]'),
-	}).evaluateHandle((row) => {
-		const records: MutationRecord[] = [];
-		const observer = new MutationObserver((changes) => {
-			records.push(
-				...changes.filter((change) =>
-					!(change.target instanceof Element && change.target.closest(".overtype-link-tooltip"))
-				),
-			);
+	const unrelatedUpdates = await page
+		.locator(".row")
+		.filter({
+			has: page.locator('textarea[data-item-id="B"]'),
+		})
+		.evaluateHandle((row) => {
+			const records: MutationRecord[] = [];
+			const observer = new MutationObserver((changes) => {
+				records.push(
+					...changes.filter(
+						(change) =>
+							!(
+								change.target instanceof Element && change.target.closest(".overtype-link-tooltip")
+							),
+					),
+				);
+			});
+			observer.observe(row, {
+				attributes: true,
+				characterData: true,
+				childList: true,
+				subtree: true,
+			});
+			return { observer, records };
 		});
-		observer.observe(row, {
-			attributes: true,
-			characterData: true,
-			childList: true,
-			subtree: true,
-		});
-		return { observer, records };
-	});
 
 	const initialReads = { ...reads };
 	const editorA1 = page.locator('textarea[data-item-id="A1"]');
@@ -422,7 +440,9 @@ test("typing in an item updates only the matching branch placements and does not
 	await unrelatedUpdates.dispose();
 });
 
-test("stale reload held by deferred does not overwrite fresh draft or input after release", async ({ page }) => {
+test("stale reload held by deferred does not overwrite fresh draft or input after release", async ({
+	page,
+}) => {
 	const items = [
 		item("A1", 10, "initial"),
 		{
@@ -461,13 +481,11 @@ test("stale reload held by deferred does not overwrite fresh draft or input afte
 			},
 		});
 	});
-	await page.route(
-		"**/api/rpc/createItem",
-		(route) => route.fulfill({ json: { result: item("new-root", 50, "") } }),
+	await page.route("**/api/rpc/createItem", (route) =>
+		route.fulfill({ json: { result: item("new-root", 50, "") } }),
 	);
-	await page.route(
-		"**/api/rpc/updateItemText",
-		(route) => route.fulfill({ json: { result: null } }),
+	await page.route("**/api/rpc/updateItemText", (route) =>
+		route.fulfill({ json: { result: null } }),
 	);
 
 	await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -504,7 +522,9 @@ test("stale reload held by deferred does not overwrite fresh draft or input afte
 	await expect(page.locator('textarea[data-item-id="A-pin"]')).toHaveValue("initial");
 });
 
-test("caret movement and selection update saves only resume position without reloading Outline, Tree, or bookmarks", async ({ page }) => {
+test("caret movement and selection update saves only resume position without reloading Outline, Tree, or bookmarks", async ({
+	page,
+}) => {
 	const items = [item("A", 10, "hello world"), item("B", 20, "second")];
 	const reads = { outline: 0, tree: 0, bookmarks: 0 };
 	let resumeSaved = 0;

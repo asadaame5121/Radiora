@@ -10,7 +10,10 @@ Deno.test("OperationLog records safe events, summarizes, exports, and clears bot
 		log.record("work.create", "error", 5, "TypeError");
 		log.record("work.create", "error", 1, "private search query");
 		const exported = log.exportJsonl();
-		const records = exported.trim().split("\n").map((line) => JSON.parse(line));
+		const records = exported
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line));
 		assertEquals(records.length, 3);
 		assertEquals(
 			Object.keys(records[0]).sort(),
@@ -26,9 +29,10 @@ Deno.test("OperationLog records safe events, summarizes, exports, and clears bot
 		assertExists(Deno.statSync(`${dir}/startup.log`));
 		log.clearAll();
 		assertEquals(log.exportJsonl(), "");
-		assertEquals([...Deno.readDirSync(dir)].map((entry) => entry.name), [
-			"diagnostics-sanitized-v1",
-		]);
+		assertEquals(
+			[...Deno.readDirSync(dir)].map((entry) => entry.name),
+			["diagnostics-sanitized-v1"],
+		);
 	} finally {
 		Deno.removeSync(dir, { recursive: true });
 	}
@@ -39,9 +43,10 @@ Deno.test("DiagnosticLogFiles discards legacy logs that may contain private text
 	try {
 		Deno.writeTextFileSync(`${dir}/startup.log`, "private item text");
 		const diagnostics = new DiagnosticLogFiles(dir);
-		assertEquals([...Deno.readDirSync(dir)].map((entry) => entry.name), [
-			"diagnostics-sanitized-v1",
-		]);
+		assertEquals(
+			[...Deno.readDirSync(dir)].map((entry) => entry.name),
+			["diagnostics-sanitized-v1"],
+		);
 		diagnostics.write("safe diagnostic");
 		assertEquals(Deno.readTextFileSync(`${dir}/startup.log`), "safe diagnostic\n");
 	} finally {
@@ -57,9 +62,10 @@ Deno.test("DiagnosticLogFiles expires older sanitized files", () => {
 		Deno.writeTextFileSync(old, "old diagnostic\n");
 		Deno.utimeSync(old, new Date("2020-01-01"), new Date("2020-01-01"));
 		new DiagnosticLogFiles(dir);
-		assertEquals([...Deno.readDirSync(dir)].map((entry) => entry.name), [
-			"diagnostics-sanitized-v1",
-		]);
+		assertEquals(
+			[...Deno.readDirSync(dir)].map((entry) => entry.name),
+			["diagnostics-sanitized-v1"],
+		);
 	} finally {
 		Deno.removeSync(dir, { recursive: true });
 	}

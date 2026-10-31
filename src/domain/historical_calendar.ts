@@ -25,13 +25,15 @@ const MONTH_LENGTHS = [
 ];
 
 export function daysInHistoricalMonth(year: number, month: number): number {
-	const leap = year % LEAP_CYCLE === 0 &&
-		(year % YEARS_PER_CENTURY !== 0 || year % GREGORIAN_CYCLE === 0);
-	return month === 2 && leap ? LEAP_FEBRUARY_DAYS : MONTH_LENGTHS[month - 1] ?? 0;
+	const leap =
+		year % LEAP_CYCLE === 0 && (year % YEARS_PER_CENTURY !== 0 || year % GREGORIAN_CYCLE === 0);
+	return month === 2 && leap ? LEAP_FEBRUARY_DAYS : (MONTH_LENGTHS[month - 1] ?? 0);
 }
 
 export function historicalDay(year: number, month = 1, day = 1): number {
-	let result = DAYS_PER_YEAR * year + Math.floor((year + LEAP_CYCLE - 1) / LEAP_CYCLE) -
+	let result =
+		DAYS_PER_YEAR * year +
+		Math.floor((year + LEAP_CYCLE - 1) / LEAP_CYCLE) -
 		Math.floor((year + YEARS_PER_CENTURY - 1) / YEARS_PER_CENTURY) +
 		Math.floor((year + GREGORIAN_CYCLE - 1) / GREGORIAN_CYCLE);
 	for (let current = 1; current < month; current++) {
@@ -43,9 +45,11 @@ export function historicalDay(year: number, month = 1, day = 1): number {
 export function historicalDateFromDay(coordinate: number) {
 	const target = Math.floor(coordinate);
 	if (
-		!Number.isFinite(target) || target < historicalDay(-MAX_HISTORICAL_YEAR) ||
+		!Number.isFinite(target) ||
+		target < historicalDay(-MAX_HISTORICAL_YEAR) ||
 		target >= historicalDay(MAX_HISTORICAL_YEAR + 1)
-	) throw new RangeError("Historical day coordinate is outside the supported year range");
+	)
+		throw new RangeError("Historical day coordinate is outside the supported year range");
 	let low = -MAX_HISTORICAL_YEAR - 1;
 	let high = MAX_HISTORICAL_YEAR + 2;
 	while (low + 1 < high) {

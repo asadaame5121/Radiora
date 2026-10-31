@@ -4,9 +4,7 @@ Deno.test("version comparison UI keeps arbitrary selectors and independent scrol
 	const component = await Deno.readTextFile(
 		new URL("../src/ui/RevisionComparison.svelte", import.meta.url),
 	);
-	const pane = await Deno.readTextFile(
-		new URL("../src/ui/ComparisonPane.svelte", import.meta.url),
-	);
+	const pane = await Deno.readTextFile(new URL("../src/ui/ComparisonPane.svelte", import.meta.url));
 	const styles = await Deno.readTextFile(new URL("../src/ui/styles.css", import.meta.url));
 
 	assertMatch(component, /<ComparisonPane/);

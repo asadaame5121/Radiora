@@ -30,7 +30,9 @@ function link(id: string, from: string, to: string): OutlineLink {
 	};
 }
 
-test("body typing skips annotation projection; title typing changes only dependent row content", async ({ page }) => {
+test("body typing skips annotation projection; title typing changes only dependent row content", async ({
+	page,
+}) => {
 	const items = ["A", "B", "C", "D"].map(item);
 	const links = [link("ab", "A", "B"), link("cd", "C", "D")];
 	// Count real client-side projection calls without introducing production instrumentation.
@@ -52,9 +54,8 @@ test("body typing skips annotation projection; title typing changes only depende
 		expect(instrumented).not.toBe(source);
 		await route.fulfill({ response, body: instrumented });
 	});
-	await page.route(
-		"**/api/rpc/listOutline",
-		(route) => route.fulfill({ json: { result: { items, links, knots: [], stashItemIds: [] } } }),
+	await page.route("**/api/rpc/listOutline", (route) =>
+		route.fulfill({ json: { result: { items, links, knots: [], stashItemIds: [] } } }),
 	);
 	await page.route("**/api/rpc/updateItemText", (route) => {
 		const [id, text]: [string, string] = route.request().postDataJSON().args;
@@ -78,8 +79,9 @@ test("body typing skips annotation projection; title typing changes only depende
 		const observer = new MutationObserver((changes) => {
 			// OverType's document-click tooltip dismissal is independent of annotation publication.
 			records.push(
-				...changes.filter((change) =>
-					!(change.target instanceof Element && change.target.closest(".overtype-link-tooltip"))
+				...changes.filter(
+					(change) =>
+						!(change.target instanceof Element && change.target.closest(".overtype-link-tooltip")),
 				),
 			);
 		});

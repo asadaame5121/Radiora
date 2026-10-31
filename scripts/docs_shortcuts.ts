@@ -24,7 +24,7 @@ const SPLICE_END = "<!-- shortcuts:end -->";
 function commandTable(): string {
 	const bindings = validateShortcuts(
 		COMMAND_DEFINITIONS.flatMap((command) =>
-			command.shortcut ? [{ commandId: command.id, shortcut: command.shortcut }] : []
+			command.shortcut ? [{ commandId: command.id, shortcut: command.shortcut }] : [],
 		),
 	);
 	if (bindings.errors.length > 0) {
@@ -49,13 +49,7 @@ function commandTable(): string {
 
 function editorTable(): string {
 	const rows = EDITOR_BINDINGS.map(({ label, keys }) => `| ${label} | \`${keys}\` |`);
-	return [
-		"## アウトラインの編集",
-		"",
-		"| 操作 | キー |",
-		"| --- | --- |",
-		...rows,
-	].join("\n");
+	return ["## アウトラインの編集", "", "| 操作 | キー |", "| --- | --- |", ...rows].join("\n");
 }
 
 function render(): string {
@@ -70,19 +64,21 @@ function render(): string {
 }
 
 function spliceInto(targetPath: string, content: string): void {
-	const path = targetPath.startsWith("/") || /^[A-Za-z]:[\\/]/.test(targetPath)
-		? targetPath
-		: `${Deno.cwd()}/${targetPath}`;
+	const path =
+		targetPath.startsWith("/") || /^[A-Za-z]:[\\/]/.test(targetPath)
+			? targetPath
+			: `${Deno.cwd()}/${targetPath}`;
 	const original = Deno.readTextFileSync(path);
 	const start = original.indexOf(SPLICE_START);
 	const end = original.indexOf(SPLICE_END);
 	if (start < 0 || end < 0 || end <= start) {
-		throw new Error(
-			`${path} に ${SPLICE_START} と ${SPLICE_END} のマーカーが見つかりません。`,
-		);
+		throw new Error(`${path} に ${SPLICE_START} と ${SPLICE_END} のマーカーが見つかりません。`);
 	}
-	const next = original.slice(0, start + SPLICE_START.length) +
-		"\n\n" + content.trim() + "\n\n" +
+	const next =
+		original.slice(0, start + SPLICE_START.length) +
+		"\n\n" +
+		content.trim() +
+		"\n\n" +
 		original.slice(end);
 	Deno.writeTextFileSync(path, next);
 }

@@ -9,9 +9,10 @@ for (const level of ["root", "child"]) {
 	Deno.test(`occurrence operations inserts between existing ${level} siblings`, async () => {
 		const store = new MemoryGraphStore();
 		const operations = new OccurrenceOperations(store);
-		const parentId = level === "root"
-			? null
-			: (await operations.createItem({ text: "parent", parentId: null })).id;
+		const parentId =
+			level === "root"
+				? null
+				: (await operations.createItem({ text: "parent", parentId: null })).id;
 		const siblings: string[] = [];
 		for (const text of ["A", "B", "C", "D"]) {
 			const created = await operations.createItem({
@@ -23,17 +24,15 @@ for (const level of ["root", "child"]) {
 		}
 
 		const created = await operations.createItem({ text: "new", parentId, afterId: siblings[1] });
-		const persisted = (await store.listItems()).filter((item) => item.parentId === parentId)
+		const persisted = (await store.listItems())
+			.filter((item) => item.parentId === parentId)
 			.sort((left, right) => left.orderKey - right.orderKey);
 
 		assertEquals(created.parentId, parentId);
-		assertEquals(persisted.map((item) => item.id), [
-			siblings[0],
-			siblings[1],
-			created.id,
-			siblings[2],
-			siblings[3],
-		]);
+		assertEquals(
+			persisted.map((item) => item.id),
+			[siblings[0], siblings[1], created.id, siblings[2], siblings[3]],
+		);
 	});
 }
 
@@ -46,9 +45,13 @@ Deno.test("occurrence operations creates ordered siblings and preserves child or
 
 	await operations.deleteItem(parent.id);
 
-	const roots = (await operations.listOutline()).items.filter((item) => item.parentId === null)
+	const roots = (await operations.listOutline()).items
+		.filter((item) => item.parentId === null)
 		.sort((left, right) => left.orderKey - right.orderKey);
-	assertEquals(roots.map((item) => item.id), [first.id, a.id, b.id]);
+	assertEquals(
+		roots.map((item) => item.id),
+		[first.id, a.id, b.id],
+	);
 });
 
 Deno.test("occurrence operations includes implicit FROM links in listOutline", async () => {
@@ -73,7 +76,10 @@ Deno.test("occurrence operations reconciles knots after a move and listOutline p
 	assertEquals((await store.listKnots()).length, 1);
 	const snapshot = await operations.listOutline();
 	assertEquals(snapshot.stashItemIds.sort(), [a.id, b.id].sort());
-	assertEquals((await store.listKnots()).map((knot) => knot.cycleIds), [snapshot.stashItemIds]);
+	assertEquals(
+		(await store.listKnots()).map((knot) => knot.cycleIds),
+		[snapshot.stashItemIds],
+	);
 });
 
 Deno.test("occurrence operations marks a recursive placement as a reference stub without changing its Work", async () => {
@@ -85,8 +91,8 @@ Deno.test("occurrence operations marks a recursive placement as a reference stub
 		parentId: descendant.id,
 	});
 
-	const item = (await operations.listOutline()).items.find((candidate) =>
-		candidate.id === recursive.id
+	const item = (await operations.listOutline()).items.find(
+		(candidate) => candidate.id === recursive.id,
 	);
 	assertEquals(item?.referenceStub, true);
 	assertEquals(item?.workId, ancestor.workId);
@@ -148,9 +154,8 @@ Deno.test("occurrence operations rejects a Branch from another Work", async () =
 	const operations = new OccurrenceOperations(new MemoryGraphStore());
 	const source = await operations.createItem({ text: "source", parentId: null });
 	const other = await operations.createItem({ text: "other", parentId: null });
-	const otherBranchId = other.revisionSelector.mode === "branch"
-		? other.revisionSelector.branchId
-		: "";
+	const otherBranchId =
+		other.revisionSelector.mode === "branch" ? other.revisionSelector.branchId : "";
 
 	await assertRejects(
 		() =>
@@ -269,14 +274,17 @@ Deno.test("occurrence operations edits the selected Branch and rejects pinned Re
 		],
 	);
 
-	await store.createRevision({
-		id: "fixed-revision",
-		workId: source.workId,
-		text: "fixed",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt,
-	}, "alternate");
+	await store.createRevision(
+		{
+			id: "fixed-revision",
+			workId: source.workId,
+			text: "fixed",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt,
+		},
+		"alternate",
+	);
 	await store.updateOccurrence({
 		id: "alternate-occurrence",
 		workId: source.workId,
@@ -296,17 +304,19 @@ Deno.test("occurrence operations switches one placement between a fixed Revision
 	const store = new MemoryGraphStore();
 	const operations = new OccurrenceOperations(store);
 	const source = await operations.createItem({ text: "current", parentId: null });
-	const branchId = source.revisionSelector.mode === "branch"
-		? source.revisionSelector.branchId
-		: "";
-	await store.createRevision({
-		id: "older-revision",
-		workId: source.workId,
-		text: "older",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: "2026-08-12T00:00:00.000Z",
-	}, branchId);
+	const branchId =
+		source.revisionSelector.mode === "branch" ? source.revisionSelector.branchId : "";
+	await store.createRevision(
+		{
+			id: "older-revision",
+			workId: source.workId,
+			text: "older",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: "2026-08-12T00:00:00.000Z",
+		},
+		branchId,
+	);
 
 	await operations.setOccurrenceRevision(source.id, "older-revision");
 	let selected = (await operations.listOutline()).items.find((item) => item.id === source.id);
@@ -327,9 +337,7 @@ Deno.test("occurrence operations maintains trash guards and counts", async () =>
 	await operations.trashWork(item.id);
 	assertEquals(
 		(await operations.listTrash()).map((entry) => [entry.work.id, entry.occurrenceCount]),
-		[
-			[item.workId, 1],
-		],
+		[[item.workId, 1]],
 	);
 	await operations.restoreWork(item.workId);
 	assertEquals(await operations.listTrash(), []);
@@ -434,13 +442,7 @@ Deno.test("discardEmptyItems removes only empty leaf items atomically", async ()
 	// handledIds は重複排除された全入力ID
 	assertEquals(
 		result.handledIds.sort(),
-		[
-			emptyLeaf1.id,
-			emptyLeaf2.id,
-			nonEmptyLeaf.id,
-			emptyParent.id,
-			missingId,
-		].sort(),
+		[emptyLeaf1.id, emptyLeaf2.id, nonEmptyLeaf.id, emptyParent.id, missingId].sort(),
 	);
 
 	// deletedIds は空かつ子なしの leaf のみ

@@ -29,9 +29,12 @@ async function clickBackdropOutsideDialog(canvasElement: HTMLElement): Promise<v
 		{ x: overlayBounds.right - 1, y: overlayBounds.top + 1 },
 		{ x: overlayBounds.left + 1, y: overlayBounds.bottom - 1 },
 		{ x: overlayBounds.right - 1, y: overlayBounds.bottom - 1 },
-	].find(({ x, y }) =>
-		x < dialogBounds.left || x > dialogBounds.right || y < dialogBounds.top ||
-		y > dialogBounds.bottom
+	].find(
+		({ x, y }) =>
+			x < dialogBounds.left ||
+			x > dialogBounds.right ||
+			y < dialogBounds.top ||
+			y > dialogBounds.bottom,
 	);
 	if (!point) throw new Error("No clickable backdrop area outside the dialog");
 
@@ -61,8 +64,9 @@ export const Rewrite: Story = {
 	},
 	play: async ({ canvasElement }) => {
 		const canvas = within(canvasElement.ownerDocument.body);
-		await expect(await canvas.findByRole("textbox", { name: `${DEFAULT_UI_VOCABULARY.branch}名` }))
-			.toHaveFocus();
+		await expect(
+			await canvas.findByRole("textbox", { name: `${DEFAULT_UI_VOCABULARY.branch}名` }),
+		).toHaveFocus();
 	},
 };
 
@@ -71,7 +75,7 @@ export const Escape: Story = {
 		await userEvent.keyboard("{Escape}");
 		await waitFor(() => expect(args.onReset).toHaveBeenCalledOnce());
 		await waitFor(() =>
-			expect(canvasElement.ownerDocument.body.querySelector(".confirmation-dialog")).toBeNull()
+			expect(canvasElement.ownerDocument.body.querySelector(".confirmation-dialog")).toBeNull(),
 		);
 	},
 };
@@ -81,7 +85,7 @@ export const OutsideClick: Story = {
 		await clickBackdropOutsideDialog(canvasElement);
 		await waitFor(() => expect(args.onReset).toHaveBeenCalledOnce());
 		await waitFor(() =>
-			expect(canvasElement.ownerDocument.body.querySelector(".confirmation-dialog")).toBeNull()
+			expect(canvasElement.ownerDocument.body.querySelector(".confirmation-dialog")).toBeNull(),
 		);
 	},
 };
@@ -102,7 +106,8 @@ export const FocusRestoration: Story = {
 	args: { restoreFocus: true },
 	play: async ({ canvasElement }) => {
 		await userEvent.keyboard("{Escape}");
-		await expect(canvasElement.ownerDocument.body.querySelector(".focus-return-target"))
-			.toHaveFocus();
+		await expect(
+			canvasElement.ownerDocument.body.querySelector(".focus-return-target"),
+		).toHaveFocus();
 	},
 };

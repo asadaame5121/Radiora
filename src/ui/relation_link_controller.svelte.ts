@@ -43,19 +43,20 @@ export class RelationLinkController {
 
 	async inspectCandidate(candidate: InlineSemanticLinkCandidate): Promise<string> {
 		const quote = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-		const reason = candidate.reason === undefined
-			? ""
-			: `("${candidate.reason.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}")`;
-		const advancedInput = `${quote(candidate.source)} :: ${candidate.type}${reason} :: ${
-			quote(candidate.target)
-		}`;
+		const reason =
+			candidate.reason === undefined
+				? ""
+				: `("${candidate.reason.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}")`;
+		const advancedInput = `${quote(candidate.source)} :: ${candidate.type}${reason} :: ${quote(
+			candidate.target,
+		)}`;
 		try {
 			const resolution = await this.ports.resolveAdvancedLink(advancedInput);
 			return resolution.source.status === "resolved" && resolution.target.status === "resolved"
 				? `候補を解決しました: ${candidate.type} · ${candidate.source} → ${candidate.target}`
 				: `未確定の候補です: ${
-					resolution.source.reason ?? resolution.target.reason ?? "対象を選択してください。"
-				}`;
+						resolution.source.reason ?? resolution.target.reason ?? "対象を選択してください。"
+					}`;
 		} catch (cause) {
 			return `構文を確認できませんでした: ${this.ports.errorMessage(cause)}`;
 		}

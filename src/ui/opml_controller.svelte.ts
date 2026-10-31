@@ -18,23 +18,27 @@ export class OpmlController {
 	constructor(private readonly ports: OpmlPorts) {}
 
 	export = (): Promise<void> =>
-		this.operation.run(this.ports.flush, async (current) => {
-			const source = await this.ports.api.exportOpml();
-			if (!current()) {
-				return;
-			}
-			downloadTextFile(
-				source,
-				"text/x-opml;charset=utf-8",
-				`radiora-${localDateValue(new Date())}.opml`,
-			);
-			return `${this.ports.vocabulary.opmlExportSuccess}。`;
-		}, (cause) =>
-			this.ports.reportError(
-				`${this.ports.vocabulary.opmlExport}ことができませんでした: ${
-					this.ports.errorMessage(cause)
-				}`,
-			));
+		this.operation.run(
+			this.ports.flush,
+			async (current) => {
+				const source = await this.ports.api.exportOpml();
+				if (!current()) {
+					return;
+				}
+				downloadTextFile(
+					source,
+					"text/x-opml;charset=utf-8",
+					`radiora-${localDateValue(new Date())}.opml`,
+				);
+				return `${this.ports.vocabulary.opmlExportSuccess}。`;
+			},
+			(cause) =>
+				this.ports.reportError(
+					`${this.ports.vocabulary.opmlExport}ことができませんでした: ${this.ports.errorMessage(
+						cause,
+					)}`,
+				),
+		);
 
 	import = (file: Pick<File, "text">): Promise<void> =>
 		this.operation.runFile(
@@ -43,14 +47,14 @@ export class OpmlController {
 			async (source, current) => {
 				const result = await this.ports.api.importOpml(source);
 				if (!current()) return;
-				if (!await this.ports.reload(current) || !current()) return;
+				if (!(await this.ports.reload(current)) || !current()) return;
 				return `${this.ports.vocabulary.opmlImportSuccess}: ${result.importedCount}件。`;
 			},
 			(cause) =>
 				this.ports.reportError(
-					`${this.ports.vocabulary.opmlImport}ことができませんでした: ${
-						this.ports.errorMessage(cause)
-					}`,
+					`${this.ports.vocabulary.opmlImport}ことができませんでした: ${this.ports.errorMessage(
+						cause,
+					)}`,
 				),
 		);
 

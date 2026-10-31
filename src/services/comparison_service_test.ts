@@ -114,14 +114,17 @@ Deno.test("comparison follows Work Working Copy but pins Revision endpoint text"
 	const store = new MemoryGraphStore();
 	const source = await createWork(store, "source", "作業中");
 	await createWork(store, "target", "現在の対象");
-	await store.createRevision({
-		id: "fixed-revision",
-		workId: "target",
-		text: "固定された対象",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: NOW,
-	}, "branch-target");
+	await store.createRevision(
+		{
+			id: "fixed-revision",
+			workId: "target",
+			text: "固定された対象",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: NOW,
+		},
+		"branch-target",
+	);
 	await createLink(store, {
 		id: "fixed-link",
 		type: "FIX",
@@ -202,14 +205,17 @@ Deno.test("comparison rejects a Revision endpoint whose owner scope does not mat
 	await createWork(store, "a", "A");
 	await createWork(store, "b", "B");
 	await createWork(store, "c", "C");
-	await store.createRevision({
-		id: "revision-b",
-		workId: "b",
-		text: "Bの固定版",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: NOW,
-	}, "branch-b");
+	await store.createRevision(
+		{
+			id: "revision-b",
+			workId: "b",
+			text: "Bの固定版",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: NOW,
+		},
+		"branch-b",
+	);
 	await createLink(store, {
 		id: "invalid-scope",
 		type: "FIX",
@@ -259,15 +265,18 @@ Deno.test("Work comparison candidates expose Branch Working Copies and fixed Rev
 			updatedAt: NOW,
 		},
 	);
-	await store.createRevision({
-		id: "revision-head",
-		workId: "work",
-		text: "確定版本文",
-		parentRevisionIds: [],
-		kind: "edition",
-		createdAt: NOW,
-		message: "公開版",
-	}, main.branchId);
+	await store.createRevision(
+		{
+			id: "revision-head",
+			workId: "work",
+			text: "確定版本文",
+			parentRevisionIds: [],
+			kind: "edition",
+			createdAt: NOW,
+			message: "公開版",
+		},
+		main.branchId,
+	);
 
 	const beforeBranches = await store.listBranches("work");
 	const beforeCopies = await store.listWorkingCopies("work");

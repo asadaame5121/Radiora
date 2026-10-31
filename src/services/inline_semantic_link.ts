@@ -13,12 +13,7 @@ export type InlineSemanticLinkDiagnosticCode =
 	| "UNKNOWN_TYPE"
 	| "UNTERMINATED_LINK";
 
-export type InlineSemanticLinkDiagnosticField =
-	| "source"
-	| "type"
-	| "reason"
-	| "target"
-	| "link";
+export type InlineSemanticLinkDiagnosticField = "source" | "type" | "reason" | "target" | "link";
 
 /** A syntactically valid inline semantic-link candidate. */
 export interface InlineSemanticLinkCandidate {

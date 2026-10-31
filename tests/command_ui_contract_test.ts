@@ -16,15 +16,7 @@ Deno.test("App routes command buttons and global shortcuts through the command s
 	assert(app.includes("validateShortcuts(COMMAND_DEFINITIONS"));
 	assert(adapter.includes('target.addEventListener("keydown", this.handle, true)'));
 	assert(adapter.includes('target.removeEventListener("keydown", this.handle, true)'));
-	for (
-		const id of [
-			"quickCapture",
-			"hoist",
-			"addBookmark",
-			"saveRevision",
-			"createLink",
-		]
-	) {
+	for (const id of ["quickCapture", "hoist", "addBookmark", "saveRevision", "createLink"]) {
 		assert(app.includes(`executeCommand("${id}"`));
 	}
 });
@@ -63,9 +55,7 @@ Deno.test("command palette is shortcut-only and closes through the dialog overla
 
 Deno.test("branch rewrite and link commands remain keyboard-first and confirmation gated", async () => {
 	const app = await Deno.readTextFile(new URL("../src/ui/App.svelte", import.meta.url));
-	const bindings = await Deno.readTextFile(
-		new URL("../src/shared/bindings.ts", import.meta.url),
-	);
+	const bindings = await Deno.readTextFile(new URL("../src/shared/bindings.ts", import.meta.url));
 	const desktop = await Deno.readTextFile(
 		new URL("../src/desktop/register_bindings.ts", import.meta.url),
 	);

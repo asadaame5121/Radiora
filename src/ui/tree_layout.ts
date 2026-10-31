@@ -132,17 +132,18 @@ export function calculateTreeWorldLayout(
 
 	const zoom = options.zoom ?? 1;
 	const dummyCamera = { k: zoom, x: 0, y: 0 };
-	const lineage = options.projection === "lineage"
-		? calculateLineageProjection(snapshot, options.relationTypeDefinitions)
-		: null;
+	const lineage =
+		options.projection === "lineage"
+			? calculateLineageProjection(snapshot, options.relationTypeDefinitions)
+			: null;
 	const projected = snapshot.items.map((item) => ({
 		item,
 		worldX: lineage
 			? (options.projectGeneration ?? options.projectX)(
-				lineage.knotWorkIds.has(item.workId)
-					? lineage.knotGeneration ?? 0
-					: lineage.generationByWorkId.get(item.workId) ?? 0,
-			)
+					lineage.knotWorkIds.has(item.workId)
+						? (lineage.knotGeneration ?? 0)
+						: (lineage.generationByWorkId.get(item.workId) ?? 0),
+				)
 			: options.projectX(parseTimestamp(item.createdAt)),
 	}));
 	const laidOut = assignLanes(
@@ -162,10 +163,7 @@ export function calculateTreeWorldLayout(
 	};
 }
 
-export function applyTreeCamera(
-	worldLayout: TreeWorldLayout,
-	camera: TreeCamera,
-): TreeLayout {
+export function applyTreeCamera(worldLayout: TreeWorldLayout, camera: TreeCamera): TreeLayout {
 	if (worldLayout.nodes.length === 0) {
 		return {
 			lod: "detail",
@@ -214,12 +212,17 @@ export function calculateTreeLayout(
 }
 
 export function labelForItem(text: string): { label: string; lines: string[] } {
-	const firstLine = text.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "(空の項目)";
+	const firstLine =
+		text
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.find(Boolean) ?? "(空の項目)";
 	const graphemes = splitGraphemes(firstLine);
 	const clipped = graphemes.length > 32 ? [...graphemes.slice(0, 31), "…"] : graphemes;
-	const lines = clipped.length > 16
-		? [clipped.slice(0, 16).join(""), clipped.slice(16).join("")]
-		: [clipped.join("")];
+	const lines =
+		clipped.length > 16
+			? [clipped.slice(0, 16).join(""), clipped.slice(16).join("")]
+			: [clipped.join("")];
 	return { label: clipped.join(""), lines };
 }
 
@@ -251,12 +254,13 @@ function assignLanes(
 ): { nodes: Array<Omit<TreeLayoutNode, "x" | "y">>; contentHeight: number } {
 	const knotIds = new Set(snapshot.stashItemIds);
 	const order = buildLaneOrder(snapshot);
-	const sorted = [...projected].sort((a, b) =>
-		a.worldX - b.worldX ||
-		(order.get(a.item.id) ?? Number.MAX_SAFE_INTEGER) -
-			(order.get(b.item.id) ?? Number.MAX_SAFE_INTEGER) ||
-		a.item.orderKey - b.item.orderKey ||
-		a.item.id.localeCompare(b.item.id)
+	const sorted = [...projected].sort(
+		(a, b) =>
+			a.worldX - b.worldX ||
+			(order.get(a.item.id) ?? Number.MAX_SAFE_INTEGER) -
+				(order.get(b.item.id) ?? Number.MAX_SAFE_INTEGER) ||
+			a.item.orderKey - b.item.orderKey ||
+			a.item.id.localeCompare(b.item.id),
 	);
 	const baseLaneCount = Math.min(10, Math.max(1, Math.ceil(Math.sqrt(sorted.length))));
 	const binaryTreeFactor = 2;
