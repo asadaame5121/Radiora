@@ -1008,6 +1008,7 @@ version = "0.0.0"
 dependencies = [
  "loro",
  "rusqlite",
+ "serde_json",
  "tempfile",
  "tracing-subscriber",
 ]

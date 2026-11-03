@@ -1,0 +1,6 @@
+{
+  "name": "radiora-loro-interop-poc",
+  "private": true,
+  "type": "module",
+  "dependencies": { "loro-crdt": "1.16.2" }
+}
