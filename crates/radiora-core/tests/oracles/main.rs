@@ -5,6 +5,7 @@
 //! compared against these models and the shared JSON fixtures in `tests/fixtures/`.
 
 mod history;
+mod import;
 mod lineage;
 mod structure;
 mod support;
