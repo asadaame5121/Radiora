@@ -1,0 +1,294 @@
+{
+	"format": "radiora-legacy-v2-fixture",
+	"tables": {
+		"work": [
+			{
+				"id": "work-deleted",
+				"position": 0,
+				"payload": {
+					"id": "work-deleted",
+					"createdAt": "2026-10-15T00:00:00.000Z",
+					"updatedAt": "2026-10-15T00:00:00.000Z",
+					"deletedAt": "2026-10-15T00:01:00.000Z"
+				}
+			},
+			{
+				"id": "work-live",
+				"position": 1,
+				"payload": {
+					"id": "work-live",
+					"createdAt": "2026-10-15T00:00:00.000Z",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"branch": [
+			{
+				"id": "branch-deleted",
+				"position": 0,
+				"payload": {
+					"id": "branch-deleted",
+					"workId": "work-deleted",
+					"name": "main",
+					"headRevisionId": null,
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-live",
+				"position": 1,
+				"payload": {
+					"id": "branch-live",
+					"workId": "work-live",
+					"name": "main",
+					"headRevisionId": null,
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"working_copy": [
+			{
+				"id": "branch-deleted",
+				"position": 0,
+				"payload": {
+					"branchId": "branch-deleted",
+					"workId": "work-deleted",
+					"text": "削除済み本文",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-live",
+				"position": 1,
+				"payload": {
+					"branchId": "branch-live",
+					"workId": "work-live",
+					"text": "現行本文",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"revision": [],
+		"recovery_snapshot": [],
+		"occurrence": [
+			{
+				"id": "occ-deleted",
+				"position": 0,
+				"payload": {
+					"id": "occ-deleted",
+					"workId": "work-deleted",
+					"parentOccurrenceId": null,
+					"orderKey": 1024,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-deleted"
+					}
+				}
+			},
+			{
+				"id": "occ-live",
+				"position": 1,
+				"payload": {
+					"id": "occ-live",
+					"workId": "work-live",
+					"parentOccurrenceId": null,
+					"orderKey": 1024,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-live"
+					}
+				}
+			}
+		],
+		"semantic_link": [
+			{
+				"id": "link-live-deleted",
+				"position": 0,
+				"payload": {
+					"id": "link-live-deleted",
+					"fromId": "work-live",
+					"toId": "work-deleted",
+					"from": {
+						"scope": "work",
+						"workId": "work-live"
+					},
+					"to": {
+						"scope": "work",
+						"workId": "work-deleted"
+					},
+					"type": "RELATED",
+					"status": "asserted",
+					"origin": "human",
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "link-live-missing",
+				"position": 1,
+				"payload": {
+					"id": "link-live-missing",
+					"fromId": "work-live",
+					"toId": "work-does-not-exist",
+					"from": {
+						"scope": "work",
+						"workId": "work-live"
+					},
+					"to": {
+						"scope": "work",
+						"workId": "work-does-not-exist"
+					},
+					"type": "RELATED",
+					"status": "asserted",
+					"origin": "human",
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"system_relation": [],
+		"knot": [],
+		"search_alias": [],
+		"emergence_feedback": [],
+		"emergence_suggestion": [],
+		"saved_rule_query": [],
+		"purge_manifest": [
+			{
+				"id": "purge-removed",
+				"position": 0,
+				"payload": {
+					"id": "purge-removed",
+					"workId": "work-purged-no-row",
+					"occurrenceIds": [
+						"occ-purged-no-row"
+					],
+					"branchIds": [
+						"branch-purged-no-row"
+					],
+					"revisionIds": [
+						"revision-purged-no-row"
+					],
+					"linkIds": [
+						"link-purged-no-row"
+					],
+					"purgedAt": "2026-10-15T00:01:00.000Z"
+				}
+			}
+		],
+		"bookmark": [
+			{
+				"id": "bookmark-deleted",
+				"position": 0,
+				"payload": {
+					"id": "bookmark-deleted",
+					"workId": "work-deleted",
+					"occurrenceId": "occ-deleted",
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"resume_position": [],
+		"relation_type_definition": [
+			{
+				"id": "RELATED",
+				"position": 0,
+				"payload": {
+					"name": "RELATED",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "FROM",
+				"position": 1,
+				"payload": {
+					"name": "FROM",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": true
+				}
+			},
+			{
+				"id": "LIKE",
+				"position": 2,
+				"payload": {
+					"name": "LIKE",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "SUPPORT",
+				"position": 3,
+				"payload": {
+					"name": "SUPPORT",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "DEF",
+				"position": 4,
+				"payload": {
+					"name": "DEF",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "VS",
+				"position": 5,
+				"payload": {
+					"name": "VS",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "FIX",
+				"position": 6,
+				"payload": {
+					"name": "FIX",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "CITE",
+				"position": 7,
+				"payload": {
+					"name": "CITE",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			}
+		]
+	},
+	"storage_metadata": [
+		{
+			"id": "radiora",
+			"position": 0,
+			"payload": {
+				"id": "radiora",
+				"schema_version": 2,
+				"updated_at": "2026-10-15T00:00:00.000Z"
+			}
+		}
+	],
+	"migration_journal": []
+}

@@ -1,0 +1,301 @@
+{
+	"format": "radiora-legacy-v2-fixture",
+	"tables": {
+		"work": [
+			{
+				"id": "work-single-heading",
+				"position": 0,
+				"payload": {
+					"id": "work-single-heading",
+					"createdAt": "2026-10-15T00:00:00.000Z",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "work-shared-heading",
+				"position": 1,
+				"payload": {
+					"id": "work-shared-heading",
+					"createdAt": "2026-10-15T00:00:00.000Z",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "work-hidden-branch",
+				"position": 2,
+				"payload": {
+					"id": "work-hidden-branch",
+					"createdAt": "2026-10-15T00:00:00.000Z",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"branch": [
+			{
+				"id": "branch-single-heading",
+				"position": 0,
+				"payload": {
+					"id": "branch-single-heading",
+					"workId": "work-single-heading",
+					"name": "main",
+					"headRevisionId": null,
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-shared-heading",
+				"position": 1,
+				"payload": {
+					"id": "branch-shared-heading",
+					"workId": "work-shared-heading",
+					"name": "main",
+					"headRevisionId": null,
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-hidden-visible",
+				"position": 2,
+				"payload": {
+					"id": "branch-hidden-visible",
+					"workId": "work-hidden-branch",
+					"name": "main",
+					"headRevisionId": null,
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-hidden-unselected",
+				"position": 3,
+				"payload": {
+					"id": "branch-hidden-unselected",
+					"workId": "work-hidden-branch",
+					"name": "main",
+					"headRevisionId": null,
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"working_copy": [
+			{
+				"id": "branch-single-heading",
+				"position": 0,
+				"payload": {
+					"branchId": "branch-single-heading",
+					"workId": "work-single-heading",
+					"text": "単一配置本文",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-shared-heading",
+				"position": 1,
+				"payload": {
+					"branchId": "branch-shared-heading",
+					"workId": "work-shared-heading",
+					"text": "共有見出し本文",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-hidden-visible",
+				"position": 2,
+				"payload": {
+					"branchId": "branch-hidden-visible",
+					"workId": "work-hidden-branch",
+					"text": "表示Branch本文",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-hidden-unselected",
+				"position": 3,
+				"payload": {
+					"branchId": "branch-hidden-unselected",
+					"workId": "work-hidden-branch",
+					"text": "非表示Branch本文",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"revision": [],
+		"recovery_snapshot": [],
+		"occurrence": [
+			{
+				"id": "occ-single-heading",
+				"position": 0,
+				"payload": {
+					"id": "occ-single-heading",
+					"workId": "work-single-heading",
+					"parentOccurrenceId": null,
+					"orderKey": 1024,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-single-heading"
+					},
+					"contextualHeading": "単一配置見出し"
+				}
+			},
+			{
+				"id": "occ-shared-heading-rep",
+				"position": 1,
+				"payload": {
+					"id": "occ-shared-heading-rep",
+					"workId": "work-shared-heading",
+					"parentOccurrenceId": null,
+					"orderKey": 1024,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-shared-heading"
+					},
+					"contextualHeading": "代表配置見出し"
+				}
+			},
+			{
+				"id": "occ-shared-heading-ref",
+				"position": 2,
+				"payload": {
+					"id": "occ-shared-heading-ref",
+					"workId": "work-shared-heading",
+					"parentOccurrenceId": null,
+					"orderKey": 2048,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-shared-heading"
+					},
+					"contextualHeading": "参照配置見出し"
+				}
+			},
+			{
+				"id": "occ-hidden-visible",
+				"position": 3,
+				"payload": {
+					"id": "occ-hidden-visible",
+					"workId": "work-hidden-branch",
+					"parentOccurrenceId": null,
+					"orderKey": 1024,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-hidden-visible"
+					}
+				}
+			}
+		],
+		"semantic_link": [],
+		"system_relation": [],
+		"knot": [],
+		"search_alias": [],
+		"emergence_feedback": [],
+		"emergence_suggestion": [],
+		"saved_rule_query": [],
+		"purge_manifest": [],
+		"bookmark": [],
+		"resume_position": [],
+		"relation_type_definition": [
+			{
+				"id": "RELATED",
+				"position": 0,
+				"payload": {
+					"name": "RELATED",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "FROM",
+				"position": 1,
+				"payload": {
+					"name": "FROM",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": true
+				}
+			},
+			{
+				"id": "LIKE",
+				"position": 2,
+				"payload": {
+					"name": "LIKE",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "SUPPORT",
+				"position": 3,
+				"payload": {
+					"name": "SUPPORT",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "DEF",
+				"position": 4,
+				"payload": {
+					"name": "DEF",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "VS",
+				"position": 5,
+				"payload": {
+					"name": "VS",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "FIX",
+				"position": 6,
+				"payload": {
+					"name": "FIX",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "CITE",
+				"position": 7,
+				"payload": {
+					"name": "CITE",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			}
+		]
+	},
+	"storage_metadata": [
+		{
+			"id": "radiora",
+			"position": 0,
+			"payload": {
+				"id": "radiora",
+				"schema_version": 2,
+				"updated_at": "2026-10-15T00:00:00.000Z"
+			}
+		}
+	],
+	"migration_journal": []
+}

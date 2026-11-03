@@ -1,0 +1,123 @@
+{
+	"format": "radiora-legacy-v2-fixture",
+	"tables": {
+		"work": [],
+		"branch": [],
+		"working_copy": [],
+		"revision": [],
+		"recovery_snapshot": [],
+		"occurrence": [],
+		"semantic_link": [],
+		"system_relation": [],
+		"knot": [],
+		"search_alias": [],
+		"emergence_feedback": [],
+		"emergence_suggestion": [],
+		"saved_rule_query": [],
+		"purge_manifest": [],
+		"bookmark": [],
+		"resume_position": [],
+		"relation_type_definition": [
+			{
+				"id": "RELATED",
+				"position": 0,
+				"payload": {
+					"name": "RELATED",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "FROM",
+				"position": 1,
+				"payload": {
+					"name": "FROM",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": true
+				}
+			},
+			{
+				"id": "LIKE",
+				"position": 2,
+				"payload": {
+					"name": "LIKE",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "SUPPORT",
+				"position": 3,
+				"payload": {
+					"name": "SUPPORT",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "DEF",
+				"position": 4,
+				"payload": {
+					"name": "DEF",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "VS",
+				"position": 5,
+				"payload": {
+					"name": "VS",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "FIX",
+				"position": 6,
+				"payload": {
+					"name": "FIX",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "CITE",
+				"position": 7,
+				"payload": {
+					"name": "CITE",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			}
+		]
+	},
+	"storage_metadata": [
+		{
+			"id": "radiora",
+			"position": 0,
+			"payload": {
+				"id": "radiora",
+				"schema_version": 3,
+				"updated_at": "2026-10-15T00:00:00.000Z"
+			}
+		}
+	],
+	"migration_journal": []
+}

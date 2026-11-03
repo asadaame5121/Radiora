@@ -1,0 +1,278 @@
+{
+	"format": "radiora-legacy-v2-fixture",
+	"tables": {
+		"work": [
+			{
+				"id": "work-shared",
+				"position": 0,
+				"payload": {
+					"id": "work-shared",
+					"createdAt": "2026-10-15T00:00:00.000Z",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "work-child-root",
+				"position": 1,
+				"payload": {
+					"id": "work-child-root",
+					"createdAt": "2026-10-15T00:00:00.000Z",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "work-child-ref",
+				"position": 2,
+				"payload": {
+					"id": "work-child-ref",
+					"createdAt": "2026-10-15T00:00:00.000Z",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"branch": [
+			{
+				"id": "branch-shared",
+				"position": 0,
+				"payload": {
+					"id": "branch-shared",
+					"workId": "work-shared",
+					"name": "main",
+					"headRevisionId": null,
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-child-root",
+				"position": 1,
+				"payload": {
+					"id": "branch-child-root",
+					"workId": "work-child-root",
+					"name": "main",
+					"headRevisionId": null,
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-child-ref",
+				"position": 2,
+				"payload": {
+					"id": "branch-child-ref",
+					"workId": "work-child-ref",
+					"name": "main",
+					"headRevisionId": null,
+					"createdAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"working_copy": [
+			{
+				"id": "branch-shared",
+				"position": 0,
+				"payload": {
+					"branchId": "branch-shared",
+					"workId": "work-shared",
+					"text": "共有本文",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-child-root",
+				"position": 1,
+				"payload": {
+					"branchId": "branch-child-root",
+					"workId": "work-child-root",
+					"text": "代表側の子",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			},
+			{
+				"id": "branch-child-ref",
+				"position": 2,
+				"payload": {
+					"branchId": "branch-child-ref",
+					"workId": "work-child-ref",
+					"text": "参照側の子",
+					"updatedAt": "2026-10-15T00:00:00.000Z"
+				}
+			}
+		],
+		"revision": [],
+		"recovery_snapshot": [],
+		"occurrence": [
+			{
+				"id": "occ-shared-representative",
+				"position": 0,
+				"payload": {
+					"id": "occ-shared-representative",
+					"workId": "work-shared",
+					"parentOccurrenceId": null,
+					"orderKey": 1024,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-shared"
+					}
+				}
+			},
+			{
+				"id": "occ-shared-reference",
+				"position": 1,
+				"payload": {
+					"id": "occ-shared-reference",
+					"workId": "work-shared",
+					"parentOccurrenceId": null,
+					"orderKey": 2048,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-shared"
+					},
+					"contextualHeading": "参照項目の固有見出し"
+				}
+			},
+			{
+				"id": "occ-child-representative",
+				"position": 2,
+				"payload": {
+					"id": "occ-child-representative",
+					"workId": "work-child-root",
+					"parentOccurrenceId": "occ-shared-representative",
+					"orderKey": 1024,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-child-root"
+					}
+				}
+			},
+			{
+				"id": "occ-child-reference",
+				"position": 3,
+				"payload": {
+					"id": "occ-child-reference",
+					"workId": "work-child-ref",
+					"parentOccurrenceId": "occ-shared-reference",
+					"orderKey": 1024,
+					"collapsed": false,
+					"revisionSelector": {
+						"mode": "branch",
+						"branchId": "branch-child-ref"
+					}
+				}
+			}
+		],
+		"semantic_link": [],
+		"system_relation": [],
+		"knot": [],
+		"search_alias": [],
+		"emergence_feedback": [],
+		"emergence_suggestion": [],
+		"saved_rule_query": [],
+		"purge_manifest": [],
+		"bookmark": [],
+		"resume_position": [],
+		"relation_type_definition": [
+			{
+				"id": "RELATED",
+				"position": 0,
+				"payload": {
+					"name": "RELATED",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "FROM",
+				"position": 1,
+				"payload": {
+					"name": "FROM",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": true
+				}
+			},
+			{
+				"id": "LIKE",
+				"position": 2,
+				"payload": {
+					"name": "LIKE",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "SUPPORT",
+				"position": 3,
+				"payload": {
+					"name": "SUPPORT",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "DEF",
+				"position": 4,
+				"payload": {
+					"name": "DEF",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "VS",
+				"position": 5,
+				"payload": {
+					"name": "VS",
+					"direction": "symmetric",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "FIX",
+				"position": 6,
+				"payload": {
+					"name": "FIX",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			},
+			{
+				"id": "CITE",
+				"position": 7,
+				"payload": {
+					"name": "CITE",
+					"direction": "directed",
+					"builtIn": true,
+					"createdAt": "1970-01-01T00:00:00.000Z",
+					"advancesGeneration": false
+				}
+			}
+		]
+	},
+	"storage_metadata": [
+		{
+			"id": "radiora",
+			"position": 0,
+			"payload": {
+				"id": "radiora",
+				"schema_version": 2,
+				"updated_at": "2026-10-15T00:00:00.000Z"
+			}
+		}
+	],
+	"migration_journal": []
+}
