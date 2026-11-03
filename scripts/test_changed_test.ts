@@ -51,12 +51,31 @@ Deno.test("Deno chooses colocated and nested tests by exact basename", () => {
 		selectTests(["src/services/parser.ts", "src/domain/model.ts", "scripts/tool.ts"], inventory),
 		{
 			deno: ["scripts/tool_test.ts", "src/services/parser_test.ts", "tests/nested/model_test.ts"],
-			vitest: [],
+			vitest: ["src/domain/model.ts", "src/services/parser.ts"],
 			denoFallback: false,
 			vitestFallback: false,
 			rust: false,
 		},
 	);
+});
+
+Deno.test("migrated service, domain and shared tests remain reachable from production changes", () => {
+	for (const file of [
+		"src/services/recent_edited_items.ts",
+		"src/domain/historical_calendar.ts",
+		"src/shared/ui_concepts.ts",
+	]) {
+		const files = [...inventory, file];
+		assertEquals(selectTests([file], files), {
+			deno: ["src", "tests", "scripts"],
+			vitest: [file],
+			denoFallback: true,
+			vitestFallback: false,
+			rust: false,
+		});
+		assertEquals(selectTests([file], files, [file]).vitestFallback, true);
+	}
+	assertEquals(selectTests(["src/services/parser_test.ts"], inventory).vitest, []);
 });
 
 Deno.test("modified test files select themselves and deduplicate", () => {
@@ -71,7 +90,7 @@ Deno.test("modified test files select themselves and deduplicate", () => {
 		),
 		{
 			deno: ["src/services/parser_test.ts"],
-			vitest: ["vitest/theme_controller.svelte.test.ts"],
+			vitest: ["src/services/parser.ts", "vitest/theme_controller.svelte.test.ts"],
 			denoFallback: false,
 			vitestFallback: false,
 			rust: false,
@@ -83,7 +102,7 @@ Deno.test("shared unmapped modules and deleted Deno tests fall back", () => {
 	for (const file of ["src/domain/shared.ts", "src/services/deleted_test.ts"]) {
 		assertEquals(selectTests([file], [...inventory, "src/domain/shared.ts"]), {
 			deno: ["src", "tests", "scripts"],
-			vitest: [],
+			vitest: file === "src/domain/shared.ts" ? [file] : [],
 			denoFallback: true,
 			vitestFallback: false,
 			rust: false,

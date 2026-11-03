@@ -193,7 +193,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        batch: [parsers, projections, domain, storage, controllers]
+        batch: [parsers, projections, domain, storage, controllers, tree]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -296,6 +296,28 @@ jobs:
           install_args: --locked
       - run: mise run deny:rust
 
+  frontend-deno-free:
+    name: Frontend without Deno
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.4
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify the Deno-free frontend path
+        run: npm run verify:frontend:deno-free
+
   required-checks:
     name: Required checks
     # Aggregates every CI job. A failed, cancelled or skipped job is never reported as success.
@@ -307,6 +329,7 @@ jobs:
       - static-analysis
       - a11y
       - mutation-preflight
+      - frontend-deno-free
       - rust-product
       - rust-portable
       - cargo-deny

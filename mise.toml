@@ -157,10 +157,10 @@ run = "npm run test:visual"
 
 [tasks."mutation:preflight"]
 description = "Dry-run one Stryker batch to verify wiring: mise run mutation:preflight parsers"
-usage = 'arg "<batch>" help="parsers|projections|domain|storage|controllers"'
+usage = 'arg "<batch>" help="parsers|projections|domain|storage|controllers|tree"'
 run = "npm run test:mutation:{{usage.batch}} -- --dryRunOnly"
 
 [tasks."mutation:run"]
 description = "Run one Stryker batch (long): mise run mutation:run parsers"
-usage = 'arg "<batch>" help="parsers|projections|domain|storage|controllers"'
+usage = 'arg "<batch>" help="parsers|projections|domain|storage|controllers|tree"'
 run = "npm run test:mutation:{{usage.batch}}"

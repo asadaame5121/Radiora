@@ -54,6 +54,8 @@ Desktop固有のサポート期間はこの発表から断定できない。[Den
 このため、Deno
 Desktopへの新たな依存を増やさず、配布アプリのruntimeをTauriへ移す。移行期間の旧版と検証用Deno
 CLIは維持できるが、最終配布アプリのDeno同梱は終了する方針とする。残る開発用Denoタスクも後述のM5で移行する。
+フロントエンドのDenoテスト・型検査の移植は、[限定移植計画](frontend-deno-test-migration-plan.md)で扱う。
+この工程は旧backend・配布・開発ツール全体のDeno撤去と分け、M5/G2/G3の完了を意味しない。
 
 TauriはシステムWebViewを利用するため、現在のCEFと同じ描画エンジンではない。WindowsはWebView2、LinuxはWebKitGTKを使う。軽量化や性能改善は期待だけで採用根拠にせず、同じデータと操作で実機比較する。[Tauriアーキテクチャ](https://v2.tauri.app/concept/architecture/)
 

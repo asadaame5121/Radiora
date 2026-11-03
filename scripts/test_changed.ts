@@ -25,6 +25,8 @@ function changeKind(file: string): "documentation" | "vitest" | "deno" | "rust" 
 			return "vitest";
 		if (file.endsWith(".ts")) return "both";
 	}
+	if (/^src\/(services|domain|shared)\/.*\.ts$/.test(file) && !file.endsWith("_test.ts"))
+		return "both";
 	return /^(src|tests|scripts)\/.*\.ts$/.test(file) ? "deno" : "all";
 }
 
