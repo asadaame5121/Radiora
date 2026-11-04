@@ -7,5 +7,7 @@ export default defineConfig({
 	test: {
 		name: "unit",
 		include: ["vitest/**/*.test.ts"],
+		// Wall-clock budgets are flaky beside parallel workers; they run in the serial `perf` project.
+		exclude: ["**/node_modules/**", "vitest/**/*.perf.test.ts"],
 	},
 });

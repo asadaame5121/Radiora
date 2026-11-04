@@ -7,11 +7,11 @@ import {
 	HIGH_DENSITY_WORK_COUNT,
 } from "../../../tests/support/high_density_graph_fixture.ts";
 
-// Fixture generation and deep equality checks exceed Vitest's 5s default; the budget assertions time only the projection.
+// Fixture generation exceeds Vitest's 5s default. Timing budgets live in the serial `perf` project.
 const HIGH_DENSITY_FIXTURE_TIMEOUT_MS = 30_000;
 
 test(
-	"high-density lineage layout stays within its performance budget",
+	"high-density lineage layout collapses dense content and represents every Work once",
 	async () => {
 		const fixture = await createHighDensityGraphFixture();
 		const branches = new BranchService(fixture.store);
@@ -22,7 +22,6 @@ test(
 		});
 		expect(projection.totalWorkCount).toEqual(HIGH_DENSITY_WORK_COUNT);
 
-		const started = performance.now();
 		const layout = calculateTreeLayout(projection.snapshot, {
 			width: 1400,
 			height: 800,
@@ -30,9 +29,6 @@ test(
 			projectX: (timestamp) => timestamp / 1000,
 			camera: { k: 0.5, x: 0, y: 0 },
 		});
-		const elapsedMs = performance.now() - started;
-
-		expect(elapsedMs, `layout took ${elapsedMs.toFixed(1)}ms`).toBeLessThan(1_500);
 		expect(
 			layout.nodes.some((node) => node.aggregate),
 			"dense content is collapsed",

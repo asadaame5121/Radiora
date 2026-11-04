@@ -50,16 +50,20 @@ export function buildSparseOutline(
 		});
 	}
 
+	// Index by endpoint so each result visits only its own links, in the original link order.
+	const linksByWorkId = new Map<string, OutlineLink[]>();
+	for (const link of links) {
+		pushLink(linksByWorkId, link.fromId, link);
+		if (link.toId !== link.fromId) pushLink(linksByWorkId, link.toId, link);
+	}
 	const linkTargetParent = new Map<string, string>();
 	for (const result of results) {
-		for (const link of links) {
-			if (link.fromId === result.item.workId || link.toId === result.item.workId) {
-				const otherWorkId = link.fromId === result.item.workId ? link.toId : link.fromId;
-				const otherItem = itemsByWorkId.get(otherWorkId);
-				if (otherItem && !included.has(otherItem.id)) {
-					included.set(otherItem.id, { item: otherItem, isMatched: false });
-					linkTargetParent.set(otherItem.id, result.item.id);
-				}
+		for (const link of linksByWorkId.get(result.item.workId) ?? []) {
+			const otherWorkId = link.fromId === result.item.workId ? link.toId : link.fromId;
+			const otherItem = itemsByWorkId.get(otherWorkId);
+			if (otherItem && !included.has(otherItem.id)) {
+				included.set(otherItem.id, { item: otherItem, isMatched: false });
+				linkTargetParent.set(otherItem.id, result.item.id);
 			}
 		}
 	}
@@ -128,4 +132,10 @@ export function buildSparseOutline(
 	}
 
 	return nodes;
+}
+
+function pushLink(byWorkId: Map<string, OutlineLink[]>, workId: string, link: OutlineLink): void {
+	const bucket = byWorkId.get(workId);
+	if (bucket) bucket.push(link);
+	else byWorkId.set(workId, [link]);
 }

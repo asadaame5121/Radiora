@@ -15,6 +15,15 @@ export default defineConfig({
 			unitConfig,
 			{
 				extends: true,
+				test: {
+					name: "perf",
+					include: ["vitest/**/*.perf.test.ts"],
+					fileParallelism: false,
+					maxWorkers: 1,
+				},
+			},
+			{
+				extends: true,
 				plugins: [storybookTest({ configDir: join(root, ".storybook") })],
 				test: {
 					name: "storybook",

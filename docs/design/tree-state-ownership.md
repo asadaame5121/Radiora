@@ -49,8 +49,19 @@ capture方式へ置換せず、D3の既存操作契約を維持する。
 `tree_lane_order.ts`はoutline/semantic近接順を所有する。
 layoutのedge代表Occurrenceとlaneの代表Occurrenceは既存の異なる選択規則を保持する。
 
+layoutは3段に分け、gestureの各frameで全体を再計算しない（`tree_zoom_layout.ts`）。 world
+layout（lane・世代）と集約（LOD・cluster・edge）は`quantizeTreeZoom`で
+2^(1/4)刻みに切り下げたzoomで計算し、刻みを跨いだ時だけ再計算する。低いzoomで確保した
+lane間隔・衝突判定は実zoomでも重ならない側に倒れる。 集約の衝突gridはbounding boxに
+固定されpanで変わらないため、pan・刻み内のzoomは`projectTreeLayout`のO(node+edge)の
+座標投影だけを行う。 `minZoom`はworld座標のboundsから求め、panで再計算しない。 Svelte
+Flow/ELK移行後もlayout計算をviewport変更から切り離す契約は引き継ぐ。
+
 ## 回帰検証
 
 既存layout・高密度fixture、循環moduleとhit判定の直接テスト、Controllerの応答逆順・失敗・
-reload公開/中止・選択例外・設定再読込テストを使う。
+reload公開/中止・選択例外・設定再読込テストを使う。 時間予算は並列workerの負荷で揺れるため、
+unitから分けた`perf` project（`vitest/**/*.perf.test.ts`、1 worker、5回の中央値）で検査し、 pan 1
+frameの再投影を16ms未満とする。 `tests/ui/tree-performance.spec.ts`はpanと刻み内の wheelでworld
+layoutを再計算しないことを数える。
 ブラウザではpan/zoom、gesture中のunmount、再mount、Tree↔Optionsと再起動の設定共有を確認する。

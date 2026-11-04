@@ -7,7 +7,6 @@ import * as d3 from "d3";
 import type { OutlineSnapshot, RelationTypeDefinition } from "../domain/models";
 import { buildTreeHighlightSet, resolveTreeSelectionId } from "./tree_highlight";
 import {
-	applyTreeCamera,
 	calculateLineageProjection,
 	calculateTreeWorldLayout,
 	type TreeLayoutEdge,
@@ -15,6 +14,7 @@ import {
 	type TreeProjection,
 } from "./tree_layout";
 import { fitTreeBounds, fitTreeNodes, type TreeBounds } from "./tree_camera";
+import { aggregateTreeAtZoom, projectTreeLayout, quantizeTreeZoom } from "./tree_zoom_layout.ts";
 import { connectTreePointer } from "./tree_pointer_adapter.ts";
 import { visibleContextLabels } from "./tree_label_visibility.ts";
 import TreeToolbar from "./TreeToolbar.svelte";
@@ -53,7 +53,8 @@ let transform = $state<d3.ZoomTransform>(d3.zoomIdentity);
 let hoveredId = $state<string | null>(null);
 let chronologyMode = $state<"created" | "historical">("created");
 const historical = $derived(projection === "chronology" && chronologyMode === "historical");
-const zoom = $derived(transform.k);
+// Lanes and clusters follow the zoom step, not every gesture frame; pan only reprojects.
+const layoutZoom = $derived(quantizeTreeZoom(transform.k));
 let pointer: ReturnType<typeof connectTreePointer> | null = null;
 
 const timeDomain = $derived.by((): [Date, Date] => {
@@ -89,13 +90,14 @@ const worldLayout = $derived.by(() =>
 	calculateTreeWorldLayout(snapshot, {
 		height,
 		projection,
-		zoom,
+		zoom: layoutZoom,
 		relationTypeDefinitions,
 		projectX: (timestamp) => chronologyBaseScale(new Date(timestamp)),
 		projectGeneration: (generation) => lineageBaseScale(generation),
 	})
 );
-const layout = $derived.by(() => applyTreeCamera(worldLayout, transform));
+const zoomLayout = $derived(aggregateTreeAtZoom(worldLayout, layoutZoom));
+const layout = $derived(projectTreeLayout(zoomLayout, transform));
 const axisMarks = $derived.by(() => {
 	if (projection === "chronology") {
 		return chronologyScreenScale
@@ -299,7 +301,8 @@ export function zoomToBounds(bounds: TreeBounds): void {
 }
 
 function fitCamera(): { k: number; x: number; y: number } {
-	return fitTreeNodes(layout.nodes, { width, height });
+	// World bounds do not depend on the pan, so minZoom is not recomputed per frame.
+	return fitTreeNodes(zoomLayout.nodes, { width, height });
 }
 
 function fitTransformFor(bounds: TreeBounds): { k: number; x: number; y: number } {

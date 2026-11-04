@@ -6,11 +6,7 @@ import type {
 } from "../domain/models.ts";
 import { calculateLineageProjection, type LineageProjection } from "./tree_lineage_projection.ts";
 import { buildLaneOrder } from "./tree_lane_order.ts";
-import {
-	aggregateScreenCells,
-	lodForScreenCollisions,
-	materializeEdges,
-} from "./tree_spatial_aggregation.ts";
+import { aggregateTreeAtZoom, projectTreeLayout } from "./tree_zoom_layout.ts";
 export { calculateLineageProjection, type LineageProjection } from "./tree_lineage_projection.ts";
 export { buildLaneOrder } from "./tree_lane_order.ts";
 export { lodForScreenCollisions } from "./tree_spatial_aggregation.ts";
@@ -111,8 +107,6 @@ export interface RawEdge {
 	type: TreeLinkType;
 }
 
-const OVERVIEW_CELL_WIDTH = 48;
-const OVERVIEW_CELL_HEIGHT = 36;
 const NODE_GAP = 12;
 const LANE_SPACING = 44;
 
@@ -164,35 +158,7 @@ export function calculateTreeWorldLayout(
 }
 
 export function applyTreeCamera(worldLayout: TreeWorldLayout, camera: TreeCamera): TreeLayout {
-	if (worldLayout.nodes.length === 0) {
-		return {
-			lod: "detail",
-			nodes: [],
-			edges: [],
-			contentHeight: worldLayout.contentHeight,
-		};
-	}
-
-	const screenNodes = worldLayout.nodes.map((node) => ({
-		...node,
-		x: node.worldX * camera.k + camera.x,
-		y: node.worldY * camera.k + camera.y,
-	}));
-	const lod = lodForScreenCollisions(screenNodes);
-
-	if (lod === "detail") {
-		return {
-			lod,
-			nodes: screenNodes,
-			edges: materializeEdges(
-				worldLayout.rawEdges,
-				new Map(screenNodes.map((node) => [node.id, node])),
-			),
-			contentHeight: worldLayout.contentHeight,
-		};
-	}
-
-	return aggregateScreenCells(screenNodes, worldLayout.rawEdges, lod, worldLayout.contentHeight);
+	return projectTreeLayout(aggregateTreeAtZoom(worldLayout, camera.k), camera);
 }
 
 export function calculateTreeLayout(
@@ -366,10 +332,13 @@ function parseTimestamp(value: string): number {
 	return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// Segmenter construction dominates per-label cost; one instance serves every label.
+let graphemeSegmenter: Intl.Segmenter | null = null;
+
 function splitGraphemes(value: string): string[] {
 	if (typeof Intl.Segmenter === "function") {
-		const segmenter = new Intl.Segmenter("ja", { granularity: "grapheme" });
-		return [...segmenter.segment(value)].map((part) => part.segment);
+		graphemeSegmenter ??= new Intl.Segmenter("ja", { granularity: "grapheme" });
+		return [...graphemeSegmenter.segment(value)].map((part) => part.segment);
 	}
 	return Array.from(value);
 }

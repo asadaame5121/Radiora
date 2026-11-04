@@ -96,6 +96,17 @@ test("Tree gestures and selection survive projection, filter, and viewport chang
 			),
 	);
 	expect(await worldLayoutCalls()).toBe(worldLayoutCallsBeforePan);
+	// A small wheel step stays inside one layout zoom step (2^(1/4)); only the camera changes.
+	const beforeSmallZoom = await camera();
+	await page.mouse.wheel(0, -20);
+	await expect.poll(camera).not.toEqual(beforeSmallZoom);
+	await page.evaluate(
+		() =>
+			new Promise<void>((resolve) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+			),
+	);
+	expect(await worldLayoutCalls()).toBe(worldLayoutCallsBeforePan);
 	const beforeZoom = await camera();
 	const worldLayoutCallsBeforeZoom = await worldLayoutCalls();
 	await page.mouse.wheel(0, -300);

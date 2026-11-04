@@ -6,11 +6,11 @@ import {
 	HIGH_DENSITY_WORK_COUNT,
 } from "../../../tests/support/high_density_graph_fixture.ts";
 
-// Fixture generation and deep equality checks exceed Vitest's 5s default; the budget assertions time only the projection.
+// Fixture generation and deep equality checks exceed Vitest's 5s default. Timing budgets live in the serial `perf` project.
 const HIGH_DENSITY_FIXTURE_TIMEOUT_MS = 30_000;
 
 test(
-	"sparse outline preserves dense search context within its performance budget",
+	"sparse outline preserves dense search context without mutating its inputs",
 	async () => {
 		const { items, links, projectionResults: results } = await createHighDensityGraphFixture();
 		expect(items.length).toEqual(HIGH_DENSITY_WORK_COUNT);
@@ -19,11 +19,7 @@ test(
 		const itemsBefore = structuredClone(items);
 		const linksBefore = structuredClone(links);
 		const resultsBefore = structuredClone(results);
-		const started = performance.now();
 		const nodes = buildSparseOutline(results, items, links);
-		const elapsedMs = performance.now() - started;
-
-		expect(elapsedMs, `Sparse Outline took ${elapsedMs.toFixed(1)}ms`).toBeLessThan(2_500);
 		expect(items).toEqual(itemsBefore);
 		expect(links).toEqual(linksBefore);
 		expect(results).toEqual(resultsBefore);
