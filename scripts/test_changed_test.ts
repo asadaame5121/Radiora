@@ -121,7 +121,8 @@ Deno.test("deleted and renamed UI files run all unit tests", () => {
 Deno.test("config, dependencies, assets and unknown changes fall back to both suites", () => {
 	for (const file of [
 		"deno.json",
-		"package-lock.json",
+		"pnpm-lock.yaml",
+		"pnpm-workspace.yaml",
 		"vite.config.ts",
 		"src/main.ts",
 		"public/icon.svg",

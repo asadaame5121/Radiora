@@ -24,6 +24,6 @@ mutation target を分離する。
 ## 確認コマンド
 
 ```sh
-npx vitest run --project unit vitest/editor_controller.svelte.test.ts
-npm run test:mutation:controllers
+pnpm exec vitest run --project unit vitest/editor_controller.svelte.test.ts
+pnpm run test:mutation:controllers
 ```

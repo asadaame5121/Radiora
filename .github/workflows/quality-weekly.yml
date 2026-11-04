@@ -28,14 +28,14 @@ jobs:
           sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
           cache: false
           install_args: --locked
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       - name: Restore incremental mutation results
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: reports/mutation/${{ matrix.batch }}-incremental.json
-          key: mutation-${{ matrix.batch }}-${{ runner.os }}-${{ hashFiles('package-lock.json', 'deno.lock') }}-${{ github.run_id }}
+          key: mutation-${{ matrix.batch }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'deno.lock') }}-${{ github.run_id }}
           restore-keys: |
-            mutation-${{ matrix.batch }}-${{ runner.os }}-${{ hashFiles('package-lock.json', 'deno.lock') }}-
+            mutation-${{ matrix.batch }}-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'deno.lock') }}-
       - name: Run mutation batch
         env:
           BATCH: ${{ matrix.batch }}
@@ -63,7 +63,7 @@ jobs:
           sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
           cache: false
           install_args: --locked
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       - run: mise run coverage:frontend
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -89,8 +89,8 @@ jobs:
           sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
           cache: false
           install_args: --locked
-      - run: npm ci
-      - run: npx playwright install chromium
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium
       - run: mise run test:visual
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()

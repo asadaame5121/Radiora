@@ -22,6 +22,6 @@
 ## 確認コマンド
 
 ```sh
-npx vitest run --project unit vitest/help_update_controller.svelte.test.ts
-npm run test:mutation:controllers
+pnpm exec vitest run --project unit vitest/help_update_controller.svelte.test.ts
+pnpm run test:mutation:controllers
 ```

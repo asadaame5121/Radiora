@@ -3,6 +3,7 @@
 
 [tools]
 node = "22.23.4"
+pnpm = "12.15.0"
 deno = "2.9.3"
 rust = { version = "1.98.1", profile = "minimal", components = "rustfmt,clippy" }
 "aqua:rhysd/actionlint" = "1.7.12"
@@ -36,11 +37,11 @@ run = "cargo test --workspace --locked"
 
 [tasks."test:ui"]
 description = "Run the existing mock application interaction tests"
-run = "npm run test:ui"
+run = "pnpm run test:ui"
 
 [tasks."test:a11y"]
 description = "Run the existing mock application accessibility tests"
-run = "npm run test:a11y"
+run = "pnpm run test:a11y"
 
 [tasks.test]
 description = "Run tests for changed files; --staged selects staged paths (working-tree execution)"
@@ -77,11 +78,11 @@ run = "cargo deny check"
 # Frontend gate. Each task maps to one step of the former `deno task verify` chain.
 [tasks."fmt:frontend"]
 description = "Check Biome formatting (the only formatter for TS/JS/Svelte/CSS/JSON); no files are modified"
-run = "npm exec -- biome format"
+run = "pnpm exec biome format"
 
 [tasks."lint:frontend"]
 description = "Run Biome lint with the GritQL plugins"
-run = "npm exec -- biome lint"
+run = "pnpm exec biome lint"
 
 [tasks."quality:frontend"]
 description = "Run the implementation-line, magic-number and duplicate-code ratchets"
@@ -95,7 +96,7 @@ run = [
 description = "Type-check the Deno entry point and the Svelte project"
 run = [
   "deno check --node-modules-dir=auto src/main.ts",
-  "npm run check",
+  "pnpm run check",
 ]
 
 [tasks."test:frontend:deno"]
@@ -104,11 +105,11 @@ run = "deno test --node-modules-dir=auto -A src tests scripts"
 
 [tasks."test:frontend:unit"]
 description = "Run the Vitest unit project (fast-check included)"
-run = "npm run test:svelte"
+run = "pnpm run test:svelte"
 
 [tasks."build:frontend"]
 description = "Build the Vite frontend"
-run = "npm run build"
+run = "pnpm run build"
 
 [tasks."verify:frontend"]
 description = "Frontend gate: format, lint, ratchets, types, Deno/Vitest tests, build (same order as the legacy chain)"
@@ -124,7 +125,7 @@ run = [
 
 [tasks."test:storybook"]
 description = "Run the Storybook component interaction tests"
-run = "npm run test:storybook"
+run = "pnpm run test:storybook"
 
 [tasks."verify:ui"]
 description = "Browser interaction gate: UI, WCAG A/AA and Storybook (needs Playwright Chromium)"
@@ -146,21 +147,21 @@ run = [
 [tasks."coverage:frontend"]
 description = "Collect Vitest and Deno coverage and apply the coverage ratchet"
 run = [
-  "npm run coverage:unit",
+  "pnpm run coverage:unit",
   "deno task coverage:deno",
   "deno run --allow-read scripts/quality/coverage_ratchet.ts",
 ]
 
 [tasks."test:visual"]
 description = "Run Playwright visual regression (baselines are Windows captures)"
-run = "npm run test:visual"
+run = "pnpm run test:visual"
 
 [tasks."mutation:preflight"]
 description = "Dry-run one Stryker batch to verify wiring: mise run mutation:preflight parsers"
 usage = 'arg "<batch>" help="parsers|projections|domain|storage|controllers|tree"'
-run = "npm run test:mutation:{{usage.batch}} -- --dryRunOnly"
+run = "pnpm run test:mutation:{{usage.batch}} -- --dryRunOnly"
 
 [tasks."mutation:run"]
 description = "Run one Stryker batch (long): mise run mutation:run parsers"
 usage = 'arg "<batch>" help="parsers|projections|domain|storage|controllers|tree"'
-run = "npm run test:mutation:{{usage.batch}}"
+run = "pnpm run test:mutation:{{usage.batch}}"

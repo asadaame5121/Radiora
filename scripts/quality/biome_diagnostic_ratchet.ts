@@ -8,15 +8,10 @@ type BiomeReport = { diagnostics?: Diagnostic[] };
 const BASELINE_URL = new URL("./magic_number_baseline.json", import.meta.url);
 const UPDATE = Deno.args.includes("--update");
 
-function npmCommand(): string {
-	return Deno.build.os === "windows" ? "npm.cmd" : "npm";
-}
-
 async function collectFingerprints(): Promise<string[]> {
-	const command = new Deno.Command(npmCommand(), {
+	const command = new Deno.Command("pnpm", {
 		args: [
 			"exec",
-			"--",
 			"biome",
 			"lint",
 			"--only=lint/style/noMagicNumbers",

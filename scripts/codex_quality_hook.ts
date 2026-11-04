@@ -41,11 +41,7 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	const lintResult = await runCommand(
-		Deno.build.os === "windows" ? "npm.cmd" : "npm",
-		biomeLintArgs(lintFiles),
-		repositoryRoot,
-	);
+	const lintResult = await runCommand("pnpm", biomeLintArgs(lintFiles), repositoryRoot);
 	if (lintResult.code === 0) {
 		return;
 	}
@@ -183,7 +179,7 @@ export function isLintFile(file: string): boolean {
 }
 
 export function biomeLintArgs(files: string[]): string[] {
-	return ["exec", "--", "biome", "lint", "--write", "--no-errors-on-unmatched", ...files];
+	return ["exec", "biome", "lint", "--write", "--no-errors-on-unmatched", ...files];
 }
 
 async function runDeno(args: string[], cwd: string): Promise<CommandResult> {

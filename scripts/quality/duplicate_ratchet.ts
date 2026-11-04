@@ -11,10 +11,6 @@ const BASELINE_URL = new URL("./duplicate_baseline.json", import.meta.url);
 const REPORT = "reports/jscpd-ratchet/jscpd-report.json";
 const UPDATE = Deno.args.includes("--update");
 
-function npmCommand(): string {
-	return Deno.build.os === "windows" ? "npm.cmd" : "npm";
-}
-
 function fingerprint(duplicate: Duplicate): string {
 	const files = [duplicate.firstFile.name, duplicate.secondFile.name]
 		.map((path) => path.replaceAll("\\", "/"))
@@ -22,8 +18,8 @@ function fingerprint(duplicate: Duplicate): string {
 	return `${files[0]}|${files[1]}|${duplicate.lines}|${duplicate.tokens}`;
 }
 
-const output = await new Deno.Command(npmCommand(), {
-	args: ["exec", "--", "jscpd", "src", "--reporters", "json", "--output", "reports/jscpd-ratchet"],
+const output = await new Deno.Command("pnpm", {
+	args: ["exec", "jscpd", "src", "--reporters", "json", "--output", "reports/jscpd-ratchet"],
 	stdout: "inherit",
 	stderr: "inherit",
 }).output();

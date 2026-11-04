@@ -32,7 +32,7 @@ jobs:
           install_args: --locked
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Verify
         run: mise run verify:frontend
@@ -59,7 +59,7 @@ jobs:
           install_args: --locked
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
 
       - name: Generate duplicate-code SARIF
@@ -160,11 +160,11 @@ jobs:
 
       - name: Install dependencies
         id: dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install Chromium
         id: chromium
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Test application interactions
         id: ui
@@ -205,7 +205,7 @@ jobs:
           sha256: ${{ runner.os == 'Windows' && 'd38bd78b63ca1e913e1d55cbd1633b45e9b01f2735ac81b1915f84f75a3eb5cd' || 'fe6dd17e68e09682b31d2e7bb7bb755d22636ac1af5d94621e300f2ca9e9fe8a' }}
           cache: false
           install_args: --locked
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       - name: Verify mutation batch wiring
         env:
           BATCH: ${{ matrix.batch }}
@@ -306,17 +306,20 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.23.4
-          cache: npm
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Verify the Deno-free frontend path
-        run: npm run verify:frontend:deno-free
+        run: pnpm run verify:frontend:deno-free
 
   required-checks:
     name: Required checks

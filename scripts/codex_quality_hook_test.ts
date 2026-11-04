@@ -36,7 +36,6 @@ Deno.test("Biome hook enables safe writes without unsafe fixes", () => {
 	const args = biomeLintArgs(["src/main.ts"]);
 	assertEquals(args, [
 		"exec",
-		"--",
 		"biome",
 		"lint",
 		"--write",
