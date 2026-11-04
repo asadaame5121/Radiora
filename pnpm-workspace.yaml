@@ -1,4 +1,5 @@
 overrides:
-  qs: 6.15.3
+  qs: 6.16.1 # typed-rest-client/Stryker audit requires qs >=6.16.1
+  minimatch: 11.0.1 # Stryker 9.6.1 resolves 10.2.6; audit requires >=11.0.1
 allowBuilds:
   esbuild: true
