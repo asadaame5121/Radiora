@@ -43,11 +43,19 @@ pub struct TableDigest {
     pub payload_bytes: u64,
     pub sha256: String,
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Quarantined {
+    pub table: String,
+    pub id: String,
+    pub position: i64,
+    pub reason: String,
+}
 #[derive(Debug)]
 pub struct LegacySource {
     pub path: PathBuf,
     pub fingerprint: SourceFingerprint,
     pub records: Vec<LegacyRecord>,
+    pub quarantined: Vec<Quarantined>,
     pub archive: Vec<ArchiveRow>,
     pub tables: BTreeMap<String, TableDigest>,
 }
@@ -139,17 +147,18 @@ pub fn read_legacy(path: &Path) -> Result<LegacySource> {
     let result = read_database(&path);
     // Check even when schema/payload validation failed.
     ensure_unchanged(&path, &before)?;
-    let (records, archive) = result?;
+    let (records, archive, quarantined) = result?;
     let tables = digests(&archive);
     Ok(LegacySource {
         path,
         fingerprint: before,
         records,
+        quarantined,
         archive,
         tables,
     })
 }
-fn read_database(path: &Path) -> Result<(Vec<LegacyRecord>, Vec<ArchiveRow>)> {
+fn read_database(path: &Path) -> Result<(Vec<LegacyRecord>, Vec<ArchiveRow>, Vec<Quarantined>)> {
     let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     db.busy_timeout(std::time::Duration::from_secs(5))?;
     db.execute_batch("PRAGMA query_only=ON; BEGIN;")?;
@@ -201,6 +210,7 @@ fn read_database(path: &Path) -> Result<(Vec<LegacyRecord>, Vec<ArchiveRow>)> {
     }
     let mut archive = read_metadata(&db)?;
     let mut records = Vec::new();
+    let mut quarantined = Vec::new();
     for table in RECORD_TABLES {
         let mut seen = HashSet::new();
         let mut query = db.prepare(&format!(
@@ -216,6 +226,9 @@ fn read_database(path: &Path) -> Result<(Vec<LegacyRecord>, Vec<ArchiveRow>)> {
                     reason: reason.into(),
                 })
             };
+            if id.is_empty() {
+                return Err(error("empty row ID"));
+            }
             if !seen.insert(id.clone()) {
                 return Err(error("duplicate table ID"));
             }
@@ -226,23 +239,30 @@ fn read_database(path: &Path) -> Result<(Vec<LegacyRecord>, Vec<ArchiveRow>)> {
                 return Err(error("negative position"));
             }
             let payload: String = row.get(2).map_err(|_| error("payload must be text"))?;
-            let value = validate_record(table, &id, &payload)?;
             archive.push(ArchiveRow {
                 table: table.into(),
                 id: id.clone(),
                 position: Some(position),
                 payload: payload.clone(),
             });
-            records.push(LegacyRecord {
-                table: table.into(),
-                id,
-                position,
-                payload,
-                value,
-            });
+            match validate_record(table, &id, &payload) {
+                Ok(value) => records.push(LegacyRecord {
+                    table: table.into(),
+                    id,
+                    position,
+                    payload,
+                    value,
+                }),
+                Err(error) => quarantined.push(Quarantined {
+                    table: error.table,
+                    id: error.id,
+                    position,
+                    reason: error.reason,
+                }),
+            }
         }
     }
-    Ok((records, archive))
+    Ok((records, archive, quarantined))
 }
 fn read_metadata(db: &Connection) -> Result<Vec<ArchiveRow>> {
     let mut query =

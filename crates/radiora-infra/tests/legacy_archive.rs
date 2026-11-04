@@ -118,13 +118,14 @@ fn refusals_leave_no_destination_or_temporary_database() -> TestResult {
         "running",
         "failed",
         "unknown",
-        "json",
-        "type",
         "duplicate",
         "missing",
         "columns",
-        "identity",
         "position",
+        "fractional-position",
+        "payload-type",
+        "duplicate-quarantined",
+        "empty-id",
     ] {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("legacy.db");
@@ -140,22 +141,25 @@ fn refusals_leave_no_destination_or_temporary_database() -> TestResult {
                 )?;
             }
             "unknown" => db.execute_batch("CREATE TABLE surprise(data TEXT);")?,
-            "json" => insert(&db, "work", "w", 0, "{")?,
-            "type" => insert(&db, "work", "w", 0, r#"{"id":"w"}"#)?,
             "duplicate" => {
                 insert(&db, "emergence_feedback", "same", 0, r#""pin""#)?;
                 insert(&db, "emergence_feedback", "same", 1, r#""accept""#)?;
             }
             "missing" => db.execute_batch("DROP TABLE work;")?,
             "columns" => db.execute_batch("ALTER TABLE work ADD COLUMN unarchived TEXT;")?,
-            "identity" => insert(
-                &db,
-                "working_copy",
-                "wrong",
-                0,
-                &format!(r#"{{"branchId":"b","workId":"w","text":"","updatedAt":"{INSTANT}"}}"#),
-            )?,
             "position" => insert(&db, "emergence_feedback", "id", -1, r#""pin""#)?,
+            "fractional-position" => {
+                insert(&db, "emergence_feedback", "id", 0, r#""pin""#)?;
+                db.execute("UPDATE emergence_feedback SET position=0.5", [])?;
+            }
+            "payload-type" => {
+                db.execute("INSERT INTO emergence_feedback VALUES('id',0,x'00')", [])?;
+            }
+            "duplicate-quarantined" => {
+                insert(&db, "emergence_feedback", "same", 0, "{")?;
+                insert(&db, "emergence_feedback", "same", 1, r#""pin""#)?;
+            }
+            "empty-id" => insert(&db, "emergence_feedback", "", 0, r#""pin""#)?,
             _ => unreachable!(),
         }
         drop(db);
@@ -171,7 +175,12 @@ fn refusals_leave_no_destination_or_temporary_database() -> TestResult {
         );
         if matches!(
             reason,
-            "json" | "type" | "duplicate" | "identity" | "position"
+            "duplicate"
+                | "position"
+                | "fractional-position"
+                | "payload-type"
+                | "duplicate-quarantined"
+                | "empty-id"
         ) {
             assert!(matches!(error, ImportError::Record(_)), "{error}");
         }
@@ -236,6 +245,125 @@ fn shared_i6_valid_fixtures_are_accepted_without_reinterpreting_their_data() -> 
         assert!(!source.records.is_empty(), "{name}");
         let report = archive_legacy(&path, &dir.path().join("staging.db"))?;
         assert_eq!(report.tables, source.tables, "{name}");
+    }
+    Ok(())
+}
+
+#[test]
+fn invalid_payload_fixture_is_archived_with_one_diagnostic_per_quarantined_row() -> TestResult {
+    let fixture: Value = serde_json::from_str(include_str!(
+        "fixtures/legacy_v2/quarantine_invalid_payload/database.json"
+    ))?;
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("legacy.db");
+    let db = empty_database(&path)?;
+    for (table, rows) in fixture["tables"].as_object().unwrap() {
+        for row in rows.as_array().unwrap() {
+            insert(
+                &db,
+                table,
+                row["id"].as_str().unwrap(),
+                row["position"].as_i64().unwrap(),
+                row["payloadSource"].as_str().unwrap(),
+            )?;
+        }
+    }
+    drop(db);
+    let before = fingerprint(&path)?;
+    let source = read_legacy(&path)?;
+    assert_eq!(source.archive.len(), 8);
+    assert_eq!(source.records.len(), 2);
+    assert_eq!(source.quarantined.len(), 5);
+    assert!(
+        source
+            .records
+            .iter()
+            .all(|row| row.id.starts_with("valid-"))
+    );
+    for row in &source.quarantined {
+        assert!(!row.reason.is_empty());
+        assert!(
+            !source
+                .records
+                .iter()
+                .any(|record| record.table == row.table && record.id == row.id)
+        );
+    }
+    let staging = dir.path().join("staging.db");
+    let report = archive_legacy(&path, &staging)?;
+    assert_eq!(report.tables, source.tables);
+    assert_eq!(fingerprint(&path)?, before);
+    let output = Connection::open(&staging)?;
+    let count: i64 =
+        output.query_row("SELECT count(*) FROM import_diagnostics", [], |r| r.get(0))?;
+    assert_eq!(count, 5);
+    for row in &source.archive {
+        let (position,payload,hash):(Option<i64>,String,String)=output.query_row(
+            "SELECT position,payload,row_hash FROM legacy_archive WHERE \"table\"=?1 AND legacy_id=?2",
+            params![row.table,row.id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?)))?;
+        assert_eq!(position, row.position);
+        assert_eq!(payload, row.payload);
+        assert_eq!(hash.len(), 64);
+    }
+    for (table, expected) in &source.tables {
+        let (rows, bytes, hash): (u64, u64, String) = output.query_row(
+            "SELECT row_count,payload_bytes,sha256 FROM legacy_archive_summary WHERE \"table\"=?1",
+            [table],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )?;
+        assert_eq!(
+            (rows, bytes, hash),
+            (
+                expected.rows,
+                expected.payload_bytes,
+                expected.sha256.clone()
+            )
+        );
+    }
+    for row in &source.quarantined {
+        let (severity,kind,reason,action):(String,String,String,String)=output.query_row(
+            "SELECT severity,kind,reason,action FROM import_diagnostics WHERE legacy_table=?1 AND legacy_id=?2",
+            params![row.table,row.id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)))?;
+        assert_eq!(
+            (severity.as_str(), kind.as_str(), action.as_str()),
+            ("error", "invalid-record", "archived-only")
+        );
+        assert_eq!(reason, row.reason);
+        let position: i64 = output.query_row(
+            "SELECT position FROM legacy_archive WHERE \"table\"=?1 AND legacy_id=?2",
+            params![row.table, row.id],
+            |r| r.get(0),
+        )?;
+        assert_eq!(position, row.position);
+    }
+    assert_eq!(source.tables["work"].rows, 4);
+    assert_eq!(source.tables["working_copy"].rows, 2);
+    let rerun = archive_legacy(&path, &dir.path().join("retry.db"))?;
+    assert_eq!(rerun.tables, report.tables);
+    assert_eq!(fingerprint(&path)?, before);
+    Ok(())
+}
+
+#[test]
+fn every_record_table_can_quarantine_without_rejecting_the_database() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("legacy.db");
+    let db = empty_database(&path)?;
+    for table in RECORD_TABLES {
+        insert(&db, table, "bad-row", 0, "{")?;
+    }
+    drop(db);
+    let source = read_legacy(&path)?;
+    assert!(source.records.is_empty());
+    assert_eq!(source.quarantined.len(), 17);
+    let staging = dir.path().join("staging.db");
+    archive_legacy(&path, &staging)?;
+    let output = Connection::open(staging)?;
+    let count: i64 =
+        output.query_row("SELECT count(*) FROM import_diagnostics", [], |r| r.get(0))?;
+    assert_eq!(count, 17);
+    for table in RECORD_TABLES {
+        assert_eq!(source.tables[table].rows, 1);
     }
     Ok(())
 }

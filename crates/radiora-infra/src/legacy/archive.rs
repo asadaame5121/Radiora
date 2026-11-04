@@ -44,6 +44,12 @@ pub fn archive_legacy(source: &Path, staging_path: &Path) -> Result<ArchiveRepor
                payload TEXT NOT NULL, row_hash TEXT NOT NULL,
                PRIMARY KEY(\"table\",legacy_id)
              ) STRICT;
+             CREATE TABLE import_diagnostics (
+               severity TEXT NOT NULL, kind TEXT NOT NULL,
+               legacy_table TEXT NOT NULL, legacy_id TEXT NOT NULL,
+               reason TEXT NOT NULL, action TEXT NOT NULL,
+               PRIMARY KEY(legacy_table, legacy_id, kind)
+             ) STRICT;
              CREATE TABLE legacy_archive_summary (
                \"table\" TEXT PRIMARY KEY, row_count INTEGER NOT NULL,
                payload_bytes INTEGER NOT NULL, sha256 TEXT NOT NULL
@@ -82,6 +88,12 @@ pub fn archive_legacy(source: &Path, staging_path: &Path) -> Result<ArchiveRepor
             tx.execute(
                 "INSERT INTO legacy_archive VALUES(?1,?2,?3,?4,?5)",
                 params![row.table, row.id, row.position, row.payload, row_hash(row)],
+            )?;
+        }
+        for record in &source.quarantined {
+            tx.execute(
+                "INSERT INTO import_diagnostics VALUES('error','invalid-record',?1,?2,?3,'archived-only')",
+                params![record.table, record.id, record.reason],
             )?;
         }
         let actual = verify_archive(&tx, &source.archive)?;

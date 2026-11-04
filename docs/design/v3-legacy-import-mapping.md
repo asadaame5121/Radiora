@@ -1,7 +1,7 @@
 # v3 Legacy Importer：旧SQLite→新Loro DBの対応設計
 
 作成日: 2026-11-03 状態: #384（T-05）の設計案。実装・受入の完了記録ではない。
-§7の3項目はユーザー採用済み。それ以外の対応・schema案は実装とfixtureでの検証を経て確定する。
+§7の4項目はユーザー採用済み。それ以外の対応・schema案は実装とfixtureでの検証を経て確定する。
 
 前提の正本: [v3決定事項](v3-model-decisions.md) §1/§2/§4、[初回提供範囲](v3-first-release-scope.md)
 §3、
@@ -121,15 +121,24 @@ Revision）で表示本文を選ぶ。
   参照項目になるOccurrenceの`contextualHeading`は、参照項目の`heading`へ写す。
 - **Q3 どのOccurrenceも選んでいないBranchの本文**:
   archiveのみとする（参照されないRevisionと同じ扱い）。 独立Topicとして実体化しない。
+- **Q4（2026-11-04）不正payloadはarchive＋診断**:
+  payloadのJSON構文・型・文字列/数値のdecoder・identity検証に失敗したrecordは、変換全体を拒否せず、
+  原文のままarchiveへ保存する。診断を出し、そのrecordは文書層の入力から除外する。
 
 ## 8. 安全性・拒否条件
 
 - 旧DBは読取り専用で開き、変換前後でsize・mtime・SHA-256が不変であることを記録・検査する。
 - 変換は一時pathの新DBへ行い、全検証が通った後にだけ目的pathへ移して`import_run.completed`にする。
   途中失敗の一時DBは成功扱いせず破棄する。再実行は常に新規作成（同じ旧DBのhashなら同じ結果）。
-- 拒否する入力: `schema_version`が2以外、`migration_journal`に`running`/`failed`が残る、
-  未知のtable、JSONとして不正なpayload、型検証に失敗したrecord、同じtable内のID重複。
-  拒否時は新DBを残さず、旧DBも変更しない。
+- 全体拒否する入力: `schema_version`が2以外、`migration_journal`に`running`/`failed`が残る、
+  未知/欠落table、列不一致、同table内のID重複、空のrow ID、positionが整数でない/負、
+  payloadがTEXTでない等の行構造不正、旧DBの変更検知。 拒否時は新DBを残さず、旧DBも変更しない。
+- payload由来の検証失敗（JSON構文不正、型不正、孤立UTF-16 surrogate、数値範囲外、 row IDとpayload
+  identityの不一致）は、その行だけ隔離して続行する。
+  `legacy_archive`の原文・件数・bytes・hash照合に隔離行も含め、
+  `import_diagnostics`へseverity=`error`、kind=`invalid-record`、対象table/旧ID、
+  検証理由、action=`archived-only`を1行ずつ記録する。
+- 隔離されたrecordへの参照はI1 oracleの`Resolution::Missing`扱いとし、別recordへリダイレクトしない。
 - 新DBの起動時は、`meta.schemaVersion`・SQLite envelope version・importer
   versionが未知なら開かずに拒否する。
   #383の残課題1（壊れた差分1行で開けない）の扱いは#385の起動処理で決める。

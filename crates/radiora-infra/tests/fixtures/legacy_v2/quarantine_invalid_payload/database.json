@@ -1,0 +1,72 @@
+{
+	"format": "radiora-legacy-v2-fixture",
+	"tables": {
+		"work": [
+			{
+				"id": "valid-work",
+				"position": 0,
+				"payloadSource": "{\"id\":\"valid-work\",\"createdAt\":\"2026-09-04T12:00:00.000Z\",\"updatedAt\":\"2026-09-04T12:00:00.000Z\"}"
+			},
+			{
+				"id": "invalid-json",
+				"position": 1,
+				"payloadSource": " \n {\"id\":\"invalid-json\", "
+			},
+			{
+				"id": "invalid-type",
+				"position": 2,
+				"payloadSource": "{\"id\":\"invalid-type\"}"
+			},
+			{
+				"id": "overflow-year",
+				"position": 3,
+				"payloadSource": "{\"id\":\"overflow-year\",\"createdAt\":\"2026-09-04T12:00:00.000Z\",\"updatedAt\":\"2026-09-04T12:00:00.000Z\",\"historicalTime\":{\"kind\":\"point\",\"date\":{\"precision\":\"year\",\"year\":1e400}}}"
+			}
+		],
+		"branch": [],
+		"working_copy": [
+			{
+				"id": "surrogate-copy",
+				"position": 0,
+				"payloadSource": " {\"branchId\":\"surrogate-copy\",\"workId\":\"valid-work\",\"text\":\"\\ud800\",\"updatedAt\":\"2026-09-04T12:00:00.000Z\"} \r\n"
+			},
+			{
+				"id": "mismatched-copy",
+				"position": 1,
+				"payloadSource": "{\"branchId\":\"different-copy\",\"workId\":\"valid-work\",\"text\":\"原文維持\",\"updatedAt\":\"2026-09-04T12:00:00.000Z\"}"
+			}
+		],
+		"revision": [],
+		"recovery_snapshot": [],
+		"occurrence": [],
+		"semantic_link": [],
+		"system_relation": [],
+		"knot": [],
+		"search_alias": [],
+		"emergence_feedback": [
+			{
+				"id": "valid-feedback",
+				"position": 0,
+				"payloadSource": "\"pin\""
+			}
+		],
+		"emergence_suggestion": [],
+		"saved_rule_query": [],
+		"purge_manifest": [],
+		"bookmark": [],
+		"resume_position": [],
+		"relation_type_definition": []
+	},
+	"storage_metadata": [
+		{
+			"id": "radiora",
+			"position": 0,
+			"payload": {
+				"id": "radiora",
+				"schema_version": 2,
+				"updated_at": "2026-09-04T12:00:00.000Z"
+			}
+		}
+	],
+	"migration_journal": []
+}

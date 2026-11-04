@@ -4,8 +4,8 @@ mod source;
 pub use archive::{ArchiveReport, archive_legacy};
 use radiora_core::legacy::RecordError;
 pub use source::{
-    ArchiveRow, FileFingerprint, LegacyRecord, LegacySource, SourceFingerprint, TableDigest,
-    fingerprint, read_legacy,
+    ArchiveRow, FileFingerprint, LegacyRecord, LegacySource, Quarantined, SourceFingerprint,
+    TableDigest, fingerprint, read_legacy,
 };
 use std::{io, time::SystemTimeError};
 

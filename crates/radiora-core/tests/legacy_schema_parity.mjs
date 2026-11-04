@@ -10,9 +10,9 @@ for (const test of cases) {
   assert.equal(accepted, test.accept, test.name);
 }
 console.log(`v2 TypeScript schema corpus: ${cases.length} cases PASS`);
-// Known JSON decoder gap: TS strings can contain isolated UTF-16 surrogates.
+// The importer absorbs this decoder difference through archive-only quarantine.
 parseStoredRecord("working_copy", { id: "b", payload: JSON.stringify({
   branchId: "b", workId: "w", text: String.fromCharCode(0xd800),
   updatedAt: "2026-01-01T00:00:00.000Z"
 }) }, 0);
-console.log("Known gap: TS accepts isolated UTF-16 surrogate; Rust rejects without replacement");
+console.log("TS accepts isolated UTF-16 surrogate; importer quarantines decoder failures with archive + diagnostic");
