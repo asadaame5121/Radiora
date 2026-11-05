@@ -7,12 +7,12 @@ for (const test of cases) {
   let accepted = true;
   try { parseStoredRecord(test.table, { id: test.id, payload: test.json }, 0); }
   catch { accepted = false; }
-  assert.equal(accepted, test.accept, test.name);
+  assert.equal(accepted, test.tsAccept ?? test.accept, test.name);
 }
-console.log(`v2 TypeScript schema corpus: ${cases.length} cases PASS`);
+console.log(`v2 TypeScript schema corpus: ${cases.length} cases PASS; ${cases.filter(test => test.quarantine).length} approved Rust numeric quarantine difference`);
 // The importer absorbs this decoder difference through archive-only quarantine.
 parseStoredRecord("working_copy", { id: "b", payload: JSON.stringify({
   branchId: "b", workId: "w", text: String.fromCharCode(0xd800),
   updatedAt: "2026-01-01T00:00:00.000Z"
 }) }, 0);
-console.log("TS accepts isolated UTF-16 surrogate; importer quarantines decoder failures with archive + diagnostic");
+console.log("TS accepts isolated UTF-16 surrogate and numeric overflow; importer archives decoder failures with diagnostics");

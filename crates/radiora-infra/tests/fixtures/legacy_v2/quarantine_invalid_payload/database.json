@@ -38,7 +38,13 @@
 		],
 		"revision": [],
 		"recovery_snapshot": [],
-		"occurrence": [],
+		"occurrence": [
+			{
+				"id": "overflow-number",
+				"position": 0,
+				"payloadSource": "{\"id\":\"overflow-number\",\"workId\":\"valid-work\",\"parentOccurrenceId\":null,\"orderKey\":1e400,\"collapsed\":false,\"revisionSelector\":{\"mode\":\"branch\",\"branchId\":\"b\"}}"
+			}
+		],
 		"semantic_link": [],
 		"system_relation": [],
 		"knot": [],

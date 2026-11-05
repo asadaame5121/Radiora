@@ -8,20 +8,10 @@ pub struct Instant(pub String);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct RelationName(pub String);
-// v.number accepts Infinity from JSON.parse("1e400"). Preserve that lexeme first.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+// Values outside finite f64 fail JSON parsing and are archived by importer quarantine.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Number(pub f64);
-impl<'de> Deserialize<'de> for Number {
-    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let number = serde_json::Number::deserialize(d)?;
-        number
-            .to_string()
-            .parse::<f64>()
-            .map(Self)
-            .map_err(D::Error::custom)
-    }
-}
 macro_rules! string_scalar {
     ($name:ident, $validate:expr, $message:literal) => {
         impl<'de> Deserialize<'de> for $name {

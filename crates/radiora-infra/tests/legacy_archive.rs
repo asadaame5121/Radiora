@@ -271,9 +271,9 @@ fn invalid_payload_fixture_is_archived_with_one_diagnostic_per_quarantined_row()
     drop(db);
     let before = fingerprint(&path)?;
     let source = read_legacy(&path)?;
-    assert_eq!(source.archive.len(), 8);
+    assert_eq!(source.archive.len(), 9);
     assert_eq!(source.records.len(), 2);
-    assert_eq!(source.quarantined.len(), 5);
+    assert_eq!(source.quarantined.len(), 6);
     assert!(
         source
             .records
@@ -282,6 +282,9 @@ fn invalid_payload_fixture_is_archived_with_one_diagnostic_per_quarantined_row()
     );
     for row in &source.quarantined {
         assert!(!row.reason.is_empty());
+        if row.id.starts_with("overflow-") {
+            assert!(row.reason.contains("number out of range"));
+        }
         assert!(
             !source
                 .records
@@ -296,7 +299,7 @@ fn invalid_payload_fixture_is_archived_with_one_diagnostic_per_quarantined_row()
     let output = Connection::open(&staging)?;
     let count: i64 =
         output.query_row("SELECT count(*) FROM import_diagnostics", [], |r| r.get(0))?;
-    assert_eq!(count, 5);
+    assert_eq!(count, 6);
     for row in &source.archive {
         let (position,payload,hash):(Option<i64>,String,String)=output.query_row(
             "SELECT position,payload,row_hash FROM legacy_archive WHERE \"table\"=?1 AND legacy_id=?2",

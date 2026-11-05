@@ -138,6 +138,9 @@ Revision）で表示本文を選ぶ。
   `legacy_archive`の原文・件数・bytes・hash照合に隔離行も含め、
   `import_diagnostics`へseverity=`error`、kind=`invalid-record`、対象table/旧ID、
   検証理由、action=`archived-only`を1行ずつ記録する。
+- JSONの数値decoderは有限f64を対象とし、serde_jsonの`float_roundtrip`で小数の往復精度を保つ。
+  `arbitrary_precision`はworkspaceのfeature統合でIPCへ伝播するため使用しない。
+  `1e400`等、有限f64に収まらずJSON parseで失敗するpayloadも原文archive＋診断へ隔離する。
 - 隔離されたrecordへの参照はI1 oracleの`Resolution::Missing`扱いとし、別recordへリダイレクトしない。
 - 新DBの起動時は、`meta.schemaVersion`・SQLite envelope version・importer
   versionが未知なら開かずに拒否する。
