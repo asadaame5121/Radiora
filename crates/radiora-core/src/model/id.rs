@@ -103,3 +103,9 @@ logical_id!(
     /// The UUIDv7 format is an implementation choice, not a product decision.
     TrashEntryId
 );
+
+logical_id!(
+    /// Identifies one typed Relation. Kept across endpoint moves and document extraction.
+    /// The UUIDv7 format is an implementation choice, not a product decision.
+    RelationId
+);
