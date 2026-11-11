@@ -4,14 +4,20 @@
 mod block;
 mod id;
 mod link;
+mod relation;
 mod trash;
 
 pub use block::{
     Block, BlockContent, BlockRecord, OwnedContent, PlainLabel, Presence, PurgedBlock,
     ReferenceItem, ReferenceResolution, direct_reference_target, remap_on_copy, resolve_reference,
 };
-pub use id::{BlockId, IdError, TrashEntryId};
+pub use id::{BlockId, IdError, RelationId, TrashEntryId};
 pub use link::{BLOCK_LINK_PREFIX, LinkError, block_link_url, parse_block_link_url};
+pub use relation::{
+    BUILT_IN_TYPES, CardEdge, CardPair, Direction, EndpointState, Excluded, ExclusionReason,
+    Lineage, Relation, RelationStatus, RelationTypeDefinition, RelationTypeError, RelationTypeName,
+    RelationTypes, TopicProjection, lineage, project_to_topics,
+};
 pub use trash::{
     OriginalPlacement, PlacementObservation, RestorePlan, TrashEntry, TrashEntryError,
     collect_newly_deleted, plan_restore, purge_targets,
