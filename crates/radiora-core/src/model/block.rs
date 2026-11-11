@@ -83,6 +83,19 @@ pub enum BlockContent {
     Reference(ReferenceItem),
 }
 
+impl BlockContent {
+    /// Content for the copy of a Block, given the old→new mapping of the copied set.
+    /// Reference targets follow the mapping. Internal links inside Markdown follow the same rule,
+    /// but rewriting them needs the Markdown link extractor, so owned bodies are cloned as-is
+    /// here until that module exists.
+    pub fn copied(&self, copies: &BTreeMap<BlockId, BlockId>) -> Self {
+        match self {
+            Self::Owned(content) => Self::Owned(content.clone()),
+            Self::Reference(reference) => Self::Reference(reference.remapped(copies)),
+        }
+    }
+}
+
 /// Whether a stored Block is visible or sitting in the trash. In the first release a trashed
 /// subtree is not edited or moved directly; it is restored first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
