@@ -16,7 +16,7 @@ crateのlib.rsはCargo targetを成立させる最小の宣言のみで、domain
 | core/infra         | thiserror 2.0.21                   | 型付きdomain/storage error。原因を保持し、desktopからの外部公開内容を制御                                          |
 | core/infra         | uuid 1.29.0                        | coreはstd/serde、infraのみv7発行feature。core関数は発行済みIDを入力する                                            |
 | infra              | loro 1.16.2                        | 単一Doc/Undo/差分。logging有効、未使用counter/jsonpath無効                                                         |
-| infra              | rusqlite 0.32.1                    | bundled SQLite＋backup API。同期writer/transactionとsnapshot設計は保存sliceで実装                                  |
+| infra              | rusqlite 0.41.1                    | bundled SQLite 3.54.1＋backup API。同期writer/transactionとsnapshot設計は保存sliceで実装                           |
 | infra              | sha2 0.11.1                        | backup/asset完全性照合。default無効。暗号化・発行者認証の代替にしない                                              |
 | infra              | tempfile 3.27.0                    | 保存/restoreのstagingと試験一時DB。単独でatomic置換や停電耐性が保証されるとは扱わない                              |
 | infra/desktop      | tracing 0.1.44                     | 保存phase/要求/障害の診断。本文・秘密情報をlogへ出さない                                                           |
@@ -28,6 +28,11 @@ crateのlib.rsはCargo targetを成立させる最小の宣言のみで、domain
 
 storageのLoro/rusqliteは既存PoCで検証した直接API版を維持する。
 最新Loro/rusqliteへの一括更新はせず、V01/V11/V12のfixtureを製品へ接続してから更新判断する。
+例外（2026-11-11）: RUSTSEC-2026-0459（同梱SQLite 3.54.0未満のWAL page
+size不一致による未初期化メモリ読出し）に対応するため、
+rusqliteだけを修正版を同梱する最小版0.41.1（libsqlite3-sys 0.39.1）へ上げた。
+この時点で製品のrusqlite利用はlegacy importerの読取り/archiveだけで、Loroは1.16.2のまま据え置く。
+保存sliceでV01/V11/V12を接続するときは、この版を前提に検証する。
 同版でもfeature/transitive解決はPoCと異なり得るため、PoCの緑を製品lock全体へ転記しない。
 初回のlock解決ではloro-internal 1.17.1が選ばれ、Loro 1.16.2のcompileが失敗した。 Cargo.lockは cargo
 update -p loro-internal --precise 1.16.2 で互換版へ固定した。
@@ -65,7 +70,7 @@ MSVC / Rust 1.98.1で cargo check --workspace --all-targets --locked が成功�
 一次資料: [petgraph](https://docs.rs/petgraph/0.8.3/petgraph/),
 [Markdown](https://docs.rs/pulldown-cmark/0.13.6/pulldown_cmark/),
 [UUID](https://docs.rs/uuid/1.29.0/uuid/), [proptest](https://docs.rs/proptest/1.12.0/proptest/),
-[Loro](https://docs.rs/loro/1.16.2/loro/), [SQLite](https://docs.rs/rusqlite/0.32.1/rusqlite/),
+[Loro](https://docs.rs/loro/1.16.2/loro/), [SQLite](https://docs.rs/rusqlite/0.41.1/rusqlite/),
 [Tauri](https://docs.rs/tauri/2.12.5/tauri/),
 [dialog](https://docs.rs/tauri-plugin-dialog/2.8.4/tauri_plugin_dialog/)。 license
 metadataは追加した直接依存がMIT/Apache-2.0系。配布artifactのtransitive

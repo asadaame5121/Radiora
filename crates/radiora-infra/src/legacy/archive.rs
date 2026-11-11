@@ -73,7 +73,7 @@ pub fn archive_legacy(source: &Path, staging_path: &Path) -> Result<ArchiveRepor
                     .path
                     .to_str()
                     .ok_or_else(|| ImportError::Rejected("source path is not UTF-8".into()))?,
-                source.fingerprint.database.size,
+                i64::try_from(source.fingerprint.database.size)?,
                 mtime,
                 source.fingerprint.database.sha256,
                 source.fingerprint.wal.as_ref().map(|wal| &wal.sha256),
@@ -105,7 +105,12 @@ pub fn archive_legacy(source: &Path, staging_path: &Path) -> Result<ArchiveRepor
         for (table, digest) in &actual {
             tx.execute(
                 "INSERT INTO legacy_archive_summary VALUES(?1,?2,?3,?4)",
-                params![table, digest.rows, digest.payload_bytes, digest.sha256],
+                params![
+                    table,
+                    i64::try_from(digest.rows)?,
+                    i64::try_from(digest.payload_bytes)?,
+                    digest.sha256
+                ],
             )?;
         }
         super::source::ensure_unchanged(&source.path, &source.fingerprint)?;

@@ -26,7 +26,7 @@ thiserror = "=2.0.21"
 uuid = { version = "=1.29.0", default-features = false, features = ["std", "serde"] }
 # Preserve the tested storage API baseline; upgrades require the V01/V11/V12 fixtures.
 loro = { version = "=1.16.2", default-features = false, features = ["logging"] }
-rusqlite = { version = "=0.32.1", features = ["bundled", "backup"] }
+rusqlite = { version = "=0.41.1", features = ["bundled", "backup"] }
 sha2 = { version = "=0.11.1", default-features = false }
 tempfile = "=3.27.0"
 tracing = "=0.1.44"
