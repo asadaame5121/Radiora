@@ -4,6 +4,8 @@
 mod block;
 mod id;
 mod link;
+mod markdown_links;
+mod naming;
 mod trash;
 
 pub use block::{
@@ -12,6 +14,8 @@ pub use block::{
 };
 pub use id::{BlockId, IdError, TrashEntryId};
 pub use link::{BLOCK_LINK_PREFIX, LinkError, block_link_url, parse_block_link_url};
+pub use markdown_links::{InternalLink, internal_links, linked_targets, remap_internal_links};
+pub use naming::{add_alias, display_name, search_key};
 pub use trash::{
     OriginalPlacement, PlacementObservation, RestorePlan, TrashEntry, TrashEntryError,
     collect_newly_deleted, plan_restore, purge_targets,
