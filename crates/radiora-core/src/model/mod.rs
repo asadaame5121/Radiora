@@ -4,6 +4,7 @@
 mod block;
 mod id;
 mod link;
+mod outline;
 mod trash;
 
 pub use block::{
@@ -12,6 +13,7 @@ pub use block::{
 };
 pub use id::{BlockId, IdError, TrashEntryId};
 pub use link::{BLOCK_LINK_PREFIX, LinkError, block_link_url, parse_block_link_url};
+pub use outline::{InvariantViolation, Membership, Outline, Slot, StructureError};
 pub use trash::{
     OriginalPlacement, PlacementObservation, RestorePlan, TrashEntry, TrashEntryError,
     collect_newly_deleted, plan_restore, purge_targets,
