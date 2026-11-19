@@ -4,6 +4,7 @@
 mod block;
 mod id;
 mod link;
+mod outline;
 mod relation;
 mod trash;
 
@@ -13,6 +14,7 @@ pub use block::{
 };
 pub use id::{BlockId, IdError, RelationId, TrashEntryId};
 pub use link::{BLOCK_LINK_PREFIX, LinkError, block_link_url, parse_block_link_url};
+pub use outline::{InvariantViolation, Membership, Outline, Slot, StructureError};
 pub use relation::{
     BUILT_IN_TYPES, CardEdge, CardPair, Direction, EndpointState, Excluded, ExclusionReason,
     Lineage, Relation, RelationStatus, RelationTypeDefinition, RelationTypeError, RelationTypeName,

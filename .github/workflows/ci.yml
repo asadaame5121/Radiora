@@ -142,7 +142,9 @@ jobs:
 
   a11y:
     name: Application interactions and WCAG A/AA
-    runs-on: ubuntu-latest
+    # Playwright 1.58.2 cannot install Chromium dependencies on ubuntu-26.04 (ubuntu-latest since
+    # 2026-11). Unpin when Playwright is upgraded to a release that supports it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Check out repository
