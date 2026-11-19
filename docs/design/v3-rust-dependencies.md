@@ -3,7 +3,8 @@
 決定日: 2026-10-31。ユーザー指定により、テストだけでなく初回Radiora全体の必要依存を追加した。
 [architecture](v3-architecture.md)の3 crateをroot Cargo workspaceとして作成し、直接版を固定する。
 Cargo.lockは製品workspace用。独立PoCはworkspaceからexcludeし、既存lock/manifestを変更しない。
-crateのlib.rsはCargo targetを成立させる最小の宣言のみで、domain/adapter/Tauriアプリはまだ未接続。
+domain/adapterの製品機能はまだ未接続。2026-11-19にTauri hostの実行入口・build.rs・設定を追加し、
+既存UIをmock dev serverから表示する[mock shell](v3-desktop-mock-shell.md)まで起動できる。
 
 ## 採用一覧
 
@@ -22,7 +23,7 @@ crateのlib.rsはCargo targetを成立させる最小の宣言のみで、domain
 | infra/desktop      | tracing 0.1.44                     | 保存phase/要求/障害の診断。本文・秘密情報をlogへ出さない                                                           |
 | desktop            | tracing-subscriber 0.3.23          | fmt/env-filterのみ。subscriberの所有はhost                                                                         |
 | desktop            | tauri 2.12.5                       | Tauri 2安定版のhost。標準desktop runtime featuresを維持                                                            |
-| desktop build      | tauri-build 2.7.4                  | 後続のTauri設定/asset/capability build。今回はbuild.rs/config/実行入口をまだ作らない                               |
+| desktop build      | tauri-build 2.7.4                  | Tauri設定/asset/capability build。build.rs/configはmock shellで接続、capabilityは後続                              |
 | desktop            | tauri-plugin-dialog 2.8.4          | native入出力dialog。汎用filesystem RPCを自作しない。plugin登録・capabilityは後続                                   |
 | core/infra dev     | proptest 1.12.0                    | V01〜V13の生成/縮小/固定反例。stdのみ。crashは別process harnessで扱い、fork/timeout featureを先行導入しない        |
 
