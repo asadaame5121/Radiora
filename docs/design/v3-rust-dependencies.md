@@ -32,7 +32,8 @@ storageのLoro/rusqliteは既存PoCで検証した直接API版を維持する。
 size不一致による未初期化メモリ読出し）に対応するため、
 rusqliteだけを修正版を同梱する最小版0.41.1（libsqlite3-sys 0.39.1）へ上げた。
 この時点で製品のrusqlite利用はlegacy importerの読取り/archiveだけで、Loroは1.16.2のまま据え置く。
-保存sliceでV01/V11/V12を接続するときは、この版を前提に検証する。
+保存sliceでV01/V11/V12を接続するときは、この版を前提に検証する。 2026-11-20にloro 1.16.2/rusqlite
+0.41.1の製品利用を[workspace store](v3-workspace-store.md)（段階B）で開始した。
 同版でもfeature/transitive解決はPoCと異なり得るため、PoCの緑を製品lock全体へ転記しない。
 初回のlock解決ではloro-internal 1.17.1が選ばれ、Loro 1.16.2のcompileが失敗した。 Cargo.lockは cargo
 update -p loro-internal --precise 1.16.2 で互換版へ固定した。

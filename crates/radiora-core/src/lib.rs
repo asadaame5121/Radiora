@@ -1,4 +1,5 @@
-//! Pure domain rules, planners, and application ports. Product implementation is not yet connected.
+//! Pure domain rules, planners, and application ports.
 
+pub mod app;
 pub mod legacy;
 pub mod model;
