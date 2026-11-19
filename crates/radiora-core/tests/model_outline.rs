@@ -133,6 +133,28 @@ fn duplicate_issues_new_ids_and_remaps_references() {
     };
     assert_eq!(copied_target(inside), id(502));
     assert_eq!(copied_target(outside), id(2));
+    // Internal links in an owned body follow the same rule; labels, aliases and code stay.
+    let body = format!(
+        "see [C]({}) and [A]({}), not `{}`",
+        block_link_url(id(4)),
+        block_link_url(id(2)),
+        block_link_url(id(4))
+    );
+    let alias = PlainLabel::new("alias").unwrap();
+    let owned = BlockContent::Owned(OwnedContent {
+        markdown: body,
+        aliases: vec![alias.clone()],
+    });
+    let expected = OwnedContent {
+        markdown: format!(
+            "see [C]({}) and [A]({}), not `{}`",
+            block_link_url(id(502)),
+            block_link_url(id(2)),
+            block_link_url(id(4))
+        ),
+        aliases: vec![alias],
+    };
+    assert_eq!(owned.copied(&mapping), BlockContent::Owned(expected));
     // Issuing an existing ID is rejected without changing the outline.
     let before = outline.clone();
     assert_eq!(

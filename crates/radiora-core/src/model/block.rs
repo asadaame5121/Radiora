@@ -8,6 +8,7 @@
 //! Invariants that need the whole workspace (no reference chains, unique root membership) are
 //! checked by `resolve_reference` and the structure planners, and covered by property tests.
 use super::id::{BlockId, TrashEntryId};
+use super::markdown_links::remap_internal_links;
 use std::collections::BTreeMap;
 
 /// User-entered plain text (alias, reference-item heading). Whitespace-only values are not
@@ -85,12 +86,15 @@ pub enum BlockContent {
 
 impl BlockContent {
     /// Content for the copy of a Block, given the old→new mapping of the copied set.
-    /// Reference targets follow the mapping. Internal links inside Markdown follow the same rule,
-    /// but rewriting them needs the Markdown link extractor, so owned bodies are cloned as-is
-    /// here until that module exists.
+    /// Reference targets and internal links in the Markdown body follow the same rule: a target
+    /// inside the copied set follows the copy, one outside keeps the original. Aliases and link
+    /// labels are kept as written.
     pub fn copied(&self, copies: &BTreeMap<BlockId, BlockId>) -> Self {
         match self {
-            Self::Owned(content) => Self::Owned(content.clone()),
+            Self::Owned(content) => Self::Owned(OwnedContent {
+                markdown: remap_internal_links(&content.markdown, copies),
+                aliases: content.aliases.clone(),
+            }),
             Self::Reference(reference) => Self::Reference(reference.remapped(copies)),
         }
     }
