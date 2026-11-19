@@ -1,0 +1,28 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Radiora v3",
+	"identifier": "dev.radiora.v3",
+	"build": {
+		"devUrl": "http://127.0.0.1:5173",
+		"frontendDist": "../../dist"
+	},
+	"app": {
+		"windows": [
+			{
+				"label": "main",
+				"title": "Radiora v3 (mock shell)",
+				"width": 1280,
+				"height": 800,
+				"minWidth": 640,
+				"minHeight": 480
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"active": false,
+		"icon": ["../../src/Radiora_icon.ico", "../../src/Radiora_icon.png"]
+	}
+}

@@ -48,6 +48,10 @@ description = "Run tests for changed files; --staged selects staged paths (worki
 raw_args = true
 run = "deno run -A scripts/test_changed.ts"
 
+[tasks."desktop:mock"]
+description = "Open the v3 Tauri mock shell: the existing UI on the Vite mock server inside the radiora-desktop window"
+run = "deno run --allow-run=node,cargo --allow-net=127.0.0.1:5173 scripts/v3_desktop_mock.ts"
+
 [tasks."verify:rust:portable"]
 description = "Check core and infra without the desktop OS dependencies"
 run = [
