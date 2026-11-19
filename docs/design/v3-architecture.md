@@ -19,8 +19,9 @@ UI/runtime/保存方式の変更理由を分け、同じ公開操作をheadless 
 | radiora-desktop | Tauri invoke/通知、起動終了、adapterの組立                                                            | coreとinfraへ依存。Loro/SQLiteへ直接依存しない |
 | Frontend        | Svelte View、feature Controller、Workspace、draft/IME/focus、Svelte Flow/ELK接続                      | desktopのDTO境界                               |
 
-crate名とCargo workspaceは[製品Rust依存](v3-rust-dependencies.md)へ反映した。lib
-targetのみを置き、製品機能やTauri起動はまだ未接続。
+crate名とCargo workspaceは[製品Rust依存](v3-rust-dependencies.md)へ反映した。製品機能は未接続。
+Tauri hostは既存UIをmock dev
+serverから表示する[mock shell](v3-desktop-mock-shell.md)まで起動できる。
 portは実際のI/O・交換・障害注入の境界に限定し、包括的なCRUD storeを作らない。
 portの定義は利用するcore側が所有する。composition rootへdomain logicを置かない。
 
