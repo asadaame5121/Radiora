@@ -25,5 +25,7 @@ pub enum ImportError {
     SourceChanged,
     #[error("clock is before Unix epoch: {0}")]
     Clock(#[from] SystemTimeError),
+    #[error("value does not fit a SQLite INTEGER: {0}")]
+    IntegerRange(#[from] std::num::TryFromIntError),
 }
 pub type Result<T> = std::result::Result<T, ImportError>;

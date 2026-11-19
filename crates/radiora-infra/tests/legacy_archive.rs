@@ -309,13 +309,13 @@ fn invalid_payload_fixture_is_archived_with_one_diagnostic_per_quarantined_row()
         assert_eq!(hash.len(), 64);
     }
     for (table, expected) in &source.tables {
-        let (rows, bytes, hash): (u64, u64, String) = output.query_row(
+        let (rows, bytes, hash): (i64, i64, String) = output.query_row(
             "SELECT row_count,payload_bytes,sha256 FROM legacy_archive_summary WHERE \"table\"=?1",
             [table],
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )?;
         assert_eq!(
-            (rows, bytes, hash),
+            (u64::try_from(rows)?, u64::try_from(bytes)?, hash),
             (
                 expected.rows,
                 expected.payload_bytes,
