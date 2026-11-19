@@ -4,6 +4,8 @@
 mod block;
 mod id;
 mod link;
+mod markdown_links;
+mod naming;
 mod outline;
 mod relation;
 mod trash;
@@ -14,6 +16,8 @@ pub use block::{
 };
 pub use id::{BlockId, IdError, RelationId, TrashEntryId};
 pub use link::{BLOCK_LINK_PREFIX, LinkError, block_link_url, parse_block_link_url};
+pub use markdown_links::{InternalLink, internal_links, linked_targets, remap_internal_links};
+pub use naming::{add_alias, display_name, search_key};
 pub use outline::{InvariantViolation, Membership, Outline, Slot, StructureError};
 pub use relation::{
     BUILT_IN_TYPES, CardEdge, CardPair, Direction, EndpointState, Excluded, ExclusionReason,
