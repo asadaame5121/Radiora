@@ -1,3 +1,4 @@
-//! Loro, SQLite, and file adapters. Product implementation is not yet connected.
+//! Loro, SQLite, and file adapters.
 
 pub mod legacy;
+pub mod workspace;
