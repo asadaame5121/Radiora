@@ -1,9 +1,14 @@
-# v3 本文保存の中核（段階B1）
+# v3 本文保存の中核
 
-作成日: 2026-11-20。状態: 実装済み（`radiora-core::app`、`radiora-infra::workspace`）。
-開発データ用であり、#383の受入・G2承認ではない。
-段階Bの目標「文書を作り本文を保存し、再起動後に復元する」の保存部分。Tauri
-command・UIは後続のB3/B4で接続する。
+作成日: 2026-11-20。更新: 2026-11-20（位置づけを仮置きへ修正）。 状態:
+実装済み（`radiora-core::app`、`radiora-infra::workspace`）。**ただし文書モデルに関わる判断は仮置き。**
+開発データ用であり、#383・#385の受入、#381の決定、G2承認ではない。
+「文書を作り本文を保存し、再起動後に復元する」ための保存部分。
+
+**仮置きの判断（#381で決めるまで変更前提）:** `kind="block"`/`kind="reference"`と`owns_body`による
+本文所有の表現、版をworkspace全体の連番にする粒度、`applied_request`による再送の認識。
+これらは#381の文書モデル決定より先に実装したもので、合意済みの契約ではない。 Tauri
+command・UIとの接続はspike（`spike/v3-body-desktop`ブランチ、v3未merge）で試しただけである。
 
 ## 1. 責務の分担
 
@@ -51,7 +56,7 @@ Loro文書は[Legacy Importer設計](v3-legacy-import-mapping.md) §3の「Loro�
 | SQLite | `store_meta`（`format`、`schema_version`）、`snapshot`（1行、`through_seq`）、`updates`（AUTOINCREMENT）、`applied_request` |
 | Loro   | Map `meta`（`schemaVersion=1`、`workspaceId`）、Tree `blocks`（node metadataに`id`・`kind="block"`・LoroText `text`）       |
 
-段階Bが書くのは`kind="block"`だけ。`kind="reference"`は`BlockPresence::Live { owns_body: false }`として
+現状書くのは`kind="block"`だけ。`kind="reference"`は`BlockPresence::Live { owns_body: false }`として
 本文編集を`NoBody`で拒否するが、参照先本文の表示は未実装でreadは`Corrupt`になる。`aliases`、`trash`、`legacy`、
 `relations`、`relationTypes`、`deletedIds`はまだ書かず、未知のkindは推測せず`Corrupt`で拒否する。
 SQLiteとLoroのどちらかのschemaが`1`でなければ開かずに`SchemaMismatch`、他アプリのDBは`NotWorkspace`を返す。
@@ -81,10 +86,10 @@ G2前の開発データは互換を保証しない。形式を変えたら版を
 
 ## 5. 未対応（後続）
 
-- V01のN（実Tauriの縦断）はB3〜B5。commit直前/直後のkill、snapshot集約中断は#383。
+- V01のN（実Tauriの縦断）は#385。spikeでの手動確認は合否に数えない。commit直前/直後のkill、snapshot集約中断は#383。
 - snapshot集約と取込済みupdateの削除、`applied_request`の保持期間（#383）。
 - crash/停電、1万Block規模、WAL実容量の測定（#383）。
 - 共通Undo、構造操作、ゴミ箱/完全削除（T-07・#286）。commit originは`user:body-slice`。
-- Blockの検索は全node走査。補完・索引は段階C以降で別の派生索引にする。
-- 版はworkspace全体の粒度。複数paneの同時編集で不要な`StaleVersion`が出るため、段階Cで粒度を見直す。
-- 単一processの保証（二重起動の排他）とcoordinatorのthread間共有はdesktop側（B3）で扱う。
+- Blockの検索は全node走査。補完・索引は別の派生索引にする見込み（#385の後続）。
+- 版はworkspace全体の粒度。複数paneの同時編集で不要な`StaleVersion`が出る。粒度は#381/#385で決める。
+- 単一processの保証（二重起動の排他）とcoordinatorのthread間共有はdesktop側で扱う（#385）。

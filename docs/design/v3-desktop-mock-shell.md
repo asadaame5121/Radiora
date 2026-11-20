@@ -47,8 +47,9 @@ worktree外へ向けてから実行する。
 - **データ:** 何も保存しない。v2の`%LOCALAPPDATA%\RadioraV2`にも触れない。
 - **plugin:** `tauri-plugin-dialog`は依存のみで未登録。
 
-## 4. 次の段階
+## 4. 次の作業（未合意の見込み）
 
-段階B（最小の保存と再起動）では、`radiora-infra`の保存adapterと`radiora-core`の
-coordinatorを組み立て、本文sliceのcommandだけを公開する。v2の`RadioraBindings`をTauriへ
-写すことはしない（#385の決定）。
+#385の「invoke adapterと独立DTOを経由する」に従い、IPCはv2の`RadioraBindings`を写さず
+本文slice用の独立DTOで追加する見込み。既存Svelte UIを使うか最小画面を新設するか、
+command名・DTO・版の表現は#385の未決事項であり、ここでは決めない。
+見出しの「段階A」は作業上の区切りで、合意した計画ではない。
