@@ -4,25 +4,20 @@
 	"identifier": "dev.radiora.v3",
 	"build": {
 		"devUrl": "http://127.0.0.1:5173",
-		"frontendDist": "../../dist"
+		"frontendDist": "../../dist-v3"
 	},
 	"app": {
-		"windows": [
-			{
-				"label": "main",
-				"title": "Radiora v3 (mock shell)",
-				"width": 1280,
-				"height": 800,
-				"minWidth": 640,
-				"minHeight": 480
-			}
-		],
+		"windows": [],
 		"security": {
-			"csp": null
+			"csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+			"devCsp": null
 		}
 	},
 	"bundle": {
 		"active": false,
-		"icon": ["../../src/Radiora_icon.ico", "../../src/Radiora_icon.png"]
+		"icon": [
+			"../../src/Radiora_icon.ico",
+			"../../src/Radiora_icon.png"
+		]
 	}
 }

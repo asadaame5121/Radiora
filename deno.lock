@@ -14,6 +14,7 @@
     "npm:@stryker-mutator/core@9.6.1": "9.6.1_@types+node@22.20.5",
     "npm:@stryker-mutator/vitest-runner@9.6.1": "9.6.1_@stryker-mutator+core@9.6.1__@types+node@22.20.5_vitest@4.1.12__@types+node@22.20.5__@vitest+browser-playwright@4.1.12__@vitest+coverage-v8@4.1.12__vite@7.3.7___@types+node@22.20.5__@vitest+browser@4.1.12__playwright@1.58.2_@types+node@22.20.5_@vitest+browser@4.1.12__vitest@4.1.12__@types+node@22.20.5__@vitest+browser-playwright@4.1.12__@vitest+coverage-v8@4.1.12__playwright@1.58.2__vite@7.3.7___@types+node@22.20.5_@vitest+browser-playwright@4.1.12__playwright@1.58.2__vitest@4.1.12__@types+node@22.20.5__@vitest+coverage-v8@4.1.12__vite@7.3.7___@types+node@22.20.5_@vitest+coverage-v8@4.1.12__@vitest+browser@4.1.12__vitest@4.1.12__@types+node@22.20.5__@vitest+browser-playwright@4.1.12__vite@7.3.7___@types+node@22.20.5_playwright@1.58.2_vite@7.3.7__@types+node@22.20.5",
     "npm:@sveltejs/vite-plugin-svelte@^6.2.4": "6.2.4_svelte@5.56.8_vite@7.3.7__@types+node@22.20.5_@types+node@22.20.5",
+    "npm:@tauri-apps/api@2.12.4": "2.12.4",
     "npm:@types/d3@^7.4.3": "7.4.3",
     "npm:@types/node@^22.20.5": "22.20.5",
     "npm:@vitest/browser-playwright@4.1.12": "4.1.12_playwright@1.58.2_vitest@4.1.12_@types+node@22.20.5_@vitest+coverage-v8@4.1.12_vite@7.3.7__@types+node@22.20.5",
@@ -1626,6 +1627,9 @@
       "dependencies": [
         "tslib"
       ]
+    },
+    "@tauri-apps/api@2.12.4": {
+      "integrity": "sha512-pVmfis+4zT8H0Qhp3xPZx9Ju7kpzvA6rr/PSJPyuwfvucTQ8sVt61NYU9KMkK703UFlYadFmjKA4HhybOtN0gg=="
     },
     "@testing-library/dom@10.4.2": {
       "integrity": "sha512-yzr2S9HyAIdhz2/6qHgbs665Q7PKVcDF05vsOlHPxG1mo36gKVesdYVeDLnXgfjJ03CrKRk08knc6+E/9m8v2Q==",
@@ -4023,6 +4027,7 @@
         "npm:@stryker-mutator/core@9.6.1",
         "npm:@stryker-mutator/vitest-runner@9.6.1",
         "npm:@sveltejs/vite-plugin-svelte@^6.2.4",
+        "npm:@tauri-apps/api@2.12.4",
         "npm:@types/d3@^7.4.3",
         "npm:@types/node@^22.20.5",
         "npm:@vitest/browser-playwright@4.1.12",

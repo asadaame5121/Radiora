@@ -81,10 +81,10 @@ G2前の開発データは互換を保証しない。形式を変えたら版を
 
 ## 5. 未対応（後続）
 
-- V01のN（実Tauriの縦断）はB3〜B5。commit直前/直後のkill、snapshot集約中断は#383。
+- V01のN（実Tauriの縦断）は[段階B3〜B5](v3-body-slice-desktop.md)でCDPを使い手動で確認した（自動化は未接続）。commit直前/直後のkill、snapshot集約中断は#383。
 - snapshot集約と取込済みupdateの削除、`applied_request`の保持期間（#383）。
 - crash/停電、1万Block規模、WAL実容量の測定（#383）。
 - 共通Undo、構造操作、ゴミ箱/完全削除（T-07・#286）。commit originは`user:body-slice`。
 - Blockの検索は全node走査。補完・索引は段階C以降で別の派生索引にする。
 - 版はworkspace全体の粒度。複数paneの同時編集で不要な`StaleVersion`が出るため、段階Cで粒度を見直す。
-- 単一processの保証（二重起動の排他）とcoordinatorのthread間共有はdesktop側（B3）で扱う。
+- 単一processの排他とcoordinatorのthread間共有は[desktop側](v3-body-slice-desktop.md)で実装した。

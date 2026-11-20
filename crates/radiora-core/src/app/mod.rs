@@ -8,7 +8,7 @@ mod planner;
 mod port;
 mod view;
 
-pub use command::{DocumentCommand, Fingerprint, Request, RequestId};
+pub use command::{DocumentCommand, Fingerprint, InvalidRequestId, Request, RequestId};
 pub use coordinator::{CommandError, DocumentCoordinator, Saved};
 pub use planner::{DocumentChange, PlanError, plan};
 pub use port::{ApplyFailure, BlockPresence, DocumentStore, Receipt, StoreFailure};

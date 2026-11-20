@@ -1,0 +1,13 @@
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "main",
+	"description": "The body-slice commands for the main window only. No plugin or filesystem permission.",
+	"windows": ["main"],
+	"permissions": [
+		"allow-workspace-view",
+		"allow-new-block-id",
+		"allow-create-document",
+		"allow-update-body",
+		"allow-retry-save"
+	]
+}

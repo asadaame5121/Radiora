@@ -18,5 +18,9 @@ tauri-plugin-dialog.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
+[features]
+# Embeds dist-v3 and serves it over Tauri's protocol instead of the Vite devUrl.
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build.workspace = true

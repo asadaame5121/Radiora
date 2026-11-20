@@ -1,6 +1,9 @@
 use crate::model::BlockId;
 use std::fmt;
+use std::str::FromStr;
 use uuid::Uuid;
+
+const HYPHENATED_LEN: usize = 36;
 
 /// Client-issued identity of one request, used only to recognise a resent request.
 /// Any UUID version is accepted; it is not a logical ID.
@@ -22,6 +25,26 @@ impl fmt::Display for RequestId {
         self.0.hyphenated().fmt(f)
     }
 }
+
+/// Accepts only the hyphenated UUID form (any version), as sent across the IPC boundary.
+impl FromStr for RequestId {
+    type Err = InvalidRequestId;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        if text.len() != HYPHENATED_LEN {
+            return Err(InvalidRequestId(
+                text.chars().take(HYPHENATED_LEN).collect(),
+            ));
+        }
+        Uuid::try_parse(text)
+            .map(Self)
+            .map_err(|_| InvalidRequestId(text.to_owned()))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("request ID must be a hyphenated UUID: {0:?}")]
+pub struct InvalidRequestId(String);
 
 /// Document commands of the stage B body slice.
 #[derive(Debug, Clone, PartialEq, Eq)]

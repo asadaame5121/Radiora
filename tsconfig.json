@@ -13,5 +13,12 @@
 		"skipLibCheck": true,
 		"types": ["svelte"]
 	},
-	"include": ["src/domain/**/*.ts", "src/shared/**/*.ts", "src/ui/**/*.ts", "src/ui/**/*.svelte"]
+	"include": [
+		"src/domain/**/*.ts",
+		"src/shared/**/*.ts",
+		"src/ui/**/*.ts",
+		"src/ui/**/*.svelte",
+		"src/v3/**/*.ts",
+		"src/v3/**/*.svelte"
+	]
 }
