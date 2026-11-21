@@ -257,7 +257,10 @@ Query/関係サジェスト、Chronology、bookmark等の専用一覧、OPML/Mar
 共通履歴の[追加Rust fixture検証](../../spikes/loro-purge/shared-undo-results.md)では、
 複数pane由来の本文編集、Tree移動/切り出し/削除復元、複合split、SQLite保存失敗/retry、
 完全削除後の履歴resetを13件の公開操作testで確認した。
-製品UI・focus/IME、crash復旧、規模性能、共通履歴版Alloyは未検証であり、#383全体の完了とはしない。
+製品UI・focus/IME、crash復旧、規模性能は未検証であり、#383全体の完了とはしない。
+共通履歴版Alloyは2026-10-31にA01（27
+command）で有界検査した（[記録](../../spikes/document-model-alloy/v3-results.md)）。
+有界scopeの検査であり、Loro/SQLite/OSの実装検証や製品の合格ではない。
 
 ## 4. #384：旧データとLegacy Importer
 
