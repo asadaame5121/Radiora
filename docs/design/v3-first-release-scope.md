@@ -54,17 +54,17 @@ F01/F02/F04/F06/F12へ反映した。各操作の詳細は[v3決定事項](v3-mo
 
 ## 3. 後続へ送る機能と最低保護
 
-| 機能・対象Issue                                               | 初回の扱い                                                               | 初回にも残す最低保証                                                                 |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| Query・ルールエンジン #236/#269                               | 後続。通常検索を先に提供し、Prolog等の同梱を初回へ入れない               | 保存済みquery/定義/設定は未変換を含めarchiveへ保持し、原recordを読出し/exportできる  |
-| 関係サジェスト・判断理由再利用 #235/#288                      | 後続。候補生成/理由必須UIは出さず、理由なしの手動Relation作成を妨げない  | 提案根拠と利用者の判断理由を区別して保持。対象ID/日時/状態とともに読出し/export      |
-| 曖昧検索・同義語辞書・高度ranking                             | 後続。別名による直接検索を初回に提供                                     | 旧辞書/検索設定は別名へ勝手に再解釈せず、元の値を保護                                |
-| Chronology・歴史年代timeline                                  | 後続の画面。初回の主表示はOutline＋縦Lineage                             | 既存の年代・精度・calendar・型/由来のmetadataを保持し、原record読出し/export         |
-| bookmark・Recent/Today等の専用一覧                            | 後続。初回は検索/内部リンク/共通navigationで移動                         | 保存済み対象ID/順序/日時/設定を保持。存在しない対象もMissingとして識別               |
-| OPML import/export・Markdown import・外部ツール向け出力       | 後続。初回はnative backup往復と閲覧用Markdown export                     | 既存OPML拡張・入出力設定等の保存情報は保護。対応していない入出力を無損失と表示しない |
-| Revision/Recovery/Branch/Mergeの専用操作・比較UI              | v2完全再現と全Revisionの通常Topic表示は初回対象外。新たな版/復旧UIは後続 | #384の実体化/archive契約で本文・ID・日時・参照を保護。過去情報を共通Undoへ置換しない |
-| 高度なLOD/cluster・系譜Hoist・minimap・接続drag・自由座標保存 | 後続。初回はfilter/カード開閉/明示移動で範囲を扱う                       | 旧保存設定は保護。engineの座標を文書やRelationの正本にしない                         |
-| 全ゴミ箱一括purge                                             | 後続。初回は確認した単一ゴミ箱項目の対象集合を扱う                       | 独立したゴミ箱項目・既削除子の区別を保持し、一括削除を単一項目へ暗黙拡張しない       |
+| 機能・対象Issue                                               | 初回の扱い                                                               | 初回にも残す最低保証                                                                                                        |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Query・ルールエンジン #236/#269                               | 後続。通常検索を先に提供し、Prolog等の同梱を初回へ入れない               | 保存済みquery/定義/設定は未変換を含めarchiveへ保持し、原recordを読出し/exportできる                                         |
+| 関係サジェスト・判断理由再利用 #235/#288                      | 後続。候補生成/理由必須UIは出さず、理由なしの手動Relation作成を妨げない  | 提案根拠と利用者の判断理由を区別して保持。対象ID/日時/状態とともに読出し/export                                             |
+| 曖昧検索・同義語辞書・高度ranking                             | 後続。別名による直接検索を初回に提供                                     | 旧辞書/検索設定は別名へ勝手に再解釈せず、元の値を保護                                                                       |
+| Chronology・歴史年代timeline                                  | 後続の画面。初回の主表示はOutline＋縦Lineage                             | 既存の年代・精度・calendar・型/由来のmetadataを保持し、原record読出し/export                                                |
+| bookmark・Recent/Today等の専用一覧                            | 後続。初回は検索/内部リンク/共通navigationで移動                         | 保存済み対象ID/順序/日時/設定を保持。存在しない対象もMissingとして識別                                                      |
+| OPML import/export・Markdown import・外部ツール向け出力       | 後続。初回はnative backup往復と閲覧用Markdown export                     | 旧DBに該当recordは無く、保護対象のデータは無い。対応していない入出力を無損失と表示しない                                    |
+| Revision/Recovery/Branch/Mergeの専用操作・比較UI              | v2完全再現と全Revisionの通常Topic表示は初回対象外。新たな版/復旧UIは後続 | #384の実体化/archive契約で本文・ID・日時・参照を保護。過去情報を共通Undoへ置換しない                                        |
+| 高度なLOD/cluster・系譜Hoist・minimap・接続drag・自由座標保存 | 後続。初回はfilter/カード開閉/明示移動で範囲を扱う                       | DBに保存された旧情報はarchiveで保護。localStorageの旧UI設定は初回では保護しない。engineの座標を文書やRelationの正本にしない |
+| 全ゴミ箱一括purge                                             | 後続。初回は確認した単一ゴミ箱項目の対象集合を扱う                       | 独立したゴミ箱項目・既削除子の区別を保持し、一括削除を単一項目へ暗黙拡張しない                                              |
 
 archive保護は個別機能の再実装を要求しない。
 初回にはarchiveの種別/件数/保存形式/未変換理由の一覧と、原recordを読取り専用で確認・取り出す導線を設ける。
@@ -72,6 +72,34 @@ archive保護は個別機能の再実装を要求しない。
 backup→空DB復元→再exportで情報を照合する。
 通常検索でarchiveまで黙って混ぜず、「現在の文書」と「旧保留情報」を区別して閲覧する。
 archiveの具体形式・全record写像・未対応値の扱いは#384の未決を解消してから実装する。
+
+### 3.1 保留情報の最低保証の確定（2026-11-21）
+
+ユーザーが採用した。archive層は[Legacy対応設計](v3-legacy-import-mapping.md)§1の`legacy_archive`
+（旧17 table＋metadataの全件verbatim copy）を指す。
+
+| 後続機能                 | 旧table / v3での保持場所                                                                                  | 最低保証                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Query・ルールエンジン    | `saved_rule_query`→archive                                                                                | 一覧・原文閲覧・export                             |
+| 関係サジェスト・判断理由 | `emergence_suggestion`/`emergence_feedback`→archive。v3の手動Relationの`reason`はLoro                     | 提案と判断を区別したまま閲覧・export               |
+| 曖昧検索・同義語         | `search_alias`→archive（別名へ変換しない）                                                                | 閲覧・export                                       |
+| Chronology               | 年代metadata→該当Blockの`legacy`（Loro）。原recordはarchive                                               | Blockとともにnative backup往復。原文は閲覧・export |
+| bookmark・Recent         | `bookmark`/`resume_position`→archive                                                                      | 閲覧・export。対象が無ければMissingと識別          |
+| 版・復旧UI               | `revision`/`branch`/`working_copy`/`recovery_snapshot`→archive。参照されたRevisionはBlockへ実体化（#384） | 閲覧・export                                       |
+| 高度なTree操作           | `knot`/`system_relation`→archive（v3は再計算し使わない）                                                  | 閲覧・export                                       |
+| OPML・入出力             | 該当DB recordなし                                                                                         | 保護対象なし。無損失と表示しない                   |
+
+- 閲覧: table別の件数・保存形式・未変換理由の一覧と、原文の読取り専用表示。通常検索へ混ぜない。
+- export: archiveをJSON
+  Linesで出力する。1行に`table`・`legacy_id`・`position`・`payload`（原文）・行hashを持ち、
+  `import_run`の旧DB hashを添える。
+- backup: native
+  backupにarchive・旧ID対応表・診断を含め、空DB復元→再exportで件数・hashが一致することを確認する。
+- 完全削除: 初回のv3完全削除はarchiveに触れない。旧データ由来のBlockを完全削除する確認画面で
+  「旧版archiveに原本が残る」と示す。archive自体の削除は旧DBの保管終了（G3）と同じ別判断とし、初回では提供しない。
+- 範囲:
+  保護対象はDBに保存された情報に限る。localStorageの旧UI設定（Tree座標・LOD・表示設定・テーマ等）は
+  初回では保護しない。archiveはG3の判断まで保持し、自動期限切れ・圧縮破棄をしない。
 
 ## 4. 維持する初回対象外と承認境界
 

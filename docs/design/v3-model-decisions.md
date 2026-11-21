@@ -188,6 +188,10 @@ Query/関係サジェスト、Chronology、bookmark等の専用一覧、OPML/Mar
 F01（本文版の競合判定）、F02（root末尾Enterで最初の子・行頭Backspace結合）、F04（参照項目の配置操作・rootにしない）、
 F06（文書一覧は表示側の並べ替え）、F12（参照項目先頭の復元）を追記した。#235/#236はTauri初回では後続。
 
+同日、保留情報の最低保証を[初回提供範囲§3.1](v3-first-release-scope.md#31-保留情報の最低保証の確定2026-11-21)で確定した。
+後続機能ごとの旧table/保持場所、archiveの閲覧・JSON Lines export・native backup往復、
+初回の完全削除はarchiveに触れず確認画面で原本残存を示すこと、localStorageの旧UI設定は保護対象外であることを定めた。
+
 ### 維持する初回対象外
 
 初回対象外:
