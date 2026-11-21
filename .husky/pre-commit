@@ -1,2 +1,8 @@
 pnpm exec lint-staged
-deno task verify
+
+# Markdownだけのcommitでは重いverifyを省く（lint-stagedのdeno fmtは上で実行済み）。
+if git diff --cached --name-only | grep -qv '\.md$'; then
+	deno task verify
+else
+	echo "pre-commit: Markdown only; skipping deno task verify"
+fi
