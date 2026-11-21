@@ -91,5 +91,5 @@ G2前の開発データは互換を保証しない。形式を変えたら版を
 - crash/停電、1万Block規模、WAL実容量の測定（#383）。
 - 共通Undo、構造操作、ゴミ箱/完全削除（T-07・#286）。commit originは`user:body-slice`。
 - Blockの検索は全node走査。補完・索引は別の派生索引にする見込み（#385の後続）。
-- 版はworkspace全体の粒度。複数paneの同時編集で不要な`StaleVersion`が出る。粒度は#381/#385で決める。
+- 版はworkspace全体の粒度。複数paneの同時編集で不要な`StaleVersion`が出る。2026-11-21に、本文はBlock単位の本文版、構造操作は前提条件で判定すると決定した（[v3決定事項](v3-model-decisions.md)「競合判定の単位・本文版の採用契約」）。実装の置換は#383/#385。
 - 単一processの保証（二重起動の排他）とcoordinatorのthread間共有はdesktop側で扱う（#385）。
