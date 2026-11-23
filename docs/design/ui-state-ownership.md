@@ -1,5 +1,8 @@
 # UI state ownership・writer・寿命
 
+> **v3での位置づけ（2026-11-23）**:
+> 本書はv2現行実装の契約である。v3では[ADR 0004](../adr/0004-v3-loro-workspace-source-of-truth.md)と[v3決定事項](v3-model-decisions.md)を正本とし、本書の書換えは該当する実装PRで行う。
+
 2026-10-04。Issue [#295](https://github.com/asadaame5121/Radiora/issues/295)、親Issue
 [#294](https://github.com/asadaame5121/Radiora/issues/294) の実装契約。 照合基点は main
 `b208ea0a495ac39c62c78fb833bc6c141a2155cb`（PR #302反映後）。 Issue本文に記録された「Radiora State

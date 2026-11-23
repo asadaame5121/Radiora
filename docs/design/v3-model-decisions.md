@@ -192,6 +192,9 @@ F06（文書一覧は表示側の並べ替え）、F12（参照項目先頭の�
 後続機能ごとの旧table/保持場所、archiveの閲覧・JSON Lines export・native backup往復、
 初回の完全削除はarchiveに触れず確認画面で原本残存を示すこと、localStorageの旧UI設定は保護対象外であることを定めた。
 
+2026-11-23、main ADR
+0003（編集セッション限定のLoro導入、Proposed）を置き換える[ADR 0004](../adr/0004-v3-loro-workspace-source-of-truth.md)を採用した。0003の決定1〜10を置換/維持/精密化に分け、v2現行実装の設計契約（ui-state-ownership等4本）には注記だけを置き、書換えは実装PRで行う。
+
 ### 維持する初回対象外
 
 初回対象外:
