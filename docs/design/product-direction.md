@@ -10,6 +10,9 @@ tags:
 
 # Radiora v2 製品方向性・機能仕様
 
+> **v3での位置づけ（2026-11-23）**:
+> 本書はv2現行実装の契約である。v3では[ADR 0004](../adr/0004-v3-loro-workspace-source-of-truth.md)と[v3決定事項](v3-model-decisions.md)を正本とし、本書の書換えは該当する実装PRで行う。
+
 ## 1. この文書の目的
 
 この文書は、Radioraの製品モデル、実装済みPoCの境界、および将来の方向性を記録する。

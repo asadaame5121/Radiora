@@ -300,6 +300,8 @@ main `8acc2af`のADR
 IDを永続化しない」も、「binary内部には含まれるが、業務ID・RPC
 IDとして公開しない」へ精密化が必要。本worktreeにないmain側の文書を移行済みとして書き換えない。
 
+2026-11-23、この置換関係を[ADR 0004](../adr/0004-v3-loro-workspace-source-of-truth.md)に記録した（#382）。
+
 先行PoCの再現条件・障害注入・1万件測定は[調査ノート§4](loro-backend-migration-research.md#4-先行pocの仕様未実装)に定義する。計画更新の完了と、この検証の合格を区別する。
 
 ## 7. 段階計画と完了条件

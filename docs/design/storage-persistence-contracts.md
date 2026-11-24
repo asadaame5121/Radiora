@@ -12,6 +12,9 @@ tags:
 
 # Radiora 永続化契約・保存復元対応表 (S0)
 
+> **v3での位置づけ（2026-11-23）**:
+> 本書はv2現行実装の契約である。v3では[ADR 0004](../adr/0004-v3-loro-workspace-source-of-truth.md)と[v3決定事項](v3-model-decisions.md)を正本とし、本書の書換えは該当する実装PRで行う。
+
 ## 1. 目的
 
 本書は、リファクタリング計画 S（Memory / SQLite / JSON Storage）の着手前提として、 `GraphStore`
