@@ -28,7 +28,7 @@ const outlineRowItem = await readFile(
 test("outline provides non-button Zoom and preserves an explicit return path", () => {
 	expect(app).toMatch(/function hoistOccurrence\(id: string\)/);
 	expect(outlineRowItem).toMatch(
-		/ondblclick=\{\(\) => handlers\.hoistOccurrence\(row\.item\.id\)\}/,
+		/ondblclick=\{\(\) => hoist\?\.hoistOccurrence\(row\.item\.id\)\}/,
 	);
 	expect(app).toMatch(/if \(browsingLocation\.hoistOccurrenceId\)/);
 	expect(app).toMatch(/requestClearHoist/);

@@ -1,8 +1,9 @@
 import type { OutlineItem, OutlineSnapshot } from "../domain/models.ts";
 import type { BrowsingOutlineProjection } from "../services/browsing_navigation_state.ts";
+import type { OutlineRowSource } from "./outline_row_source.ts";
 
-export type VisibleRow = {
-	item: OutlineItem;
+export type VisibleRow<T extends OutlineRowSource = OutlineItem> = {
+	item: T;
 	depth: number;
 	hasChildren: boolean;
 	stash: boolean;

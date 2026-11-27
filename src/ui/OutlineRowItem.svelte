@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang="ts" generics="T extends OutlineRowSource">
 	import type { RelationTypeDefinition } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { VisibleRow } from "./outline_view_model.ts";
@@ -9,6 +9,7 @@
 	import type {
 		OutlineHelpers,
 		OutlineRowHandlers,
+		OutlineRowSource,
 	} from "./outline_row_types.ts";
 	import IconButton from "./primitives/IconButton.svelte";
 	import MarkdownEditor from "./MarkdownEditor.svelte";
@@ -30,15 +31,15 @@
 		onRowElement = () => undefined,
 		accessibility,
 	}: {
-		row: VisibleRow;
+		row: VisibleRow<T>;
 		selectedId: string | null;
 		draggedId: string | null;
 		vocabulary: UiVocabulary;
 		internalReferenceCompletion: InternalReferenceCompletionState | null;
 		inlineLinkCompletion: InlineLinkCompletionState | null;
 		relationTypeDefinitions?: readonly RelationTypeDefinition[];
-		handlers: OutlineRowHandlers;
-		helpers: OutlineHelpers;
+		handlers: OutlineRowHandlers<T>;
+		helpers: OutlineHelpers<T>;
 		onDragStart: (id: string) => void;
 		onDragEnd: () => void;
 		onRowElement?: (id: string, element: HTMLElement | null) => void;
@@ -48,8 +49,17 @@
 	let rowElement = $state<HTMLElement | null>(null);
 	const REFERENCE_PREFIX_LENGTH = 8;
 
-	const inlineLinks = $derived(helpers.inlineSemanticLinksFor(row.item.text));
-	const annotations = $derived(helpers.semanticLinkAnnotationsFor(row.item.id));
+	const NO_INLINE_LINKS = { candidates: [], diagnostics: [] } as const;
+	const editing = $derived(handlers.editing);
+	const drag = $derived(handlers.drag);
+	const hoist = $derived(handlers.hoist);
+	const contextMenu = $derived(handlers.contextMenu);
+	const completion = $derived(handlers.completion);
+	const references = $derived(handlers.references);
+	const annotationHelpers = $derived(helpers.annotations);
+	const inlineLinks = $derived(annotationHelpers?.inlineSemanticLinksFor(row.item.text) ?? NO_INLINE_LINKS);
+	const annotations = $derived(annotationHelpers?.semanticLinkAnnotationsFor(row.item.id) ?? []);
+	const referenceChips = $derived(annotationHelpers?.referencesIn(row.item.text) ?? []);
 	const rowBody = $derived(helpers.bodyFor(row.item));
 	// Notify the observer of this row ID/DOM binding; cleanup unobserves replaced/unmounted rows.
 	$effect(() => {
@@ -68,7 +78,7 @@
 	style={`--depth:${row.depth}`}
 	onfocusout={(event) => {
 		if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
-		handlers.discardUntouchedEmptyItem(row.item.id);
+		editing?.discardUntouchedEmptyItem(row.item.id);
 	}}
 	role="treeitem"
 	aria-selected={selectedId === row.item.id}
@@ -77,16 +87,16 @@
 	aria-setsize={accessibility?.size}
 	aria-expanded={row.hasChildren ? !row.item.collapsed : undefined}
 	tabindex="-1"
-	oncontextmenu={(event) => handlers.openOccurrenceContextMenu(row.item.id, "outline", event)}
-	onkeydown={(event) => handlers.handleOccurrenceContextMenuKeydown(row.item.id, "outline", event)}
-	draggable="true"
-	ondragstart={() => onDragStart(row.item.id)}
+	oncontextmenu={(event) => contextMenu?.openOccurrenceContextMenu(row.item.id, "outline", event)}
+	onkeydown={(event) => contextMenu?.handleOccurrenceContextMenuKeydown(row.item.id, "outline", event)}
+	draggable={drag ? "true" : "false"}
+	ondragstart={() => { if (drag) onDragStart(row.item.id); }}
 	ondragend={onDragEnd}
 	onmousedown={(event) => {
 		if (event.target === event.currentTarget) handlers.deselectFromBlank(event);
 	}}
 	ondragover={(event) => event.preventDefault()}
-	ondrop={() => handlers.dropOn(row.item)}
+	ondrop={() => drag?.dropOn(row.item)}
 >
 	<IconButton
 		class={`disclosure${row.hasChildren ? "" : " hidden"}`}
@@ -100,50 +110,54 @@
 		aria-label={`${vocabulary.work}を選択`}
 		title={`ダブルクリックでこの${vocabulary.work}に${vocabulary.hoist}`}
 		onclick={() => handlers.selectOccurrence(row.item.id)}
-		ondblclick={() => handlers.hoistOccurrence(row.item.id)}
+		ondblclick={() => hoist?.hoistOccurrence(row.item.id)}
 	>•</button>
 	<div class="internal-reference-editor">
-		<MarkdownEditor
-			value={row.item.text}
-			itemId={row.item.id}
-			onFocus={() => { if (selectedId !== row.item.id) handlers.selectOccurrence(row.item.id); }}
-			onChange={(_value, textarea) => handlers.updateLocalText(row.item.id, textarea)}
-			onSelectionChange={(textarea) => handlers.updateEditorSelection(row.item.id, textarea)}
-			onKeydown={(event, textarea, compositionGuard) =>
-				handlers.handleKeydown(event, row, textarea, compositionGuard)}
-			onInternalReference={handlers.openEditorInternalReference}
-		/>
+		{#if editing}
+			<MarkdownEditor
+				value={row.item.text}
+				itemId={row.item.id}
+				onFocus={() => { if (selectedId !== row.item.id) handlers.selectOccurrence(row.item.id); }}
+				onChange={(_value, textarea) => editing.updateLocalText(row.item.id, textarea)}
+				onSelectionChange={(textarea) => editing.updateEditorSelection(row.item.id, textarea)}
+				onKeydown={(event, textarea, compositionGuard) =>
+					editing.handleKeydown(event, row, textarea, compositionGuard)}
+				onInternalReference={editing.openEditorInternalReference}
+			/>
+		{:else}
+			<p class="row-text">{row.item.text}</p>
+		{/if}
 		{#if rowBody && selectedId !== row.item.id}
 			<p class="row-body-preview">{rowBody.replace(/\s+/gu, " ").trim()}</p>
 		{/if}
-		{#if internalReferenceCompletion && internalReferenceCompletion.itemId === row.item.id}
+		{#if completion && internalReferenceCompletion && internalReferenceCompletion.itemId === row.item.id}
 			<InternalReferenceCompletion
 				completion={internalReferenceCompletion}
 				{vocabulary}
-				onSelect={(candidate) => handlers.applyInternalReferenceCompletion(row.item.id, candidate)}
+				onSelect={(candidate) => completion.applyInternalReferenceCompletion(row.item.id, candidate)}
 			/>
 		{/if}
-		{#if inlineLinkCompletion && inlineLinkCompletion.itemId === row.item.id}
+		{#if completion && inlineLinkCompletion && inlineLinkCompletion.itemId === row.item.id}
 			<InlineLinkCompletion
 				completion={inlineLinkCompletion}
 				itemTitle={helpers.titleFor(row.item)}
 				{vocabulary}
 				{relationTypeDefinitions}
-				onSearch={(query) => void handlers.updateInlineLinkSearch(row.item.id, query)}
-				onKeydown={(event) => handlers.handleInlineLinkOmniKeydown(event, row.item.id)}
-				onSelectCandidate={(candidate) => handlers.selectInlineLinkCandidate(row.item.id, candidate)}
-				onCreateTarget={() => void handlers.createInlineLinkTarget(row.item.id)}
-				onSelectType={(type) => handlers.selectInlineLinkType(row.item.id, type)}
-				onSetDirection={(direction) => handlers.setInlineLinkDirection(row.item.id, direction)}
-				onCommit={() => void handlers.commitInlineLink(row.item.id)}
+				onSearch={(query) => void completion.updateInlineLinkSearch(row.item.id, query)}
+				onKeydown={(event) => completion.handleInlineLinkOmniKeydown(event, row.item.id)}
+				onSelectCandidate={(candidate) => completion.selectInlineLinkCandidate(row.item.id, candidate)}
+				onCreateTarget={() => void completion.createInlineLinkTarget(row.item.id)}
+				onSelectType={(type) => completion.selectInlineLinkType(row.item.id, type)}
+				onSetDirection={(direction) => completion.setInlineLinkDirection(row.item.id, direction)}
+				onCommit={() => void completion.commitInlineLink(row.item.id)}
 			/>
 		{/if}
-		{#if helpers.referencesIn(row.item.text).length}
+		{#if references && referenceChips.length}
 			<section class="internal-reference-chips" aria-label={vocabulary.internalReference}>
-				{#each helpers.referencesIn(row.item.text) as reference (reference.range.start)}
+				{#each referenceChips as reference (reference.range.start)}
 					<button
 						type="button"
-						onclick={() => handlers.openInternalReference(
+						onclick={() => references.openInternalReference(
 							row.item.text,
 							reference.scope,
 							reference.id,
@@ -156,10 +170,10 @@
 				{/each}
 			</section>
 		{/if}
-		{#if inlineLinks.candidates.length || inlineLinks.diagnostics.length}
+		{#if references && (inlineLinks.candidates.length || inlineLinks.diagnostics.length)}
 			<section class="inline-semantic-links" aria-label="本文中の関係候補">
 				{#each inlineLinks.candidates as candidate (candidate.start)}
-					<button type="button" class="inline-candidate-btn" onclick={() => void handlers.inspectInlineSemanticLink(candidate)}>
+					<button type="button" class="inline-candidate-btn" onclick={() => void references.inspectInlineSemanticLink(candidate)}>
 						<span>{candidate.source} · {candidate.type} · {candidate.target}</span>
 						{#if candidate.reason}<small>「{candidate.reason}」</small>{/if}
 					</button>
@@ -173,7 +187,7 @@
 			<section class="semantic-link-annotations" aria-label="関係注釈">
 				{#each annotations as annotation (annotation.linkId)}
 					<p>
-						<span aria-hidden="true">┄ {helpers.annotationDirection(annotation)}</span>
+						<span aria-hidden="true">┄ {annotationHelpers?.annotationDirection(annotation)}</span>
 						<strong>{annotation.type}</strong>
 						<span>{annotation.otherDisplayName}</span>
 						<small>「{annotation.reason}」</small>
@@ -214,6 +228,12 @@
 	.internal-reference-editor {
 		position: relative;
 		min-width: 0;
+	}
+	.row-text {
+		margin: 0;
+		padding: 2px 0;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 	.row-body-preview {
 		margin: 2px 0 0;

@@ -1372,40 +1372,44 @@
 	}
 
 	const outlineHelpers = $derived<OutlineHelpers>({
-		inlineSemanticLinksFor,
-		semanticLinkAnnotationsFor,
 		bodyFor,
 		titleFor,
-		referencesIn,
-		annotationDirection,
+		annotations: {
+			inlineSemanticLinksFor,
+			semanticLinkAnnotationsFor,
+			referencesIn,
+			annotationDirection,
+		},
 	});
 
 	const outlineHandlers: OutlineRowHandlers = {
-		openOccurrenceContextMenu,
-		handleOccurrenceContextMenuKeydown,
 		deselectFromBlank,
-		dropOn: outlineDrag.dropOn,
 		toggle: (row) => {
 			const current = captureOutlineRequest();
 			void toggle(row).catch((cause) => { if (current()) error = errorMessage(cause); });
 		},
 		selectOccurrence,
-		hoistOccurrence,
-		updateLocalText,
-		updateEditorSelection,
-		discardUntouchedEmptyItem: pendingEmptyItemController.discard,
-		handleKeydown,
-		openEditorInternalReference,
-		applyInternalReferenceCompletion,
-		updateInlineLinkSearch,
-		handleInlineLinkOmniKeydown,
-		selectInlineLinkCandidate,
-		createInlineLinkTarget,
-		selectInlineLinkType,
-		setInlineLinkDirection,
-		commitInlineLink,
-		openInternalReference,
-		inspectInlineSemanticLink,
+		editing: {
+			updateLocalText,
+			updateEditorSelection,
+			discardUntouchedEmptyItem: pendingEmptyItemController.discard,
+			handleKeydown,
+			openEditorInternalReference,
+		},
+		drag: { dropOn: outlineDrag.dropOn },
+		hoist: { hoistOccurrence },
+		contextMenu: { openOccurrenceContextMenu, handleOccurrenceContextMenuKeydown },
+		completion: {
+			applyInternalReferenceCompletion,
+			updateInlineLinkSearch,
+			handleInlineLinkOmniKeydown,
+			selectInlineLinkCandidate,
+			createInlineLinkTarget,
+			selectInlineLinkType,
+			setInlineLinkDirection,
+			commitInlineLink,
+		},
+		references: { openInternalReference, inspectInlineSemanticLink },
 	};
 </script>
 
