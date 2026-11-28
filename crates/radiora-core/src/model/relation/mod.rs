@@ -3,11 +3,12 @@
 //! Endpoints may be Topic roots, ordinary Blocks or reference items. A Relation to a reference
 //! item belongs to that item and is never re-targeted to the body owner. Internal body links are
 //! a separate feature and are never converted into Relations.
+mod lineage;
 mod projection;
 
 pub use projection::{
-    CardEdge, CardPair, EndpointState, Excluded, ExclusionReason, Lineage, TopicProjection,
-    lineage, project_to_topics,
+    Card, CardEdge, CardPair, CardPlacement, EndpointState, ExclusionReason, RelationTrace,
+    TopicBlock, VerticalTree, project_vertical_tree,
 };
 
 use super::id::{BlockId, RelationId};
@@ -78,9 +79,20 @@ pub struct RelationTypeDefinition {
     pub name: RelationTypeName,
     pub direction: Direction,
     pub built_in: bool,
-    /// Relations of this type advance the lineage generation. They are stored as
-    /// `derived TYPE origin` (e.g. `New FROM Old`) and displayed origin → derived.
+    /// Directed Relations of this type advance the lineage generation. The origin is drawn on
+    /// top: the stored target for FROM (`New FROM Old`), the stored source for every other type
+    /// (adopted 2026-11-27, #409). Symmetric types never advance generations.
     pub advances_generation: bool,
+}
+
+/// The only type whose stored direction is `derived TYPE origin`.
+const FROM_TYPE: &str = "FROM";
+
+impl RelationTypeDefinition {
+    /// Whether the display direction is the reverse of the stored `source → target`.
+    pub fn display_reversed(&self) -> bool {
+        self.built_in && self.name.as_str() == FROM_TYPE
+    }
 }
 
 /// Built-in types carried over from v2: name, direction, advances generation.

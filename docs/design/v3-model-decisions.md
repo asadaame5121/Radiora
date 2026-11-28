@@ -265,6 +265,9 @@ PDSへの暗号化backupは移植完了後の将来案であり、初回scopeや
 ### 残る実装・検証
 
 - Relation投影・filter前の世代/SCC、カード内循環とTopic投影上の循環の区別をfixtureで検証する。
+  純粋計算の投影とfixture/PBTは#409
+  V0で追加（[実装計画 §9](vertical-tree-implementation-plan.md#9-今回確認した範囲と残作業)）。v3
+  read modelへの接続はV2。
 - SQLite設定の再起動保持・複数pane反映・一時展開・カード開閉との独立・保存失敗を検証する。
 - 削除操作ごとの対象範囲、既存の削除状態の維持、親の状態別復元、兄弟位置fallback、
   代表と参照項目それぞれの削除・復元を実Loroと永続化fixtureで検証する。
