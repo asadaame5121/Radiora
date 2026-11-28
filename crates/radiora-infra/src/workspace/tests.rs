@@ -76,7 +76,9 @@ fn a_lost_commit_result_is_settled_by_its_receipt() {
     let reopened = WorkspaceStore::open(&path).expect("reopen");
     assert_eq!(reopened.durable_version(), 3);
     assert_eq!(
-        reopened.committed_view().expect("view").blocks[0].body,
-        "next"
+        reopened.committed_view().expect("view").topics[0].blocks[0]
+            .own_body()
+            .map(|body| body.text.as_str()),
+        Some("next")
     );
 }

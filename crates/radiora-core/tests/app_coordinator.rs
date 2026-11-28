@@ -6,9 +6,9 @@
 
 use proptest::prelude::*;
 use radiora_core::app::{
-    ApplyFailure, BlockPresence, BlockView, CommandError, DocumentChange, DocumentCommand,
-    DocumentCoordinator, DocumentStore, Fingerprint, PlanError, Receipt, Request, RequestId,
-    StoreFailure, WorkspaceView, plan,
+    ApplyFailure, BlockContent, BlockPresence, BlockView, BodyVersion, BodyView, CommandError,
+    DocumentChange, DocumentCommand, DocumentCoordinator, DocumentStore, Fingerprint, PlanError,
+    Receipt, Request, RequestId, StoreFailure, TopicView, WorkspaceView, plan,
 };
 use radiora_core::model::BlockId;
 use std::cell::RefCell;
@@ -275,15 +275,19 @@ impl DocumentStore for FakeStore {
         }
         Ok(WorkspaceView {
             version: model.version,
-            blocks: model
+            topics: model
                 .durable
                 .iter()
-                .enumerate()
-                .map(|(index, (id, body))| BlockView {
-                    id: *id,
-                    parent: None,
-                    index,
-                    body: body.clone(),
+                .map(|(id, body)| TopicView {
+                    blocks: vec![BlockView {
+                        id: *id,
+                        parent: None,
+                        depth: 0,
+                        content: BlockContent::Body(BodyView {
+                            text: body.clone(),
+                            version: BodyVersion::new("fake"),
+                        }),
+                    }],
                 })
                 .collect(),
         })
@@ -374,8 +378,10 @@ fn check(
         Ok(view) => {
             assert!(!coordinator.is_dirty());
             assert_eq!(view.version, model.version);
-            let published: BTreeMap<_, _> =
-                view.blocks.into_iter().map(|b| (b.id, b.body)).collect();
+            let published: BTreeMap<_, _> = view
+                .blocks()
+                .filter_map(|b| Some((b.id, b.own_body()?.text.clone())))
+                .collect();
             assert_eq!(published, model.durable);
         }
         Err(error) => assert!(matches!(

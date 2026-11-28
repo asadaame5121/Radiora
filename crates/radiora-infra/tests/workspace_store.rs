@@ -3,8 +3,7 @@
 //! connection with a SQLite trigger, so the product code carries no test hook.
 
 use radiora_core::app::{
-    BlockView, CommandError, DocumentCommand, DocumentCoordinator, PlanError, Request, RequestId,
-    Saved,
+    CommandError, DocumentCommand, DocumentCoordinator, PlanError, Request, RequestId, Saved,
 };
 use radiora_core::model::BlockId;
 use radiora_infra::workspace::{WorkspaceError, WorkspaceStore, issue_block_id};
@@ -60,9 +59,11 @@ fn bodies(coordinator: &Coordinator) -> Vec<(BlockId, String)> {
     coordinator
         .view()
         .expect("committed view")
-        .blocks
-        .into_iter()
-        .map(|block| (block.id, block.body))
+        .blocks()
+        .map(|block| {
+            let body = block.own_body().expect("a body");
+            (block.id, body.text.clone())
+        })
         .collect()
 }
 
@@ -82,7 +83,7 @@ fn a_new_workspace_is_empty_at_version_zero() {
     let (_dir, path) = temp_db();
     let view = open(&path).view().expect("view");
     assert_eq!(view.version, 0);
-    assert!(view.blocks.is_empty());
+    assert!(view.topics.is_empty());
 }
 
 #[test]
@@ -106,21 +107,17 @@ fn saved_documents_and_bodies_survive_reopening() {
     let app = open(&path);
     assert_eq!(app.version(), 5);
     assert_eq!(
-        app.view().expect("view").blocks,
+        bodies(&app),
         vec![
-            BlockView {
-                id: first,
-                parent: None,
-                index: 0,
-                body: "思索の連鎖 🌱\n二行目".into(),
-            },
-            BlockView {
-                id: second,
-                parent: None,
-                index: 1,
-                body: String::new(),
-            },
+            (first, "思索の連鎖 🌱\n二行目".into()),
+            (second, String::new())
         ]
+    );
+    let view = app.view().expect("view");
+    assert!(
+        view.topics
+            .iter()
+            .all(|topic| topic.blocks.len() == 1 && topic.blocks[0].parent.is_none())
     );
 }
 

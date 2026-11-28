@@ -6,16 +6,16 @@
 //!   Each node's metadata holds `id` (logical UUIDv7, distinct from the Loro TreeID),
 //!   `kind` and, for `kind = "block"`, the body as the LoroText `text`.
 //!
-//! Stage B writes only `kind = "block"`. Reference items (`kind = "reference"`, `target`,
-//! `heading`), `aliases`, `trash`, `legacy`, `relations`, `relationTypes` and `deletedIds`
-//! are not written yet; a node of another kind is reported as unsupported, not guessed.
-//! These names never cross the IPC boundary; callers only see `BlockView`.
+//! Stage B writes only `kind = "block"`. The read model also reads reference items
+//! (`kind = "reference"`, `target`, `heading`) and the trash mark (`trash`) written by the
+//! Legacy Importer or the test fixture. `aliases`, `legacy`, `relations`, `relationTypes` and
+//! `deletedIds` are not read yet; a node of another kind is reported as unsupported, not
+//! guessed. These names never cross the IPC boundary; callers only see `WorkspaceView`.
 
 use super::error::{Result, WorkspaceError};
 use loro::{
     Container, LoroDoc, LoroText, LoroTree, LoroValue, TreeID, TreeParentId, ValueOrContainer,
 };
-use radiora_core::app::{BlockView, WorkspaceView};
 use radiora_core::model::BlockId;
 use uuid::Uuid;
 
@@ -29,6 +29,18 @@ const NODE_KIND: &str = "kind";
 const NODE_TEXT: &str = "text";
 const KIND_BLOCK: &str = "block";
 const KIND_REFERENCE: &str = "reference";
+const NODE_TARGET: &str = "target";
+const NODE_HEADING: &str = "heading";
+const NODE_TRASH: &str = "trash";
+
+/// What a tree node holds, by `kind`.
+pub(super) enum NodeKind {
+    Block(LoroText),
+    Reference {
+        target: BlockId,
+        heading: Option<String>,
+    },
+}
 
 /// Writes the schema marker and a new workspace ID into a fresh document and commits it.
 pub(super) fn initialize(doc: &LoroDoc) -> Result<()> {
@@ -118,38 +130,41 @@ pub(super) fn body(tree: &LoroTree, node: TreeID) -> Result<LoroText> {
     }
 }
 
-pub(super) fn view(doc: &LoroDoc, version: u64) -> Result<WorkspaceView> {
-    let tree = tree(doc);
-    let mut blocks = Vec::new();
-    walk(&tree, TreeParentId::Root, None, &mut blocks)?;
-    Ok(WorkspaceView { version, blocks })
-}
-
-fn walk(
-    tree: &LoroTree,
-    parent: TreeParentId,
-    parent_id: Option<BlockId>,
-    out: &mut Vec<BlockView>,
-) -> Result<()> {
-    for (index, node) in tree
-        .children(parent)
-        .unwrap_or_default()
-        .into_iter()
-        .enumerate()
-    {
-        let id = block_id_of(tree, node)?;
-        out.push(BlockView {
-            id,
-            parent: parent_id,
-            index,
-            body: body(tree, node)?.to_string(),
-        });
-        walk(tree, TreeParentId::Node(node), Some(id), out)?;
+/// Reads a node's kind with its body text or its reference target.
+pub(super) fn kind(tree: &LoroTree, node: TreeID) -> Result<NodeKind> {
+    if owns_body(tree, node)? {
+        return body(tree, node).map(NodeKind::Block);
     }
-    Ok(())
+    let meta = tree.get_meta(node)?;
+    let target = match meta.get(NODE_TARGET) {
+        Some(ValueOrContainer::Value(LoroValue::String(text))) => text.parse()?,
+        other => {
+            return Err(WorkspaceError::Corrupt(format!(
+                "reference item {node} has no target ({other:?})"
+            )));
+        }
+    };
+    let heading = match meta.get(NODE_HEADING) {
+        None | Some(ValueOrContainer::Value(LoroValue::Null)) => None,
+        Some(ValueOrContainer::Value(LoroValue::String(text))) => Some(text.to_string()),
+        Some(other) => {
+            return Err(WorkspaceError::Corrupt(format!(
+                "reference item {node} has an unsupported heading ({other:?})"
+            )));
+        }
+    };
+    Ok(NodeKind::Reference { target, heading })
 }
 
-fn block_id_of(tree: &LoroTree, node: TreeID) -> Result<BlockId> {
+/// `true` when the node carries a trash mark itself (its descendants are trashed with it).
+pub(super) fn is_trash_marked(tree: &LoroTree, node: TreeID) -> Result<bool> {
+    Ok(match tree.get_meta(node)?.get(NODE_TRASH) {
+        None | Some(ValueOrContainer::Value(LoroValue::Null)) => false,
+        Some(_) => true,
+    })
+}
+
+pub(super) fn block_id_of(tree: &LoroTree, node: TreeID) -> Result<BlockId> {
     match tree.get_meta(node)?.get(NODE_ID) {
         Some(ValueOrContainer::Value(LoroValue::String(text))) => Ok(text.parse()?),
         other => Err(WorkspaceError::Corrupt(format!(

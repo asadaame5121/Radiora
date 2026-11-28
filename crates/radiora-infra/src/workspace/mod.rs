@@ -9,9 +9,18 @@
 //!   retried, never the Loro operation; the committed view refuses while pending;
 //! - receipts store a SHA-256 digest of the request fingerprint.
 //!
+//! The committed view is the saved read model (`read_model`), with per-Block body versions
+//! derived from the history (`body_version`).
+//!
 //! Undo, structure edits, trash and snapshot compaction are not wired yet.
 
+mod body_version;
 mod error;
+#[cfg(any(test, feature = "test-support"))]
+pub mod fixture;
+mod read_model;
+#[cfg(test)]
+mod read_model_tests;
 mod schema;
 mod store;
 #[cfg(test)]
@@ -19,6 +28,7 @@ mod tests;
 
 pub use error::{Result, WorkspaceError};
 
+use body_version::BodyVersions;
 use loro::{CommitOptions, ExportMode, LoroDoc, VersionVector};
 use radiora_core::app::{
     ApplyFailure, BlockPresence, DocumentChange, DocumentStore, Fingerprint, Receipt, RequestId,
@@ -50,6 +60,8 @@ pub struct WorkspaceStore {
     saved: VersionVector,
     version: u64,
     state: State,
+    /// Indexed through `saved`; refreshed whenever a change becomes durable.
+    versions: BodyVersions,
 }
 
 /// Issues a new logical Block ID (UUIDv7).
@@ -83,12 +95,14 @@ impl WorkspaceStore {
         };
         schema::prepare(&doc);
         let saved = doc.oplog_vv();
+        let versions = BodyVersions::build(&doc);
         Ok(Self {
             doc,
             store,
             saved,
             version,
             state: State::Clean,
+            versions,
         })
     }
 
@@ -149,6 +163,7 @@ impl WorkspaceStore {
         self.saved = current;
         self.version = version;
         self.state = State::Clean;
+        self.versions.refresh(&self.doc);
     }
 
     fn require(&self, expected: State) -> Result<()> {
@@ -224,7 +239,7 @@ impl DocumentStore for WorkspaceStore {
 
     fn committed_view(&self) -> std::result::Result<WorkspaceView, StoreFailure> {
         self.require(State::Clean).map_err(StoreFailure::new)?;
-        schema::view(&self.doc, self.version).map_err(StoreFailure::new)
+        read_model::build(&self.doc, &self.versions, self.version).map_err(StoreFailure::new)
     }
 }
 

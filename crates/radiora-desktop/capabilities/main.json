@@ -1,0 +1,7 @@
+{
+	"$schema": "../gen/schemas/desktop-schema.json",
+	"identifier": "main",
+	"description": "The saved read model command for the main window only. No plugin, filesystem or core permission.",
+	"windows": ["main"],
+	"permissions": ["allow-read-saved-workspace"]
+}

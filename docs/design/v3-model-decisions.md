@@ -453,6 +453,13 @@ Dry-run、変換結果、旧ID→新ID対応、未変換データと理由をレ
 | 競合                       | 同じBlockを2つのpaneで編集した競合ではdraftを保持し、上書き/破棄を選べる。無関係なBlockの保存は競合しない                                                                      |
 | 依存                       | #384は完成を待たず、schema v1案だけを前提にする。#383は#396の保存中核の上に積み、合格はfeatごとの受入で確認する                                                                |
 
+command名・DTO field（2026-11-28、#403 feat A）: 読取りcommandは`read_saved_workspace`、応答は
+`generation`（read
+model公開世代）と`topics[].blocks[]`（`id`/`parentId`/`depth`/`kind`、`kind="block"`は`body`/`bodyVersion`、
+`kind="reference"`は`heading`と`target`{`id`/`state`=`live`|`trashed`|`missing`}）、errorは`kind`/`message`/`blockId`。
+本文版tokenはそのBlockのLoroTextに触れたop集合から作るopaque digestとした。
+詳細は[v3 IPC：保存済みread modelのcommandとDTO](v3-ipc-read-model.md)を正本とする。
+
 作業開始時のfeat分割: A command/DTO/invoke adapterと保存済みread modelの読取り、B
 本文の編集・保存・本文版・競合・retry/失敗表示、 C
 参照項目の表示・反映・代表への移動・Missing/ゴミ箱表示、D
@@ -461,7 +468,9 @@ Dry-run、変換結果、旧ID→新ID対応、未変換データと理由をレ
 
 ### 残る実装・証拠
 
-- command/DTO/version token、複合command、workspace共通Undoの配線。
+- 読取りcommand/DTO/version
+  tokenは[v3 IPC read model](v3-ipc-read-model.md)で決定・Rust側実装済み（#403）。
+  書込みcommand、複合command、workspace共通Undoの配線は残る。
 - 採用済みの入力/IME/構造操作の区切り、autosaveとの独立、再起動時の空履歴を製品UIで検証する。
 - 別paneのUndoでは対象通知と明示移動、現在のeditorでは有効なcaret復帰を検証する。
   navigation・draft/focusの所有と要求失効を維持し、履歴managerから画面を直接変更しない。
