@@ -18,5 +18,10 @@ tauri-plugin-dialog.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
+[dev-dependencies]
+radiora-infra = { workspace = true, features = ["test-support"] }
+tempfile.workspace = true
+uuid = { workspace = true, features = ["v7"] }
+
 [build-dependencies]
 tauri-build.workspace = true

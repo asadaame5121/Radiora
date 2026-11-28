@@ -12,4 +12,6 @@ pub use command::{DocumentCommand, Fingerprint, Request, RequestId};
 pub use coordinator::{CommandError, DocumentCoordinator, Saved};
 pub use planner::{DocumentChange, PlanError, plan};
 pub use port::{ApplyFailure, BlockPresence, DocumentStore, Receipt, StoreFailure};
-pub use view::{BlockView, WorkspaceView};
+pub use view::{
+    BlockContent, BlockView, BodyVersion, BodyView, TargetView, TopicView, WorkspaceView,
+};

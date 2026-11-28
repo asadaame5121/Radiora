@@ -8,6 +8,10 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Exposes `workspace::fixture`, the synthetic schema-v1 workspace builder, to other crates' tests.
+test-support = []
+
 [dependencies]
 radiora-core.workspace = true
 loro.workspace = true

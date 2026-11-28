@@ -38,18 +38,21 @@ worktree外へ向けてから実行する。
 
 ## 3. 意図的に未対応の範囲
 
-- **invoke/DTO:** commandは登録しておらず、capabilityも置いていない。UIがIPCを使わないため、
-  権限を先に開けない。#385の本文sliceで、独立DTOとruntime validationを伴って追加する。
+- **invoke/DTO:** #403で読取りcommand `read_saved_workspace`
+  と、それだけを許可するcapabilityを追加した （[v3 IPC read model](v3-ipc-read-model.md)）。mock
+  shellのUIはまだ呼ばない。書込みcommandはfeat Bで追加する。
 - **CSP:** dev serverを表示するため`csp: null`。製品assetを埋め込むrelease経路（T-09）で CSPとWorker
   assetを決める。
 - **release build:** mock APIはVite middlewareにしか存在しないため、`--release`は拒否する。
   `frontendDist`は将来の埋込み先として`../../dist`を指すだけで、現状のreleaseでは動作しない。
-- **データ:** 何も保存しない。v2の`%LOCALAPPDATA%\RadioraV2`にも触れない。
+- **データ:** 起動時に`RADIORA_V3_DATA_DIR`（未設定ならapp-local data
+  `dev.radiora.v3`）のworkspaceを開く（無ければ空で作る）。 mock
+  shellのUIはそれを読み書きしない。v2の`%LOCALAPPDATA%\RadioraV2`には触れない。
 - **plugin:** `tauri-plugin-dialog`は依存のみで未登録。
 
 ## 4. 次の作業（未合意の見込み）
 
 #385の「invoke adapterと独立DTOを経由する」に従い、IPCはv2の`RadioraBindings`を写さず
 本文slice用の独立DTOで追加する見込み。既存Svelte UIを使うか最小画面を新設するか、
-command名・DTO・版の表現は#385の未決事項であり、ここでは決めない。
+command名・DTO・版の表現は#403で[v3 IPC read model](v3-ipc-read-model.md)に決めた。
 見出しの「段階A」は作業上の区切りで、合意した計画ではない。
