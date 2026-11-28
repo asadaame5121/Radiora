@@ -92,8 +92,8 @@ test("Markdown editor keeps native replacement, autosave, completion, and resolv
 	);
 
 	expect(outlineRowItem).toMatch(/<MarkdownEditor/);
-	expect(outlineRowItem).toMatch(/onChange=.*handlers\.updateLocalText/);
-	expect(outlineRowItem).toMatch(/onSelectionChange=.*handlers\.updateEditorSelection/);
+	expect(outlineRowItem).toMatch(/onChange=.*editing\.updateLocalText/);
+	expect(outlineRowItem).toMatch(/onSelectionChange=.*editing\.updateEditorSelection/);
 	expect(completion).toMatch(/textarea\.setRangeText\(/);
 	expect(completion).toMatch(/inputType: "insertReplacementText"/);
 	expect(controller).toMatch(

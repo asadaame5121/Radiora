@@ -1,3 +1,4 @@
+import type { OutlineRowSource } from "./outline_row_source.ts";
 import type { VisibleRow } from "./outline_view_model.ts";
 import type { OutlineScrollMetrics } from "./outline_virtual_viewport_controller.svelte.ts";
 import {
@@ -68,13 +69,13 @@ export class OutlineScrollAdapter {
 		return calculateMetrics(rowsElement, findScrollContainer(rowsElement));
 	}
 
-	dropOnVirtualGap(
+	dropOnVirtualGap<T extends OutlineRowSource>(
 		event: DragEvent,
 		draggedId: string | null,
 		rowsElement: HTMLElement | null,
 		layout: VirtualOutlineLayout,
-		rows: readonly VisibleRow[],
-		onDrop: (row: VisibleRow) => void,
+		rows: readonly VisibleRow<T>[],
+		onDrop: (row: VisibleRow<T>) => void,
 	): void {
 		const target = event.target;
 		if (

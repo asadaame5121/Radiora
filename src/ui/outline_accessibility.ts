@@ -1,7 +1,8 @@
+import type { OutlineRowSource } from "./outline_row_source.ts";
 import type { VisibleRow } from "./outline_view_model.ts";
 
 /** ARIA positions describe logical siblings, not the currently mounted window. */
-export function outlineAccessibility(rows: readonly VisibleRow[]) {
+export function outlineAccessibility<T extends OutlineRowSource>(rows: readonly VisibleRow<T>[]) {
 	const sizes = new Map<string | null, number>();
 	const positions = new Map<string | null, number>();
 	for (const row of rows) {

@@ -1,13 +1,13 @@
-<script lang="ts">
+<script lang="ts" generics="T extends OutlineRowSource">
 	import { onMount, untrack } from "svelte";
-	import type { OutlineItem, RelationTypeDefinition } from "../domain/models.ts";
+	import type { RelationTypeDefinition } from "../domain/models.ts";
 	import type { UiVocabulary } from "../shared/ui_vocabulary.ts";
 	import type { VisibleRow } from "./outline_view_model.ts";
 	import type {
 		InlineLinkCompletionState,
 		InternalReferenceCompletionState,
 	} from "./editor_completion_controller.svelte.ts";
-	import type { OutlineHelpers, OutlineRowHandlers } from "./outline_row_types.ts";
+	import type { OutlineHelpers, OutlineRowHandlers, OutlineRowSource } from "./outline_row_types.ts";
 	import OutlineRowItem from "./OutlineRowItem.svelte";
 	import type { VirtualOutlineEntry } from "./virtual_outline_viewport.ts";
 	import type { OutlineVirtualViewportController } from "./outline_virtual_viewport_controller.svelte.ts";
@@ -49,14 +49,14 @@
 		onDragStart: (id: string) => void;
 		onDragEnd: () => void;
 		outlineContextBreadcrumb: string;
-		outlineContextBreadcrumbItems: readonly OutlineItem[];
+		outlineContextBreadcrumbItems: readonly T[];
 		outlineContextTitle: string;
 		registerEnsureMounted?: (port: EnsureOutlineRowMounted) => () => void;
 		hoisted: boolean;
 		canClearHoist: boolean;
 		clearHoistReason: string | undefined;
 		onClearHoist: () => void;
-		visibleRows: readonly VisibleRow[];
+		visibleRows: readonly VisibleRow<T>[];
 		vocabulary: UiVocabulary;
 		loading: boolean;
 		hasSnapshot?: boolean;
@@ -68,9 +68,10 @@
 		stashItemIdsLength: number;
 		knotsLength: number;
 		openBreadcrumb: (id: string) => void;
-		createRoot: () => void;
-		handlers: OutlineRowHandlers;
-		helpers: OutlineHelpers;
+		/** Omit when the caller cannot create rows; the create buttons are then hidden. */
+		createRoot?: () => void;
+		handlers: OutlineRowHandlers<T>;
+		helpers: OutlineHelpers<T>;
 	} = $props();
 
 	let rowsEl = $state<HTMLDivElement | null>(null);
@@ -106,13 +107,15 @@
 	});
 
 	function handleRootDrop(event: DragEvent): void {
+		const drag = handlers.drag;
+		if (!drag) return;
 		viewportAdapter.dropOnVirtualGap(
 			event,
 			draggedId,
 			rowsEl,
 			viewport.layout,
 			normalRows,
-			(row) => handlers.dropOn(row.item),
+			(row) => drag.dropOn(row.item),
 		);
 	}
 </script>
@@ -129,14 +132,16 @@
 		{/if}
 		<h1>{outlineContextTitle}</h1>
 		<p class="outline-context__meta">
-			{normalRows.length}件の{vocabulary.work} · 行をそのまま編集できます
+			{normalRows.length}件の{vocabulary.work}{handlers.editing ? " · 行をそのまま編集できます" : ""}
 		</p>
 	</div>
 	<div class="section-title outline-actions">
 		{#if hoisted}
 			<button type="button" onclick={onClearHoist} disabled={!canClearHoist} title={clearHoistReason}>{vocabulary.hoist}を解除</button>
 		{/if}
-		<button type="button" onclick={createRoot}>＋ ルートに追加</button>
+		{#if createRoot}
+			<button type="button" onclick={createRoot}>＋ ルートに追加</button>
+		{/if}
 	</div>
 </div>
 
@@ -146,7 +151,9 @@
 
 {#if !loading || hasSnapshot}
 	{#if snapshotItemsLength === 0}
-		<button type="button" class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
+		{#if createRoot}
+			<button type="button" class="first-item" onclick={createRoot}>最初の{vocabulary.work}を作る</button>
+		{/if}
 	{:else}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
