@@ -1,25 +1,35 @@
-//! Card (Topic) projection and lineage of Relations. Everything here is regenerable display
-//! data: it never writes back to Relations, and display filters apply after it, so filters never
-//! change generations or Knot membership.
+//! Vertical-tree projection of typed Relations onto Topic cards (#381 contract, #409 V0).
+//!
+//! Everything here is regenerable read data keyed only by logical Block IDs and Topic root IDs:
+//! it never writes back to Relations, holds no layout coordinates, and display filters apply
+//! after it ([`VerticalTree::filtered`]), so a filter never changes generations or Knot
+//! membership.
+use super::lineage::lineage;
 use super::{Direction, Relation, RelationStatus, RelationTypeName, RelationTypes};
 use crate::model::id::{BlockId, RelationId};
-use petgraph::algo::tarjan_scc;
-use petgraph::graph::{DiGraph, NodeIndex};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// State of a Relation endpoint, observed from the workspace by the caller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Deleted state of a Block as observed by the caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EndpointState {
-    /// Live Block (root, ordinary Block or reference item) and the Topic it belongs to.
+    /// Live Block (root, ordinary Block or reference item) and the root of the Topic it belongs
+    /// to.
     Live {
         topic: BlockId,
     },
     InTrash,
-    /// Purged or unknown.
+    /// Purged or unknown. Block IDs absent from the projection input are Missing as well.
     Missing,
 }
 
+/// One Block of the projection input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TopicBlock {
+    pub id: BlockId,
+    pub state: EndpointState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ExclusionReason {
     Retracted,
     UnknownType,
@@ -27,42 +37,135 @@ pub enum ExclusionReason {
     EndpointMissing,
 }
 
-/// A kept Relation that is not projected. Trash/Missing Relations are preserved, never shown
-/// with deleted bodies, and never used for lineage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Excluded {
-    pub relation: RelationId,
-    pub reason: ExclusionReason,
-}
-
-/// Cards connected by an edge, in display order. Directed Relations use their display direction
-/// (origin → derived for generation types, source → target otherwise); symmetric pairs are
-/// ordered by Topic ID.
+/// Cards connected by an edge, in display order. FROM (`New FROM Old`) is reversed so the origin
+/// is on top; every other directed type, generation-advancing custom types included, keeps the
+/// stored source on top. Symmetric pairs are ordered by Topic ID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CardPair {
     pub from: BlockId,
     pub to: BlockId,
 }
 
-/// Aggregated edge between two cards, keeping the original Relation IDs (their count is the
-/// number shown) and types.
+/// Where one original Relation went. Every input Relation has exactly one trace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelationTrace {
+    /// Generation-advancing edge between two non-Knot cards: an edge of the layout DAG.
+    Layout { pair: CardPair },
+    /// Generation-advancing edge with a Knot member at either end. Drawn with its display
+    /// direction, but not part of the layout DAG.
+    KnotConnection { pair: CardPair },
+    /// Edge between cards whose type does not advance generations.
+    NonGenerational { pair: CardPair },
+    /// Both endpoints belong to `topic` (self-loops and in-card cycles included): no card
+    /// self-edge, not used for generations.
+    InCard { topic: BlockId },
+    /// Kept as stored but not projected; trash/Missing bodies are never shown.
+    Excluded { reason: ExclusionReason },
+}
+
+impl RelationTrace {
+    pub fn pair(&self) -> Option<CardPair> {
+        match self {
+            Self::Layout { pair }
+            | Self::KnotConnection { pair }
+            | Self::NonGenerational { pair } => Some(*pair),
+            Self::InCard { .. } | Self::Excluded { .. } => None,
+        }
+    }
+}
+
+/// Aggregated edge between two cards, keeping the original Relation IDs and their types.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CardEdge {
     pub relations: BTreeSet<RelationId>,
     pub kinds: BTreeSet<RelationTypeName>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct TopicProjection {
-    /// Relations whose endpoints share a Topic, including self-loops and in-card cycles. They
-    /// make no card self-edge and are not used for lineage.
-    pub in_card: BTreeMap<BlockId, BTreeSet<RelationId>>,
-    pub edges: BTreeMap<CardPair, CardEdge>,
-    pub excluded: Vec<Excluded>,
+impl CardEdge {
+    /// Number of original Relations shown on the aggregated edge.
+    pub fn count(&self) -> usize {
+        self.relations.len()
+    }
 }
 
-/// Live endpoints of an asserted Relation with a known type, as display-ordered Topics.
-enum Projected<'a> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CardPlacement {
+    Generation(usize),
+    /// Member of the Knot identified by its smallest member Topic ID.
+    Knot {
+        knot: BlockId,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Card {
+    pub placement: CardPlacement,
+    pub in_card: BTreeSet<RelationId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct VerticalTree {
+    /// One card per Topic root that has a live Block.
+    pub cards: BTreeMap<BlockId, Card>,
+    pub edges: BTreeMap<CardPair, CardEdge>,
+    /// Cycles of the Topic projection keyed by their smallest member. Only cycle members, never
+    /// the acyclic Topics flowing into or out of them.
+    pub knots: BTreeMap<BlockId, BTreeSet<BlockId>>,
+    /// Row of the Knot area below every generation (v2 rule), if any Knot exists.
+    pub knot_generation: Option<usize>,
+    pub traces: BTreeMap<RelationId, RelationTrace>,
+}
+
+impl VerticalTree {
+    pub fn generation(&self, topic: BlockId) -> Option<usize> {
+        match self.cards.get(&topic)?.placement {
+            CardPlacement::Generation(generation) => Some(generation),
+            CardPlacement::Knot { .. } => None,
+        }
+    }
+
+    /// Edges of the layout DAG between the cards present in this projection.
+    pub fn layout_edges(&self) -> BTreeSet<CardPair> {
+        self.traces
+            .values()
+            .filter_map(|trace| match trace {
+                RelationTrace::Layout { pair } => Some(*pair),
+                _ => None,
+            })
+            .filter(|pair| self.cards.contains_key(&pair.from) && self.cards.contains_key(&pair.to))
+            .collect()
+    }
+
+    /// Display filter: hides cards outside `visible` and edges touching them. Generations, Knot
+    /// IDs, the Knot row and traces are kept exactly as computed from the unfiltered input.
+    pub fn filtered(&self, visible: &BTreeSet<BlockId>) -> Self {
+        let shown = |topic: &BlockId| visible.contains(topic);
+        Self {
+            cards: self
+                .cards
+                .iter()
+                .filter(|(topic, _)| shown(topic))
+                .map(|(topic, card)| (*topic, card.clone()))
+                .collect(),
+            edges: self
+                .edges
+                .iter()
+                .filter(|(pair, _)| shown(&pair.from) && shown(&pair.to))
+                .map(|(pair, edge)| (*pair, edge.clone()))
+                .collect(),
+            knots: self
+                .knots
+                .iter()
+                .map(|(id, members)| (*id, members.iter().copied().filter(shown).collect()))
+                .filter(|(_, members): &(BlockId, BTreeSet<BlockId>)| !members.is_empty())
+                .collect(),
+            knot_generation: self.knot_generation,
+            traces: self.traces.clone(),
+        }
+    }
+}
+
+enum Classified<'a> {
     Pair {
         pair: CardPair,
         kind: &'a RelationTypeName,
@@ -75,39 +178,39 @@ enum Projected<'a> {
 fn classify<'a>(
     relation: &'a Relation,
     types: &RelationTypes,
-    endpoint: &impl Fn(BlockId) -> EndpointState,
-) -> Projected<'a> {
+    state: &impl Fn(BlockId) -> EndpointState,
+) -> Classified<'a> {
     if relation.status == RelationStatus::Retracted {
-        return Projected::Excluded(ExclusionReason::Retracted);
+        return Classified::Excluded(ExclusionReason::Retracted);
     }
     let Some(definition) = types.get(&relation.kind) else {
-        return Projected::Excluded(ExclusionReason::UnknownType);
+        return Classified::Excluded(ExclusionReason::UnknownType);
     };
-    let (source, target) = match (endpoint(relation.source), endpoint(relation.target)) {
+    let (source, target) = match (state(relation.source), state(relation.target)) {
         (EndpointState::Live { topic: s }, EndpointState::Live { topic: t }) => (s, t),
         (EndpointState::Missing, _) | (_, EndpointState::Missing) => {
-            return Projected::Excluded(ExclusionReason::EndpointMissing);
+            return Classified::Excluded(ExclusionReason::EndpointMissing);
         }
-        _ => return Projected::Excluded(ExclusionReason::EndpointInTrash),
+        _ => return Classified::Excluded(ExclusionReason::EndpointInTrash),
     };
     if source == target {
-        return Projected::InCard(source);
+        return Classified::InCard(source);
     }
-    let pair = match (definition.direction, definition.advances_generation) {
-        (Direction::Symmetric, _) => CardPair {
+    let pair = match definition.direction {
+        Direction::Symmetric => CardPair {
             from: source.min(target),
             to: source.max(target),
         },
-        (Direction::Directed, true) => CardPair {
+        Direction::Directed if definition.display_reversed() => CardPair {
             from: target,
             to: source,
         },
-        (Direction::Directed, false) => CardPair {
+        Direction::Directed => CardPair {
             from: source,
             to: target,
         },
     };
-    Projected::Pair {
+    Classified::Pair {
         pair,
         kind: &relation.kind,
         advances_generation: definition.advances_generation
@@ -115,118 +218,98 @@ fn classify<'a>(
     }
 }
 
-pub fn project_to_topics<'a>(
+/// Projects Relations onto Topic cards and computes generations and Knots from every valid
+/// generation-advancing Relation, before any display filter.
+///
+/// Preconditions: Block IDs and Relation IDs are unique. If a Block ID repeats, the smallest
+/// state wins so the result still does not depend on input order.
+pub fn project_vertical_tree<'a>(
+    blocks: impl IntoIterator<Item = TopicBlock>,
     relations: impl IntoIterator<Item = &'a Relation>,
     types: &RelationTypes,
-    endpoint: impl Fn(BlockId) -> EndpointState,
-) -> TopicProjection {
-    let mut projection = TopicProjection::default();
+) -> VerticalTree {
+    let mut states: BTreeMap<BlockId, EndpointState> = BTreeMap::new();
+    for block in blocks {
+        states
+            .entry(block.id)
+            .and_modify(|state| *state = (*state).min(block.state))
+            .or_insert(block.state);
+    }
+    let topics: BTreeSet<BlockId> = states
+        .values()
+        .filter_map(|state| match state {
+            EndpointState::Live { topic } => Some(*topic),
+            EndpointState::InTrash | EndpointState::Missing => None,
+        })
+        .collect();
+    let state = |id: BlockId| states.get(&id).copied().unwrap_or(EndpointState::Missing);
+
+    let mut tree = VerticalTree::default();
+    let mut in_card: BTreeMap<BlockId, BTreeSet<RelationId>> = BTreeMap::new();
+    let mut advancing: BTreeMap<RelationId, CardPair> = BTreeMap::new();
     for relation in relations {
-        match classify(relation, types, &endpoint) {
-            Projected::Excluded(reason) => projection.excluded.push(Excluded {
-                relation: relation.id,
-                reason,
-            }),
-            Projected::InCard(topic) => {
-                projection
-                    .in_card
-                    .entry(topic)
-                    .or_default()
-                    .insert(relation.id);
+        let trace = match classify(relation, types, &state) {
+            Classified::Excluded(reason) => RelationTrace::Excluded { reason },
+            Classified::InCard(topic) => {
+                in_card.entry(topic).or_default().insert(relation.id);
+                RelationTrace::InCard { topic }
             }
-            Projected::Pair { pair, kind, .. } => {
-                let edge = projection.edges.entry(pair).or_default();
+            Classified::Pair {
+                pair,
+                kind,
+                advances_generation,
+            } => {
+                let edge = tree.edges.entry(pair).or_default();
                 edge.relations.insert(relation.id);
                 edge.kinds.insert(kind.clone());
-            }
-        }
-    }
-    projection
-}
-
-/// Generations and Knots of the Topic projection.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Lineage {
-    /// Generation of every non-Knot Topic: the longest chain of generation Relations from a
-    /// Topic without origins, ignoring edges to and from Knot members (same rule as v2).
-    pub generation: BTreeMap<BlockId, usize>,
-    /// Each cycle of the Topic projection, separated from the acyclic Topics around it.
-    pub knots: Vec<BTreeSet<BlockId>>,
-}
-
-/// Computes lineage over `topics` from the asserted, live, cross-Topic Relations whose type
-/// advances generation. Cycles inside one Topic are in-card and do not form Knots.
-pub fn lineage<'a>(
-    topics: impl IntoIterator<Item = BlockId>,
-    relations: impl IntoIterator<Item = &'a Relation>,
-    types: &RelationTypes,
-    endpoint: impl Fn(BlockId) -> EndpointState,
-) -> Lineage {
-    let mut graph: DiGraph<BlockId, ()> = DiGraph::new();
-    let nodes: BTreeMap<BlockId, NodeIndex> = topics
-        .into_iter()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .map(|topic| (topic, graph.add_node(topic)))
-        .collect();
-    for relation in relations {
-        if let Projected::Pair {
-            pair,
-            advances_generation: true,
-            ..
-        } = classify(relation, types, &endpoint)
-            && let (Some(from), Some(to)) = (nodes.get(&pair.from), nodes.get(&pair.to))
-            && graph.find_edge(*from, *to).is_none()
-        {
-            graph.add_edge(*from, *to, ());
-        }
-    }
-    let mut knots: Vec<BTreeSet<BlockId>> = tarjan_scc(&graph)
-        .into_iter()
-        .filter(|component| component.len() > 1)
-        .map(|component| component.into_iter().map(|node| graph[node]).collect())
-        .collect();
-    knots.sort();
-    let in_knot: BTreeSet<BlockId> = knots.iter().flatten().copied().collect();
-    let generation = acyclic_generations(&graph, &nodes, &in_knot);
-    Lineage { generation, knots }
-}
-
-fn acyclic_generations(
-    graph: &DiGraph<BlockId, ()>,
-    nodes: &BTreeMap<BlockId, NodeIndex>,
-    in_knot: &BTreeSet<BlockId>,
-) -> BTreeMap<BlockId, usize> {
-    let active = |node: NodeIndex| !in_knot.contains(&graph[node]);
-    let mut indegree: BTreeMap<NodeIndex, usize> = BTreeMap::new();
-    let mut generation: BTreeMap<BlockId, usize> = BTreeMap::new();
-    let mut ready = Vec::new();
-    for (topic, node) in nodes {
-        if !active(*node) {
-            continue;
-        }
-        let degree = graph
-            .neighbors_directed(*node, petgraph::Direction::Incoming)
-            .filter(|parent| active(*parent))
-            .count();
-        indegree.insert(*node, degree);
-        generation.insert(*topic, 0);
-        if degree == 0 {
-            ready.push(*node);
-        }
-    }
-    while let Some(parent) = ready.pop() {
-        let next = generation.get(&graph[parent]).copied().unwrap_or(0) + 1;
-        for child in graph.neighbors(parent).filter(|child| active(*child)) {
-            let current = generation.entry(graph[child]).or_insert(0);
-            *current = (*current).max(next);
-            if let Some(degree) = indegree.get_mut(&child) {
-                *degree -= 1;
-                if *degree == 0 {
-                    ready.push(child);
+                if advances_generation {
+                    advancing.insert(relation.id, pair);
                 }
+                // Layout vs Knot connection is decided once Knots are known.
+                RelationTrace::NonGenerational { pair }
             }
-        }
+        };
+        tree.traces.insert(relation.id, trace);
     }
-    generation
+
+    let lineage = lineage(&topics, &advancing.values().copied().collect());
+    let knot_of: BTreeMap<BlockId, BlockId> = lineage
+        .knots
+        .iter()
+        .filter_map(|members| members.first().map(|id| (*id, members)))
+        .flat_map(|(id, members)| members.iter().map(move |member| (*member, id)))
+        .collect();
+    for (relation, pair) in advancing {
+        let touches_knot = knot_of.contains_key(&pair.from) || knot_of.contains_key(&pair.to);
+        let trace = if touches_knot {
+            RelationTrace::KnotConnection { pair }
+        } else {
+            RelationTrace::Layout { pair }
+        };
+        tree.traces.insert(relation, trace);
+    }
+    tree.knot_generation = (!lineage.knots.is_empty())
+        .then(|| lineage.generation.values().max().map_or(0, |max| max + 1));
+    tree.cards = topics
+        .into_iter()
+        .map(|topic| {
+            let placement = match knot_of.get(&topic) {
+                Some(knot) => CardPlacement::Knot { knot: *knot },
+                None => {
+                    CardPlacement::Generation(lineage.generation.get(&topic).copied().unwrap_or(0))
+                }
+            };
+            let card = Card {
+                placement,
+                in_card: in_card.remove(&topic).unwrap_or_default(),
+            };
+            (topic, card)
+        })
+        .collect();
+    tree.knots = lineage
+        .knots
+        .into_iter()
+        .filter_map(|members| members.first().copied().map(|id| (id, members)))
+        .collect();
+    tree
 }

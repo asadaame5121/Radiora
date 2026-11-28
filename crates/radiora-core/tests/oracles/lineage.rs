@@ -257,7 +257,7 @@ fn types() -> Vec<RelationType> {
     ]
 }
 
-fn input() -> impl Strategy<Value = Input> {
+pub fn input() -> impl Strategy<Value = Input> {
     let block = (
         1u32..=5,
         prop_oneof![12 => Just(BlockState::Live), 1 => Just(BlockState::Trash), 1 => Just(BlockState::Missing)],

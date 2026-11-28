@@ -317,5 +317,21 @@ shimの起動待ちとcacheアクセス拒否で中断した。合否証拠は�
 Relation投影・SQLite
 fold保存・Undo細則は採用済みであり、V0で期待結果を固定する。巨大カードの高さ制限は引き続き実装/実機検証で判断する。
 
+2026-11-28（#409 V0、v3ブランチ）:
+Relation→Topic投影を`radiora_core::model::project_vertical_tree`へ一本化した。
+入力はBlock（論理ID・所属Topic root・live/ゴミ箱/Missing）、型付きRelation、型設定。出力はTopic root
+IDごとのカード （世代またはKnot ID、カード内Relation）、元Relation
+ID集合を持つ集約edge、Knot（最小member IDで識別）、Knot行、
+全Relationの追跡（通常配置/Knot接続/非世代進行/カード内/除外理由）で、座標・Svelte Flow
+nodeを含まない。 表示filterは`VerticalTree::filtered`で投影後に適用し、世代・Knot
+ID・追跡を変えない。
+方向は2026-11-27採用どおりFROMだけ反転し、独自の世代進行型は保存始点を上に置く（#390時点の全世代進行型反転を修正）。
+対称型は世代を進めない。検証は固定fixture（`tests/model_relation.rs`、共有`tests/fixtures/v09_lineage.json`）と、
+到達可能性行列のV09 oracleとの一致PBT（`tests/oracles/lineage_conformance.rs`）で行う。
+§8の性質6（座標・bounds）はV1、fold保存とカード開閉の分離（#409スコープ8）は別Issueで扱い、本PRでは未検証。
+v2との意図した差:
+v2は保存方向で世代を辿り（New=G0）、可視Workだけから再計算し、Work単位の自己loopもKnotにする。
+v3は表示方向（派生元=G0）、filter前の有効graph、Topic単位でカード内Relationを世代・Knotから除く。
+
 2026-10-30に独立HTMLモックを追加した。JavaScript構文・fixtureのID/世代方向・既存色tokenの参照を検査した。
 ブラウザ自動表示はツールのfile URL制限で未実施。IME・描画・操作感は手動確認と実WebView検証が必要。

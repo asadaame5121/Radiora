@@ -20,9 +20,10 @@ pub use markdown_links::{InternalLink, internal_links, linked_targets, remap_int
 pub use naming::{add_alias, display_name, search_key};
 pub use outline::{InvariantViolation, Membership, Outline, Slot, StructureError};
 pub use relation::{
-    BUILT_IN_TYPES, CardEdge, CardPair, Direction, EndpointState, Excluded, ExclusionReason,
-    Lineage, Relation, RelationStatus, RelationTypeDefinition, RelationTypeError, RelationTypeName,
-    RelationTypes, TopicProjection, lineage, project_to_topics,
+    BUILT_IN_TYPES, Card, CardEdge, CardPair, CardPlacement, Direction, EndpointState,
+    ExclusionReason, Relation, RelationStatus, RelationTrace, RelationTypeDefinition,
+    RelationTypeError, RelationTypeName, RelationTypes, TopicBlock, VerticalTree,
+    project_vertical_tree,
 };
 pub use trash::{
     OriginalPlacement, PlacementObservation, RestorePlan, TrashEntry, TrashEntryError,
